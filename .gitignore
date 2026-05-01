@@ -28,6 +28,10 @@ Thumbs.db
 # user config (project-level config.toml is committed; user override is not)
 .crumb/config.local.toml
 
+# Maintainer-only operational skills (mirrored from ~/workspace/mango-wiki/.skills/).
+# The committed skills/ bundle is what evaluators see; .skills/ is local working tooling.
+.skills/
+
 # temp
 tmp/
 .tmp/
