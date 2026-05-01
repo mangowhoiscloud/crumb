@@ -1,0 +1,52 @@
+{
+  "name": "crumb",
+  "version": "0.1.0",
+  "description": "Multi-agent execution harness for casual game prototyping. Pitch a game in one line, watch agents collaborate, intervene anytime.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "crumb": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext .ts",
+    "format:check": "prettier --check \"**/*.{ts,md,json}\"",
+    "format": "prettier --write \"**/*.{ts,md,json}\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "multi-agent",
+    "orchestrator",
+    "claude-code",
+    "codex",
+    "game-prototyping",
+    "transcript",
+    "observability"
+  ],
+  "author": "mango",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "blessed": "^0.1.81",
+    "chokidar": "^3.6.0",
+    "@iarna/toml": "^2.2.5",
+    "ulid": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/blessed": "^0.1.25",
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  }
+}

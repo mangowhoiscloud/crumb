@@ -1,0 +1,26 @@
+# Crumb runtime configuration
+# Override per-agent adapter / model. Paperclip-inspired.
+
+schema = "crumb/v1"
+
+[agents.coordinator]
+adapter = "claude-local"
+model = "claude-haiku-4-5"
+
+[agents.planner-lead]
+adapter = "claude-local"
+model = "claude-sonnet-4-6"
+thinking_effort = "high"
+
+[agents.engineering-lead]
+adapter = "codex-local"
+model = "gpt-5.5"
+
+[agents.builder-fallback]
+adapter = "claude-local"
+model = "claude-sonnet-4-6"
+
+# Verifier mode (inside engineering-lead)
+[verifier]
+mode = "courteval"  # grader -> critic -> defender -> regrader
+adaptive_stop_threshold = 1.0  # score variance < 1.0 over 2 rounds → done

@@ -1,0 +1,34 @@
+# dependencies
+node_modules/
+package-lock.json
+
+# build output
+dist/
+*.tsbuildinfo
+
+# runtime sessions (generated, never commit)
+sessions/
+
+# logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# env
+.env
+.env.local
+.env.*.local
+
+# user config (project-level config.toml is committed; user override is not)
+.crumb/config.local.toml
+
+# temp
+tmp/
+.tmp/

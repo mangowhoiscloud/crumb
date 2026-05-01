@@ -1,0 +1,13 @@
+# --solo: Anthropic key only (Claude Max subscription)
+
+[agents.coordinator]
+adapter = "claude-local"
+model = "claude-haiku-4-5"
+
+[agents.planner-lead]
+adapter = "claude-local"
+model = "claude-sonnet-4-6"
+
+[agents.engineering-lead]
+adapter = "claude-local"
+model = "claude-sonnet-4-6"

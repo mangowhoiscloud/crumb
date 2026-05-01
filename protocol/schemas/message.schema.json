@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mangowhoiscloud/crumb/protocol/schemas/message.schema.json",
+  "title": "Crumb Transcript Message",
+  "description": "Single transcript.jsonl line. 28 kinds × 11 fields. OTel GenAI alias-able.",
+  "type": "object",
+  "required": ["id", "ts", "session_id", "from", "kind"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID — sortable + unique"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC"
+    },
+    "session_id": { "type": "string", "minLength": 1 },
+    "task_id": { "type": "string" },
+    "from": {
+      "type": "string",
+      "enum": ["user", "coordinator", "planner-lead", "engineering-lead", "builder-fallback", "validator", "system"]
+    },
+    "to": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "string", "enum": ["*"] }
+      ]
+    },
+    "parent_event_id": { "type": ["string", "null"] },
+    "in_reply_to": { "type": ["string", "null"], "description": "Deprecated alias for parent_event_id" },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "session.start", "session.end", "agent.wake", "agent.stop",
+        "goal", "question.socratic", "answer.socratic",
+        "spec", "spec.update", "build",
+        "verify.request", "verify.result", "judge.score", "done",
+        "agent.thought_summary", "question", "answer", "debate", "note",
+        "step.socratic", "step.concept", "step.research", "step.design", "step.judge",
+        "user.intervene", "user.veto", "user.approve", "user.pause", "user.resume",
+        "handoff.requested", "handoff.accepted", "handoff.rollback",
+        "artifact.created", "ack", "error", "audit",
+        "tool.call", "tool.result", "hook"
+      ]
+    },
+    "topic": { "type": "string" },
+    "step": {
+      "type": "string",
+      "enum": ["socratic", "concept", "research", "design", "builder", "qa", "verifier", "grader", "critic", "defender", "regrader", "synth"]
+    },
+    "body": { "type": "string" },
+    "data": { "type": "object" },
+    "content": {
+      "type": "object",
+      "required": ["format", "text"],
+      "properties": {
+        "format": { "enum": ["markdown", "json", "text", "xml"] },
+        "text": { "type": "string" }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "role": { "type": "string", "enum": ["src", "doc", "config", "screenshot", "data"] }
+        }
+      }
+    },
+    "scores": {
+      "type": "object",
+      "properties": {
+        "goal_completion": { "type": "number", "minimum": 0, "maximum": 5 },
+        "collaboration": { "type": "number", "minimum": 0, "maximum": 5 },
+        "groundedness": { "type": "number", "minimum": 0, "maximum": 5 },
+        "actionability": { "type": "number", "minimum": 0, "maximum": 5 },
+        "cost_efficiency": { "type": "number", "minimum": 0, "maximum": 5 },
+        "intervention_response": { "type": "number", "minimum": 0, "maximum": 5 },
+        "aggregate": { "type": "number", "minimum": 0, "maximum": 30 },
+        "verdict": { "type": "string", "enum": ["PASS", "PARTIAL", "FAIL", "REJECT"] },
+        "feedback": { "type": "string" },
+        "audit_violations": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "ack_required": { "type": "boolean" },
+    "blocking": { "type": "boolean" },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "visibility": { "type": "string", "enum": ["public", "private"], "default": "public" },
+        "model": { "type": "string" },
+        "turn": { "type": "number" },
+        "tokens_in": { "type": "number" },
+        "tokens_out": { "type": "number" },
+        "cache_read": { "type": "number" },
+        "cache_write": { "type": "number" },
+        "latency_ms": { "type": "number" },
+        "cost_usd": { "type": "number" },
+        "thinking_tokens": { "type": "number" },
+        "audit_violations": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "additionalProperties": false
+}
