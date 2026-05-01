@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 /**
- * Crumb CLI entry — runtime orchestrator.
- * Implementation forthcoming. See wiki/bagelcode-final-design-2026.md for spec.
+ * Crumb CLI entry — multi-agent execution harness.
+ * See README.md for usage and design/DESIGN.md for the binding game spec.
  */
 
-console.log('Crumb v0.1.0 — runtime not yet implemented');
-console.log('See wiki/bagelcode-final-design-2026.md for full design');
-process.exit(0);
+import { main } from './cli.js';
+
+main(process.argv.slice(2)).catch((err: unknown) => {
+  // eslint-disable-next-line no-console
+  console.error('[crumb] fatal:', err instanceof Error ? err.message : err);
+  process.exit(1);
+});

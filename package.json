@@ -33,9 +33,11 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "@iarna/toml": "^2.2.5",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "blessed": "^0.1.81",
     "chokidar": "^3.6.0",
-    "@iarna/toml": "^2.2.5",
     "ulid": "^2.3.0"
   },
   "devDependencies": {
