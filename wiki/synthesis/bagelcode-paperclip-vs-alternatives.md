@@ -39,7 +39,7 @@ updated: 2026-05-01
 ### 강점
 - ✅ Issue + 댓글 + 첨부 + audit log → 무거운 multi-agent 회사 운영 가능
 - ✅ org chart, 예산, governance, approval flow → 진짜 조직 운영 도구
-- ✅ MCP 서버 별도 ([[paperclip-mcp]]) — 외부 에이전트가 자연어로 통제 가능
+- ✅ MCP 서버 별도 (Paperclip MCP) — 외부 에이전트가 자연어로 통제 가능
 - ✅ [[kiki-appmaker]] 의 production path 그 자체 (sandwich + 17-agent + bkit)
 
 ### 약점 (과제 컨텍스트)

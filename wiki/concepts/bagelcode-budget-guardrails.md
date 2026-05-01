@@ -4,13 +4,13 @@ category: concepts
 tags: [bagelcode, crumb, guardrails, ratchet, budget, fault-tolerance, anti-deception]
 sources:
   - "[[bagelcode-final-design-2026]]"
-  - "[[bagelcode-fault-tolerance-design.md]]"
+  - "[[bagelcode-fault-tolerance-design]]"
   - "[[bagelcode-rubric-scoring]]"
   - "[[bagelcode-frontier-rationale-5-claims]]"
 summary: 검수 → 래칫 패턴이 무한 반복되거나 토큰을 폭식하지 않도록, 최대 횟수 / wall-clock / token 3축에 가드레일을 정의. 현재 구현 5종 + 미구현 8종 + sprint demo 임계값 + 우선순위.
 provenance:
-  extracted: 0.55
-  inferred: 0.40
+  extracted: 0.78
+  inferred: 0.17
   ambiguous: 0.05
 created: 2026-05-02
 updated: 2026-05-02
@@ -24,7 +24,7 @@ updated: 2026-05-02
 
 `spec → build → verify → rollback → spec.update → ...` 루프는 verdict 가 PASS 안 나오면 무한 가능. 폭주 시나리오 3종:
 
-1. **Score oscillation** — FAIL 8 → PASS 28 → FAIL 12 → PASS 26. variance 가 크니 [[adaptive stop]] 발화 안 함.
+1. **Score oscillation** — FAIL 8 → PASS 28 → FAIL 12 → PASS 26. variance 가 크니 [[bagelcode-final-design-2026|adaptive stop]] 발화 안 함.
 2. **Subprocess hang** — claude/codex 가 timeout 없이 응답 멈춤. idle_timeout (60s) 은 *event 간격* 만 검사 — subprocess 안에서는 무한 대기.
 3. **Token 누적** — 매 spawn 이 transcript 전체를 sandwich 에 inject → 후반부 turn 은 첫 turn 의 5-10× 토큰 소비. 누적 검사 X. ^[inferred]
 

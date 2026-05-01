@@ -54,6 +54,7 @@ updated: 2026-05-01
 - [[bagelcode-rubric-scoring]] — 5차원 × 5점 + 토큰 효율 + Karpathy P4 anti-deception 룰
 - [[bagelcode-orchestration-topology]] — **Hub-Ledger-Spoke** (PDCA 폐기 → hierarchical hybrid)
 - [[bagelcode-fault-tolerance-design]] — F1-F5 실패 분류 × 복구 primitive (연결부/통신/에이전트)
+- [[bagelcode-budget-guardrails]] — 검수 → 래칫 폭주 방지 3축 (횟수/time/cost) — 현재 5종 / 미구현 8종 / P0 4종 추천
 
 ## Synthesis (의사결정)
 
@@ -76,7 +77,9 @@ updated: 2026-05-01
 
 ## 권장 방향 (현재)
 
-**Hub-Ledger-Spoke 토폴로지** ([[bagelcode-orchestration-topology]]) + **Claude Code + Codex 고정** ([[bagelcode-agents-fixed]]) + **Gemini Verifier (cross-provider)** + **F1-F5 fault tolerance** ([[bagelcode-fault-tolerance-design]]).
+> ⚠️ **2026-05-02 갱신**: 아래는 v1-v2 중간 결정. **최종 lock 된 결정은 [[bagelcode-final-design-2026]]** — Verifier 는 외부 Gemini 가 아니라 **Engineering Lead 안의 CourtEval (Grader/Critic/Defender/Re-grader, ACL 2025)** 로 흡수됨. budget cap 은 [[bagelcode-budget-guardrails]] 참조.
+
+**Hub-Ledger-Spoke 토폴로지** ([[bagelcode-orchestration-topology]]) + **Claude Code + Codex 고정** ([[bagelcode-agents-fixed]]) + **CourtEval verifier** ([[bagelcode-final-design-2026]]) + **F1-F5 fault tolerance** ([[bagelcode-fault-tolerance-design]]) + **3축 budget cap** ([[bagelcode-budget-guardrails]]).
 
 PDCA pipeline 은 ICML 2025 §F (Resilience-Faulty-Agents) 결과 기반 폐기 — chain 토폴로지 = 10.5% 저하 + Cognition 의 context-fragmentation 경고와 충돌. Hierarchical 5.5% 로 회귀.
 
@@ -95,11 +98,13 @@ PDCA pipeline 은 ICML 2025 §F (Resilience-Faulty-Agents) 결과 기반 폐기 
 
 ## 결정 대기 중
 
-- [ ] Verifier provider 최종 (Gemini 디폴트 vs GLM stretch — 인증 셋업 측정)
-- [ ] 시연 녹화 vs 라이브
-- [ ] 제출 GitHub public vs zip
-- [ ] [[bagelcode-job-posting-208045]] 본문 verbatim 확보 (선택)
-- [ ] 게임 도메인 (안 C) 잔존 흔적 — README 도입부 1 case 로 유지할지
+> 최신 상태는 [[bagelcode-final-design-2026]] 와 `~/workspace/crumb/CHANGELOG.md` 참조. 아래 todos 의 `[x]` 는 2026-05-02 시점 갱신.
+
+- [x] Verifier provider 최종 — **CourtEval (Engineering Lead 내부, Claude Sonnet 4.6)** 로 결정. Gemini 폐기 (cost)
+- [ ] 시연 녹화 (1-3 min) — sprint 막바지 작업
+- [x] 제출 GitHub public — `mangowhoiscloud/crumb` 레포 생성 완료 (commit `a82ec4c` 기준 main)
+- [ ] [[bagelcode-job-posting-208045]] 본문 verbatim 확보 (선택; CSR 페이지)
+- [x] 게임 도메인 — Phaser 3.80 single-file ≤60KB 로 lock
 
 ## Related
 
