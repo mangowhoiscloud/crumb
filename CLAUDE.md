@@ -37,15 +37,18 @@ crumb/
 
 ## Skills available in this workspace
 
-The 9 skills in `.skills/` are **not committed** (gitignored). They are the operational tooling for maintaining `wiki/` during the sprint and are mirrored from `~/workspace/mango-wiki/.skills/`.
+The 12 skills in `.skills/` are **not committed** (gitignored). They mirror `~/workspace/mango-wiki/.skills/` and let any user of this repo maintain a personal knowledge base alongside the codebase — Crumb sessions inevitably accumulate context (specs, design rationale, post-mortems, frontier references) that benefits from the same Karpathy-style compiled wiki the `wiki/` subset already demonstrates.
 
 | User says... | Read this skill |
 |---|---|
+| "wiki 셋업" / "initialize my wiki" | `.skills/wiki-setup/SKILL.md` |
 | "wiki에 추가" / "ingest this" / "이 자료 정리해서 넣어" | `.skills/wiki-ingest/SKILL.md` |
 | "wiki 갱신" / "이 페이지 업데이트" / "save this to wiki" | `.skills/wiki-update/SKILL.md` |
 | "wiki에서 X 찾아" / "what do we know about Y" | `.skills/wiki-query/SKILL.md` |
 | "wiki 상태" / "manifest" / "what's been ingested" | `.skills/wiki-status/SKILL.md` |
 | "wiki lint" / "broken link" / "audit wiki" | `.skills/wiki-lint/SKILL.md` |
+| "wiki 재구축" / "archive and start over" | `.skills/wiki-rebuild/SKILL.md` |
+| "wiki 내보내기" / "graphml" / "neo4j export" / "visualize graph" | `.skills/wiki-export/SKILL.md` |
 | "cross-link" / "wikilinks 연결" / "이 두 페이지 묶어줘" | `.skills/cross-linker/SKILL.md` |
 | "태그 정리" / "tag normalize" | `.skills/tag-taxonomy/SKILL.md` |
 | "스킬 만들어줘" / "new skill for X" | `.skills/skill-creator/SKILL.md` |
