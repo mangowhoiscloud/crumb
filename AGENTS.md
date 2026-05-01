@@ -11,9 +11,17 @@
 
 ```bash
 npm install
+npm run build
+
+# Mock-adapter smoke test (no subscription needed, ~1s)
+npx tsx src/index.ts run \
+  --goal "고양이 매치-3, 60초, 콤보 1.5x" \
+  --adapter mock --idle-timeout 5000
+
+# Real run via local CLIs
 claude login   # if not already
-codex login    # if not already (optional, --solo mode bypasses)
-npm run dev -- run --preset standard "고양이 매치-3, 60초, 콤보 1.5x"
+codex login    # if not already (optional)
+npx tsx src/index.ts run --goal "..."   # default adapters: claude-local + codex-local
 ```
 
 ## For agents working on this repo
@@ -77,15 +85,20 @@ Every architecture decision in this repo is grounded in `wiki/`. Before changing
 ### How to run a session
 
 ```bash
-# default standard mode (Claude Code + Codex)
-npm run dev -- run --preset standard "your game pitch"
+# Mock adapter — deterministic demo, no API/subscription cost
+npx tsx src/index.ts run --goal "your game pitch" --adapter mock --idle-timeout 5000
 
-# solo mode (Anthropic key only)
-npm run dev -- run --preset solo "your pitch"
+# Real run — Coordinator picks claude-local for planner-lead and codex-local
+# for engineering-lead by default (overridable via --adapter)
+npx tsx src/index.ts run --goal "your game pitch"
 
-# replay a previous session
-npm run dev -- replay sessions/<session-id>/
+# Replay deterministically — proves state is fully derivable from transcript
+npx tsx src/index.ts replay sessions/<session-id>/
 
-# observe (browser-based, optional)
-npm run dev -- observe sessions/<session-id>/
+# List sessions and adapter health
+npx tsx src/index.ts ls
+npx tsx src/index.ts doctor
+
+# Observation: tail the transcript while a session runs
+tail -f sessions/<session-id>/transcript.jsonl | jq -r '"\(.kind)\t\(.from)\t\(.body // "")"'
 ```
