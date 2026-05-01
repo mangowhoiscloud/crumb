@@ -20,35 +20,85 @@
     "task_id": { "type": "string" },
     "from": {
       "type": "string",
-      "enum": ["user", "coordinator", "planner-lead", "engineering-lead", "builder-fallback", "validator", "system"]
-    },
-    "to": {
-      "oneOf": [
-        { "type": "string" },
-        { "type": "string", "enum": ["*"] }
+      "enum": [
+        "user",
+        "coordinator",
+        "planner-lead",
+        "engineering-lead",
+        "builder-fallback",
+        "validator",
+        "system"
       ]
     },
+    "to": {
+      "oneOf": [{ "type": "string" }, { "type": "string", "enum": ["*"] }]
+    },
     "parent_event_id": { "type": ["string", "null"] },
-    "in_reply_to": { "type": ["string", "null"], "description": "Deprecated alias for parent_event_id" },
+    "in_reply_to": {
+      "type": ["string", "null"],
+      "description": "Deprecated alias for parent_event_id"
+    },
     "kind": {
       "type": "string",
       "enum": [
-        "session.start", "session.end", "agent.wake", "agent.stop",
-        "goal", "question.socratic", "answer.socratic",
-        "spec", "spec.update", "build",
-        "verify.request", "verify.result", "judge.score", "done",
-        "agent.thought_summary", "question", "answer", "debate", "note",
-        "step.socratic", "step.concept", "step.research", "step.design", "step.judge",
-        "user.intervene", "user.veto", "user.approve", "user.pause", "user.resume",
-        "handoff.requested", "handoff.accepted", "handoff.rollback",
-        "artifact.created", "ack", "error", "audit",
-        "tool.call", "tool.result", "hook"
+        "session.start",
+        "session.end",
+        "agent.wake",
+        "agent.stop",
+        "goal",
+        "question.socratic",
+        "answer.socratic",
+        "spec",
+        "spec.update",
+        "build",
+        "verify.request",
+        "verify.result",
+        "judge.score",
+        "done",
+        "agent.thought_summary",
+        "question",
+        "answer",
+        "debate",
+        "note",
+        "step.socratic",
+        "step.concept",
+        "step.research",
+        "step.design",
+        "step.judge",
+        "user.intervene",
+        "user.veto",
+        "user.approve",
+        "user.pause",
+        "user.resume",
+        "handoff.requested",
+        "handoff.accepted",
+        "handoff.rollback",
+        "artifact.created",
+        "ack",
+        "error",
+        "audit",
+        "tool.call",
+        "tool.result",
+        "hook"
       ]
     },
     "topic": { "type": "string" },
     "step": {
       "type": "string",
-      "enum": ["socratic", "concept", "research", "design", "builder", "qa", "verifier", "grader", "critic", "defender", "regrader", "synth"]
+      "enum": [
+        "socratic",
+        "concept",
+        "research",
+        "design",
+        "builder",
+        "qa",
+        "verifier",
+        "grader",
+        "critic",
+        "defender",
+        "regrader",
+        "synth"
+      ]
     },
     "body": { "type": "string" },
     "data": { "type": "object" },
