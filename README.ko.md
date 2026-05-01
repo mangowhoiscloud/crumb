@@ -18,25 +18,39 @@
 git clone https://github.com/mangowhoiscloud/crumb.git
 cd crumb
 npm install
+npm run build
 
-# 사용자 구독으로 인증 (API 키 불필요)
-claude login   # Claude Max 구독 활용
-codex login    # OpenAI Plus 구독 (--solo 모드는 생략 가능)
+# Mock 어댑터로 스모크 테스트 (구독 불필요, 0원)
+npx tsx src/index.ts run \
+  --goal "60초 매치-3 + 콤보 보너스" \
+  --adapter mock --idle-timeout 5000
 
-# 세션 실행
-npm run dev -- run --preset standard "고양이 매치-3, 60초, 콤보 1.5x"
+# 결과 확인
+ls sessions/                                    # ULID 디렉터리 1개 생성
+jq -r '"\(.kind)\t\(.from)"' sessions/*/transcript.jsonl
+
+# 결정론 재실행
+npx tsx src/index.ts replay sessions/<session-id>
 ```
 
-TUI 에서 에이전트 협업을 관찰하면서 `/note <텍스트>` 나 `/veto <id>` 로 언제든 개입.
+실제 에이전트 호출은 사용자 CLI 인증 후:
 
-## 모드
+```bash
+claude login   # Claude Max 구독
+codex login    # OpenAI Plus 구독 (선택)
+npx tsx src/index.ts run --goal "..."   # 기본 어댑터: claude-local + codex-local
+```
 
-| Mode | 활성 actor | 용도 |
-|---|---|---|
-| `--solo` | Coord + 1 Lead (Claude only) | Anthropic 키만, 최소 셋업 |
-| `--standard` (default) | Coord + Planner Lead + Engineering Lead + Verifier | Claude + Codex 정상 |
-| `--rigorous` | + 진짜 specialist 분리 (Concept/Research/Design/QA) | Quality demo, 토큰 ~3× |
-| `--parallel` | standard + Codex/Claude 병렬 builder | 속도 demo, 토큰 ~2× |
+## CLI
+
+| 명령 | 동작 |
+|---|---|
+| `crumb run --goal "<피치>"` | 새 세션 시작 (actor별 기본 어댑터) |
+| `crumb run --goal ... --adapter mock` | 모든 actor를 mock으로 강제 (결정론 데모) |
+| `crumb event` | stdin JSON을 검증·append (서브프로세스 에이전트가 사용) |
+| `crumb replay <session-dir>` | transcript에서 상태 재구성 (결정론 검증) |
+| `crumb doctor` | 어댑터 헬스체크 (`claude --version`, `codex --version`) |
+| `crumb ls` | `sessions/` 디렉터리 목록 + 이벤트 수 |
 
 ## 아키텍처 한 화면
 
@@ -89,15 +103,27 @@ sessions/<session-id>/
 
 ## 상태
 
-초기 개발 중. README 와 wiki/ 가 코드보다 앞서 있고, 36 시간 sprint 에 걸쳐 점진 구축 중.
+Walking skeleton 완료 (`a68651e`):
+
+- [x] 스키마 검증 JSONL transcript (28 kinds × 11 fields, ajv 2020-12)
+- [x] Pure reducer + circuit breaker + adaptive stop + rollback (vitest 13 specs)
+- [x] Adapter — `claude-local` / `codex-local` / `mock` 3종
+- [x] Live dispatcher — 서브프로세스 spawn + sandwich 주입
+- [x] CLI — `run` / `event` / `replay` / `doctor` / `ls`
+- [x] CI — lint + typecheck + format + test matrix (Node 18/20/22) + 스키마 검증
+- [ ] `claude-local` + `codex-local` 실제 end-to-end 실행 (sandwich 갱신, 검증 중)
+- [ ] TUI 관찰자 (blessed) — 현재는 `tail -f sessions/*/transcript.jsonl` 로 대체
+- [ ] `summary.html` 후처리 리포트 생성기
+- [ ] 데모 스크린캐스트
 
 ## 문서
 
 - [AGENTS.md](./AGENTS.md) — 이 repo 에서 작업하는 에이전트/기여자용
-- [docs/architecture.md](./docs/architecture.md) — Architecture deep-dive
-- [docs/observability.md](./docs/observability.md) — 자체 구축 observability rationale
+- [agents/_event-protocol.md](./agents/_event-protocol.md) — 서브프로세스 에이전트가 `crumb event` 로 이벤트 emit 하는 방법
 - [protocol/schema.md](./protocol/schema.md) — 1-page transcript spec
+- [protocol/schemas/message.schema.json](./protocol/schemas/message.schema.json) — JSON Schema (draft 2020-12)
 - [wiki/](./wiki/) — 설계 rationale (mango-wiki 의 subset)
+  - [bagelcode-final-design-2026.md](./wiki/concepts/bagelcode-final-design-2026.md) — 최종 설계 spec
 
 ## License
 

@@ -19,25 +19,39 @@ This is built for the [Bagelcode 신작팀 AI 개발자 과제 전형](https://c
 git clone https://github.com/mangowhoiscloud/crumb.git
 cd crumb
 npm install
+npm run build
 
-# Authenticate via your existing CLI tools (no API keys needed)
-claude login   # uses your Claude Max subscription
-codex login    # uses your OpenAI Plus subscription (optional for --solo)
+# Smoke test with the mock adapter (no subscription needed)
+npx tsx src/index.ts run \
+  --goal "60-second match-3 with combo bonus" \
+  --adapter mock --idle-timeout 5000
 
-# Run a session
-npm run dev -- run --preset standard "고양이 매치-3, 60초, 콤보 1.5x"
+# Inspect what happened
+ls sessions/                                    # one ULID-named directory
+jq -r '"\(.kind)\t\(.from)"' sessions/*/transcript.jsonl
+
+# Re-derive state deterministically
+npx tsx src/index.ts replay sessions/<session-id>
 ```
 
-The TUI shows agents collaborating; type `/note <text>` or `/veto <id>` anytime.
+For a real run with the user's local CLIs, authenticate first:
 
-## Modes
+```bash
+claude login   # Claude Max subscription
+codex login    # OpenAI Plus subscription (optional)
+npx tsx src/index.ts run --goal "..."   # default adapters: claude-local + codex-local
+```
 
-| Mode | Active actors | Example use |
-|---|---|---|
-| `--solo` | Coord + 1 Lead (all Claude) | Anthropic key only, minimum setup |
-| `--standard` (default) | Coord + Planner Lead + Engineering Lead + Verifier | Normal, Claude + Codex |
-| `--rigorous` | + true specialist actors (Concept/Research/Design/QA split) | Quality demo, ~3× tokens |
-| `--parallel` | standard + Codex/Claude parallel builders | Speed demo, ~2× tokens |
+## CLI
+
+| Command | What it does |
+|---|---|
+| `crumb run --goal "<pitch>"` | Start a new session (default adapters per actor) |
+| `crumb run --goal ... --adapter mock` | Force every actor to the mock adapter (deterministic demo) |
+| `crumb event` | Read a JSON message from stdin, validate, append to `$CRUMB_TRANSCRIPT_PATH` (subprocess agents call this) |
+| `crumb replay <session-dir>` | Re-derive state from `transcript.jsonl` (proves determinism) |
+| `crumb doctor` | Adapter health check (`claude --version`, `codex --version`) |
+| `crumb ls` | List `sessions/` with event counts |
 
 ## Architecture (high level)
 
@@ -90,15 +104,27 @@ These 4 files are the **input asset** for a downstream Unity team — Crumb is t
 
 ## Status
 
-Early development. This README and the wiki/ directory are ahead of the code; the runtime is being built incrementally over a 36-hour sprint.
+Walking skeleton complete (`a68651e`):
+
+- [x] Schema-validated JSONL transcript (28 kinds × 11 fields, ajv 2020-12)
+- [x] Pure reducer with circuit breaker, adaptive stopping, rollback rules (13 vitest specs)
+- [x] Adapter interface — `claude-local`, `codex-local`, and `mock` implementations
+- [x] Live dispatcher that spawns subprocess agents with sandwich-injected prompts
+- [x] CLI — `run`, `event`, `replay`, `doctor`, `ls`
+- [x] CI — lint + typecheck + format + test matrix (Node 18/20/22) + schema validation
+- [ ] Real agent end-to-end run with `claude-local` + `codex-local` (sandwich files updated; testing in progress)
+- [ ] TUI observer (blessed) — currently `tail -f sessions/*/transcript.jsonl` is the substitute
+- [ ] `summary.html` post-session report generator
+- [ ] Demo screencast
 
 ## Documentation
 
 - [AGENTS.md](./AGENTS.md) — For agents/contributors working on this repo
-- [docs/architecture.md](./docs/architecture.md) — Architecture deep-dive
-- [docs/observability.md](./docs/observability.md) — Self-built observability rationale
+- [agents/_event-protocol.md](./agents/_event-protocol.md) — How sandwich agents emit transcript events via `crumb event`
 - [protocol/schema.md](./protocol/schema.md) — 1-page transcript spec
+- [protocol/schemas/message.schema.json](./protocol/schemas/message.schema.json) — JSON Schema (draft 2020-12)
 - [wiki/](./wiki/) — Design rationale (subset of mango-wiki)
+  - [bagelcode-final-design-2026.md](./wiki/concepts/bagelcode-final-design-2026.md) — Canonical design spec
 
 ## License
 
