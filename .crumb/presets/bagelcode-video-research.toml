@@ -1,0 +1,84 @@
+# bagelcode-video-research (v3.3 — researcher single-provider override)
+#
+# Use case: video evidence is the dominant input for THIS session's research,
+# but the user does not want a 3-way provider split for build/verify (e.g. they
+# only have Claude Max + Google Gemini Advanced, no Codex Plus). researcher is
+# bound to gemini-sdk for the multimodal video path; everything else follows
+# ambient (entry harness — typically Claude Code).
+#
+# Difference vs bagelcode-cross-3way:
+#   - bagelcode-cross-3way   : 3 providers (Claude + Codex + Gemini) — Bagelcode mail's verbatim ask
+#   - bagelcode-video-research: 1-provider ambient + Gemini SDK ONLY for researcher
+#
+# Resolve order (per [[bagelcode-system-architecture-v3]] §5.1):
+#   1. preset.actors.<name>.{harness, model} 명시 사용
+#   2. preset.[defaults] block (없음)
+#   3. ambient (entry host 따라감)
+#   4. system fallback (claude-code + claude-sonnet-4-6)
+
+[meta]
+name = "bagelcode-video-research"
+description = "researcher 만 gemini-sdk (Gemini 3.1 Pro 비디오) 로 묶고, 나머지는 entry host ambient. Codex 없는 환경에서 멀티모달 evidence 만 별도 provider 쓰는 minimum-friction preset."
+recommended = false
+schema = "crumb/v3"
+
+# coordinator: 명시 없음 → ambient
+[actors.coordinator]
+sandwich = "agents/coordinator.md"
+
+# planner-lead: 명시 없음 → ambient
+[actors.planner-lead]
+sandwich = "agents/planner-lead.md"
+
+# researcher (★ — 이 preset 의 핵심)
+# gemini-cli 의 video bug 우회. GOOGLE_API_KEY 필요.
+[actors.researcher]
+sandwich = "agents/researcher.md"
+harness  = "gemini-sdk"
+provider = "google"
+model    = "gemini-3-1-pro"
+
+# builder: 명시 없음 → ambient (Claude Code if entry, Codex if entry, etc.)
+[actors.builder]
+sandwich = "agents/builder.md"
+
+# verifier: 명시 없음 → ambient
+[actors.verifier]
+sandwich = "agents/verifier.md"
+
+# builder-fallback: 명시 없음 → ambient
+[actors.builder-fallback]
+sandwich = "agents/builder-fallback.md"
+
+# Effects (deterministic, no LLM)
+[effects.qa_check]
+tool     = "qa-check-effect@v1"
+harness  = "none"
+provider = "none"
+
+# Skills (procedural workflow)
+[skills]
+tdd_iron_law                  = "skills/tdd-iron-law.md"
+verification_before_completion = "skills/verification-before-completion.md"
+code_review_protocol          = "skills/code-review-protocol.md"
+parallel_dispatch             = "skills/parallel-dispatch.md"
+subagent_spawn                = "skills/subagent-spawn.md"
+
+# Specialists (planner-lead 내부 step inline; v3.3: research 는 별도 actor)
+[specialists.planner-lead]
+concept  = "agents/specialists/concept-designer.md"
+design   = "agents/specialists/visual-designer.md"
+contract = "agents/specialists/game-design.md"
+
+# Verifier mode (CourtEval inline 4 sub-step)
+[verifier]
+mode                    = "courteval"
+adaptive_stop_threshold = 1.0
+sub_steps               = ["grader", "critic", "defender", "regrader"]
+
+# Routing rules
+[routing]
+flow              = ["coordinator", "planner-lead", "researcher", "planner-lead", "builder", "qa_check", "verifier"]
+escalate_on_fail  = "builder-fallback"
+escalate_on_stuck = 5
+adaptive_stop     = true
