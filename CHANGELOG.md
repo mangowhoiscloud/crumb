@@ -4,6 +4,15 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — OpenHands #5500 regression specs for circuit_breaker user-exclusion (2026-05-02)
+
+Pin down the OpenHands #5500 invariant ("stuck-detector must exclude user messages") with explicit regression tests in `src/reducer/index.test.ts`. The property was already correctly implemented at `src/reducer/index.ts:{49,477,489}` (both breaker recovery and failure branches exclude `from='user'`/`'coordinator'`/`'system'`; `stuck_count` only increments on `kind=error`), but lacked a negative test guarding against future refactor regression.
+
+- **`src/reducer/index.test.ts`** (+2 specs, suite total **293/293**):
+  - "OpenHands #5500: user.intervene does not reset an OPEN circuit breaker" — given `circuit_breaker.builder = OPEN/3-failures`, a `kind=user.intervene` event leaves the breaker untouched. Without this, a chatty user mid-session could mask a broken builder by appearing to be "actor activity" and drifting the breaker state to CLOSED.
+  - "OpenHands #5500: user.* events never increment stuck_count" — four user.* events (intervene/veto/pause/resume) in a row keep `stuck_count = 0`. Stuck detection is reserved for `kind=error` events from actors.
+- **`wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md`** §4.1 + §5 entries upgraded ⚠ → ✅ verified, with file:line citations + spec names. Cross-references the All-Hands-AI/OpenHands #5500 + #5480 thread.
+
 ### Added — NL Intervention 12-system frontier survey (2026-05-02)
 
 New reference page `wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md` extends the existing `wiki/synthesis/bagelcode-user-intervention-frontier-2026-05-02.md` matrix from 5 systems to 12, with a fresh dimension: NL classification mechanism. Survey result: 9/12 frontier systems use **implicit LLM judgment** (LangGraph, Cursor, Cline, OpenHands, Devin, Manus, Claude Code skill matcher, Codex CLI, AutoGen UserProxy), 2/12 use **protocol gates only** (Inspect AI, Aider), and 1/12 (bkit) uses an **explicit regex enum classifier** with documented FP-precision bug history (ENH-226 patch). Crumb's PR-A/PR-B path (raw NL → `kind=user.intervene body` + `collectSandwichAppends` → next actor LLM judges in context) matches the majority pattern; the page records the avoid-decision against introducing an `intent.schema.json` enum classifier as bkit-style regression. Cross-references: OpenHands #5500 stuck-detector exclusion (verify our circuit_breaker), Cursor 2.0 worktree isolation (matches our v3 invariant 8), AutoGen GroupChatManager known-broken (matches our v3 Must 5 STOP-after-handoff), LangGraph `Command` tagged-union (matches our `data.{goto, swap, target_actor, sandwich_append, reset_circuit}` 6-field shape from PR-B).
