@@ -73,10 +73,47 @@ verifier (gemini-cli per preset) requires Gemini CLI installed; otherwise --pres
 
 # 6. User intervention
 
-User can intervene mid-turn:
-- 자연어 message → kind=user.intervene
-- `crumb veto <msg-id>` shell → kind=user.veto
-- pause/resume via `crumb event` shell
+3 표면 (TUI / inbox.txt / JSON event) 모두 동일 transcript line 으로 떨어짐 — routing 은 source 무관 (`agents/coordinator.md` Routing Rules 참조). Codex CLI 환경은 shell 위주이므로 inbox.txt 를 1순위 권장.
+
+## 표면 1 — `inbox.txt` (Codex 권장)
+
+```bash
+echo "@builder use red/green palette only" >> $CRUMB_SESSION_DIR/inbox.txt
+echo "/pause @verifier waiting on screenshot" >> $CRUMB_SESSION_DIR/inbox.txt
+echo "/append @builder phaser 3.80 only — no v4 APIs" >> $CRUMB_SESSION_DIR/inbox.txt
+```
+
+500 ms watcher 가 line 하나당 transcript event 1개로 변환. Grammar 는 `src/inbox/parser.ts` (TUI 슬래시 바와 1:1 동일).
+
+## 표면 2 — TUI 슬래시 바 (`crumb tui` 띄운 경우)
+
+```
+/approve            /veto <id>          /pause [@<a>] [reason]
+/resume [@<a>]      /goto <a> [body]    /swap <from>=<adapter>
+/reset-circuit <a|all>                  /append [@<a>] <text>
+/note <text>        /redo [body]        /q  /quit
+@<a> <body>         (free text mention)
+```
+
+## 표면 3 — JSON event 직접
+
+```bash
+echo '{"from":"user","kind":"user.intervene","body":"<원문>","data":{"goto":"planner-lead"}}' \\
+  | npx tsx src/index.ts event
+```
+
+## `data` 필드 의미 (5 user.* 이벤트 공통)
+
+| `data.<key>` | 효과 |
+|---|---|
+| `target_actor: <actor>` | fact 가 `@<actor>` 로 태그됨 — 라우팅 변경 X, 다음 spawn 의 sandwich 에 노출 |
+| `goto: <actor>` | `next_speaker=<actor>` 강제 + 즉시 spawn (LangGraph Command(goto)) |
+| `swap: { from, to }` | `adapter_override[from]=to` (Paperclip BYO swap) |
+| `reset_circuit: <a> or true` | `circuit_breaker[<a>]` 클리어 (또는 전체) |
+| `sandwich_append: <text>` | dispatcher 가 다음 spawn 부터 system prompt 에 concatenate (v3.2 G4) |
+| `actor: <actor>` (pause/resume 한정) | 글로벌 대신 해당 actor 만 일시정지/해제 |
+
+→ Frontier: LangGraph `Command` (53/60), Paperclip swap (38/60), Codex `APPEND_SYSTEM.md` (38/60). 배경: `wiki/synthesis/bagelcode-user-intervention-frontier-2026-05-02.md`.
 
 # 7. Done
 
