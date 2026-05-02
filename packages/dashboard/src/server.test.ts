@@ -1,0 +1,142 @@
+/**
+ * SSE server smoke test. Starts a real HTTP server on port 0, hits each endpoint.
+ */
+
+import { mkdtemp, mkdir, writeFile, appendFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, posix, sep } from 'node:path';
+
+import { describe, it, expect } from 'vitest';
+
+import { startDashboardServer } from './server.js';
+
+async function fetchText(url: string): Promise<{ status: number; body: string }> {
+  const res = await fetch(url);
+  return { status: res.status, body: await res.text() };
+}
+
+describe('dashboard server', () => {
+  it('serves dashboard HTML at /', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'crumb-dash-'));
+    process.env.CRUMB_HOME = home;
+    const glob = posix.join(
+      home.split(sep).join('/'),
+      'projects',
+      '*',
+      'sessions',
+      '*',
+      'transcript.jsonl',
+    );
+    const server = await startDashboardServer({ port: 0, bind: '127.0.0.1', glob });
+    try {
+      const r = await fetchText(server.url);
+      expect(r.status).toBe(200);
+      expect(r.body).toMatch(/<!DOCTYPE html>/);
+      expect(r.body).toContain('Crumb · Live Dashboard');
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('serves /api/sessions JSON', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'crumb-dash-'));
+    const sessionDir = join(home, 'projects', 'p1', 'sessions', 'sess-A');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'transcript.jsonl'),
+      JSON.stringify({
+        id: '1',
+        ts: '2026-05-02T00:00:00.000Z',
+        session_id: 'sess-A',
+        from: 'user',
+        kind: 'goal',
+        body: 'hi',
+      }) + '\n',
+      'utf8',
+    );
+    const glob = posix.join(
+      home.split(sep).join('/'),
+      'projects',
+      '*',
+      'sessions',
+      '*',
+      'transcript.jsonl',
+    );
+    const server = await startDashboardServer({ port: 0, bind: '127.0.0.1', glob });
+    try {
+      // Allow chokidar's initial 'add' event to flush.
+      await new Promise((r) => setTimeout(r, 200));
+      const r = await fetch(server.url + 'api/sessions');
+      const json = (await r.json()) as {
+        sessions: Array<{ session_id: string; goal: string | null }>;
+      };
+      expect(json.sessions.some((s) => s.session_id === 'sess-A' && s.goal === 'hi')).toBe(true);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('streams append events via SSE', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'crumb-dash-'));
+    const sessionDir = join(home, 'projects', 'p1', 'sessions', 'sess-B');
+    await mkdir(sessionDir, { recursive: true });
+    const transcriptPath = join(sessionDir, 'transcript.jsonl');
+    await writeFile(transcriptPath, '', 'utf8');
+    const glob = posix.join(
+      home.split(sep).join('/'),
+      'projects',
+      '*',
+      'sessions',
+      '*',
+      'transcript.jsonl',
+    );
+    const server = await startDashboardServer({
+      port: 0,
+      bind: '127.0.0.1',
+      glob,
+      pollInterval: 50,
+    });
+
+    try {
+      await new Promise((r) => setTimeout(r, 100));
+      const controller = new AbortController();
+      const ssePromise = (async () => {
+        const res = await fetch(server.url + 'api/stream?session=*', { signal: controller.signal });
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        const events: string[] = [];
+        const start = Date.now();
+        while (Date.now() - start < 3000) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          if (buf.includes('event: append')) {
+            events.push('append');
+            break;
+          }
+        }
+        controller.abort();
+        return events;
+      })();
+
+      // Wait briefly so SSE handshake completes, then append a line.
+      await new Promise((r) => setTimeout(r, 200));
+      await appendFile(
+        transcriptPath,
+        JSON.stringify({
+          id: '1',
+          ts: '2026-05-02T00:00:00.000Z',
+          session_id: 'sess-B',
+          from: 'user',
+          kind: 'goal',
+          body: 'hi',
+        }) + '\n',
+      );
+      const events = await ssePromise;
+      expect(events).toContain('append');
+    } finally {
+      await server.close();
+    }
+  });
+});
