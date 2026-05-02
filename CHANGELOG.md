@@ -57,6 +57,23 @@ Six interactive-quality fixes to `packages/dashboard/`:
 
 Test plan: lint clean (0 errors, 26 informational sonarjs warnings), typecheck clean, format clean, **342/342 tests passing**, build inlined the new client (78991 bytes) into `dashboard-html.generated.ts`. No code changes outside `packages/dashboard/src/client/{dashboard.html, dashboard.css, dashboard.js}`. The dashboard pretest hook re-inlines automatically; CI ratchet preserved.
 
+### Added — `package.json` `files` allowlist for `npm i -g` distribution (PR-1) (2026-05-03)
+
+Closes the critical install blocker identified in the package-manager audit (`wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md` adjacent — install/update/uninstall track). Without this, `npm i -g crumb` would have shipped only `dist/` (npm's default) and `protocol/schemas/message.schema.json` would be missing → first transcript validation throws ENOENT → every session crashes.
+
+- **`package.json`** new `files` allowlist: `dist`, `protocol/schemas/**/*.json`, `agents/**/*.md`, `skills/**/*.{md,py}`, `skills/**/LICENSE.txt`, `.crumb/presets/*.toml`, top-level docs (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `CHANGELOG.md`, `README.md`, `README.ko.md`, `LICENSE`). Negation entries strip out `__pycache__/`, `*.pyc`, `*.test.{ts,js,d.ts}`, `*.spec.{ts,js}`, `*.tsbuildinfo` so the published tarball doesn't carry test artifacts (tsc currently emits them into `dist/`; cleaning the `tsconfig.json` `include` is a separate cleanup).
+- **`src/protocol/validate.test.ts`** (NEW) — 3 regression specs that fail loudly if any future PR drops a critical asset from the allowlist:
+  - schema file is reachable from repo root (the path `protocol/validate.ts:13` resolves at runtime)
+  - `npm pack --dry-run --json` includes schema, all 6 actor sandwiches, presets, AGENTS/CLAUDE/GEMINI/LICENSE, plus at least one `dist/` entry
+  - same dry-run excludes `__pycache__/`, `*.pyc`, `*.test.{ts,js,d.ts}`, `*.spec.{ts,js}` (test-artifact leakage was the second-largest source of unpacked-size waste in the pre-allowlist tarball)
+- **`npm pack --dry-run`** drops from 261 files (∞ test leakage) → 176 files / 316 kB. `dist/` + asset directories all confirmed present.
+
+This is **PR-1 of 5** in the install/update/uninstall track. Next:
+- **PR-2** — `env-paths` + `conf` integration (XDG override allowed, default `~/.crumb`)
+- **PR-3** — `crumb init` (idempotent multi-host registration via SHA-256 compare)
+- **PR-4** — `crumb update` (sandwich/preset cache refresh, config preserved)
+- **PR-5** — `crumb uninstall` (host registration removed, `--purge` for user data)
+
 ### Added — Dashboard multi-home support (`--home <path>` repeatable + `CRUMB_HOMES` env) (2026-05-02)
 
 The dashboard could only watch a single Crumb home (default `~/.crumb`), so test sessions under `/tmp/crumb-test-home/` and production sessions under `~/.crumb/` couldn't appear together. Now one dashboard instance aggregates from any number of homes.
