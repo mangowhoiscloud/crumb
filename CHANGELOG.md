@@ -4,6 +4,38 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — `@crumb/studio` separate-publish prep (PR-pkg-2) (2026-05-03)
+
+Builds on the dashboard → studio rename (#96). Prepares `@crumb/studio` for independent npm publish so users can `npm i -g @crumb/studio` without pulling the full `crumb` core, and so dashboard UX patches can iterate on their own SemVer cadence (frontier pattern: Anthropic Claude Code / OpenAI Codex / Vercel `next` + sub-packages).
+
+`packages/studio/package.json`:
+- **`private: true` removed** — was blocking publish entirely.
+- **`files` allowlist** added: `dist`, `scripts/inline-client.mjs`, `README.md`, `LICENSE`. Drops the 124 → 53 KB tarball; no test artifacts (`tsc` emits them but the allowlist excludes via `dist/**`-only inclusion).
+- **`peerDependencies: { crumb: "^0.4.0" }`** + `peerDependenciesMeta.crumb.optional = true`. Studio works standalone for read-only watching; spawning new sessions through the new-session form still requires `crumb` on `PATH` (gated by adapter doctor).
+- **`publishConfig.access: "public"`** — required for scoped packages.
+- **`engines.node: ">=18.0.0"`**, full `keywords` / `repository.directory` / `homepage` / `bugs` / `license` / `author` for npm registry SEO.
+
+`packages/studio/README.md` (NEW, 4.7 KB) — npm-registry-rendered README:
+- 4-workflow table (Spawn / Watch / Intervene / Inspect)
+- Install + run + env reference
+- Architecture (no bundler / no client framework / chokidar tail / API surface)
+- Relationship to `crumb` (single SemVer cadence)
+
+`packages/studio/LICENSE` — copied from root (MIT). Plain copy, no symlink (Windows-safe + npm-registry-friendly).
+
+Root `README.md` Quickstart updated:
+- **End-user path** (no source clone): `npm i -g crumb @crumb/studio`.
+- **Source/dev path** (`git clone`) preserved.
+
+Verification:
+- `npm pack --dry-run` on `packages/studio/`: **19 files / 53.7 kB** (was 41 / 124.8 kB pre-allowlist). `dist/cli.js` + `dist/server.js` + `dist/studio-html.generated.js` (124 KB inlined) all present.
+- Root `npm pack --dry-run` does NOT include `packages/` (root tarball untouched).
+- `lint + typecheck + format:check + test + build` — all green; **421/421 specs pass**.
+
+Out of scope (queued):
+- Actual `npm publish --access public` on both packages — deferred to user's own publish action with auth.
+- `npm version 0.4.0 --workspaces --include-workspace-root` sync — both already at 0.4.0 since PR #93.
+
 ### Changed — Rename `dashboard` → `studio` (web console; user directive) (2026-05-03)
 
 The local web UI is a control surface (spawn / intervene / swap), not just a passive dashboard. User picked the **Studio** naming after surveying Supabase Studio (renamed from Dashboard 2024 Q3) / Sanity Studio / Convex Studio precedent. This PR is a single atomic rename so future PR-pkg-2 (separate `@crumb/studio` publish) can build on the right names.

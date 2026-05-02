@@ -28,15 +28,26 @@ Built for the [Bagelcode 신작팀 AI 개발자 과제 전형](https://career.ba
 
 ## Quickstart
 
-**One-time setup** (any machine, any cwd thereafter):
+**End users** (no source clone — install from npm):
+
+```bash
+npm i -g crumb              # core CLI: crumb run / replay / event / model / doctor
+npm i -g @crumb/studio      # optional web console: crumb-studio
+crumb doctor                # verify auth + chromium binary cached (D6 portability ready)
+crumb-studio                # http://127.0.0.1:7321/ — local web console (auto-opens browser)
+```
+
+The two packages ship from the same monorepo (`mangowhoiscloud/crumb`) and share one SemVer cadence. `@crumb/studio` declares `crumb` as an **optional peer dependency** — Studio can watch existing sessions standalone, but spawning new sessions through the new-session form requires `crumb run` on `PATH`.
+
+**Source/dev setup** (one-time, for hacking on the repo):
 
 ```bash
 git clone https://github.com/mangowhoiscloud/crumb.git
 cd crumb
-npm install         # auto-installs Playwright + Chromium (~110 MB, one-time, optional dep)
+npm install                 # auto-installs Playwright + Chromium (~110 MB, one-time, optional dep)
 npm run build
-npm link            # registers `crumb` on PATH (or: npm i -g .)
-crumb doctor        # verify auth + chromium binary cached (D6 portability ready)
+npm link                    # registers `crumb` + `crumb-studio` on PATH (or: npm i -g .)
+crumb doctor
 ```
 
 After that, `crumb` works from **any directory** — repo-root and preset paths are auto-detected from the install location (`--root` flag remains as escape hatch).

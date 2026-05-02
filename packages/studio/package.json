@@ -1,8 +1,9 @@
 {
   "name": "@crumb/studio",
   "version": "0.4.0",
-  "private": true,
-  "description": "Live observability studio for Crumb sessions — file-tail SSE server + browser UI.",
+  "description": "Crumb Studio — local web console for spawning Crumb sessions, watching transcripts in real time, and intervening (approve / veto / pause / goto / swap / append). File-tail SSE server + browser UI; no cloud, no API key.",
+  "license": "MIT",
+  "author": "mango",
   "type": "module",
   "main": "dist/index.js",
   "exports": {
@@ -11,6 +12,39 @@
   },
   "bin": {
     "crumb-studio": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "scripts/inline-client.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "crumb",
+    "studio",
+    "console",
+    "dashboard",
+    "observability",
+    "sse",
+    "transcript",
+    "multi-agent",
+    "live",
+    "file-tail"
+  ],
+  "homepage": "https://github.com/mangowhoiscloud/crumb#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mangowhoiscloud/crumb.git",
+    "directory": "packages/studio"
+  },
+  "bugs": {
+    "url": "https://github.com/mangowhoiscloud/crumb/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "inline-client": "node scripts/inline-client.mjs",
@@ -22,5 +56,13 @@
   },
   "dependencies": {
     "chokidar": "^3.6.0"
+  },
+  "peerDependencies": {
+    "crumb": "^0.4.0"
+  },
+  "peerDependenciesMeta": {
+    "crumb": {
+      "optional": true
+    }
   }
 }
