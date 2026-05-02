@@ -32,6 +32,18 @@ export class MockAdapter implements Adapter {
       body: `${req.actor} starting (mock adapter)`,
     });
 
+    // The mock adapter cooperates with per_spawn_timeout by checking signal.aborted
+    // before each scripted append. Live adapters wire the signal directly to
+    // child.kill('SIGTERM').
+    if (req.signal?.aborted) {
+      return {
+        exitCode: 124, // 124 = GNU coreutils timeout exit code, matches semantics
+        stdout: `mock ${req.actor} aborted before any work`,
+        stderr: 'aborted',
+        durationMs: Date.now() - start,
+      };
+    }
+
     if (req.actor === 'planner-lead') {
       await writePlannerSequence(writer, req, wakeId);
     } else if (req.actor === 'builder' || req.actor === 'builder-fallback') {
@@ -41,9 +53,9 @@ export class MockAdapter implements Adapter {
     }
 
     return {
-      exitCode: 0,
-      stdout: `mock ${req.actor} completed`,
-      stderr: '',
+      exitCode: req.signal?.aborted ? 124 : 0,
+      stdout: `mock ${req.actor} ${req.signal?.aborted ? 'aborted mid-flight' : 'completed'}`,
+      stderr: req.signal?.aborted ? 'aborted' : '',
       durationMs: Date.now() - start,
     };
   }

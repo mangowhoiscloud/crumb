@@ -75,7 +75,15 @@ export class CodexLocalAdapter implements Adapter {
       child.stdout.on('data', (b) => (stdout += b.toString()));
       child.stderr.on('data', (b) => (stderr += b.toString()));
       child.on('error', reject);
+      const onAbort = (): void => {
+        if (!child.killed) child.kill('SIGTERM');
+      };
+      if (req.signal) {
+        if (req.signal.aborted) onAbort();
+        else req.signal.addEventListener('abort', onAbort, { once: true });
+      }
       child.on('close', (code) => {
+        if (req.signal) req.signal.removeEventListener('abort', onAbort);
         resolve({
           exitCode: code ?? -1,
           stdout,
