@@ -29,6 +29,8 @@ import { ClaudeLocalAdapter } from '../adapters/claude-local.js';
 import { CodexLocalAdapter } from '../adapters/codex-local.js';
 import { GeminiLocalAdapter } from '../adapters/gemini-local.js';
 import { MockAdapter } from '../adapters/mock.js';
+import { renderSummary } from '../summary/render.js';
+import { serialize as serializeExport } from '../exporter/otel.js';
 import type { Effect } from '../effects/types.js';
 import type { Message } from '../protocol/types.js';
 
@@ -98,13 +100,12 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
     sessionDir: opts.sessionDir,
     transcriptPath,
     repoRoot: opts.repoRoot,
+    preset,
     onHook: async (kind, body) => {
       // eslint-disable-next-line no-console
       console.log(`[hook:${kind}] ${body}`);
     },
   };
-  // preset 은 dispatcher 통합 단계에서 deps 에 전달 예정. 현재는 로딩 검증만.
-  void preset;
 
   let state = initialState(opts.sessionId);
 
@@ -141,11 +142,40 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
     let handle: { close: () => void } | null = null;
     let resolved = false;
 
+    const emitSummary = async (final: CrumbState): Promise<void> => {
+      try {
+        const events = await readAll(transcriptPath);
+        const html = renderSummary(events, final, { presetName: opts.presetName });
+        await writeFile(resolve(opts.sessionDir, 'index.html'), html, 'utf8');
+        const exportsDir = resolve(opts.sessionDir, 'exports');
+        await mkdir(exportsDir, { recursive: true });
+        await writeFile(
+          resolve(exportsDir, 'otel.jsonl'),
+          serializeExport('otel-jsonl', events),
+          'utf8',
+        );
+        await writeFile(
+          resolve(exportsDir, 'anthropic-trace.json'),
+          serializeExport('anthropic-trace', events),
+          'utf8',
+        );
+        await writeFile(
+          resolve(exportsDir, 'chrome-trace.json'),
+          serializeExport('chrome-trace', events),
+          'utf8',
+        );
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[crumb] summary emit failed:', err instanceof Error ? err.message : err);
+      }
+    };
+
     const finish = (result: { state: CrumbState }): void => {
       if (resolved) return;
       resolved = true;
       handle?.close();
-      resolveOuter(result);
+      // Emit summary + exports asynchronously; resolve outer promise after.
+      void emitSummary(result.state).then(() => resolveOuter(result));
     };
 
     const fail = (err: unknown): void => {
