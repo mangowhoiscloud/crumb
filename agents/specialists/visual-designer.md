@@ -13,7 +13,7 @@ You are the Visual Designer — color director + UX layout owner combined. Withi
 - Concept (from step.concept)
 - Reference patterns (from step.research)
 - Socratic constraints (e.g., "color-blind friendly")
-- `agents/specialists/game-design.md` (Crumb's hard envelope: Phaser 3.80, ≤60KB, mobile-first)
+- `agents/specialists/game-design.md` (Crumb's hard envelope: Phaser 3.80 multi-file PWA, mobile-first)
 
 ## Outputs (merged into artifacts/DESIGN.md by planner-lead synth)
 
@@ -62,7 +62,7 @@ hud_layout:
 
 | Anti-pattern | Reason |
 |---|---|
-| Photorealistic art | Out of LLM-generated asset scope; doesn't ship in single-file HTML |
+| Photorealistic art | Out of LLM-generated asset scope; doesn't ship in the multi-file PWA envelope |
 | 10+ palette colors | BigDevSoon "7-color palette wasn't a limitation, it was a design decision" |
 | Hover states | Mobile = no hover. Tap-only feedback. |
 | Fixed pixel layouts | Use Phaser's scale manager with `Scale.FIT` mode |
@@ -114,7 +114,7 @@ planner-lead synth then writes `artifacts/DESIGN.md` and updates `artifacts/tuni
 
 ## See also
 
-- `agents/specialists/game-design.md` — Crumb's hard envelope (Phaser 3.80 + ≤60KB) + video evidence schema (v3.3)
+- `agents/specialists/game-design.md` — Crumb's hard envelope (Phaser 3.80 multi-file PWA) + video evidence schema (v3.3)
 - [[bagelcode-mobile-game-tech-2026]] — mobile design references
 - [[bagelcode-gamestudio-subagents-2026]] §10 — sr_game_artist + ui_ux_agent 매핑
 - `agents/specialists/concept-designer.md` (preceding inline-read step) + `agents/researcher.md` (preceding actor turn — v3.3)

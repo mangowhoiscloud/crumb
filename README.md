@@ -112,7 +112,7 @@ Once it's up, the browser surfaces:
 | **Header strip** | D1–D6 source-of-truth scorecard, always visible, updates per `kind=judge.score`. |
 | **Pipeline tab** | 9-actor DAG topology (lime pulse on the active actor, lavender ripple "weaving" each transcript event sender → next-likely target) + per-actor swimlane chip timeline. |
 | **Logs tab** (ArgoCD-inspired) | Per-actor live tail of `<session>/agent-workspace/<actor>/spawn-*.log` (full stdout / stderr from every adapter spawn). Filter / follow / clear / copy. DAG node click jumps here. |
-| **Output tab** | Sandboxed iframe live-rendering `artifacts/game/index.html` (multi-file profile) or `artifacts/game.html` (single-file fallback). Reload + open-in-new-tab. Playable in-place. |
+| **Output tab** | Sandboxed iframe live-rendering `artifacts/game/index.html`. Reload + open-in-new-tab. Playable in-place. |
 | **Live execution feed** (above input) | Terminal-style stream of every transcript event for the active session **and** every chunk of every actor's spawn log. Color-coded by kind class. |
 | **Console input** (bottom) | Slash commands (`/approve` `/veto <reason>` `/pause [@actor]` `/goto <actor>` `/note <text>`), `@actor` mentions, plain-text user.intervene. **`/crumb <goal>`** spawns a brand-new session. |
 | **Detail panel** (right, click an event) | Pipeline-position narrative ("PHASE B → C — Spec sealed"), parent → this → children thread, sandwich preview per actor, per-actor mini-console. |
@@ -221,7 +221,13 @@ sessions/<session-id>/
 │   ├── task.json                       # Cumulative facts (transcript-derivable)
 │   └── progress.json                   # Per-turn state (transcript-derivable)
 ├── artifacts/
-│   ├── game.html                       # Phaser 3.80 single-file playable game
+│   ├── game/                           # Phaser 3.80 multi-file PWA — open game/index.html
+│   │   ├── index.html                  #   entry (viewport, manifest link, sw.js register)
+│   │   ├── manifest.webmanifest        #   PWA install descriptor
+│   │   ├── sw.js                       #   cache-first service worker (offline)
+│   │   ├── icon-192.png / icon-512.png
+│   │   ├── src/main.js + src/{config,scenes,entities,systems}/  # ES modules
+│   │   └── migrations/0001_init.sql    #   only when --persistence postgres opted in
 │   ├── spec.md                         # Acceptance criteria + rule book
 │   ├── DESIGN.md                       # Color / mechanics / motion spec
 │   └── tuning.json                     # Balance numbers (Unity ScriptableObject importable)

@@ -30,7 +30,7 @@ transcript.jsonl (39 kind × 11 field, append-only, ULID sorted)
    ▾
 control plane (pure reducer + state) — replay-deterministic
    ▾
-artifacts/{game.html, spec.md, DESIGN.md, tuning.json} + index.html + exports/
+artifacts/{game/, spec.md, DESIGN.md, tuning.json} + index.html + exports/
 ```
 
 ## Architecture invariants (DO NOT BREAK)
@@ -56,14 +56,14 @@ These are non-negotiable across every host harness:
 | `coordinator` | `agents/coordinator.md` | Host-inline routing (Hub-Ledger-Spoke). Decides next_speaker per transcript event. |
 | `planner-lead` | `agents/planner-lead.md` | Spec authoring. Two-phase spawn (Socratic + Concept → handoff to researcher → resume for Design + Synth). 2 specialists inline-read + game-design.md contract. |
 | `researcher` | `agents/researcher.md` | Video-evidence extractor (v3.3). Ingests gameplay clips via gemini-sdk (Gemini 3.1 Pro, native YouTube URL, 10fps frame sampling) → emits `step.research.video` × N + `step.research` synthesis. Bound to gemini-sdk adapter when video_refs present; ambient text-only fallback otherwise. |
-| `builder` | `agents/builder.md` | Phaser 3.80 single-file `game.html` implementer. Emits `kind=build`; QA is OUT of reach. |
+| `builder` | `agents/builder.md` | Phaser 3.80 multi-file PWA implementer (`artifacts/game/{index.html, src/, sw.js, manifest.webmanifest}`). Emits `kind=build`; QA is OUT of reach. |
 | `verifier` | `agents/verifier.md` | CourtEval (Grader → Critic → Defender → Re-grader, ACL 2025) inline 4 sub-step. Reads `qa.result` for D2/D6 + `step.research` evidence_refs for D5 (v3.3 anti-deception). |
 | `builder-fallback` | `agents/builder-fallback.md` | Builder substitute. Activates when `circuit_breaker.builder.state === 'OPEN'`. |
 
 Plus 2 specialists (planner-internal inline, no separate Task spawn) + 1 contract spec (read by 4+ actors):
 - `agents/specialists/concept-designer.md` — planner step.concept inline-read
 - `agents/specialists/visual-designer.md` — planner step.design inline-read
-- `agents/specialists/game-design.md` — binding game-design contract: §1 envelope (Phaser 3.80 / ≤60KB) + §3 video evidence schema (researcher) + §5 DESIGN.md synth format (planner). Inline-read by researcher / planner-lead / builder / builder-fallback / verifier.
+- `agents/specialists/game-design.md` — binding game-design contract: §1 envelope (Phaser 3.80 multi-file PWA) + §1.2 optional postgres-anon-leaderboard persistence profile + §3 video evidence schema (researcher) + §5 DESIGN.md synth format (planner). Inline-read by researcher / planner-lead / builder / builder-fallback / verifier.
 
 And 5 procedural skills (sandwich-loaded inline):
 - `skills/tdd-iron-law.md` — RED-GREEN-REFACTOR Iron Law (superpowers)

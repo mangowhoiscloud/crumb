@@ -10,16 +10,15 @@ The non-negotiable technical floor under which every Crumb game artifact runs.
 Verifier reads these as D6.portability ground truth via the `qa_check` effect
 (`src/dispatcher/qa-runner.ts`).
 
-**v3.4 widening — multi-file modular envelope.** Frontier convergence (4 sources
-in `wiki/references/bagelcode-mobile-multifile-frontier-2026-05-02.md`:
+**Multi-file modular envelope.** Frontier convergence (4 sources in
+`wiki/references/bagelcode-mobile-multifile-frontier-2026-05-02.md`:
 `Yakoub-ai/phaser4-gamedev`, `OpusGameLabs/game-creator`, Phaser-official Claude
 Code tutorial 2026-02, Troy Scott "2D shooter in one evening") shows every
 production-quality LLM-generated Phaser game in 2026 ships as a multi-file
-modular project. The previous `single-file game.html ≤60KB` envelope was a
-v3.0 simplifier; v3.4 keeps it as a **fallback profile** but the default
-target is now the multi-file profile that matches frontier practice.
+modular project. v3.4 retired the v3.0 single-file fallback — multi-file is
+the only profile.
 
-### §1.1 Default profile — `multi-file` (target for new sessions)
+### §1.1 Required profile — `multi-file` (every session)
 
 ```
 artifacts/game/
@@ -73,15 +72,126 @@ artifacts/game/
 - **Network**: zero runtime requests after CDN load + SW first-fetch — game
   must run offline.
 
-### §1.2 Fallback profile — `single-file` (legacy / constrained envelopes)
+### §1.2 Persistence profile — `postgres-anon-leaderboard` (optional, opt-in)
 
-When the user explicitly opts in via `--profile single-file` or when the goal
-contains "single file" / "단일 파일" markers, builder reverts to the v3.0
-shape:
+A persistence dimension orthogonal to §1.1 / §1.2. When activated, the
+generated game persists per-run scores to Postgres via Supabase, and surfaces
+a top-100 leaderboard inside the game shell. Anonymous-first — no signup
+required for a 60-second run. The profile is **opt-in**, never default.
 
-- **Output**: single `artifacts/game.html` (HTML + inline CSS + inline JS).
-- **Bundle**: ≤ 60 KB own code.
-- Same Phaser-CDN / Canvas / Mobile-first / Audio / Network rules as §1.1.
+**Trigger** (any of the below activates the profile during step.spec):
+
+- pitch contains markers: `"leaderboard"`, `"랭킹"`, `"ranking"`, `"점수 저장"`, `"score persistence"`, `"기록"`, `"하이스코어"`, `"high score"`
+- explicit user flag: `crumb run ... --persistence postgres`
+- preset binding `actors.builder.profile = "multi-file+postgres"` in `.crumb/presets/<name>.toml`
+
+**Backend contract** — Supabase Postgres + anonymous auth + Row-Level Security.
+Frontier convergence (Supabase 2025 anon-auth GA + RLS) makes this the only
+profile that satisfies §1.1 envelope (static Phaser + browser-direct SDK call,
+no Node.js worker between client and DB). Neon / Cloudflare D1 / direct
+`postgres://` from browser are **forbidden** under §1.1 (would require a
+worker tier outside the static-PWA envelope).
+
+**Required env** (read by builder + verifier from the session env or
+`$CRUMB_HOME/.env`; never hardcoded into source):
+
+```
+CRUMB_PG_URL              # postgres://... (verifier-only, server-side migrations)
+CRUMB_SUPABASE_URL        # https://<ref>.supabase.co
+CRUMB_SUPABASE_ANON_KEY   # browser-safe public key (never service_role)
+```
+
+**Required schema** — builder MUST emit `artifacts/game/migrations/0001_init.sql`:
+
+```sql
+-- players: one row per anonymous browser session
+CREATE TABLE players (
+  id           uuid PRIMARY KEY DEFAULT auth.uid(),  -- = supabase anon JWT subject
+  display_name text,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE players ENABLE ROW LEVEL SECURITY;
+CREATE POLICY players_self_read   ON players FOR SELECT USING (true);
+CREATE POLICY players_self_write  ON players FOR INSERT WITH CHECK (id = auth.uid());
+CREATE POLICY players_self_update ON players FOR UPDATE USING (id = auth.uid());
+
+-- runs: append-only score events (mirrors transcript invariant)
+CREATE TABLE runs (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id    uuid NOT NULL REFERENCES players(id),
+  game_slug    text NOT NULL,                        -- e.g. "cat-tap-match3-v1"
+  score        int  NOT NULL CHECK (score >= 0),
+  duration_ms  int  NOT NULL CHECK (duration_ms > 0),
+  seed         text,                                  -- replay seed (rng deterministic)
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX runs_leaderboard_idx ON runs (game_slug, score DESC, created_at DESC);
+ALTER TABLE runs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY runs_public_read    ON runs FOR SELECT USING (true);
+CREATE POLICY runs_self_insert    ON runs FOR INSERT WITH CHECK (player_id = auth.uid());
+-- no UPDATE / no DELETE policies → append-only
+
+-- leaderboard_top100: materialized view, refreshed every 60s by pg_cron
+CREATE MATERIALIZED VIEW leaderboard_top100 AS
+  SELECT game_slug, player_id, MAX(score) AS best_score, MAX(created_at) AS last_run_at
+  FROM runs GROUP BY game_slug, player_id
+  ORDER BY game_slug, best_score DESC LIMIT 100;
+CREATE UNIQUE INDEX leaderboard_top100_idx ON leaderboard_top100 (game_slug, player_id);
+SELECT cron.schedule('refresh_leaderboard', '* * * * *',
+  $$REFRESH MATERIALIZED VIEW CONCURRENTLY leaderboard_top100$$);
+```
+
+**Client surface** (Phaser scene → `@supabase/supabase-js` direct, browser-safe
+anon key only — service_role NEVER ships):
+
+```js
+// src/systems/PersistenceManager.js
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const supa = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
+
+await supa.auth.signInAnonymously();                 // BootScene
+await supa.from('runs').insert({                     // GameOverScene
+  game_slug, score, duration_ms, seed
+});
+const { data } = await supa.from('leaderboard_top100')
+  .select('player_id, best_score').eq('game_slug', GAME_SLUG);
+```
+
+**Verifier D2 ground truth** (`src/dispatcher/qa-runner.ts` extension —
+emits `kind=qa.result.persistence`):
+
+The `qa_check` effect runs a throwaway docker postgres against the emitted
+migration and verifies four invariants. Any failure → `D2 = 0` enforced by
+`src/validator/anti-deception.ts`:
+
+| Invariant | Check |
+|---|---|
+| (a) migration applies | `psql -f 0001_init.sql` exits 0 against fresh `postgres:16-alpine` container |
+| (b) anon insert | `auth.signInAnonymously()` then `INSERT INTO runs (...)` returns the row |
+| (c) RLS isolation | Cross-player insert (`player_id` of a *different* anon JWT) returns 403 |
+| (d) leaderboard MV | After 60s + manual `REFRESH`, `SELECT FROM leaderboard_top100 WHERE game_slug=X` returns ordered rows |
+
+The check is **opt-in**: when neither the trigger markers nor `--persistence
+postgres` is set, qa-runner skips the persistence sub-check entirely (D2
+unaffected). When the profile is active and `CRUMB_PG_URL` is unset in the
+verifier environment, qa-runner emits `kind=note` with `data.reason="postgres_url_missing"`
+and downgrades the run to PARTIAL — the spec persists but cannot be verified
+end-to-end.
+
+**Forbidden under §1.3**:
+
+- ❌ `service_role` key in client bundle (would let the browser bypass RLS)
+- ❌ direct `postgres://` connection from browser (no worker tier in §1.1 envelope)
+- ❌ score `UPDATE` or `DELETE` policies on `runs` (append-only invariant —
+  mirrors transcript)
+- ❌ hardcoded paths or DB URLs — every env value MUST come from
+  `$CRUMB_HOME`-resolved env or session env
+- ❌ Postgres extensions outside the Supabase managed-extension list
+  (uuid-ossp, pgcrypto, pg_cron — the three this spec uses are all included)
+
+**Frontier backing**: Supabase anonymous auth GA (2024-Q3), Postgres Weekly
+"Anonymous auth + RLS for game leaderboards" (2025-11), `pg_cron` materialized
+view refresh pattern (2024-2025 leaderboard hot-row mitigation).
 
 ## §2 Forbidden
 
@@ -201,7 +311,7 @@ metadata:
 
 ## §5 `artifacts/DESIGN.md` synth output format (planner-lead step.design)
 
-Planner-lead's final synth combines step.research + step.design into `artifacts/DESIGN.md`. This is the binding document the builder reads to write `game.html`.
+Planner-lead's final synth combines step.research + step.design into `artifacts/DESIGN.md`. This is the binding document the builder reads to write the multi-file PWA under `artifacts/game/`.
 
 ```markdown
 # <Game Title> — DESIGN.md
@@ -252,7 +362,7 @@ Planner-lead's final synth combines step.research + step.design into `artifacts/
 |---|---|---|
 | `researcher` | §1 envelope (rejects out-of-envelope mechanic suggestions) + §3 video evidence schema (output format) + §4 synth schema (output format) | Sandwich inline-specialist |
 | `planner-lead` step.design | §1 envelope (rejects visual choices that violate it) + §5 DESIGN.md synth format | Sandwich inline-specialist |
-| `builder` | §1 envelope + §2 forbidden (binding constraint while writing game.html) + §5 (reads `artifacts/DESIGN.md` per format) | Sandwich §"Inputs" |
+| `builder` | §1 envelope + §2 forbidden (binding constraint while writing `artifacts/game/**`) + §5 (reads `artifacts/DESIGN.md` per format) | Sandwich §"Inputs" |
 | `builder-fallback` | Same as builder | Fallback substitute |
 | `verifier` | §1 + §2 (D6.portability via qa.result lookup) + §3.3/§4 evidence schema (D5 anti-deception rule) | CourtEval D5/D6 input |
 
