@@ -995,7 +995,7 @@ $('console-send').addEventListener('click', async () => {
 
 // ── (4) Output tab — iframe live render of artifacts/{game/index.html | game.html} ──
 
-function refreshOutputTab() {
+async function refreshOutputTab() {
   const select = $('output-path-select');
   const iframe = $('output-frame');
   const empty = $('output-empty');
@@ -1007,10 +1007,26 @@ function refreshOutputTab() {
   }
   const events = eventCache.get(activeSession) ?? [];
   // Collect every artifact path emitted via kind=artifact.created (or build.artifacts).
-  const seen = new Map(); // path → sha256
+  const seen = new Map(); // path → sha256?
   for (const e of events) {
     for (const a of (e.artifacts ?? [])) {
-      if (a.path && a.sha256) seen.set(a.path, a.sha256);
+      if (a.path) seen.set(a.path, a.sha256 ?? null);
+    }
+  }
+  // v3.5 disk fallback — when builder skipped artifact.created emission, the
+  // file may exist on disk regardless. Walk <session>/artifacts/ and merge in
+  // anything we haven't already seen via the transcript.
+  if (seen.size === 0 || ![...seen.keys()].some(p => /\.html$/.test(p))) {
+    try {
+      const r = await fetch('/api/sessions/' + encodeURIComponent(activeSession) + '/artifacts/list');
+      if (r.ok) {
+        const j = await r.json();
+        for (const f of j.files ?? []) {
+          if (f.path && !seen.has(f.path)) seen.set(f.path, null);
+        }
+      }
+    } catch {
+      // disk fallback failed silently — empty-state UI handles it below
     }
   }
   // Pick the renderable head: prefer multi-file index.html, fall back to game.html.
@@ -1027,7 +1043,7 @@ function refreshOutputTab() {
     iframe.style.display = 'none';
     if (empty) {
       empty.style.display = 'block';
-      empty.textContent = 'No HTML artifact emitted yet for this session.';
+      empty.textContent = 'No HTML artifact found for this session (transcript or disk).';
     }
     return;
   }

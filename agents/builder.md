@@ -161,7 +161,15 @@ Then `kind=handoff.requested`, `to=coordinator`, `payload={next_expected: "qa.re
 ## Must
 
 - Include sha256 in `kind=artifact.created`
-- `kind=build` must include `data.loc_own_code` (≤ 60000 chars own code, Phaser CDN external)
+- **Emit `kind=artifact.created` for EVERY file you write** — one event per file. This is non-negotiable. Multi-file profile (§1.1) means 8–25 events; single-file profile (§1.2) means exactly 1. The dashboard's Output tab + verifier's D6 portability check both read these events; missing emissions force the dashboard into a disk-listing fallback path and trigger anti-deception Rule 8 (`builder_artifact_emit_skipped`).
+- The mapping is mechanical:
+  ```
+  for path in [files you just wrote under artifacts/]:
+      crumb event ... kind=artifact.created \
+          artifacts='[{"path":"<path>","sha256":"<sha>","role":"<role>"}]'
+  ```
+  Compute sha256 with the same hash you embed in the file's `<meta name="crumb-sha256">` if any, OR run `shasum -a 256 <path>` and paste the value. Do NOT skip the event because "the file is on disk anyway" — the transcript is the source of truth.
+- `kind=build` must include `data.loc_own_code` (≤ 60000 chars own code for single-file, total bytes for multi-file) AND `data.profile` (`"multi-file" | "single-file"`) AND `data.file_count` (number of artifacts emitted, must equal the number of `artifact.created` events you appended this spawn).
 - Set `metadata.harness` + `metadata.provider` + `metadata.model` on every emitted message (per the preset binding)
 - STOP after `kind=handoff.requested`
 
@@ -170,6 +178,7 @@ Then `kind=handoff.requested`, `to=coordinator`, `payload={next_expected: "qa.re
 **Anti-deception (validator-enforced).**
 > `kind=build` with empty `artifacts` → automatic `D2=0` downstream.
 > Any test/lint/exec claim from builder → `validator audit_violations += "builder_self_assessment_attempt"`.
+> **`kind=build` with `data.file_count` ≠ count of preceding `kind=artifact.created` events this spawn** → `validator audit_violations += "builder_artifact_emit_skipped"` (v3.5 Rule 8). The dashboard's transcript-first Output rendering depends on every file being announced; silent disk writes break observability.
 > QA is structurally OUT of your reach — the qa-check effect runs deterministically (htmlhint + playwright). **You can't fake it. Don't try.**
 
 **Cross-provider awareness.**
