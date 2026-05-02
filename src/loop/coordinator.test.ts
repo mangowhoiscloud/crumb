@@ -1,7 +1,9 @@
 /**
- * runSession resume tests — exercise the P0 race fix:
- *   1. fromOffset = byte size captured before replay (no double-reduce)
- *   2. session.start/goal idempotency guard (no double-spawn on resume)
+ * runSession tests — three coupled focuses:
+ *   1. P0 race fix: fromOffset = byte size before replay (no double-reduce);
+ *      session.start/goal idempotency guard (no double-spawn on resume).
+ *   2. v3.2 session_wall_clock guardrail (24min hook, 30min hard cap).
+ *   3. Fresh-session kickoff (synthetic session.start + goal append).
  */
 
 import { describe, expect, it } from 'vitest';
@@ -11,24 +13,40 @@ import { resolve } from 'node:path';
 
 import { runSession } from './coordinator.js';
 import { TranscriptWriter, _resetWriterRegistryForTests } from '../transcript/writer.js';
+import type { Message } from '../protocol/types.js';
 
-async function makeSession(): Promise<{ sessionDir: string; transcriptPath: string }> {
+async function makeSession(): Promise<{
+  sessionDir: string;
+  transcriptPath: string;
+  repoRoot: string;
+}> {
   const dir = await mkdtemp(resolve(tmpdir(), 'crumb-coordinator-test-'));
   const sessionDir = resolve(dir, 'session');
   await mkdir(sessionDir, { recursive: true });
+  // Stub agents/<name>.md so dispatcher's sandwich resolution doesn't ENOENT.
+  const repoRoot = resolve(dir, 'repo');
+  await mkdir(resolve(repoRoot, 'agents'), { recursive: true });
+  for (const name of ['planner-lead', 'builder', 'verifier', 'builder-fallback', 'coordinator']) {
+    await writeFile(resolve(repoRoot, 'agents', `${name}.md`), `# stub ${name}\n`);
+  }
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
-  return { sessionDir, transcriptPath };
+  return { sessionDir, transcriptPath, repoRoot };
+}
+
+async function readEvents(path: string): Promise<Message[]> {
+  const raw = await readFile(path, 'utf8');
+  return raw
+    .split('\n')
+    .filter((l) => l.trim().length > 0)
+    .map((l) => JSON.parse(l) as Message);
 }
 
 describe('runSession resume idempotency', () => {
   it('skips session.start + goal append when transcript already started', async () => {
     _resetWriterRegistryForTests();
-    const { sessionDir, transcriptPath } = await makeSession();
+    const { sessionDir, transcriptPath, repoRoot } = await makeSession();
     const sessionId = 'sess-resume-1';
 
-    // Seed a transcript that already has session.start + goal — simulates a
-    // resume after a coordinator crash, where the prior coordinator already
-    // wrote both kickoff events before exiting.
     const seedWriter = new TranscriptWriter({ path: transcriptPath, sessionId });
     await seedWriter.append({
       session_id: sessionId,
@@ -47,17 +65,13 @@ describe('runSession resume idempotency', () => {
       .split('\n')
       .filter((l) => l.trim().length > 0).length;
 
-    // Reset the registry so runSession's getTranscriptWriter creates a fresh
-    // chain — otherwise the singleton would still be tied to seedWriter's
-    // already-resolved Promise chain. (In production, runSession is the first
-    // writer for a given path within the coordinator process.)
     _resetWriterRegistryForTests();
 
     await runSession({
       goal: 'this goal must NOT be appended',
       sessionDir,
       sessionId,
-      repoRoot: resolve(sessionDir, '..'),
+      repoRoot,
       adapterOverride: 'mock',
       idleTimeoutMs: 200,
     });
@@ -67,19 +81,15 @@ describe('runSession resume idempotency', () => {
       .split('\n')
       .filter((l) => l.trim().length > 0).length;
 
-    // No new session.start / goal appended — idempotency guard worked.
     expect(sizeAfter).toBe(sizeBefore);
     expect(linesAfter).toBe(linesBefore);
   }, 10_000);
 
   it('does not re-emit replayed events to the tail (no double-reduce)', async () => {
     _resetWriterRegistryForTests();
-    const { sessionDir, transcriptPath } = await makeSession();
+    const { sessionDir, transcriptPath, repoRoot } = await makeSession();
     const sessionId = 'sess-resume-2';
 
-    // Seed a transcript with prior events. If tail's fromOffset were 0 (the
-    // pre-fix bug), every one of these would be reduced a second time and
-    // task_ledger.facts would have 6 entries instead of 3 after resume.
     const seedWriter = new TranscriptWriter({ path: transcriptPath, sessionId });
     await seedWriter.append({
       session_id: sessionId,
@@ -106,36 +116,28 @@ describe('runSession resume idempotency', () => {
       goal: 'ignored',
       sessionDir,
       sessionId,
-      repoRoot: resolve(sessionDir, '..'),
+      repoRoot,
       adapterOverride: 'mock',
       idleTimeoutMs: 200,
     });
 
-    // Three facts (1 goal + 2 ACs), not six. If fromOffset were 0 the
-    // reducer would have run a second time on every replayed event and
-    // facts.length would be doubled.
     expect(state.task_ledger.facts).toHaveLength(3);
 
-    // No bytes added by the resume path itself. (The mock adapter may spawn
-    // because state.next_speaker == 'builder' after the spec replay, but the
-    // tail doesn't re-emit replayed events, so onMessage is never called for
-    // them and dispatch isn't triggered for replayed kicks. We assert below.)
     const sizeAfter = (await stat(transcriptPath)).size;
     expect(sizeAfter).toBe(sizeBefore);
   }, 10_000);
 
   it('writes session.start + goal on a fresh session', async () => {
     _resetWriterRegistryForTests();
-    const { sessionDir, transcriptPath } = await makeSession();
+    const { sessionDir, transcriptPath, repoRoot } = await makeSession();
     const sessionId = 'sess-fresh-1';
-    // Touch the file so runSession's tail() can watch it.
     await writeFile(transcriptPath, '');
 
     await runSession({
       goal: 'fresh goal',
       sessionDir,
       sessionId,
-      repoRoot: resolve(sessionDir, '..'),
+      repoRoot,
       adapterOverride: 'mock',
       idleTimeoutMs: 200,
     });
@@ -145,8 +147,56 @@ describe('runSession resume idempotency', () => {
       .filter((l) => l.trim().length > 0)
       .map((l) => JSON.parse(l) as { kind: string; body?: string });
 
-    // Must contain at least the synthetic session.start + goal.
     expect(lines.some((m) => m.kind === 'session.start')).toBe(true);
     expect(lines.some((m) => m.kind === 'goal' && m.body === 'fresh goal')).toBe(true);
+  }, 10_000);
+});
+
+describe('runSession wall_clock budget', () => {
+  it('emits done(wall_clock_exhausted) when hard cap is crossed', async () => {
+    _resetWriterRegistryForTests();
+    const { sessionDir, transcriptPath, repoRoot } = await makeSession();
+
+    const result = await runSession({
+      goal: 'force wall-clock timeout',
+      sessionDir,
+      sessionId: 'sess-wallclock-1',
+      repoRoot,
+      adapterOverride: 'mock',
+      idleTimeoutMs: 5_000,
+      wallClockHookMs: 20,
+      wallClockHardMs: 50,
+      watchdogTickMs: 10,
+    });
+
+    expect(result.state.done).toBe(true);
+
+    const events = await readEvents(transcriptPath);
+    const done = events.find((e) => e.kind === 'done');
+    expect(done).toBeDefined();
+    expect(done?.body).toBe('wall_clock_exhausted');
+
+    const sessionEnd = events.find((e) => e.kind === 'session.end');
+    expect(sessionEnd).toBeDefined();
+  }, 10_000);
+
+  it('does not trip wall-clock when caps are wide and session ends naturally', async () => {
+    _resetWriterRegistryForTests();
+    const { sessionDir, transcriptPath, repoRoot } = await makeSession();
+
+    await runSession({
+      goal: 'normal session',
+      sessionDir,
+      sessionId: 'sess-wallclock-2',
+      repoRoot,
+      adapterOverride: 'mock',
+      idleTimeoutMs: 200,
+      wallClockHookMs: 60_000,
+      wallClockHardMs: 120_000,
+    });
+
+    const events = await readEvents(transcriptPath);
+    const done = events.find((e) => e.kind === 'done');
+    if (done) expect(done.body).not.toBe('wall_clock_exhausted');
   }, 10_000);
 });
