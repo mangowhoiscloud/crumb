@@ -198,6 +198,17 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         effect.actor === 'verifier'
           ? await readLatestBuildProvider(deps.transcriptPath)
           : undefined;
+      // v3.4 verifier hard input isolation. Project the transcript down to
+      // the minimum context the judge needs (goal / spec / build / qa.result
+      // / artifact.created / step.research.video), excluding planner
+      // reasoning + prior verifier output + private CoT + dispatcher meta.
+      // Prompt-only enforcement (sandwich text) reaches ~50% per Anthropic
+      // Hybrid Normalization 2026; this layer closes the residual.
+      // Wiki: [[bagelcode-verifier-context-isolation-2026-05-03]].
+      const judgeInputPath =
+        effect.actor === 'verifier'
+          ? await buildVerifierInputBundle(deps.transcriptPath, deps.sessionDir)
+          : undefined;
 
       let result;
       try {
@@ -219,6 +230,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
           provider: binding?.provider,
           harness: binding?.harness,
           ...(builderProvider ? { builderProvider } : {}),
+          ...(judgeInputPath ? { judgeInputPath } : {}),
         });
       } finally {
         timers.cleanup();
@@ -490,6 +502,95 @@ export async function readLatestBuildProvider(transcriptPath: string): Promise<s
     }
   }
   return undefined;
+}
+
+/**
+ * v3.4 — verifier hard input isolation. Project the transcript down to the
+ * minimum context the verifier needs and write it to
+ * `<sessionDir>/agent-workspace/verifier/judge-input.jsonl`. The verifier
+ * sandwich reads `$CRUMB_JUDGE_INPUT_PATH` instead of the full transcript;
+ * this turns AGENTS.md "DOES NOT read agent.thought_summary" from prompt-only
+ * enforcement into file-level isolation.
+ *
+ * Whitelist (events the verifier may see):
+ *   - latest `goal`
+ *   - latest `spec` (or `spec.update` if newer)
+ *   - latest `build`
+ *   - latest `qa.result`
+ *   - latest `artifact.created`
+ *   - all `step.research.video` (D5 evidence cited via Rule 5)
+ *
+ * Blocklist (events that bias judges per ComplexEval Bench EMNLP 2025 +
+ * Preference Leakage ICLR 2026 + Anthropic Bloom 2025):
+ *   - planner reasoning: `step.concept` / `step.design` / `step.research`
+ *     synthesis (curse-of-knowledge framing)
+ *   - prior round verifier output: `step.judge` × 4 / `judge.score` /
+ *     `verify.result` (anchor bias, preference leakage)
+ *   - private CoT: `agent.thought_summary`
+ *   - dispatcher meta: `dispatch.spawn` / `note` / `agent.start` /
+ *     `agent.stop` / `handoff.requested` / `handoff.rollback`
+ *   - user hints: `user.intervene` / `user.approve` / `user.veto` (could
+ *     leak user framing into the judge)
+ *   - validator audits: `audit` (recursion guard)
+ *
+ * The reducer + anti-deception validator still see the full transcript —
+ * this isolation is scoped to the verifier subprocess only. Replay-
+ * deterministic: the bundle is a pure projection.
+ *
+ * Wiki: [[bagelcode-verifier-context-isolation-2026-05-03]].
+ */
+const VERIFIER_INPUT_LATEST_KINDS = new Set([
+  'goal',
+  'spec',
+  'spec.update',
+  'build',
+  'qa.result',
+  'artifact.created',
+]);
+const VERIFIER_INPUT_ALL_KINDS = new Set(['step.research.video']);
+
+export async function buildVerifierInputBundle(
+  transcriptPath: string,
+  sessionDir: string,
+): Promise<string> {
+  const outDir = resolve(sessionDir, 'agent-workspace', 'verifier');
+  await mkdir(outDir, { recursive: true });
+  const outPath = resolve(outDir, 'judge-input.jsonl');
+  if (!existsSync(transcriptPath)) {
+    await writeFile(outPath, '', 'utf-8');
+    return outPath;
+  }
+  const raw = await readFile(transcriptPath, 'utf-8');
+  const lines = raw.split('\n').filter((l) => l.trim().length > 0);
+  const latestByKind = new Map<string, string>();
+  const allMatching: string[] = [];
+  for (const line of lines) {
+    let evt: { kind?: string } | null = null;
+    try {
+      evt = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!evt || typeof evt.kind !== 'string') continue;
+    if (VERIFIER_INPUT_LATEST_KINDS.has(evt.kind)) {
+      // spec.update supersedes spec — store under the same logical slot.
+      const slot = evt.kind === 'spec.update' ? 'spec' : evt.kind;
+      latestByKind.set(slot, line);
+    } else if (VERIFIER_INPUT_ALL_KINDS.has(evt.kind)) {
+      allMatching.push(line);
+    }
+  }
+  // Emit in a stable order: latest events in declared order, then all
+  // step.research.video in their original order. The verifier doesn't need
+  // ULID sort because the bundle is small and topically grouped.
+  const ordered: string[] = [];
+  for (const slot of ['goal', 'spec', 'build', 'qa.result', 'artifact.created']) {
+    const line = latestByKind.get(slot);
+    if (line) ordered.push(line);
+  }
+  ordered.push(...allMatching);
+  await writeFile(outPath, ordered.join('\n') + (ordered.length > 0 ? '\n' : ''), 'utf-8');
+  return outPath;
 }
 
 const LENGTH_CONTEXT_ARTIFACTS = ['spec.md', 'DESIGN.md', 'tuning.json', 'game.html'] as const;
