@@ -34,16 +34,22 @@ const NS_PER_MS = 1_000_000;
  */
 export function toOtelSpan(msg: Message): OtelSpan {
   const startNs = parseTimestampNs(msg.ts);
+  const md = msg.metadata;
+  // gen_ai.conversation.id / gen_ai.agent.id / gen_ai.workflow.name follow the
+  // OTel GenAI Semantic Conventions: prefer explicit metadata.gen_ai aliases,
+  // then fall back to transcript-native identifiers. workflow.name defaults to
+  // 'crumb.coordinator' so spans always carry a stable workflow grouping.
   const attrs: Record<string, unknown> = {
-    'gen_ai.conversation.id': msg.session_id,
+    'gen_ai.conversation.id': md?.gen_ai?.conversation_id ?? msg.session_id,
+    'gen_ai.agent.id': md?.gen_ai?.agent_id ?? msg.from,
     'gen_ai.agent.name': msg.from,
     'gen_ai.operation.name': msg.kind,
+    'gen_ai.workflow.name': md?.gen_ai?.workflow_name ?? 'crumb.coordinator',
   };
   if (msg.task_id) attrs['gen_ai.task.id'] = msg.task_id;
   if (msg.to) attrs['gen_ai.agent.target'] = msg.to;
   if (msg.step) attrs['gen_ai.step'] = msg.step;
 
-  const md = msg.metadata;
   if (md) {
     if (md.model) attrs['gen_ai.request.model'] = md.model;
     if (md.tokens_in !== undefined) attrs['gen_ai.usage.input_tokens'] = md.tokens_in;
@@ -62,6 +68,24 @@ export function toOtelSpan(msg: Message): OtelSpan {
     if (md.audit_violations && md.audit_violations.length > 0) {
       attrs['crumb.audit_violations'] = md.audit_violations;
     }
+  }
+  // Tool call args / tool result output — surface so observability platforms
+  // (Datadog / Vertex / Anthropic Console) can render the "click tool call →
+  // arguments / responses" pattern from the same export.
+  if (msg.kind === 'tool.call' && msg.data) {
+    attrs['gen_ai.tool.call.arguments'] = JSON.stringify(msg.data);
+    if (typeof msg.data.tool_name === 'string') attrs['gen_ai.tool.name'] = msg.data.tool_name;
+  }
+  if (msg.kind === 'tool.result' && msg.data) {
+    attrs['gen_ai.tool.call.output'] = JSON.stringify(msg.data);
+  }
+  // OTel general 'error.type' attribute for kind=error / audit so error-rate
+  // dashboards (Datadog, Vertex) light up without re-deriving from kind.
+  if (msg.kind === 'error') {
+    attrs['error.type'] = (msg.data?.code as string | undefined) ?? msg.body ?? 'crumb.error';
+  }
+  if (msg.kind === 'audit') {
+    attrs['error.type'] = 'crumb.audit_violation';
   }
   if (msg.scores?.aggregate !== undefined) attrs['crumb.score.aggregate'] = msg.scores.aggregate;
   if (msg.scores?.verdict) attrs['crumb.score.verdict'] = msg.scores.verdict;

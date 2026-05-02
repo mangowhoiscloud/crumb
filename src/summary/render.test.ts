@@ -174,6 +174,24 @@ describe('renderSummary', () => {
     expect(html).toContain('grader');
   });
 
+  it('CourtEval falls back to step.judge by step name when courteval refs missing', () => {
+    // Drop the courteval refs but keep the step.judge event. Renderer should
+    // still resolve grader → step.judge[step=grader] and label it "fallback".
+    const { transcript, state } = fixture();
+    const judge = transcript.find((m) => m.kind === 'judge.score')!;
+    judge.scores!.courteval = {};
+    const html = renderSummary(transcript, state);
+    expect(html).toContain('initial grade 24/30');
+    expect(html).toContain('fallback');
+  });
+
+  it('CourtEval marks missing sub-steps explicitly', () => {
+    const { transcript, state } = fixture();
+    const html = renderSummary(transcript, state);
+    // grader is present, others (critic/defender/regrader) are missing.
+    expect(html).toMatch(/critic[\s\S]*?missing/);
+  });
+
   it('W5: Fault diagnosis section reports F1-F7 status', () => {
     const { transcript, state } = fixture();
     const html = renderSummary(transcript, state);

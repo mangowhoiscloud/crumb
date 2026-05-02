@@ -6,9 +6,10 @@
  * Routing rules mirror agents/coordinator.md §routing-rules.
  */
 
-import type { Actor, Message, Verdict } from '../protocol/types.js';
+import type { Actor, Message, Scores, Verdict } from '../protocol/types.js';
 import type { CrumbState } from '../state/types.js';
 import type { Effect } from '../effects/types.js';
+import { checkAntiDeception } from '../validator/anti-deception.js';
 
 const STUCK_THRESHOLD = 5;
 const ADAPTIVE_STOP_VARIANCE = 1.0;
@@ -130,6 +131,9 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
       const lastArtifact = artifacts[artifacts.length - 1];
       const artifactPath = lastArtifact?.path ?? 'artifacts/game.html';
       const artifactSha = lastArtifact?.sha256;
+      // Stash the builder's provider so anti-deception Rule 4 (self-bias risk)
+      // can compare it against the verifier's provider on judge.score events.
+      next.last_builder_provider = event.metadata?.provider ?? null;
       effects.push({
         type: 'qa_check',
         artifact: artifactPath,
@@ -142,6 +146,18 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
     case 'qa.result': {
       // v3: qa.result → spawn verifier (CourtEval inline 4 sub-step).
       // Verifier reads qa.result as D2 + D6 ground truth lookup.
+      // Stash exec_exit_code so the reducer can run anti-deception Rules 1, 2
+      // when the next judge.score arrives (architecture invariant #5).
+      const data = (event.data ?? {}) as Record<string, unknown>;
+      const exit = typeof data.exec_exit_code === 'number' ? data.exec_exit_code : 1;
+      const smoke = data.cross_browser_smoke;
+      next.last_qa_result = {
+        build_event_id: String(data.build_event_id ?? event.parent_event_id ?? ''),
+        exec_exit_code: exit,
+        ...(smoke === 'ok' || smoke === 'fail' || smoke === 'skipped'
+          ? { cross_browser_smoke: smoke }
+          : {}),
+      };
       next.progress_ledger.next_speaker = 'verifier';
       const adapter = pickAdapter(next, 'verifier');
       effects.push({
@@ -153,10 +169,62 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
       break;
     }
 
+    case 'step.research.video': {
+      // v3.3: track every video evidence event id so anti-deception Rule 5
+      // (researcher_video_evidence_missing) can verify the verifier cited at
+      // least one of these in scores.D5.evidence at judge.score time.
+      next.research_video_evidence_ids = [...next.research_video_evidence_ids, event.id];
+      break;
+    }
+
     case 'verify.result':
     case 'judge.score': {
-      const verdict = (event.scores?.verdict ?? null) as Verdict | null;
-      const aggregate = event.scores?.aggregate ?? 0;
+      // Anti-deception pass — Rules 1, 2, 4, 5 (qa-check ground truth + self-bias
+      // + researcher video evidence). Rule 3 (D4 override) needs autoScores which
+      // requires the full transcript, so it's skipped here; summary.ts re-runs
+      // with autoScores populated for the canonical verdict math.
+      // See [[bagelcode-system-architecture-v3]] §7.3.
+      const audit = checkAntiDeception({
+        judgeScore: event,
+        qaResult: next.last_qa_result,
+        builderProvider: next.last_builder_provider,
+        researchVideoEvidenceIds: next.research_video_evidence_ids,
+      });
+      // Only swap to sanitized scores when violations actually fired. The
+      // validator unconditionally recomputes aggregate from D1–D6 dims, which
+      // would zero-out a verifier-supplied aggregate that didn't ship per-dim
+      // breakdowns — keep the original output when there's nothing to correct.
+      const useSanitized = audit.violations.length > 0;
+      const sanitized: Scores = useSanitized ? audit.scores : (event.scores ?? {});
+      const verdict = (sanitized.verdict ?? null) as Verdict | null;
+      const aggregate = sanitized.aggregate ?? event.scores?.aggregate ?? 0;
+
+      // Append a kind=audit event whenever violations fire — that record (not
+      // the original judge.score) is the canonical anti-deception trail. The
+      // verifier's raw output stays in transcript as evidence for replay.
+      if (audit.violations.length > 0) {
+        effects.push({
+          type: 'append',
+          message: {
+            session_id: event.session_id,
+            from: 'validator',
+            kind: 'audit',
+            parent_event_id: event.id,
+            body: audit.violations.join(', '),
+            data: {
+              violations: audit.violations,
+              corrected_verdict: sanitized.verdict ?? null,
+              corrected_aggregate: sanitized.aggregate ?? null,
+            },
+            metadata: {
+              deterministic: true,
+              tool: 'anti-deception@v1',
+              audit_violations: audit.violations,
+            },
+          },
+        });
+      }
+
       if (verdict) {
         next.progress_ledger.score_history.push({
           msg_id: event.id,
@@ -204,7 +272,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           type: 'hook',
           kind: 'partial',
           body: 'Verifier returned PARTIAL — please confirm or veto',
-          data: { aggregate, scores: event.scores },
+          data: { aggregate, scores: sanitized },
         });
       } else if (verdict === 'FAIL' || verdict === 'REJECT') {
         // Rollback to planner for respec — unless engineering circuit is OPEN, then fallback.
@@ -222,7 +290,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           effects.push({
             type: 'rollback',
             to: 'planner-lead',
-            feedback: event.scores?.feedback ?? 'verify failed',
+            feedback: sanitized.feedback ?? event.scores?.feedback ?? 'verify failed',
           });
         }
       }
