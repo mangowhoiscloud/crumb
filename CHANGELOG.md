@@ -4,6 +4,25 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — Model + Provider config UI (2026-05-02)
+
+Per-actor model + effort tuning, per-provider activation toggle, and `/model` natural-language interface. All 3 hosts (Claude Code / Codex CLI / Gemini CLI) get the same surface via the MCP `crumb_model` tool.
+
+- **High-end defaults** (no preset / no override): `coordinator` + `planner-lead` = `claude-opus-4-7`, `builder` = `gpt-5.5-codex`, `verifier` = `gemini-2.5-pro`, `builder-fallback` = `claude-sonnet-4-6`. All 3 local providers (`claude-local` / `codex-local` / `gemini-cli-local`) enabled. `effort = "high"` across the board.
+- **`src/config/model-config.ts`** (~230 LOC, 17 vitest specs) — `.crumb/config.toml` runtime override layer. `MODEL_CATALOG` per provider (Anthropic: opus-4-7 → sonnet-4-6 → haiku-4-5; OpenAI: gpt-5.5-codex → gpt-5.5 → gpt-4o → gpt-4o-mini; Google: gemini-2.5-pro → gemini-2.5-flash → gemini-2.0-flash). `EFFORT_LEVELS` = `low | med | high` mapped to provider-specific values at adapter spawn (OpenAI `reasoning.effort=low|medium|high`, Anthropic / Gemini thinking_budget = 8000 / 24000 / 64000 tokens).
+- **`src/tui/model-edit.ts`** (~280 LOC, 10 vitest specs) — `crumb model` blessed TUI. Tab cycles actors, ↑/↓ changes model in catalog, ←/→ changes effort (low ↔ med ↔ high), `h` cycles harness (claude-code / codex / gemini-cli / mock), `p` focuses providers panel, Space toggles enabled, Enter saves, Esc cancels. Read-only `--show`. Programmatic `applyNlInstruction()` parses Korean + English NL ("verifier 모델을 gemini-2.5-pro 로", "effort 다 high 로", "codex 비활성화", "disable gemini", "set builder model to gpt-4o-mini").
+- **MCP tool `crumb_model`** added to `src/mcp-server.ts` (now 8 tools total; was 7). Optional `instruction` arg routes to `applyNlInstruction()`; omitted = read-only show. Brand-forward CLI parity preserved (`crumb model` ↔ `crumb_model`).
+- **Claude Code skill** `.claude/skills/crumb-model/SKILL.md` — KO+EN trigger phrases, eager-loaded by skill discovery.
+- **Resolve order extended** (`src/dispatcher/preset-loader.ts`): `.crumb/config.toml` override (★ NEW) → preset.actors.<name> → preset.[defaults] → ambient → system fallback. New `loadPresetWithConfig()` + `applyConfigOverride()` returns `{ preset, providersEnabled }`.
+- **Provider activation gate** (`src/dispatcher/live.ts`) — at spawn time, if binding's harness has been disabled in `.crumb/config.toml [providers.*]`, dispatcher substitutes `claude-local` (universal fallback) and emits `kind=note` with `metadata.deterministic=true` so observers see the swap. No silent override — anti-deception aligned.
+- **CLI**: `crumb model [--show | --apply "<NL>"]` wired in `src/cli.ts`. Coordinator main loop logs disabled providers + per-actor effort on session start.
+
+### Fixed — Schema drift (2026-05-02)
+
+- `protocol/schemas/message.schema.json`: `kind` description "39 kinds" → "40 kinds (4 system + 11 workflow + 5 dialogue + 5 step + 5 user + 3 handoff + 7 meta)". Top-level description also updated to clarify "11 fields" refers to identification/routing/classification only.
+- `wiki/concepts/bagelcode-system-architecture-v3.md`: §3.3 header "39 kind 어휘" → "40 kind 어휘"; "artifact / meta (6)" → "(7)" (counts 7 entries: artifact.created/ack/error/audit/tool.call/tool.result/hook); architecture diagram "39 kind × 11 field" → "40 kind × 11 field"; §10.2 Kiki dashboard mapping similarly updated.
+- `src/helpers/explain.ts` jsdoc "39 kinds × 11 fields" → "40 kinds × 11 identification fields". `KIND_REGISTRY` already had 40 entries from prior session — only doc string was stale.
+
 ### Added — v3.1 Multi-host harness pivot (2026-05-02)
 
 Universal identity layer + sandwich Markdown unification + multi-host entry verifier. Closes the "host-aware control harness" loop opened by v3.
