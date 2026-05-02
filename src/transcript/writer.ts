@@ -25,6 +25,7 @@
  */
 
 import { appendFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { ulid } from 'ulid';
 
 import type { DraftMessage, Message } from '../protocol/types.js';
@@ -59,4 +60,34 @@ export class TranscriptWriter {
     await this.chain;
     return msg;
   }
+}
+
+/**
+ * Process-wide path-keyed registry. The single-writer-per-process invariant
+ * (see file header) only holds if there is exactly one TranscriptWriter for a
+ * given transcript path inside this process. With two instances each maintains
+ * its own Promise chain, so two parallel append() calls race at the OS level
+ * (cross-process atomicity via O_APPEND still protects against torn writes
+ * but the JS-level ordering guarantee is lost).
+ *
+ * Production code (coordinator + tui + cli + mock adapter) all share the same
+ * file in some configurations (e.g. TUI launched against a live coordinator
+ * session). Use `getTranscriptWriter` from those call sites; tests that want
+ * isolated instances may still call `new TranscriptWriter` directly.
+ */
+const writerRegistry = new Map<string, TranscriptWriter>();
+
+export function getTranscriptWriter(opts: WriterOptions): TranscriptWriter {
+  const key = resolve(opts.path);
+  let w = writerRegistry.get(key);
+  if (!w) {
+    w = new TranscriptWriter(opts);
+    writerRegistry.set(key, w);
+  }
+  return w;
+}
+
+/** Test helper — clears the registry between test cases. */
+export function _resetWriterRegistryForTests(): void {
+  writerRegistry.clear();
 }

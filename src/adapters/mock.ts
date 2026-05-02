@@ -7,7 +7,7 @@
 import { ulid } from 'ulid';
 
 import type { Actor } from '../protocol/types.js';
-import { TranscriptWriter } from '../transcript/writer.js';
+import { TranscriptWriter, getTranscriptWriter } from '../transcript/writer.js';
 import type { Adapter, SpawnRequest, SpawnResult } from './types.js';
 
 export class MockAdapter implements Adapter {
@@ -19,7 +19,7 @@ export class MockAdapter implements Adapter {
 
   async spawn(req: SpawnRequest): Promise<SpawnResult> {
     const start = Date.now();
-    const writer = new TranscriptWriter({
+    const writer = getTranscriptWriter({
       path: req.transcriptPath,
       sessionId: req.sessionId,
     });

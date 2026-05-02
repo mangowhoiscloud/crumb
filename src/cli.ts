@@ -18,7 +18,7 @@ import { ulid } from 'ulid';
 
 import { runSession } from './loop/coordinator.js';
 import { readAll } from './transcript/reader.js';
-import { TranscriptWriter } from './transcript/writer.js';
+import { getTranscriptWriter } from './transcript/writer.js';
 import { reduce } from './reducer/index.js';
 import { initialState } from './state/types.js';
 import { ClaudeLocalAdapter } from './adapters/claude-local.js';
@@ -148,7 +148,7 @@ async function cmdEvent(): Promise<void> {
   }
   const raw = await readStdin();
   const draft = JSON.parse(raw) as DraftMessage;
-  const writer = new TranscriptWriter({ path, sessionId });
+  const writer = getTranscriptWriter({ path, sessionId });
   const msg = await writer.append(draft);
   // eslint-disable-next-line no-console
   process.stdout.write(JSON.stringify({ id: msg.id, ts: msg.ts }) + '\n');
