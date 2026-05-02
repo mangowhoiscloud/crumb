@@ -21,6 +21,39 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
   - `metadata`: +`harness` / `provider` / `adapter_session_id` / `cache_carry_over` / `deterministic` / `cross_provider` (for self-bias detection and adapter cache continuity per [[bagelcode-system-architecture-v3]] §3.6 + §5.2.2).
 - `agents/`: `engineering-lead.md` removed; split into `agents/builder.md` (Builder + QA inline) + `agents/verifier.md` (CourtEval 4 sub-step inline + reviewer persona, superpowers code-reviewer pattern). Reason: cross-provider true split — builder=Codex / verifier=Gemini (or claude-code) requires actor-level provider boundary, not sandwich-internal step boundary.
 
+### Added — Observability P0 (Option B, 2026-05-02)
+
+Implements the v3 §10 4-surface lock (minus `crumb diagram` — explicitly de-scoped) with Crumb Design System (CDS) v1 tokens and RESTful `/sessions/{id}/...` URL-as-file-path layout.
+
+- **summary.html generator** (`src/summary/render.ts` + `src/summary/cds.ts`, ~700 LOC) — pure function (transcript, state) → single-file HTML. 6 sections (Artifacts iframe + spec/DESIGN refs, D1-D6 Scorecard with SourceBadge + radar, per-actor Cost stacked bar + cache hit, CourtEval 4 sub-step traces, filterable virtualized Timeline, F1-F7 Fault diagnosis). Inline CSS + inline JS + chart.js@4 CDN; ≤ 60KB own code mirrors DESIGN.md "single-file artifact" budget. 15 vitest specs.
+- **TUI** (`src/tui/app.ts` + `src/tui/format.ts`, ~330 LOC) — blessed-based live observer. 4 panes (header / scrollable Timeline / agents+adapters / status / command input). Slash commands (`/approve /veto /redo /note /pause /resume /q`) write `user.*` events back through `TranscriptWriter` — same path as dispatcher, indistinguishable downstream. 10 vitest specs on the pure formatter; live screen tested via end-to-end mock run.
+- **OTel GenAI exporter** (`src/exporter/otel.ts`, ~170 LOC) — alias-only mapping (no LLM). 3 formats: `otel-jsonl` (OpenTelemetry GenAI Semantic Conventions), `anthropic-trace` (Claude Console import), `chrome-trace` (chrome://tracing). 12 vitest specs covering attribute aliases, parent_event_id chain, per-actor `tid` lane assignment, latency-derived `dur`/`end_time_unix_nano`.
+- **Auto-emit on session end** (`src/loop/coordinator.ts`) — when `state.done` becomes true, write `sessions/<id>/index.html` (RESTful summary view) + `sessions/<id>/exports/{otel.jsonl, anthropic-trace.json, chrome-trace.json}`. File path == URL path = identical behaviour for `file://` double-click and future `crumb observe` HTTP server.
+- **Crumb Design System v1** (`src/summary/cds.ts`) — 8 token classes (color / typography / spacing / radius / shadow / breakpoint), 10 component vocab (ActorBadge / KindChip / DeterministicStar / CrossProviderBadge / VerdictPill / ScoreCell / SourceBadge / CostBar / MiniSpark / TimelineRow / AuditChip). TUI symbols ↔ HTML hex 1:1 — viewer cognitive load 0 across surfaces.
+- **CLI subcommands**: `crumb tui <session-id|dir>`, `crumb export <session-id|dir> [--format otel-jsonl|anthropic-trace|chrome-trace]`.
+
+### Added — v3 §12 5-helper completion + 3-host MCP registry (cross-host NL trigger)
+
+Goal: user can speak natural Korean / English on any of the 3 hosts (Claude Code / Codex CLI / Gemini CLI) and have Crumb route the request to the right helper.
+
+- **3 missing helpers** (`src/helpers/{status,explain,suggest}.ts`, ~480 LOC + 21 vitest specs):
+  - `crumb status <session>` — recent N signal events + latest D1-D6 scorecard with source-of-truth + cost/cache/wall totals.
+  - `crumb explain <kind>` — schema lookup over the full Kind union (40 entries: 4 system + 11 workflow + 5 dialogue + 5 step + 5 user + 3 handoff + 7 meta — wiki §3.3 mis-counted meta as 6). Did-you-mean for partials.
+  - `crumb suggest <session>` — branching next-action recommendation: PASS+clean → /approve / PARTIAL → user judgment / FAIL → /redo+hint / stuck≥5 → /pause+/crumb debug / build pending → wait / done → open summary.
+  - CLI subcommands wired in `src/cli.ts`.
+- **MCP server** (`src/mcp-server.ts`, ~190 LOC, 2 vitest specs) — `@modelcontextprotocol/sdk@^1.29.0` stdio server exposing 7 read-only tools, named brand-forward to mirror the CLI subcommand 1:1 (precedent: OpenAI Codex CLI exposes its MCP tool as `codex` / `codex-reply`, server-name == tool-name): `crumb_config` / `crumb_status` / `crumb_explain` / `crumb_suggest` / `crumb_debug` / `crumb_doctor` / `crumb_export`. One vocabulary across CLI + MCP — no drift, brand instantly recognizable to the host model. Tool descriptions encode KO+EN trigger phrases — single source-of-truth registry shared across 3 hosts. Verified via stdio JSON-RPC smoke test (`initialize` → `tools/list` returns all 7).
+- **3-host registration**:
+  - `.mcp.json` (Claude Code project root) — registers `crumb` MCP server with `CRUMB_AMBIENT_HARNESS=claude-code`.
+  - `.codex/agents/crumb.toml` `[mcp_servers.crumb]` — `CRUMB_AMBIENT_HARNESS=codex`.
+  - `.gemini/extensions/crumb/gemini-extension.json` `mcpServers.crumb` — `CRUMB_AMBIENT_HARNESS=gemini-cli`, path corrected from `${extensionPath}/../../src/...` to `${workspacePath}/src/...`.
+- **Claude Code sub-skills** (`.claude/skills/crumb-{config,status,explain,suggest,debug,doctor,export}/SKILL.md`, 7 files) — each frontmatter `description` carries explicit KO+EN trigger phrases, body says "prefer MCP tool, fall back to bash CLI". Eager-loaded by Claude Code skill discovery → faster NL match than waiting for MCP server boot.
+
+### Added — Option B observability boosts (W4 / W5 / W6)
+
+- **W4 sandbox audit** — timeline expand surfaces `tool.call.data.{cwd, add_dir, permission_mode}` + `metadata.adapter_session_id`. Anthropic gVisor pattern equivalent without their UI.
+- **W5 F1-F7 fault diagnosis** — `summary.html §6 Faults` reuses `helpers/debug.ts diagnose()` (no transcript mutation). Detected faults render as red pills with suggested actions; clean session shows `CLEAR`. Reads metadata.cross_provider, kind=qa.result coverage, kind=error patterns, stuck_count.
+- **W6 score-history MiniSpark + stuck pill** — header carries inline SVG sparkline of `score_history` aggregates (range 0-30) + verdict transitions (e.g., `18.0 → 27.0`) + colored stuck pill (0/5 ok / ≥5 err).
+
 ### Added — implementation plan markers
 
 - S2 spike: `scripts/spike-env-propagation.sh` — 30-min validation of env propagation across 3 host harnesses (Claude Code Task / Codex subagent / Gemini extension MCP) before specialist work begins. Result to be ingested as `wiki/synthesis/bagelcode-env-propagation-spike-2026-05-02.md`.
