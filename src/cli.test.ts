@@ -1,5 +1,5 @@
 /**
- * cli.ts tests — covers two cmdEvent surfaces:
+ * cli.ts tests — covers four cmdEvent surfaces:
  *
  *   1. `applyEventFirewall` — forged-event firewall (anti-deception
  *      architecture invariants #4-5). Blocks `from=system` and
@@ -11,14 +11,23 @@
  *      `kind=judge.score` only) from CRUMB_PROVIDER /
  *      CRUMB_BUILDER_PROVIDER env vars passed by the dispatcher.
  *      AGENTS.md §136 invariant.
+ *
+ *   3. `filterTranscriptLine` — visibility filter for `crumb event tail`.
+ *      Default strips `metadata.visibility="private"` events; `--all`
+ *      bypasses; `--kinds` narrows on top of visibility.
+ *
+ *   4. `crumb event tail` subprocess integration — the CLI surface the
+ *      verifier sandwich uses instead of `cat transcript.jsonl`.
  */
 
 import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { applyEventFirewall, stampEnvMetadata } from './cli.js';
+import { applyEventFirewall, filterTranscriptLine, stampEnvMetadata } from './cli.js';
 import { TranscriptWriter } from './transcript/writer.js';
 import type { DraftMessage, Message } from './protocol/types.js';
 
@@ -60,7 +69,6 @@ describe('applyEventFirewall — forged event blocking', () => {
     if (!result.rejected) throw new Error('unreachable');
     expect(result.violation).toBe('forged_system_event_attempt');
     const events = await readEvents(transcriptPath);
-    // Only the audit event landed; the forged note did NOT.
     expect(events).toHaveLength(1);
     expect(events[0].kind).toBe('audit');
     expect(events[0].from).toBe('system');
@@ -91,7 +99,6 @@ describe('applyEventFirewall — forged event blocking', () => {
     const events = await readEvents(transcriptPath);
     expect(events).toHaveLength(1);
     expect(events[0].kind).toBe('audit');
-    // Forged exec_exit_code never made it onto the transcript.
     const allBodies = events.map((e) => e.body).join(' ');
     expect(allBodies).not.toContain('totally legit ground truth');
   });
@@ -135,8 +142,6 @@ describe('applyEventFirewall — forged event blocking', () => {
   });
 
   it('passes through legitimate kind=audit from builder-fallback', async () => {
-    // builder-fallback.md L102 mandates that the actor itself emit
-    // `kind=audit event=fallback_activated` — this must NOT be blocked.
     const { writer, transcriptPath, sessionId } = await makeWriter();
     const draft: DraftMessage = {
       session_id: sessionId,
@@ -205,7 +210,6 @@ describe('stampEnvMetadata', () => {
   });
 
   it('skips cross_provider when builder provider is missing', () => {
-    // First-build case — no prior build event → CRUMB_BUILDER_PROVIDER unset.
     const out = stampEnvMetadata(baseDraft(), { CRUMB_PROVIDER: 'google' });
     expect(out.metadata?.cross_provider).toBeUndefined();
     expect(out.metadata?.provider).toBe('google');
@@ -214,8 +218,138 @@ describe('stampEnvMetadata', () => {
   it('returns draft unchanged when nothing to stamp', () => {
     const draft = baseDraft({ kind: 'note', metadata: { provider: 'openai' } });
     const out = stampEnvMetadata(draft, {});
-    // Identity preserved when no env-driven mutation occurs (cheap fast-path
-    // for the dominant case where actors set their own metadata).
     expect(out).toBe(draft);
   });
 });
+
+function lineFor(obj: object): string {
+  return JSON.stringify(obj);
+}
+
+const PUBLIC_BUILD = lineFor({
+  id: '01HZ000000000000000000000A',
+  ts: '2026-05-03T00:00:00.000Z',
+  session_id: 's1',
+  from: 'builder',
+  kind: 'build',
+  body: 'shipped game.html',
+  metadata: { visibility: 'public' },
+});
+
+const PRIVATE_THOUGHT = lineFor({
+  id: '01HZ000000000000000000000B',
+  ts: '2026-05-03T00:00:01.000Z',
+  session_id: 's1',
+  from: 'builder',
+  kind: 'agent.thought_summary',
+  body: 'considered three approaches before picking phaser',
+  metadata: { visibility: 'private' },
+});
+
+const NO_VISIBILITY_NOTE = lineFor({
+  id: '01HZ000000000000000000000C',
+  ts: '2026-05-03T00:00:02.000Z',
+  session_id: 's1',
+  from: 'planner-lead',
+  kind: 'note',
+  body: 'fyi',
+});
+
+const QA_RESULT = lineFor({
+  id: '01HZ000000000000000000000D',
+  ts: '2026-05-03T00:00:03.000Z',
+  session_id: 's1',
+  from: 'system',
+  kind: 'qa.result',
+  body: 'qa passed',
+  metadata: { visibility: 'public', deterministic: true },
+});
+
+describe('filterTranscriptLine', () => {
+  it('strips visibility=private events by default', () => {
+    expect(filterTranscriptLine(PRIVATE_THOUGHT)).toBeNull();
+  });
+
+  it('passes visibility=public events through unchanged', () => {
+    expect(filterTranscriptLine(PUBLIC_BUILD)).toBe(PUBLIC_BUILD);
+  });
+
+  it('passes events without a visibility field through (default = public)', () => {
+    expect(filterTranscriptLine(NO_VISIBILITY_NOTE)).toBe(NO_VISIBILITY_NOTE);
+  });
+
+  it('--all bypass returns private events too', () => {
+    expect(filterTranscriptLine(PRIVATE_THOUGHT, { showAll: true })).toBe(PRIVATE_THOUGHT);
+  });
+
+  it('kind filter narrows the result on top of visibility', () => {
+    expect(filterTranscriptLine(PUBLIC_BUILD, { kinds: ['qa.result'] })).toBeNull();
+    expect(filterTranscriptLine(QA_RESULT, { kinds: ['qa.result'] })).toBe(QA_RESULT);
+  });
+
+  it('kind filter does NOT lift the visibility filter', () => {
+    expect(filterTranscriptLine(PRIVATE_THOUGHT, { kinds: ['agent.thought_summary'] })).toBeNull();
+    expect(
+      filterTranscriptLine(PRIVATE_THOUGHT, {
+        showAll: true,
+        kinds: ['agent.thought_summary'],
+      }),
+    ).toBe(PRIVATE_THOUGHT);
+  });
+
+  it('returns null for blank lines and unparseable JSON', () => {
+    expect(filterTranscriptLine('')).toBeNull();
+    expect(filterTranscriptLine('   ')).toBeNull();
+    expect(filterTranscriptLine('not-json')).toBeNull();
+  });
+});
+
+describe('crumb event tail (subprocess integration)', () => {
+  const here = fileURLToPath(import.meta.url);
+  const repoRoot = resolve(here, '..', '..');
+  const cliEntry = resolve(repoRoot, 'src', 'index.ts');
+
+  async function makeTranscript(lines: string[]): Promise<string> {
+    const dir = await mkdtemp(resolve(tmpdir(), 'crumb-cli-test-'));
+    const path = resolve(dir, 'transcript.jsonl');
+    await writeFile(path, lines.join('\n') + '\n', 'utf8');
+    return path;
+  }
+
+  function runTail(transcriptPath: string, extraArgs: string[] = []): string {
+    return execFileSync(
+      'npx',
+      ['tsx', cliEntry, 'event', 'tail', '--path', transcriptPath, ...extraArgs],
+      { encoding: 'utf8' },
+    );
+  }
+
+  it('default invocation strips private events from a mixed transcript', async () => {
+    const p = await makeTranscript([PUBLIC_BUILD, PRIVATE_THOUGHT, NO_VISIBILITY_NOTE, QA_RESULT]);
+    const out = runTail(p);
+    const lines = out.split('\n').filter((l) => l.length > 0);
+    expect(lines).toHaveLength(3);
+    expect(out).not.toContain('considered three approaches');
+    expect(out).toContain('shipped game.html');
+    expect(out).toContain('qa passed');
+  });
+
+  it('--all bypasses the visibility filter', async () => {
+    const p = await makeTranscript([PUBLIC_BUILD, PRIVATE_THOUGHT]);
+    const out = runTail(p, ['--all']);
+    const lines = out.split('\n').filter((l) => l.length > 0);
+    expect(lines).toHaveLength(2);
+    expect(out).toContain('considered three approaches');
+  });
+
+  it('--kinds narrows output and keeps the default visibility filter', async () => {
+    const p = await makeTranscript([PUBLIC_BUILD, PRIVATE_THOUGHT, NO_VISIBILITY_NOTE, QA_RESULT]);
+    const out = runTail(p, ['--kinds', 'qa.result,build']);
+    const lines = out.split('\n').filter((l) => l.length > 0);
+    expect(lines).toHaveLength(2);
+    expect(out).toContain('shipped game.html');
+    expect(out).toContain('qa passed');
+    expect(out).not.toContain('considered three approaches');
+    expect(out).not.toContain('"kind":"note"');
+  });
+}, 30_000);

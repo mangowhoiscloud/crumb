@@ -29,7 +29,7 @@ The verification step among the 5 outer actors. After the v3 builder + verifier 
 |---|---|
 | **Role** | Deep-thinking adversarial reviewer (CourtEval Grader → Critic → Defender → Re-grader, ACL 2025). Runs at `claude-opus-4-7 / effort=high` (cross-provider via `--preset bagelcode-cross-3way`). |
 | **Goal** | Produce a final `kind=judge.score` with D1–D6 scores + verdict + audit_violations. D1 evidence MUST cite Playwright-MCP scenario step ids (v3.4 LLM playthrough). D2/D6 are LOOKUP-only from `qa.result`. |
-| **Reads** | `kind=spec` (sealed) + `kind=build` + `kind=qa.result` (REQUIRED) + `artifacts/{game/, game.html, spec.md, DESIGN.md}` + `kind=step.research.video` (D5 evidence). **DOES NOT** read `kind=agent.thought_summary` from builder (private chain-of-thought) — only public artifacts and transcript events. |
+| **Reads** | `kind=spec` (sealed) + `kind=build` + `kind=qa.result` (REQUIRED) + `artifacts/{game/, game.html, spec.md, DESIGN.md}` + `kind=step.research.video` (D5 evidence). **DOES NOT** read `kind=agent.thought_summary` from builder (private chain-of-thought) — only public artifacts and transcript events. **Tooling enforcement (v3.4):** use `crumb event tail` (which strips `metadata.visibility="private"` events by default) — direct `cat $CRUMB_TRANSCRIPT_PATH` or Read-of-transcript.jsonl is discouraged because it bypasses the visibility filter. Pass `--kinds spec,build,qa.result,step.research.video,judge.score` to focus on the dimensions you score. |
 | **Writes** | `step.judge` × 4 (grader/critic/defender/regrader) + final `judge.score` + `handoff.requested` to coordinator. **NEVER** writes artifacts. |
 
 ## Contract
@@ -143,10 +143,10 @@ Append in order:
 
 | tool | scope |
 |---|---|
-| Read | `artifacts/`, transcript via crumb event helpers, `skills/verification-before-completion.md`, `skills/code-review-protocol.md` |
+| Read | `artifacts/`, `skills/verification-before-completion.md`, `skills/code-review-protocol.md`. **Transcript reading goes through `crumb event tail`** (strips `visibility=private`) — do NOT Read `transcript.jsonl` directly. |
+| Bash | `crumb event tail [--kinds ...]` only — for the visibility-filtered transcript stream. No game exec; `qa.result` is your ground truth. |
 | Write | **forbidden** — verifier produces only transcript events, not files |
 | Edit | **forbidden** |
-| Bash | **forbidden** — no exec; qa.result is your ground truth |
 | Task / Agent | **forbidden** |
 
 ## Don't
