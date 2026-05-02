@@ -4,6 +4,15 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — TUI slash bar unifies grammar with inbox parser (2026-05-02)
+
+Audit after PR #14 found the TUI was a second-class intervention surface: `handleCommand` mapped 7/11 slash commands and dropped every `data` field on the floor (`target_actor` / `goto` / `swap` / `reset_circuit` / `actor` / `sandwich_append`). G1-G6 + G4 all worked through `inbox.txt` but were invisible to TUI users.
+
+- **`src/tui/app.ts`** — `handleCommand` now delegates to `parseInboxLine`. The TUI slash bar and the headless `inbox.txt` watcher share one grammar source. Quit (`/q`, `/quit`) is the only TUI-local case. Bar label refreshed to advertise `/approve /veto /pause /resume /goto /swap /reset-circuit /append /note /redo /q · @actor msg`.
+- **`src/inbox/parser.ts`** — added `/append [@<actor>] <text>` (G4 sandwich override, broadcast or actor-scoped), `/note <text>` (kind=note free-form annotation), `/redo [body]` (alias for free-text intervene; preserves TUI muscle memory).
+- **Tests**: +8 parser specs (4 for `/append`, 2 for `/note`, 2 for `/redo`); suite total 171/171 (was 163).
+- Mail requirement #2 (사용자가 협업 과정에 개입) coverage: TUI is now an equal-citizen intervention surface alongside `inbox.txt`. PR #16.
+
 ### Added — G4 sandwich override pipeline (2026-05-02)
 
 Closes the v3.2 G4 gap from the user-intervention frontier matrix: a user mid-session can persistently augment any actor's system prompt without restarting (LangGraph `Command(update={...})` pattern, 53/60 frontier score; Codex `APPEND_SYSTEM.md` 38/60 inspires the file-based local override surface).
