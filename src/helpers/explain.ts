@@ -203,9 +203,18 @@ export const KIND_REGISTRY: Record<Kind, KindInfo> = {
   'step.research': {
     kind: 'step.research',
     category: 'step',
-    description: 'Planner Lead 단계 — researcher specialist inline.',
-    emitter: 'planner-lead',
-    ref: 'agents/specialists/researcher.md',
+    description:
+      'researcher actor 단계 (v3.3) — 3 reference games × 3 actionable lessons synthesis. video evidence 가 있을 때 evidence_refs 로 step.research.video 연결.',
+    emitter: 'researcher',
+    ref: 'agents/researcher.md',
+  },
+  'step.research.video': {
+    kind: 'step.research.video',
+    category: 'step',
+    description:
+      'researcher actor 단계 (v3.3) — per-clip video evidence (mechanic / timing / palette extraction via gemini-sdk Files API + YouTube URL Part). metadata.cache_key 로 replay dedup.',
+    emitter: 'researcher',
+    ref: 'agents/specialists/game-design.md',
   },
   'step.design': {
     kind: 'step.design',

@@ -14,11 +14,12 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve as resolvePath, join as joinPath } from 'node:path';
 import { parse as parseToml } from '@iarna/toml';
 
-/** Supported harness types per v3 §5.2 9-cell matrix. */
+/** Supported harness types per v3 §5.2 9-cell matrix. v3.3 added gemini-sdk for the researcher actor's video understanding path. */
 export type Harness =
   | 'claude-code'
   | 'codex'
   | 'gemini-cli'
+  | 'gemini-sdk'
   | 'anthropic-sdk'
   | 'openai-sdk'
   | 'google-sdk'
@@ -92,6 +93,7 @@ const HARNESS_DEFAULT_MODEL: Record<Harness, { provider: Provider; model: string
   'claude-code': { provider: 'anthropic', model: 'claude-sonnet-4-6' },
   codex: { provider: 'openai', model: 'gpt-5.5-codex' },
   'gemini-cli': { provider: 'google', model: 'gemini-2.5-pro' },
+  'gemini-sdk': { provider: 'google', model: 'gemini-3-1-pro' },
   'anthropic-sdk': { provider: 'anthropic', model: 'claude-sonnet-4-6' },
   'openai-sdk': { provider: 'openai', model: 'gpt-5.5' },
   'google-sdk': { provider: 'google', model: 'gemini-2.5-pro' },

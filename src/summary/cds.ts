@@ -11,6 +11,7 @@ export const ACTOR_COLOR: Record<Actor, string> = {
   user: '#2A2520', // 👤 charcoal
   coordinator: '#2E8B57', // 🟢 emerald
   'planner-lead': '#3B6FB6', // 🔵 blue
+  researcher: '#0F8A8A', // 🔍 teal (v3.3 — visually distinct from planner blue)
   builder: '#7A4FB8', // 🟣 purple
   verifier: '#D2691E', // 🟠 orange
   'builder-fallback': '#B8456E', // 🌹 rose
@@ -22,6 +23,7 @@ export const ACTOR_GLYPH: Record<Actor, string> = {
   user: '👤',
   coordinator: '🟢',
   'planner-lead': '🔵',
+  researcher: '🔍',
   builder: '🟣',
   verifier: '🟠',
   'builder-fallback': '🌹',

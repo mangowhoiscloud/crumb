@@ -28,6 +28,7 @@ import { AdapterRegistry } from '../adapters/types.js';
 import { ClaudeLocalAdapter } from '../adapters/claude-local.js';
 import { CodexLocalAdapter } from '../adapters/codex-local.js';
 import { GeminiLocalAdapter } from '../adapters/gemini-local.js';
+import { GeminiSdkAdapter } from '../adapters/gemini-sdk.js';
 import { MockAdapter } from '../adapters/mock.js';
 import { renderSummary } from '../summary/render.js';
 import { serialize as serializeExport } from '../exporter/otel.js';
@@ -69,6 +70,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
   registry.register(new ClaudeLocalAdapter());
   registry.register(new CodexLocalAdapter());
   registry.register(new GeminiLocalAdapter());
+  registry.register(new GeminiSdkAdapter());
   registry.register(new MockAdapter());
 
   // Preset 로딩 — 사용자 명시 시만. ambient/binding 결정은 사용자 통제권.

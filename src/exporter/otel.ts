@@ -134,6 +134,7 @@ const ACTOR_TID: Record<Actor, number> = {
   user: 1,
   coordinator: 2,
   'planner-lead': 3,
+  researcher: 9,
   builder: 4,
   verifier: 5,
   'builder-fallback': 6,

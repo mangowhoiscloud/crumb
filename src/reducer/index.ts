@@ -377,8 +377,38 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
     }
 
     case 'handoff.requested': {
-      // Coordinator acknowledges; the actual spawn happens via the routing on the
-      // *content* event (spec / verify.result), not the handoff itself.
+      // Most handoffs are acknowledged here as no-ops — the actual spawn happens
+      // via routing on the *content* event (spec / verify.result). Researcher is
+      // the exception (v3.3): planner-lead emits handoff.requested(to=researcher)
+      // after step.concept, and there is no separate "concept-locked" content
+      // event we can route on, so we spawn the researcher directly here.
+      if (event.to === 'researcher' && event.from === 'planner-lead') {
+        next.progress_ledger.next_speaker = 'researcher';
+        const adapter = pickAdapter(next, 'researcher');
+        effects.push({
+          type: 'spawn',
+          actor: 'researcher',
+          adapter,
+          sandwich_appends: collectSandwichAppends(next, 'researcher'),
+        });
+      }
+      break;
+    }
+
+    case 'step.research': {
+      // v3.3: researcher synthesis arrived. Resume planner-lead for phase B
+      // (Design + Synth) with cache_carry_over via adapter_session_id so the
+      // system-prompt prefix is cached. The reducer's spawn effect just signals
+      // the dispatcher; actual --resume <session_id> wiring is in the adapter.
+      if (event.from === 'researcher') {
+        next.progress_ledger.next_speaker = 'planner-lead';
+        effects.push({
+          type: 'spawn',
+          actor: 'planner-lead',
+          adapter: pickAdapter(next, 'planner-lead'),
+          sandwich_appends: collectSandwichAppends(next, 'planner-lead'),
+        });
+      }
       break;
     }
 
@@ -437,7 +467,10 @@ function collectSandwichAppends(
     .map((f) => ({ source_id: f.source_id, text: f.text }));
 }
 
-function pickAdapter(state: CrumbState, actor: 'builder' | 'verifier' | 'planner-lead'): string {
+function pickAdapter(
+  state: CrumbState,
+  actor: 'builder' | 'verifier' | 'planner-lead' | 'researcher',
+): string {
   const override = state.progress_ledger.adapter_override[actor];
   if (override) return override;
   if (actor === 'builder') {
@@ -449,6 +482,14 @@ function pickAdapter(state: CrumbState, actor: 'builder' | 'verifier' | 'planner
     // bagelcode-cross-3way preset: verifier = gemini-cli (multimodal). Default codex if Gemini unavailable.
     // Adapter override is the proper P0 path — preset-loader should populate this.
     return 'claude-local';
+  }
+  if (actor === 'researcher') {
+    // v3.3: bagelcode-cross-3way preset binds researcher = gemini-sdk + Gemini 3.1 Pro
+    // (native YouTube URL, 10fps frame sampling, 1-hour duration cap). gemini-cli has
+    // p1-unresolved video bugs, so the SDK route is the deterministic path. Adapter
+    // override (preset-loader populated) is the canonical mechanism — this default
+    // is the ambient fallback for sessions without a preset configured.
+    return 'gemini-sdk';
   }
   return 'claude-local';
 }

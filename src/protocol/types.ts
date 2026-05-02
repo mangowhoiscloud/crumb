@@ -7,6 +7,7 @@ export type Actor =
   | 'user'
   | 'coordinator'
   | 'planner-lead'
+  | 'researcher'
   | 'builder'
   | 'verifier'
   | 'builder-fallback'
@@ -44,6 +45,7 @@ export type Kind =
   | 'step.socratic'
   | 'step.concept'
   | 'step.research'
+  | 'step.research.video'
   | 'step.design'
   | 'step.judge'
   // user intervention
@@ -71,6 +73,7 @@ export type Step =
   | 'socratic'
   | 'concept'
   | 'research'
+  | 'research.video'
   | 'design'
   | 'builder'
   | 'qa'
@@ -148,11 +151,12 @@ export interface Content {
   text: string;
 }
 
-/** v3 harness identifier — mirrors preset binding 3-tuple. */
+/** v3 harness identifier — mirrors preset binding 3-tuple. v3.3 added gemini-sdk for the researcher actor's video understanding path (Gemini 3.1 Pro native YouTube URL + 10fps frame sampling — gemini-cli has p1-unresolved video bugs). */
 export type Harness =
   | 'claude-code'
   | 'codex'
   | 'gemini-cli'
+  | 'gemini-sdk'
   | 'anthropic-sdk'
   | 'openai-sdk'
   | 'google-sdk'
@@ -177,6 +181,10 @@ export interface Metadata {
   deterministic?: boolean;
   /** v3: tool/effect identifier for deterministic events (e.g., 'qa-check-effect@v1'). */
   tool?: string;
+  /** v3.3: classifies researcher / verifier evidence source for D5 anti-deception checks. */
+  evidence_kind?: 'video' | 'screenshot' | 'text';
+  /** v3.3: sha256(video_ref + model + prompt_version) for the gemini-sdk adapter's replay cache. */
+  cache_key?: string;
   turn?: number;
   tokens_in?: number;
   tokens_out?: number;
