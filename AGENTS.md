@@ -145,7 +145,7 @@ npm install
 npm run build
 
 # 0. One-time PATH setup (after `npm install && npm run build` above)
-npm link            # registers `crumb` and `crumb-dashboard` on PATH
+npm link            # registers `crumb` and `crumb-studio` on PATH
                     # (or: npm i -g .  — same effect)
 
 # A. Natural language (Claude Code skill — recommended)
@@ -161,14 +161,14 @@ codex login     # OpenAI Codex Plus (optional)
 gemini login    # Google Gemini Advanced (optional)
 crumb run --goal "..." --preset bagelcode-cross-3way
 
-# D. Live dashboard (browser console)
-npx crumb-dashboard               # http://127.0.0.1:7321/  (auto-opens browser)
+# D. Live studio (browser console)
+npx crumb-studio               # http://127.0.0.1:7321/  (auto-opens browser)
 ```
 
 > Pre-link / dev-mode equivalents: every `crumb …` line above is interchangeable
 > with `npx tsx src/index.ts …` from inside the repo root, and
-> `npx crumb-dashboard …` is interchangeable with
-> `node packages/dashboard/dist/cli.js …` after a build.
+> `npx crumb-studio …` is interchangeable with
+> `node packages/studio/dist/cli.js …` after a build.
 
 `provider × harness × model` decisions stay with the user. Crumb never forces a default; if no preset is given, every actor follows the entry host (ambient fallback).
 
@@ -184,7 +184,7 @@ npx crumb-dashboard               # http://127.0.0.1:7321/  (auto-opens browser)
 
 ### How to run a session
 
-The bin entries (`crumb`, `crumb-dashboard`) are wired in `package.json` and
+The bin entries (`crumb`, `crumb-studio`) are wired in `package.json` and
 become available on PATH after `npm link` (or `npm i -g .`). Both forms are
 equivalent — the global form is what users see, the `npx tsx` / `node dist/`
 form is what the AGENTS.md and source comments reference for in-repo dev.
@@ -212,8 +212,8 @@ crumb doctor
 # Recommend a preset from natural-language environment description
 crumb config "Codex 만 인증된 환경에서 단일 host 데모"
 
-# Live dashboard (browser console — single-binary HTTP + SSE on 127.0.0.1:7321)
-npx crumb-dashboard
+# Live studio (browser console — single-binary HTTP + SSE on 127.0.0.1:7321)
+npx crumb-studio
 
 # Observation: tail the transcript while a session runs
 tail -f ~/.crumb/projects/<project-id>/sessions/<session-id>/transcript.jsonl | jq -r '

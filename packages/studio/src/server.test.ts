@@ -8,7 +8,7 @@ import { join, posix, sep } from 'node:path';
 
 import { describe, it, expect } from 'vitest';
 
-import { startDashboardServer } from './server.js';
+import { startStudioServer } from './server.js';
 
 async function fetchText(url: string): Promise<{ status: number; body: string }> {
   const res = await fetch(url);
@@ -20,8 +20,8 @@ async function fetchText(url: string): Promise<{ status: number; body: string }>
 const NODE_MAJOR = Number(process.versions.node.split('.')[0]);
 const describeServer = NODE_MAJOR >= 20 ? describe : describe.skip;
 
-describeServer('dashboard server', () => {
-  it('serves dashboard HTML at /', async () => {
+describeServer('studio server', () => {
+  it('serves studio HTML at /', async () => {
     const home = await mkdtemp(join(tmpdir(), 'crumb-dash-'));
     process.env.CRUMB_HOME = home;
     const glob = posix.join(
@@ -32,12 +32,12 @@ describeServer('dashboard server', () => {
       '*',
       'transcript.jsonl',
     );
-    const server = await startDashboardServer({ port: 0, bind: '127.0.0.1', glob });
+    const server = await startStudioServer({ port: 0, bind: '127.0.0.1', glob });
     try {
       const r = await fetchText(server.url);
       expect(r.status).toBe(200);
       expect(r.body).toMatch(/<!DOCTYPE html>/);
-      expect(r.body).toContain('Crumb · Live Dashboard');
+      expect(r.body).toContain('Crumb · Live Studio');
     } finally {
       await server.close();
     }
@@ -67,7 +67,7 @@ describeServer('dashboard server', () => {
       '*',
       'transcript.jsonl',
     );
-    const server = await startDashboardServer({ port: 0, bind: '127.0.0.1', glob });
+    const server = await startStudioServer({ port: 0, bind: '127.0.0.1', glob });
     try {
       // Allow chokidar's initial 'add' event to flush.
       await new Promise((r) => setTimeout(r, 200));
@@ -95,7 +95,7 @@ describeServer('dashboard server', () => {
       '*',
       'transcript.jsonl',
     );
-    const server = await startDashboardServer({
+    const server = await startStudioServer({
       port: 0,
       bind: '127.0.0.1',
       glob,
@@ -164,7 +164,7 @@ describeServer('dashboard server', () => {
       '*',
       'transcript.jsonl',
     );
-    const server = await startDashboardServer({
+    const server = await startStudioServer({
       port: 0,
       bind: '127.0.0.1',
       glob,
@@ -194,7 +194,7 @@ describeServer('dashboard server', () => {
       '*',
       'transcript.jsonl',
     );
-    const server = await startDashboardServer({
+    const server = await startStudioServer({
       port: 0,
       bind: '127.0.0.1',
       glob,
@@ -229,7 +229,7 @@ describeServer('dashboard server', () => {
       '*',
       'transcript.jsonl',
     );
-    const server = await startDashboardServer({ port: 0, bind: '127.0.0.1', glob });
+    const server = await startStudioServer({ port: 0, bind: '127.0.0.1', glob });
     try {
       const res = await fetch(server.url + 'api/sessions/nope/inbox', {
         method: 'POST',
@@ -255,7 +255,7 @@ describeServer('dashboard server', () => {
       '*',
       'transcript.jsonl',
     );
-    const server = await startDashboardServer({
+    const server = await startStudioServer({
       port: 0,
       bind: '127.0.0.1',
       glob,

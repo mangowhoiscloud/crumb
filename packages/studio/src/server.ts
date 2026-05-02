@@ -1,8 +1,8 @@
 /**
- * HTTP + SSE server for the Crumb live dashboard.
+ * HTTP + SSE server for the Crumb live studio.
  *
  * Read endpoints:
- *   GET  /                              → dashboard HTML
+ *   GET  /                              → studio HTML
  *   GET  /api/sessions                  → JSON snapshot, project-grouped
  *   GET  /api/sessions/:id/sandwich/:actor → assembled sandwich text (read-only)
  *   GET  /api/stream?session=<id|*>     → SSE stream of LiveEvents
@@ -36,7 +36,7 @@ import { join } from 'node:path';
 import { URL } from 'node:url';
 import { watch as fsWatch, createReadStream } from 'node:fs';
 
-import { DASHBOARD_HTML } from './dashboard-html.js';
+import { STUDIO_HTML } from './studio-html.js';
 import { probeAdapters } from './doctor.js';
 import { EventBus, type LiveEvent } from './event-bus.js';
 import { computeMetrics } from './metrics.js';
@@ -67,7 +67,7 @@ export interface DashboardServerOptions {
   repoRoot?: string;
 }
 
-export async function startDashboardServer(
+export async function startStudioServer(
   opts: DashboardServerOptions = {},
 ): Promise<DashboardServer> {
   const bind = opts.bind ?? '127.0.0.1';
@@ -75,7 +75,7 @@ export async function startDashboardServer(
   const repoRoot = opts.repoRoot ?? process.cwd();
   // Sessions the user dismissed via the sidebar × button. The transcript on
   // disk is untouched (read-only invariant); /api/sessions filters them out
-  // until the dashboard restarts. Volatile-by-design — there's no notion of
+  // until the studio restarts. Volatile-by-design — there's no notion of
   // "session deleted" in the on-disk model.
   const hiddenSessions = new Set<string>();
 
@@ -137,7 +137,7 @@ export async function startDashboardServer(
     if (req.method === 'POST' && url.pathname === '/api/crumb/run') {
       return void serveCrumbRun(req, res, repoRoot);
     }
-    // /api/sessions/:id/close (POST — mark dashboard-side hidden; transcript is never deleted)
+    // /api/sessions/:id/close (POST — mark studio-side hidden; transcript is never deleted)
     const closeMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/close$/);
     if (req.method === 'POST' && closeMatch) {
       return void serveSessionClose(res, hiddenSessions, closeMatch[1]!);
@@ -169,7 +169,7 @@ export async function startDashboardServer(
 function serveHtml(res: http.ServerResponse): void {
   res.setHeader('content-type', 'text/html; charset=utf-8');
   res.setHeader('cache-control', 'no-cache');
-  res.end(DASHBOARD_HTML);
+  res.end(STUDIO_HTML);
 }
 
 async function serveSessions(
@@ -191,7 +191,7 @@ async function serveSessions(
           const data = (m.data ?? {}) as Record<string, unknown>;
           if (typeof data.preset === 'string') preset = data.preset;
         }
-        // Track actors that actually ran so the dashboard can offer sandwich previews.
+        // Track actors that actually ran so the studio can offer sandwich previews.
         if (m.kind === 'agent.wake' && m.from) actorsSeen.add(m.from);
       }
       return {
@@ -221,7 +221,7 @@ async function serveSessions(
 /**
  * GET /api/health — bootstrap summary.
  *
- *   { dashboard_version, watcher_paths_tracked, sessions: { total, by_state: {...} } }
+ *   { studio_version, watcher_paths_tracked, sessions: { total, by_state: {...} } }
  *
  * Pattern: Kubernetes readiness probe — separates one-shot bootstrap data from
  * the periodic state polling done by /api/sessions. Cheap (no syscalls beyond
@@ -268,7 +268,7 @@ async function serveHealth(
  * Lightweight: PATH lookup + best-effort `--version`. Auth state intentionally
  * `null` for installed binaries since real auth probe would risk side-effects.
  * Mirrors src/helpers/doctor.ts of the crumb repo but standalone — see
- * `packages/dashboard/src/doctor.ts`.
+ * `packages/studio/src/doctor.ts`.
  */
 async function serveDoctor(res: http.ServerResponse): Promise<void> {
   const adapters = await probeAdapters();
@@ -325,7 +325,7 @@ async function serveInboxAppend(
     res.end(`session not found: ${sessionId}`);
     return;
   }
-  // Read body (cap at 8 KB so a runaway client can't OOM the dashboard).
+  // Read body (cap at 8 KB so a runaway client can't OOM the studio).
   const chunks: Buffer[] = [];
   let total = 0;
   const MAX_BYTES = 8192;
@@ -366,7 +366,7 @@ async function serveInboxAppend(
   // Append to <session>/inbox.txt — the existing inbox watcher (src/inbox/
   // watcher.ts) parses it via the same grammar as the TUI slash bar and
   // emits the corresponding kind=user.* / user.intervene transcript events.
-  // The dashboard never touches transcript.jsonl directly — append-only
+  // The studio never touches transcript.jsonl directly — append-only
   // invariant + single-writer-per-process stay intact.
   const sessionDir = sessionDirFromTranscript(match.transcript_path);
   const inboxPath = join(sessionDir, 'inbox.txt');
@@ -427,7 +427,7 @@ async function serveActorLogs(
     res.end(`(no spawn log yet for ${actor} in this session)`);
     return;
   }
-  // Concatenate all spawn logs newest-last so the dashboard sees natural order.
+  // Concatenate all spawn logs newest-last so the studio sees natural order.
   const parts: string[] = [];
   for (const f of found.files) {
     try {
@@ -592,7 +592,7 @@ function serveStream(
 // ─── v0.3.5 console — artifact iframe + crumb run / close ────────────────────
 
 /**
- * Serve any file under <session>/artifacts/ for the dashboard's Output tab.
+ * Serve any file under <session>/artifacts/ for the studio's Output tab.
  * Resolves to the session dir + 'artifacts' + relative path with traversal
  * protection (resolved path must remain inside the session's artifacts root).
  */
@@ -712,7 +712,7 @@ async function serveCrumbRun(
 }
 
 /**
- * POST /api/sessions/:id/close — dashboard-side hide (volatile).
+ * POST /api/sessions/:id/close — studio-side hide (volatile).
  */
 function serveSessionClose(
   res: http.ServerResponse,

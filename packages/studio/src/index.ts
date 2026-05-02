@@ -1,10 +1,10 @@
 /**
- * Public exports for `@crumb/dashboard`.
+ * Public exports for `@crumb/studio`.
  *
- * Programmatic embedding: `import { startDashboardServer } from '@crumb/dashboard';`
+ * Programmatic embedding: `import { startStudioServer } from '@crumb/studio';`
  */
 
-export { startDashboardServer } from './server.js';
+export { startStudioServer } from './server.js';
 export type { DashboardServer, DashboardServerOptions } from './server.js';
 export { computeMetrics } from './metrics.js';
 export type { SessionMetrics, ActorTotals } from './metrics.js';

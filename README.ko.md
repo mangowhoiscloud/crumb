@@ -37,11 +37,11 @@ git clone https://github.com/mangowhoiscloud/crumb.git
 cd crumb
 npm install         # Playwright + Chromium 자동 설치 (~110 MB, 1회, optional dep)
 npm run build
-npm link            # `crumb` + `crumb-dashboard` 가 PATH 에 등록 (또는: npm i -g .)
+npm link            # `crumb` + `crumb-studio` 가 PATH 에 등록 (또는: npm i -g .)
 crumb doctor        # 인증 + chromium binary cache 확인 (D6 portability 준비)
 ```
 
-이후 `crumb` 와 `crumb-dashboard` 를 어떤 디렉터리에서든 호출 가능 — repo-root 와 preset path 는 install 위치에서 자동 감지 (`--root` 가 escape hatch).
+이후 `crumb` 와 `crumb-studio` 를 어떤 디렉터리에서든 호출 가능 — repo-root 와 preset path 는 install 위치에서 자동 감지 (`--root` 가 escape hatch).
 
 > **Chromium 다운로드 건너뛰기** (CI / air-gapped 환경): `CRUMB_SKIP_PLAYWRIGHT_INSTALL=1 npm install`. qa-check D6 portability gate 는 signal-only 로 남고, D2 lint + size gate 는 그대로 동작.
 
@@ -97,17 +97,17 @@ crumb replay <ulid>                               # 결정론 재실행
 
 ```bash
 # `npm install && npm run build` (빠른 시작 단계) 후:
-npx crumb-dashboard                  # http://127.0.0.1:7321/  (브라우저 자동 오픈)
-npx crumb-dashboard --no-open        # 헤드리스 / SSH / CI    (URL 만 출력)
-npx crumb-dashboard --port 8080      # 다른 포트
-npx crumb-dashboard --bind 0.0.0.0   # LAN / SSH 터널 노출 (방화벽 prompt)
+npx crumb-studio                  # http://127.0.0.1:7321/  (브라우저 자동 오픈)
+npx crumb-studio --no-open        # 헤드리스 / SSH / CI    (URL 만 출력)
+npx crumb-studio --port 8080      # 다른 포트
+npx crumb-studio --bind 0.0.0.0   # LAN / SSH 터널 노출 (방화벽 prompt)
 ```
 
 브라우저에서 보이는 것:
 
 | 영역 | 내용 |
 |---|---|
-| **사이드바 (좌측)** | 프로젝트별 세션 그룹 + ＋ 버튼 (새 `crumb run` form: goal + preset). 행 hover 시 × 로 dashboard 에서 dismiss (디스크 transcript 는 보존). |
+| **사이드바 (좌측)** | 프로젝트별 세션 그룹 + ＋ 버튼 (새 `crumb run` form: goal + preset). 행 hover 시 × 로 studio 에서 dismiss (디스크 transcript 는 보존). |
 | **헤더 strip** | D1–D6 source-of-truth scorecard, 항상 보임, `kind=judge.score` 마다 갱신. |
 | **Pipeline 탭** | 9-actor DAG topology (활성 actor 라임 펄스, 모든 transcript event 마다 sender → next-likely target 으로 lavender 리플 "weaving") + actor 별 swimlane chip 타임라인. |
 | **Logs 탭** (ArgoCD-inspired) | actor 별 `<session>/agent-workspace/<actor>/spawn-*.log` 라이브 tail (모든 adapter spawn 의 stdout / stderr). filter / follow / clear / copy. DAG 노드 click 시 자동 점프. |
@@ -136,7 +136,7 @@ Cross-platform 환경 변수:
 | `crumb config <자연어>` | 자연어 설명에서 preset 추천 |
 | `crumb debug <session-id\|dir>` | F1-F7 routing 장애 진단 |
 | `crumb ls` | `~/.crumb/projects/*/sessions/` 모든 세션 + 이벤트 수 |
-| `npx crumb-dashboard [--port 7321] [--bind 127.0.0.1] [--no-open]` | 라이브 관측 대시보드 (HTTP + SSE) — 위 "라이브 대시보드" 섹션 참조 |
+| `npx crumb-studio [--port 7321] [--bind 127.0.0.1] [--no-open]` | 라이브 관측 대시보드 (HTTP + SSE) — 위 "라이브 대시보드" 섹션 참조 |
 
 ## 아키텍처 (v0.1, 한 화면)
 

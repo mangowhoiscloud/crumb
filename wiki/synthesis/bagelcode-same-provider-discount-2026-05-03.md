@@ -193,7 +193,7 @@ anthropic/anthropic 과 google/google 의 inflation 이 다를 수 있음 (Sture
 | `validator/anti-deception.test.ts` | 기존 self-bias 테스트 update + 신규 discount 케이스 추가 |
 | `protocol/types.ts` | `Scores.audit_violations` 의 enum 에 `self_bias_score_discounted` 추가 (이미 free-form string array 면 그대로) |
 | Wiki | 이 페이지 + `bagelcode-scoring-ratchet-frontier-2026-05-02.md` cross-link |
-| Dashboard / TUI | 변화 없음 — `cross_provider` flag 표시는 그대로, aggregate 가 깎인 값으로 표시되므로 사용자가 보는 숫자가 정직해짐 |
+| Studio / TUI | 변화 없음 — `cross_provider` flag 표시는 그대로, aggregate 가 깎인 값으로 표시되므로 사용자가 보는 숫자가 정직해짐 |
 
 ---
 

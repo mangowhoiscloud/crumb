@@ -364,7 +364,7 @@ Plus operational layers (5) not in academic scope:
   - Cross-provider Verifier (Builder=Codex / Verifier=Claude different model)
   - Fault tolerance (F1-F5 + circuit breaker + capability probe)
   - User intervention (TUI + slash + inbox.txt + 4 hook + SIGINT)
-  - Dual interface (agent-friendly XML + human dashboard)
+  - Dual interface (agent-friendly XML + human studio)
 
 Result: TradingAgents §4 academic foundation + Lanham/Google 2026 quantitative 
 backing + Paperclip Issue #3438 operational lessons + superpowers TDD discipline 

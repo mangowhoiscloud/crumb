@@ -9,7 +9,7 @@ import {
   sessionIdFromPath,
 } from './paths.js';
 
-describe('dashboard path helpers', () => {
+describe('studio path helpers', () => {
   const sample = '/Users/mango/.crumb/projects/596ee4eeb63e64ef/sessions/01HSESS/transcript.jsonl';
   const flatSample = '/Users/mango/workspace/crumb/sessions/01KQJEDSD6/transcript.jsonl';
 

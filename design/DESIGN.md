@@ -1,4 +1,4 @@
-# Crumb Live Dashboard — DESIGN.md
+# Crumb Live Studio — DESIGN.md
 
 > Live observability surface for `crumb` sessions. Single-file HTML + SSE stream
 > on top of `~/.crumb/projects/*/sessions/*/transcript.jsonl`. Cross-platform,
@@ -14,7 +14,7 @@ that requirement was met by two surfaces — a blessed-based TUI and a static
 `summary.html` rendered after the session ends. Neither surface answers
 **"where is my request right now?"** while a session is in flight.
 
-This package fills that gap with one live dashboard that any browser, on any OS
+This package fills that gap with one live studio that any browser, on any OS
 the user already has, can open without installing anything new.
 
 ## 2. Observability data model — the 5 frontier dimensions, mapped
@@ -23,9 +23,9 @@ We adopt the five common dimensions that every frontier observability platform
 in 2026 exposes (per `wiki/references/bagelcode-observability-frontier-2026.md`
 §5: Anthropic Claude Console / Google Vertex Unified Trace Viewer / AgentOps /
 Phoenix / Langfuse). Each dimension already lives in the transcript schema —
-the dashboard just surfaces it in real time.
+the studio just surfaces it in real time.
 
-| Dimension | Source | Emitted by | Surface in dashboard |
+| Dimension | Source | Emitted by | Surface in studio |
 |---|---|---|---|
 | **Token consumption** (in / out / cache_read / cache_write) | `metadata.tokens_in` etc. | every LLM-bearing event | Header `tokens` + `cache` + per-actor swimlane row totals |
 | **Latency** (per turn / per tool) | `metadata.latency_ms` | live dispatcher + adapter | Header `p95 lat` + scorecard live update + p50 in `/api/sessions` |
@@ -44,7 +44,7 @@ Frontier-specific dimensions adopted selectively:
 
 **Source-of-truth invariant preserved**: every score dim in the live scorecard
 shows its `source` (`verifier-llm` / `qa-check-effect` / `reducer-auto`). The
-dashboard never recomputes a verdict — it mirrors what the transcript says,
+studio never recomputes a verdict — it mirrors what the transcript says,
 plus the deterministic combine done in `src/state/scorer.ts` for D3 / D5.
 
 ## 3. Architecture (data plane)
@@ -53,7 +53,7 @@ plus the deterministic combine done in `src/state/scorer.ts` for D3 / D5.
 ~/.crumb/projects/<id>/sessions/<ulid>/transcript.jsonl   (append-only SOT)
                        │
                        ▼  chokidar watch (native fs events; polling fallback)
-            packages/dashboard
+            packages/studio
                        │
               ┌────────┴────────────────┐
               │ JsonlTail (per file)    │  cross-platform: fs.stat + fs.read + offset
@@ -65,7 +65,7 @@ plus the deterministic combine done in `src/state/scorer.ts` for D3 / D5.
               └────────────┬───────────┘
                            ▼
                 http://127.0.0.1:7321/      (Node http; no Express)
-                   ├── GET /                 → dashboard HTML (single file)
+                   ├── GET /                 → studio HTML (single file)
                    ├── GET /api/sessions     → JSON snapshot incl. history + metrics
                    └── GET /api/stream       → SSE stream (LiveEvent JSON lines)
                            │
@@ -107,7 +107,7 @@ headless flag give every CI / sandbox / SSH environment a way through.
 
 ## 5. Visual identity — Sentry × Linear
 
-The dashboard inlines two design systems chosen from
+The studio inlines two design systems chosen from
 `https://github.com/VoltAgent/awesome-design-md`:
 
 - **Linear** (`design-md/linear.app/DESIGN.md`) — chassis: layout grid, ink
@@ -119,7 +119,7 @@ The dashboard inlines two design systems chosen from
   Sentry's identity is built around debugging surfaces, which matches our
   anti-deception audit banner + deterministic-event highlighting.
 
-### Color tokens (consumed by `dashboard-html.ts`)
+### Color tokens (consumed by `studio-html.ts`)
 
 ```css
 /* Linear chassis */
@@ -163,7 +163,7 @@ The dashboard inlines two design systems chosen from
 
 ### Component vocabulary
 
-| Component | Linear / Sentry origin | Purpose in our dashboard |
+| Component | Linear / Sentry origin | Purpose in our studio |
 |---|---|---|
 | Session row (sidebar) | Linear `changelog-row` | one row per active / recent session, live dot if streaming |
 | Header pill | Linear `status-badge` | verdict (`PASS` / `PARTIAL` / `FAIL`) — color from Sentry palette |
@@ -190,8 +190,8 @@ The dashboard inlines two design systems chosen from
 ## 6. Module map (file-level spec)
 
 ```
-packages/dashboard/
-  package.json               name=@crumb/dashboard, type=module, bin=crumb-dashboard
+packages/studio/
+  package.json               name=@crumb/studio, type=module, bin=crumb-studio
   tsconfig.json              extends root, outDir=dist
   src/
     types.ts                 DashboardMessage shape (decoupled from crumb core)
@@ -202,9 +202,9 @@ packages/dashboard/
     event-bus.ts             EventBus — per-session + wildcard fan-out
     watcher.ts               SessionWatcher — chokidar over the glob, drives bus
     open-browser.ts          openBrowser() — darwin/win/linux/wsl cascade
-    server.ts                startDashboardServer() — http + SSE + /api/sessions
-    dashboard-html.ts        DASHBOARD_HTML — single-file inline CSS+JS
-    cli.ts                   crumb-dashboard binary
+    server.ts                startStudioServer() — http + SSE + /api/sessions
+    studio-html.ts        DASHBOARD_HTML — single-file inline CSS+JS
+    cli.ts                   crumb-studio binary
     index.ts                 public exports for embedding
     *.test.ts                vitest specs (jsonl-tail, metrics, event-bus, server)
 ```
@@ -212,11 +212,11 @@ packages/dashboard/
 ## 7. CLI surface
 
 ```bash
-crumb-dashboard                   # 127.0.0.1:7321, auto-open browser
-crumb-dashboard --port 8080       # alternate port
-crumb-dashboard --bind 0.0.0.0    # expose on LAN / SSH tunnel
-crumb-dashboard --no-open         # headless (CI / SSH only — print URL)
-crumb-dashboard --poll-interval 100   # tighten polling cadence (default 250ms)
+crumb-studio                   # 127.0.0.1:7321, auto-open browser
+crumb-studio --port 8080       # alternate port
+crumb-studio --bind 0.0.0.0    # expose on LAN / SSH tunnel
+crumb-studio --no-open         # headless (CI / SSH only — print URL)
+crumb-studio --poll-interval 100   # tighten polling cadence (default 250ms)
 ```
 
 ```bash
@@ -234,12 +234,12 @@ CRUMB_NO_OPEN=1                   # equivalent to --no-open
 - Recompute metrics with `MetricsAggregator` only — no second derivation point.
 - Bind `127.0.0.1` by default, opt in to `0.0.0.0`.
 - Send a heartbeat every 15 s on every open SSE connection.
-- Keep `dashboard-html.ts` zero-CDN — no `<script src="https://...">`.
+- Keep `studio-html.ts` zero-CDN — no `<script src="https://...">`.
 
 **Don't**
 
 - Modify the transcript file. Append-only invariant is enforced by the writer;
-  the dashboard is read-only.
+  the studio is read-only.
 - Use platform-specific syscalls outside the abstractions in
   `poll-detect.ts` / `open-browser.ts`.
 - Add a frontend build step (Vite / Webpack / etc.). Inline string is the
@@ -249,7 +249,7 @@ CRUMB_NO_OPEN=1                   # equivalent to --no-open
 
 ## 9. Roadmap (post-submission)
 
-- `crumb-dashboard --once` → emit a static snapshot HTML for archival; absorbs
+- `crumb-studio --once` → emit a static snapshot HTML for archival; absorbs
   the standalone `summary.html` renderer (`src/summary/render.ts`).
 - Long-poll fallback at `/api/poll?session=<id>&since=<ulid>` for SSE-blocked
   proxies.

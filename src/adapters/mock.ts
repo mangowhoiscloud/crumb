@@ -52,7 +52,7 @@ export class MockAdapter implements Adapter {
       await writeVerifierSequence(writer, req, wakeId);
     }
 
-    // Mock usage telemetry — deterministic numbers per actor so the dashboard
+    // Mock usage telemetry — deterministic numbers per actor so the studio
     // shows non-zero metrics in mock-only demos. Real adapters (claude-local
     // etc.) overwrite these with actual stream-json `result` data.
     const mockUsage: SpawnResult['usage'] = {

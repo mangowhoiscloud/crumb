@@ -5,9 +5,9 @@ node_modules/
 dist/
 *.tsbuildinfo
 
-# dashboard client inliner artifact — regenerated on prebuild / pretypecheck
-# from packages/dashboard/src/client/{dashboard.html, dashboard.css, dashboard.js}
-packages/dashboard/src/dashboard-html.generated.ts
+# studio client inliner artifact — regenerated on prebuild / pretypecheck
+# from packages/studio/src/client/{studio.html, studio.css, studio.js}
+packages/studio/src/studio-html.generated.ts
 
 # runtime sessions (generated, never commit)
 sessions/

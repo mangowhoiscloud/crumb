@@ -7,11 +7,11 @@
 ### Vertex AI Agent Builder → Gemini Enterprise Agent Platform (Cloud Next 2026 rebrand)
 
 핵심 발화 (verbatim):
-> "Google is making it easy to track key agent performance metrics with a dashboard that measures **token consumption, latency, error rates, and tool calls** over time. Within this observability dashboard, enterprises can visualize the actions agents take and reproduce any issues."
+> "Google is making it easy to track key agent performance metrics with a studio that measures **token consumption, latency, error rates, and tool calls** over time. Within this observability studio, enterprises can visualize the actions agents take and reproduce any issues."
 
-> "agent performance dashboards, multi-turn auto-raters for measuring quality, online evaluation for live traffic, and the **Unified Trace Viewer** for debugging agent reasoning paths."
+> "agent performance studios, multi-turn auto-raters for measuring quality, online evaluation for live traffic, and the **Unified Trace Viewer** for debugging agent reasoning paths."
 
-> "Agent Observability delivers turnkey dashboards with automated logging and agent auditing for total oversight. Using **standardized, OTel-compliant telemetry**, you can now verify every agent, tool, and API handoff to ensure accountability, visualize full execution paths, and quickly diagnose reasoning loops or monitor performance metrics."
+> "Agent Observability delivers turnkey studios with automated logging and agent auditing for total oversight. Using **standardized, OTel-compliant telemetry**, you can now verify every agent, tool, and API handoff to ensure accountability, visualize full execution paths, and quickly diagnose reasoning loops or monitor performance metrics."
 
 URLs:
 - https://uibakery.io/blog/vertex-ai-agent-builder
@@ -28,7 +28,7 @@ URLs:
 핵심 발화 (verbatim):
 > "the first serious attempt by a frontier model provider to own the infrastructure layer for agent execution"
 
-> "The Managed Agents dashboard sits inside the Anthropic Console... gives you full visibility into agent sessions, token usage, environment permissions, and credential vaults."
+> "The Managed Agents studio sits inside the Anthropic Console... gives you full visibility into agent sessions, token usage, environment permissions, and credential vaults."
 
 > "The observability UI renders these traces as a **timeline** where you can **click into any tool call to see exact arguments and responses**, and you can **replay a run with modifications to debug regressions**."
 
@@ -37,7 +37,7 @@ URLs:
 > "Anthropic's tools include the Claude Console for intuitive building, Claude Code for scripting, and a CLI for command-line deployment, all integrated with Claude models for efficient agent creation."
 
 URLs:
-- https://console.anthropic.com/dashboard
+- https://console.anthropic.com/studio
 - https://console.anthropic.com/workbench
 - https://platform.claude.com/workbench
 - https://www.mindstudio.ai/blog/claude-managed-agents-dashboard-guide
@@ -158,7 +158,7 @@ URLs:
 - https://openobserve.ai/blog/opentelemetry-for-llms/
 - https://dev.to/x4nent/opentelemetry-genai-semantic-conventions-the-standard-for-llm-observability-1o2a
 
-## 5 frontier dashboard 의 공통 5 차원
+## 5 frontier studio 의 공통 5 차원
 
 | 차원 | Vertex | Anthropic Console | AgentOps | Phoenix | Langfuse |
 |---|---|---|---|---|---|
@@ -178,6 +178,6 @@ URLs:
 
 - self-built (Bagelcode OSS 정합)
 - transcript.jsonl + OTel GenAI alias
-- 5 차원 dashboard (Vertex / Anthropic 패턴 그대로)
+- 5 차원 studio (Vertex / Anthropic 패턴 그대로)
 - TUI (P0) + summary.html (P1) + web observer (P2)
 - `crumb export --format otel-jsonl` 표준 export

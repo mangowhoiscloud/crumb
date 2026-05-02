@@ -1,8 +1,8 @@
 {
-  "name": "@crumb/dashboard",
+  "name": "@crumb/studio",
   "version": "0.4.0",
   "private": true,
-  "description": "Live observability dashboard for Crumb sessions — file-tail SSE server + browser UI.",
+  "description": "Live observability studio for Crumb sessions — file-tail SSE server + browser UI.",
   "type": "module",
   "main": "dist/index.js",
   "exports": {
@@ -10,7 +10,7 @@
     "./server": "./dist/server.js"
   },
   "bin": {
-    "crumb-dashboard": "dist/cli.js"
+    "crumb-studio": "dist/cli.js"
   },
   "scripts": {
     "inline-client": "node scripts/inline-client.mjs",

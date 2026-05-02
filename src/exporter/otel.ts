@@ -80,7 +80,7 @@ export function toOtelSpan(msg: Message): OtelSpan {
     attrs['gen_ai.tool.call.output'] = JSON.stringify(msg.data);
   }
   // OTel general 'error.type' attribute for kind=error / audit so error-rate
-  // dashboards (Datadog, Vertex) light up without re-deriving from kind.
+  // studios (Datadog, Vertex) light up without re-deriving from kind.
   if (msg.kind === 'error') {
     attrs['error.type'] = (msg.data?.code as string | undefined) ?? msg.body ?? 'crumb.error';
   }

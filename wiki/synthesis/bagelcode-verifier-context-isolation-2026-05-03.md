@@ -158,7 +158,7 @@ bundle 은 transcript 의 결정론적 projection (kind whitelist + latest-K fil
 | `src/adapters/types.ts` | SpawnRequest 에 `judgeInputPath?: string` |
 | `src/adapters/_shared.ts` | `CRUMB_JUDGE_INPUT_PATH` env 전파 |
 | `agents/verifier.md` | Reads column 강화, Bash scope 좁힘 |
-| dashboard | bundle 파일을 읽는 UI 가 있다면 (현재 없음) 무영향 |
+| studio | bundle 파일을 읽는 UI 가 있다면 (현재 없음) 무영향 |
 | anti-deception / reducer | 영향 없음 (full transcript 그대로 사용) |
 | replay determinism | 영향 없음 (bundle 은 transcript 의 결정론적 projection) |
 

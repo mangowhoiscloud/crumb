@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * `crumb-dashboard` CLI entrypoint.
+ * `crumb-studio` CLI entrypoint.
  *
  * Usage:
- *   crumb-dashboard                         # 127.0.0.1:7321, auto-open browser
- *   crumb-dashboard --port 8080             # custom port
- *   crumb-dashboard --bind 0.0.0.0          # expose on LAN / SSH tunnel
- *   crumb-dashboard --no-open               # headless (CI / SSH)
- *   crumb-dashboard --home ~/.crumb --home /tmp/crumb-test-home
+ *   crumb-studio                         # 127.0.0.1:7321, auto-open browser
+ *   crumb-studio --port 8080             # custom port
+ *   crumb-studio --bind 0.0.0.0          # expose on LAN / SSH tunnel
+ *   crumb-studio --no-open               # headless (CI / SSH)
+ *   crumb-studio --home ~/.crumb --home /tmp/crumb-test-home
  *                                           # v0.3.1: watch multiple Crumb homes
  *                                           #       in one server (sessions from
  *                                           #       all roots show up together).
@@ -24,7 +24,7 @@
 import { posix, sep } from 'node:path';
 
 import { openBrowser } from './open-browser.js';
-import { startDashboardServer } from './server.js';
+import { startStudioServer } from './server.js';
 
 interface Args {
   port: number;
@@ -68,10 +68,10 @@ function homesToGlobs(homes: string[]): string[] {
 
 function printHelp(): void {
   // eslint-disable-next-line no-console
-  console.log(`crumb-dashboard — live observability dashboard
+  console.log(`crumb-studio — live observability studio
 
 Usage:
-  crumb-dashboard [options]
+  crumb-studio [options]
 
 Options:
   --home <path>         Crumb home to watch. Repeatable — passes are merged.
@@ -90,14 +90,14 @@ Env (precedence: --home > CRUMB_HOMES > CRUMB_HOME > $HOME/.crumb):
   CRUMB_NO_OPEN=1       Headless mode without --no-open flag
 
 Examples:
-  crumb-dashboard --home ~/.crumb --home /tmp/crumb-test-home
-  CRUMB_HOMES=/Users/mango/.crumb:/tmp/crumb-real-home crumb-dashboard
+  crumb-studio --home ~/.crumb --home /tmp/crumb-test-home
+  CRUMB_HOMES=/Users/mango/.crumb:/tmp/crumb-real-home crumb-studio
 `);
 }
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const opts: Parameters<typeof startDashboardServer>[0] = {
+  const opts: Parameters<typeof startStudioServer>[0] = {
     port: args.port,
     bind: args.bind,
   };
@@ -109,10 +109,10 @@ async function main(): Promise<void> {
   if (args.homes.length > 0) {
     opts.globs = homesToGlobs(args.homes);
   }
-  const server = await startDashboardServer(opts);
+  const server = await startStudioServer(opts);
 
   // eslint-disable-next-line no-console
-  console.log(`crumb dashboard listening on ${server.url}`);
+  console.log(`crumb studio listening on ${server.url}`);
   if (args.homes.length > 0) {
     // eslint-disable-next-line no-console
     console.log(`watching ${args.homes.length} home(s):`);
@@ -135,6 +135,6 @@ async function main(): Promise<void> {
 
 main().catch((err) => {
   // eslint-disable-next-line no-console
-  console.error('crumb-dashboard failed:', err);
+  console.error('crumb-studio failed:', err);
   process.exit(1);
 });

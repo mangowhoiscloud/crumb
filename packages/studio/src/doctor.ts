@@ -1,5 +1,5 @@
 /**
- * Lightweight adapter probe for the dashboard.
+ * Lightweight adapter probe for the studio.
  *
  * Mirrors `crumb doctor` (in src/helpers/doctor.ts of the crumb repo) but
  * decoupled — no cross-package import. We only need 3 signals per adapter:
