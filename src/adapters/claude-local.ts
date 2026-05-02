@@ -72,8 +72,14 @@ export class ClaudeLocalAdapter implements Adapter {
       });
       let stdout = '';
       let stderr = '';
-      child.stdout.on('data', (b) => (stdout += b.toString()));
-      child.stderr.on('data', (b) => (stderr += b.toString()));
+      child.stdout.on('data', (b) => {
+        stdout += b.toString();
+        req.onStdoutActivity?.();
+      });
+      child.stderr.on('data', (b) => {
+        stderr += b.toString();
+        req.onStdoutActivity?.();
+      });
       child.on('error', reject);
       const detachAbort = attachAbortHandler(child, req.signal);
       child.on('close', (code) => {

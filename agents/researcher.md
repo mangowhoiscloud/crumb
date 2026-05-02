@@ -48,7 +48,7 @@ A new outer actor in the v3.3 split. Runs between planner-lead's step.concept an
 | out (transcript) | `kind=step.research` × 1 (synthesis: 3 reference games + 3 actionable lessons grounded in video evidence) |
 | out (transcript) | `kind=handoff.requested(to=planner-lead)` payload `{research_id}` |
 
-**Handoff:** Always to `planner-lead`. The coordinator's reducer routes `handoff.requested(to=planner-lead)` → resume planner-lead via `adapter_session_id` (cache_carry_over) so the second planner-lead spawn picks up step.design with the new research events readable on the transcript.
+**Handoff:** Always to `planner-lead`. The coordinator's reducer routes `handoff.requested(to=planner-lead)` → fresh planner-lead spawn for step.design. (The `adapter_session_id` / `cache_carry_over` metadata fields are forward-compat — no `--resume` wiring yet, so the second planner-lead spawn re-reads transcript.jsonl from scratch.)
 
 ## Steps (sequential, single spawn)
 
