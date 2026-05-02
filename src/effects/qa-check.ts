@@ -33,6 +33,10 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
+import type { ACPredicateItem, ACResult } from './qa-interactive.js';
+
+export type { ACPredicateItem, ACResult } from './qa-interactive.js';
+
 export interface QaResult {
   /** Overall lint pass — DOCTYPE + viewport + script tag all present. */
   lint_passed: boolean;
@@ -48,6 +52,26 @@ export interface QaResult {
   runtime_ms: number;
   /** D6 portability — cross-browser smoke result. Optional, skipped by default. */
   cross_browser_smoke?: 'ok' | 'fail' | 'skipped';
+  /**
+   * D6 portability supplement — PWA offline-boot test (setOffline + reload).
+   * Skipped when artifact has no `sw.js` sibling. Frontier-aligned with
+   * ArtifactsBench (arXiv:2507.04952) multi-step "first_interaction" verification.
+   */
+  pwa_offline_boot?: 'ok' | 'fail' | 'skipped';
+  /** Phaser scene reached SYS.RUNNING(5) on first load. Informational. */
+  phaser_scene_running?: boolean;
+  /**
+   * v3.5 — per-AC deterministic results from `qa-interactive.ts`. Empty
+   * array = caller passed no `ac_predicates` (legacy spec or all-subjective);
+   * non-empty = each entry's status is the single-origin ground truth for
+   * that AC, anti-deception Rule 1-extended (LLM may not forge AC pass/fail).
+   * See `agents/specialists/game-design.md` §AC-Predicate-Compile.
+   */
+  ac_results?: ACResult[];
+  /** Number of `ac_results` with status === 'PASS'. */
+  ac_pass_count?: number;
+  /** Length of `ac_results`. */
+  ac_total?: number;
   /** Own-code size in bytes (excluding CDN-loaded scripts). */
   loc_own_bytes: number;
   /** Detailed lint findings (one per failed check). */
@@ -93,7 +117,10 @@ const MAX_OWN_CODE_BYTES = 60_000;
  * + lint_findings=['artifact_missing: ...']` so D2 collapses to 0 and the
  * audit trail surfaces the real failure mode.
  */
-export async function runQaCheck(artifactPath: string): Promise<QaResult> {
+export async function runQaCheck(
+  artifactPath: string,
+  acPredicates: ACPredicateItem[] = [],
+): Promise<QaResult> {
   const start = Date.now();
 
   // Mock fixture path — deterministic PASS (CI / mock adapter only).
@@ -151,6 +178,8 @@ export async function runQaCheck(artifactPath: string): Promise<QaResult> {
   // CRUMB_QA_PLAYWRIGHT_OPTIONAL).
   let firstInteraction: QaResult['first_interaction'] = 'skipped';
   let crossBrowserSmoke: QaResult['cross_browser_smoke'] = 'skipped';
+  let pwaOfflineBoot: QaResult['pwa_offline_boot'] = 'skipped';
+  let phaserSceneRunning: QaResult['phaser_scene_running'];
   const requirePlaywright = process.env.CRUMB_QA_REQUIRE_PLAYWRIGHT === '1';
   const playwrightOptional = process.env.CRUMB_QA_PLAYWRIGHT_OPTIONAL === '1';
   let playwrightUnavailable = false;
@@ -159,8 +188,15 @@ export async function runQaCheck(artifactPath: string): Promise<QaResult> {
     const smoke = await runPlaywrightSmoke(artifactPath);
     firstInteraction = smoke.firstInteraction;
     crossBrowserSmoke = smoke.crossBrowser;
+    pwaOfflineBoot = smoke.pwaOffline ?? 'skipped';
+    phaserSceneRunning = smoke.phaserSceneRunning;
     if (smoke.firstInteraction === 'fail') {
       findings.push(`playwright smoke failed: ${smoke.reason ?? 'unknown'}`);
+    }
+    if (pwaOfflineBoot === 'fail') {
+      findings.push(
+        'pwa offline-boot failed (sw.js precache likely incomplete — cross-origin CDN scripts not cached)',
+      );
     }
   } catch (err) {
     // Distinguish "playwright not installed" (module-not-found) from "smoke errored".
@@ -187,9 +223,33 @@ export async function runQaCheck(artifactPath: string): Promise<QaResult> {
     }
   }
 
+  // v3.5 — AC predicate runner (deterministic, no LLM). Skipped silently
+  // when planner-lead emitted no `ac_predicates` (legacy spec) OR when
+  // playwright is unavailable (the inner runner SKIPs every item).
+  let acResults: ACResult[] = [];
+  let acPassCount = 0;
+  if (acPredicates.length > 0 && firstInteraction === 'ok') {
+    try {
+      const { runACInteractive } = await import('./qa-interactive.js');
+      const ac = await runACInteractive(artifactPath, acPredicates);
+      acResults = ac.results;
+      acPassCount = ac.passed;
+      if (ac.passed < ac.total) {
+        const failedIds = ac.results
+          .filter((r) => r.status !== 'PASS')
+          .map((r) => r.ac_id)
+          .join(', ');
+        findings.push(`ac predicates failed (${ac.total - ac.passed}/${ac.total}): ${failedIds}`);
+      }
+    } catch (err) {
+      findings.push(`ac-interactive errored: ${(err as Error).message.slice(0, 200)}`);
+    }
+  }
+
   const playwrightFailed = firstInteraction === 'fail';
   const playwrightBlocks = playwrightFailed || (playwrightUnavailable && requirePlaywright);
-  const allOk = lintPassed && ownBytes <= MAX_OWN_CODE_BYTES && !playwrightBlocks;
+  const acFailed = acResults.length > 0 && acPassCount < acResults.length;
+  const allOk = lintPassed && ownBytes <= MAX_OWN_CODE_BYTES && !playwrightBlocks && !acFailed;
 
   return {
     lint_passed: lintPassed,
@@ -199,6 +259,11 @@ export async function runQaCheck(artifactPath: string): Promise<QaResult> {
     artifact_sha256: sha256,
     runtime_ms: Date.now() - start,
     cross_browser_smoke: crossBrowserSmoke,
+    pwa_offline_boot: pwaOfflineBoot,
+    ...(phaserSceneRunning !== undefined ? { phaser_scene_running: phaserSceneRunning } : {}),
+    ...(acResults.length > 0
+      ? { ac_results: acResults, ac_pass_count: acPassCount, ac_total: acResults.length }
+      : {}),
     loc_own_bytes: ownBytes,
     lint_findings: findings,
   };

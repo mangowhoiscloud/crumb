@@ -4,6 +4,7 @@
  */
 
 import type { Actor, DraftMessage } from '../protocol/types.js';
+import type { ACPredicateLedgerItem } from '../state/types.js';
 
 export type Effect =
   | SpawnEffect
@@ -90,4 +91,11 @@ export interface QaCheckEffect {
   build_event_id: string;
   /** sha256 of the artifact (for tamper detection between build and qa). */
   artifact_sha256?: string;
+  /**
+   * v3.5 — deterministic AC predicates compiled by planner-lead at spec-seal,
+   * pulled from `state.task_ledger.ac_predicates` by the reducer's `build`
+   * case. The dispatcher passes these to `runQaCheck` so the AC layer runs
+   * alongside the static smoke. Empty when the spec emitted no predicates.
+   */
+  ac_predicates?: ACPredicateLedgerItem[];
 }

@@ -23,7 +23,7 @@ export async function runQaCheckEffect(effect: QaCheckEffect, deps: QaRunnerDeps
 
   let result;
   try {
-    result = await runQaCheck(artifactPath);
+    result = await runQaCheck(artifactPath, effect.ac_predicates ?? []);
   } catch (err) {
     // Even hard failures must produce a qa.result so the verifier can read D2.
     await deps.writer.append({
@@ -69,6 +69,17 @@ export async function runQaCheckEffect(effect: QaCheckEffect, deps: QaRunnerDeps
       artifact_sha256: result.artifact_sha256,
       runtime_ms: result.runtime_ms,
       cross_browser_smoke: result.cross_browser_smoke,
+      ...(result.pwa_offline_boot ? { pwa_offline_boot: result.pwa_offline_boot } : {}),
+      ...(result.phaser_scene_running !== undefined
+        ? { phaser_scene_running: result.phaser_scene_running }
+        : {}),
+      ...(result.ac_results
+        ? {
+            ac_results: result.ac_results,
+            ac_pass_count: result.ac_pass_count,
+            ac_total: result.ac_total,
+          }
+        : {}),
       loc_own_bytes: result.loc_own_bytes,
       lint_findings: result.lint_findings,
     },

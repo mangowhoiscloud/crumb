@@ -64,11 +64,32 @@ describe('runQaCheck — mock fixture vs missing artifact', () => {
   });
 });
 
+/**
+ * v3.5 — `playwright` is now a real devDependency (so the AC-interactive
+ * runner has it installed in CI), but the detection-contract tests still need
+ * to simulate the "playwright not installed" case. Mock the smoke import so
+ * runQaCheck observes a `Cannot find module 'playwright'` error path —
+ * matches the runtime detection regex in qa-check.ts. The mock factory must
+ * return a module shape whose `runPlaywrightSmoke` throws that specific
+ * error (returning a throwing factory triggers vitest hoist warnings).
+ */
+function mockPlaywrightMissing(): void {
+  vi.doMock('./qa-check-playwright.js', () => ({
+    runPlaywrightSmoke: () => {
+      throw new Error("Cannot find module 'playwright'");
+    },
+    withStaticServer: vi.fn(),
+    SCENE_RUNNING_PROBE: '',
+  }));
+}
+
 describe('runQaCheck — lint + size on real artifact', () => {
   it('PASSes a valid Phaser HTML when Playwright unavailable (default mode)', async () => {
+    mockPlaywrightMissing();
+    const { runQaCheck: rerunQaCheck } = await import('./qa-check.js');
     const path = join(tmp, 'game.html');
     writeFileSync(path, VALID_HTML);
-    const r = await runQaCheck(path);
+    const r = await rerunQaCheck(path);
     // Default: missing Playwright → finding emitted but exec doesn't fail.
     expect(r.lint_passed).toBe(true);
     expect(r.exec_exit_code).toBe(0);
@@ -77,19 +98,23 @@ describe('runQaCheck — lint + size on real artifact', () => {
   });
 
   it('FAILs when DOCTYPE / viewport / phaser script all missing', async () => {
+    mockPlaywrightMissing();
+    const { runQaCheck: rerunQaCheck } = await import('./qa-check.js');
     const path = join(tmp, 'game.html');
     writeFileSync(path, '<html><body>nothing here</body></html>');
-    const r = await runQaCheck(path);
+    const r = await rerunQaCheck(path);
     expect(r.lint_passed).toBe(false);
     expect(r.exec_exit_code).toBe(1);
     expect(r.lint_findings.length).toBeGreaterThanOrEqual(3);
   });
 
   it('FAILs when own-code exceeds 60KB', async () => {
+    mockPlaywrightMissing();
+    const { runQaCheck: rerunQaCheck } = await import('./qa-check.js');
     const path = join(tmp, 'game.html');
     const padding = 'x'.repeat(61_000);
     writeFileSync(path, VALID_HTML.replace('// game logic', `// ${padding}`));
-    const r = await runQaCheck(path);
+    const r = await rerunQaCheck(path);
     expect(r.exec_exit_code).toBe(1);
     expect(r.lint_findings.some((f) => /60000 bytes/.test(f))).toBe(true);
   });
@@ -97,10 +122,12 @@ describe('runQaCheck — lint + size on real artifact', () => {
 
 describe('runQaCheck — Playwright detection contract', () => {
   it('CRUMB_QA_REQUIRE_PLAYWRIGHT=1 + Playwright missing → exec_exit_code=1', async () => {
+    mockPlaywrightMissing();
     process.env.CRUMB_QA_REQUIRE_PLAYWRIGHT = '1';
+    const { runQaCheck: rerunQaCheck } = await import('./qa-check.js');
     const path = join(tmp, 'game.html');
     writeFileSync(path, VALID_HTML);
-    const r = await runQaCheck(path);
+    const r = await rerunQaCheck(path);
     expect(r.exec_exit_code).toBe(1);
     expect(r.first_interaction).toBe('fail');
     expect(r.lint_findings.some((f) => /CRUMB_QA_REQUIRE_PLAYWRIGHT.*not installed/i.test(f))).toBe(
@@ -109,10 +136,12 @@ describe('runQaCheck — Playwright detection contract', () => {
   });
 
   it('CRUMB_QA_PLAYWRIGHT_OPTIONAL=1 → silent skip (no warning, no fail)', async () => {
+    mockPlaywrightMissing();
     process.env.CRUMB_QA_PLAYWRIGHT_OPTIONAL = '1';
+    const { runQaCheck: rerunQaCheck } = await import('./qa-check.js');
     const path = join(tmp, 'game.html');
     writeFileSync(path, VALID_HTML);
-    const r = await runQaCheck(path);
+    const r = await rerunQaCheck(path);
     expect(r.exec_exit_code).toBe(0);
     expect(r.first_interaction).toBe('skipped');
     expect(r.lint_findings.some((f) => /playwright/i.test(f))).toBe(false);

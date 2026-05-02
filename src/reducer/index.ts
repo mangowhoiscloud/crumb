@@ -124,6 +124,35 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           category: 'spec',
         });
       }
+      // v3.5 — capture deterministic AC predicates if planner-lead compiled any.
+      // See agents/specialists/game-design.md §AC-Predicate-Compile.
+      const predicates = event.data?.ac_predicates;
+      if (Array.isArray(predicates)) {
+        next.task_ledger.ac_predicates = predicates
+          .filter(
+            (
+              p,
+            ): p is { id: string; intent: string; predicate_js: string } & Record<
+              string,
+              unknown
+            > =>
+              typeof p === 'object' &&
+              p !== null &&
+              typeof (p as Record<string, unknown>).id === 'string' &&
+              typeof (p as Record<string, unknown>).intent === 'string' &&
+              typeof (p as Record<string, unknown>).predicate_js === 'string',
+          )
+          .map((p) => ({
+            id: p.id,
+            intent: p.intent,
+            predicate_js: p.predicate_js,
+            ...(typeof p.action_js === 'string' || p.action_js === null
+              ? { action_js: p.action_js as string | null }
+              : {}),
+            ...(typeof p.wait_ms === 'number' ? { wait_ms: p.wait_ms } : {}),
+            ...(typeof p.timeout_ms === 'number' ? { timeout_ms: p.timeout_ms } : {}),
+          }));
+      }
       // v3.2 budget cap: respec_count > RESPEC_MAX → done(too_many_respec).
       // Only spec.update counts as a respec (initial spec is the first try).
       if (event.kind === 'spec.update') {
@@ -160,6 +189,9 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         artifact: artifactPath,
         build_event_id: event.id,
         artifact_sha256: artifactSha,
+        ...(next.task_ledger.ac_predicates.length > 0
+          ? { ac_predicates: next.task_ledger.ac_predicates }
+          : {}),
       });
       break;
     }

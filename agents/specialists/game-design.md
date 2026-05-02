@@ -286,6 +286,87 @@ The LLM playthrough is **additive evidence**, never overrides the
 deterministic D2 / D6 ground truth from `qa.result`. Anti-deception Rules 1-2
 still force-correct any verifier attempt to claim D2 ≠ qa.result.
 
+## §AC-Predicate-Compile — deterministic AC layer (v3.5)
+
+The verifier-side LLM playthrough above (§6.5) covers subjective AC
+verification; `qa-interactive` covers the **deterministic** layer right
+underneath. Together they form a two-tier AC verification model:
+
+```
+spec.data.acceptance_criteria  ── strings, may include subjective items ──▶ verifier LLM (D1 / D5)
+spec.data.ac_predicates         ── deterministic, browser-side ──────────▶ qa_check effect (D2 ground truth ext)
+```
+
+### §AC-Predicate-Compile.1 — `ACPredicateItem` schema
+
+Planner-lead emits one `ACPredicateItem` per deterministic AC at spec-seal:
+
+| field | required | type | semantics |
+|---|---|---|---|
+| `id` | ✅ | `string` | Stable identifier (e.g. `AC1`, `AC2-cluster-tap`). Used as the key in `qa.result.data.ac_results[].ac_id`. |
+| `intent` | ✅ | `string` | One-line natural language; for diagnostic logs. |
+| `predicate_js` | ✅ | `string` | A JavaScript expression evaluated in browser context; must return a truthy boolean for PASS. Wrapped in `(() => { return ${predicate_js}; })()` by the runner. May reference `window`, `document`, `Phaser`, `window.__GAME__`. |
+| `action_js` | optional | `string \| null` | Pre-action evaluated in browser context before predicate. Use for ACs that need a click / drag / state mutation first (e.g. `document.querySelector('[data-tile][data-row="0"][data-col="0"]').click()`). `null` or absent = no pre-action. |
+| `wait_ms` | optional | `int` | Sleep between action and first predicate eval (default 250 ms). Use for animation completion (cluster clear at 220 ms → set 250). |
+| `timeout_ms` | optional | `int` | Max wait for predicate to become truthy via `page.waitForFunction` polling (default 3000 ms; capped at `CRUMB_QA_AC_TIMEOUT_MS`). |
+
+### §AC-Predicate-Compile.2 — runner contract
+
+`src/effects/qa-interactive.ts` (no LLM call) executes the items in order:
+
+1. Reuse the local HTTP server + headless Chromium that
+   `qa-check-playwright.ts` boots for the static smoke. New context per AC
+   to guarantee state isolation; service worker cache survives within the
+   browser process.
+2. Wait for canvas + Phaser SYS.RUNNING (5) (ArtifactsBench probe — same as
+   §1 boot truth).
+3. For each `ACPredicateItem`:
+   - if `action_js` set → `await page.evaluate(action_js)`
+   - sleep `wait_ms` ms
+   - `await page.waitForFunction("(() => { return " + predicate_js + "; })()", { timeout: timeout_ms })`
+   - any console-error during the AC window → status = `FAIL` with reason
+   - timeout → status = `FAIL` with `predicate_did_not_become_truthy`
+   - thrown exception in `action_js` or `predicate_js` → status = `FAIL` with `error: <msg>`
+   - else → status = `PASS`
+4. Aggregate into `ac_results: ACResult[]` plus counters
+   `ac_pass_count` / `ac_total`.
+
+### §AC-Predicate-Compile.3 — anti-deception integration
+
+When `ac_predicates.length > 0`, the dispatcher's `qa-runner.ts` runs the
+deterministic AC layer and writes the per-AC pass/fail into
+`qa.result.data.ac_results[]`. The verifier MUST read these as ground
+truth — anti-deception **Rule 1-extended**: judge.score with verdict=PASS
+where any `ac_results[].status === 'FAIL'` forces D1 ≤ 2 (mirrors the
+existing `exec_exit_code ≠ 0 → D2=0` rule for D1 functional fit).
+
+Karpathy autoresearch immutable-harness rule: predicates are emitted **once
+at spec-seal** by the planner. Subsequent verifier rounds read the same
+predicates — no re-compilation, no LLM-generated drift. The cost: planner
+must invest one socratic round to compile each AC's `predicate_js`. The
+benefit: `D1 functional` now has the same anti-deception protection as `D2
+exec` and `D6 portability`, closing the LLM-vs-evidence gap documented in
+`wiki/findings/bagelcode-frontier-evidence-vs-llm-reasoning-2026-05-03.md`.
+
+### §AC-Predicate-Compile.4 — what NOT to predicate
+
+Predicate compilation is for state-observable assertions only. **Do NOT** try
+to compile:
+
+- Visual fidelity ("juicy feedback", "satisfying motion") — verifier LLM
+  scenario steps via Playwright MCP (§6.5)
+- Multi-input flow narrative ("game over modal flows correctly into restart")
+  — verifier MCP playthrough
+- Visual contrast values — verifier MCP screenshot grading
+- Audio quality / volume balance — out of headless smoke scope (no audio)
+- Any AC whose definition depends on aesthetic / stylistic judgement
+
+Heuristic: if the AC's "How to test" column contains a measurable predicate
+expression (count, value comparison, classList check, RGB hex match,
+attribute check), it goes into `ac_predicates`. If it contains adjectives
+("smooth", "responsive", "satisfying"), it stays in
+`acceptance_criteria` strings only.
+
 ## §7 Migration notes (from former design/DESIGN.md)
 
 The root-level `design/DESIGN.md` has been deleted as of v3.3. Three reasons:
