@@ -45,6 +45,7 @@ import { suggestNext, formatSuggestion } from './helpers/suggest.js';
 import { diagnose, formatDiagnosis } from './helpers/debug.js';
 import { runDoctor, formatReport } from './helpers/doctor.js';
 import { serialize as serializeExport } from './exporter/otel.js';
+import { registerWriteTools } from './mcp-write-tools.js';
 
 const VERSION = '0.2.0';
 
@@ -251,6 +252,8 @@ export function buildServer(root: string = process.cwd()): McpServer {
       }
     },
   );
+
+  registerWriteTools(server, root);
 
   return server;
 }

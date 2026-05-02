@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/session-start.cjs"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/stop.cjs"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npm run lint*)",
+      "Bash(npm run typecheck*)",
+      "Bash(npm run format*)",
+      "Bash(npm run build*)",
+      "Bash(npm run test*)",
+      "Bash(npm run dev*)",
+      "Bash(npm run start*)",
+      "Bash(npm test*)",
+      "Bash(npm install*)",
+      "Bash(npm link*)",
+      "Bash(npx tsx src/index.ts *)",
+      "Bash(npx vitest *)",
+      "Bash(crumb run*)",
+      "Bash(crumb status*)",
+      "Bash(crumb suggest*)",
+      "Bash(crumb explain*)",
+      "Bash(crumb doctor*)",
+      "Bash(crumb config*)",
+      "Bash(crumb debug*)",
+      "Bash(crumb resume*)",
+      "Bash(crumb replay*)",
+      "Bash(crumb ls*)",
+      "Bash(crumb versions*)",
+      "Bash(crumb model*)",
+      "Bash(crumb export*)",
+      "Bash(crumb init*)",
+      "Bash(crumb release*)",
+      "Bash(crumb migrate*)",
+      "Bash(crumb copy-artifacts*)",
+      "Bash(crumb event*)",
+      "Bash(crumb help*)",
+      "Bash(crumb --help)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(git fetch*)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr list*)",
+      "Bash(gh run list*)",
+      "Bash(gh run view*)",
+      "Bash(gh run watch*)",
+      "Bash(tail -f sessions/*)",
+      "Bash(tail -n * sessions/*)",
+      "Bash(tail -f .crumb/projects/*)",
+      "Read(./sessions/**)",
+      "Read(./.crumb/**)",
+      "Read(~/.crumb/**)"
+    ]
+  }
+}
