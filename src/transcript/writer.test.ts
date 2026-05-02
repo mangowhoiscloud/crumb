@@ -3,7 +3,7 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
-import { TranscriptWriter } from './writer.js';
+import { TranscriptWriter, _resetWriterRegistryForTests, getTranscriptWriter } from './writer.js';
 import { ValidationError } from '../protocol/validate.js';
 
 async function makeTmp(): Promise<{ dir: string; path: string }> {
@@ -60,6 +60,54 @@ describe('TranscriptWriter', () => {
     const lines = raw.split('\n').filter((l) => l.trim().length > 0);
     expect(lines).toHaveLength(20);
     // Every line is well-formed JSON.
+    for (const l of lines) JSON.parse(l);
+  });
+});
+
+describe('getTranscriptWriter (path-keyed singleton)', () => {
+  it('returns the same instance for the same path', async () => {
+    _resetWriterRegistryForTests();
+    const { path } = await makeTmp();
+    const a = getTranscriptWriter({ path, sessionId: 's' });
+    const b = getTranscriptWriter({ path, sessionId: 's' });
+    expect(a).toBe(b);
+  });
+
+  it('returns the same instance regardless of path style (relative vs absolute)', async () => {
+    _resetWriterRegistryForTests();
+    const { dir, path } = await makeTmp();
+    const a = getTranscriptWriter({ path, sessionId: 's' });
+    // Same file, different syntactic path — singleton must canonicalize.
+    const b = getTranscriptWriter({
+      path: resolve(dir, './transcript.jsonl'),
+      sessionId: 's',
+    });
+    expect(a).toBe(b);
+  });
+
+  it('returns distinct instances for distinct paths', async () => {
+    _resetWriterRegistryForTests();
+    const { path: p1 } = await makeTmp();
+    const { path: p2 } = await makeTmp();
+    const a = getTranscriptWriter({ path: p1, sessionId: 's' });
+    const b = getTranscriptWriter({ path: p2, sessionId: 's' });
+    expect(a).not.toBe(b);
+  });
+
+  it('shared singleton serializes appends from two call sites', async () => {
+    _resetWriterRegistryForTests();
+    const { path } = await makeTmp();
+    const a = getTranscriptWriter({ path, sessionId: 's' });
+    const b = getTranscriptWriter({ path, sessionId: 's' });
+    await Promise.all([
+      a.append({ session_id: 's', from: 'user', kind: 'note', body: 'a' }),
+      b.append({ session_id: 's', from: 'user', kind: 'note', body: 'b' }),
+      a.append({ session_id: 's', from: 'user', kind: 'note', body: 'c' }),
+    ]);
+    const raw = await readFile(path, 'utf8');
+    const lines = raw.split('\n').filter((l) => l.trim().length > 0);
+    expect(lines).toHaveLength(3);
+    // Every line parses — proves no torn writes.
     for (const l of lines) JSON.parse(l);
   });
 });

@@ -25,7 +25,7 @@ import { reduce } from '../reducer/index.js';
 import { initialState, type CrumbState } from '../state/types.js';
 import type { Message } from '../protocol/types.js';
 import { readAll, tail } from '../transcript/reader.js';
-import { TranscriptWriter } from '../transcript/writer.js';
+import { getTranscriptWriter } from '../transcript/writer.js';
 import { parseInboxLine } from '../inbox/parser.js';
 
 import { formatActorList, formatRow, formatStatus } from './format.js';
@@ -133,7 +133,9 @@ export async function runTui(opts: TuiOptions): Promise<void> {
     keys: true,
   });
 
-  const writer = new TranscriptWriter({ path: transcriptPath, sessionId });
+  // Path-keyed factory — if the coordinator already created a writer for this
+  // transcript, share its Promise chain so JS-level append ordering holds.
+  const writer = getTranscriptWriter({ path: transcriptPath, sessionId });
 
   function rerender(): void {
     const t0 = transcript[0]?.ts ? Date.parse(transcript[0].ts) : Date.now();
