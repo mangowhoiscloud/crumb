@@ -12,9 +12,9 @@ const judgeScore = (overrides: Partial<Message>): Message => ({
   scores: {
     D1: { score: 5, source: 'verifier-llm' },
     D2: { score: 5, source: 'qa-check-effect', lookup: 'qa.result.exec_exit_code' },
-    D3: { score: 4, source: 'hybrid', auto: 4, semantic: 4 },
+    D3: { score: 4, source: 'verifier-llm', semantic: 4 },
     D4: { score: 5, source: 'reducer-auto', lookup: 'scoreHistory' },
-    D5: { score: 4, source: 'hybrid', auto: 4, quality: 4 },
+    D5: { score: 4, source: 'verifier-llm', quality: 4 },
     D6: { score: 5, source: 'qa-check-effect' },
     aggregate: 28,
     verdict: 'PASS',
@@ -79,19 +79,31 @@ describe('anti-deception validator', () => {
     expect(result.violations).toContain('self_bias_risk_same_provider');
   });
 
-  it('Rule 5: D3 inflation flagged when score - auto > 1.5', () => {
+  it('D3/D5 split: aggregate uses combined (verifier llm + reducer auto) avg', () => {
+    // Verifier emits D3=5 (its LLM component); reducer auto says D3_auto=3.
+    // combineDimScore averages → 4. D5 same: verifier 4 + auto 2 → 3.
+    // Aggregate = D1(5) + D2(5) + D3(4) + D4(5) + D5(3) + D6(5) = 27
     const result = checkAntiDeception({
       judgeScore: judgeScore({
         scores: {
-          D3: { score: 5, source: 'hybrid', auto: 3, semantic: 5 },
+          D1: { score: 5, source: 'verifier-llm' },
+          D2: { score: 5, source: 'qa-check-effect' },
+          D3: { score: 5, source: 'verifier-llm', semantic: 5 },
+          D4: { score: 5, source: 'reducer-auto' },
+          D5: { score: 4, source: 'verifier-llm', quality: 4 },
+          D6: { score: 5, source: 'qa-check-effect' },
           verdict: 'PASS',
         },
       }),
       qaResult: { exec_exit_code: 0 },
-      autoScores: { D3_auto: 3, D4: 5, D5_auto: 4 },
+      autoScores: { D3_auto: 3, D4: 5, D5_auto: 2 },
       builderProvider: 'openai',
     });
-    expect(result.violations).toContain('verifier_inflated_hybrid');
+    expect(result.scores.aggregate).toBe(27);
+    // Verifier inflating its LLM-only D3 from a sane 4 to 5 no longer creates a
+    // "hybrid inflation" violation — the reducer's auto component (3) is mixed
+    // in by combineDimScore, so the aggregate naturally pulls back toward truth.
+    expect(result.violations).not.toContain('verifier_inflated_hybrid');
   });
 
   it('No violations on clean cross-provider PASS', () => {

@@ -253,8 +253,7 @@ function sourceClass(source: string): string {
   if (source.includes('qa-check')) return 'source-qa-check';
   if (source.includes('reducer')) return 'source-reducer';
   if (source.includes('verifier')) return 'source-llm';
-  if (source.includes('hybrid')) return 'source-hybrid';
-  return 'source-hybrid';
+  return 'source-llm';
 }
 
 // ─── §3 Cost breakdown ─────────────────────────────────────────────────────

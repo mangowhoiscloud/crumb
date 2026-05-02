@@ -139,7 +139,7 @@ describe('version', () => {
           scores: {
             D1: { score: 5, source: 'verifier-llm' },
             D2: { score: 4, source: 'qa-check-effect' },
-            D3: { score: 3, source: 'hybrid' },
+            D3: { score: 3, source: 'verifier-llm' },
             aggregate: 25,
             verdict: 'PASS',
           },

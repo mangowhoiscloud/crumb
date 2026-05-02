@@ -131,7 +131,7 @@
     },
     "scores": {
       "type": "object",
-      "description": "v3: D1-D6 source-of-truth matrix. Each dimension carries score + source (verifier-llm | qa-check-effect | reducer-auto | hybrid) + optional lookup/evidence/auto/semantic/quality. Legacy 6-dim fields kept as deprecated aliases for v0.1.x transcript replay.",
+      "description": "v3: D1-D6 source-of-truth matrix. Each dimension carries score + source (verifier-llm | qa-check-effect | reducer-auto) — every dimension reports a single origin. D3/D5 are split: the verifier emits its LLM-judged value with source='verifier-llm' (the `score` is the LLM component only, 0-5); the reducer-auto component is computed separately by computeAutoScores() and combined deterministically at aggregate time via combineDimScore() in src/state/scorer.ts. The combine rule lives in code, not in the verifier — no LLM can inflate a merged number. Legacy 6-dim fields kept as deprecated aliases for v0.1.x transcript replay.",
       "properties": {
         "D1": { "$ref": "#/$defs/scoreDimension", "description": "spec_fit (LLM, AC ✓/✗)" },
         "D2": {
@@ -140,12 +140,12 @@
         },
         "D3": {
           "$ref": "#/$defs/scoreDimension",
-          "description": "observability (hybrid: reducer auto + verifier semantic)"
+          "description": "observability — verifier emits LLM semantic component (0-5, source='verifier-llm'); reducer computes auto component separately. combineDimScore averages the two for /5 aggregate."
         },
         "D4": { "$ref": "#/$defs/scoreDimension", "description": "convergence (reducer auto)" },
         "D5": {
           "$ref": "#/$defs/scoreDimension",
-          "description": "intervention (hybrid: reducer auto + verifier quality)"
+          "description": "intervention — verifier emits LLM quality component (0-5, source='verifier-llm'); reducer computes auto component separately. combineDimScore averages the two for /5 aggregate."
         },
         "D6": {
           "$ref": "#/$defs/scoreDimension",
@@ -167,7 +167,7 @@
         "audit_violations": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "anti-deception violations: verify_pass_without_exec_zero | verifier_overrode_d2_ground_truth | verifier_overrode_d4_ground_truth | self_bias_risk_same_provider | verifier_inflated_hybrid"
+          "description": "anti-deception violations: verify_pass_without_exec_zero | verifier_overrode_d2_ground_truth | verifier_overrode_d4_ground_truth | self_bias_risk_same_provider"
         },
         "goal_completion": { "type": "number", "minimum": 0, "maximum": 5, "deprecated": true },
         "collaboration": { "type": "number", "minimum": 0, "maximum": 5, "deprecated": true },
@@ -298,8 +298,8 @@
         "score": { "type": "number", "minimum": 0, "maximum": 5 },
         "source": {
           "type": "string",
-          "enum": ["verifier-llm", "qa-check-effect", "reducer-auto", "hybrid"],
-          "description": "Which layer produced this dimension's score. anti-deception validator forbids verifier override of qa-check-effect / reducer-auto sources."
+          "enum": ["verifier-llm", "qa-check-effect", "reducer-auto"],
+          "description": "Which layer produced this dimension's score. Single origin per dim — the prior 'hybrid' value is removed in favor of split D3/D5 (verifier emits LLM component, reducer computes auto component, combineDimScore() merges deterministically)."
         },
         "lookup": {
           "type": "string",
@@ -314,7 +314,7 @@
           "type": "number",
           "minimum": 0,
           "maximum": 5,
-          "description": "Reducer auto-computed component for hybrid sources (D3, D5)."
+          "description": "Optional informational mirror of the reducer-auto component for D3/D5 (the canonical value lives in computeAutoScores). Kept for replay convenience; combineDimScore prefers the freshly computed value."
         },
         "semantic": {
           "type": "number",

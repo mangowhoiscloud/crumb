@@ -1,5 +1,5 @@
 /**
- * Anti-deception validator — 5 rules enforcing scoring ground-truth integrity.
+ * Anti-deception validator — 4 rules enforcing scoring ground-truth integrity.
  *
  * Frontier backbone:
  *   - NeurIPS 2024 self-bias linear correlation (cross-provider mitigation)
@@ -9,11 +9,17 @@
  * Runs after a kind=judge.score event. Mutates the score in-place if a non-LLM
  * dimension was overridden by verifier; appends violation strings for audit.
  *
+ * The previous Rule 5 (verifier_inflated_hybrid) was removed when D3/D5 were
+ * split into single-origin dims. The verifier emits its LLM component, the
+ * reducer's auto component is computed independently, and combineDimScore() in
+ * src/state/scorer.ts merges the two in code — no merged number for an LLM to
+ * inflate.
+ *
  * See [[bagelcode-system-architecture-v3]] §7.3 + [[bagelcode-llm-judge-frontier-2026]] R3-R5.
  */
 
 import type { Message, Scores, ScoreDimension } from '../protocol/types.js';
-import type { AutoScores } from '../state/scorer.ts';
+import { combineAggregate, type AutoScores } from '../state/scorer.js';
 
 export interface QaResultLike {
   exec_exit_code: number;
@@ -73,16 +79,11 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
     violations.push('self_bias_risk_same_provider');
   }
 
-  // ── Rule 5 — verifier_inflated_hybrid (D3 / D5) ─────────────────────────────
-  if (scores.D3?.source === 'hybrid' && scores.D3.score - input.autoScores.D3_auto > 1.5) {
-    violations.push('verifier_inflated_hybrid');
-  }
-  if (scores.D5?.source === 'hybrid' && scores.D5.score - input.autoScores.D5_auto > 1.5) {
-    violations.push('verifier_inflated_hybrid');
-  }
+  // (Rule 5 removed when D3/D5 split — see file header comment.)
 
-  // Recompute aggregate after force-corrections.
-  scores.aggregate = recomputeAggregate(scores);
+  // Recompute aggregate after force-corrections using the deterministic combine
+  // rule for D3/D5 (avg of verifier-llm component + reducer-auto component).
+  scores.aggregate = combineAggregate(scores, input.autoScores);
   if (scores.verdict === 'PASS' && (scores.aggregate ?? 0) < 24) scores.verdict = 'PARTIAL';
 
   scores.audit_violations = violations;
@@ -95,9 +96,4 @@ function forceScore(
   source: ScoreDimension['source'],
 ): ScoreDimension {
   return { ...prev, score: newScore, source, lookup: prev.lookup ?? (null as never) };
-}
-
-function recomputeAggregate(scores: Scores): number {
-  const dims = [scores.D1, scores.D2, scores.D3, scores.D4, scores.D5, scores.D6];
-  return dims.reduce<number>((sum, d) => sum + (d?.score ?? 0), 0);
 }

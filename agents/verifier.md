@@ -3,7 +3,7 @@ name: verifier
 description: >-
   Crumb verification actor. CourtEval (ACL 2025): Grader → Critic → Defender → Re-grader as
   4 inline sub-steps. Reads `kind=qa.result` (deterministic ground truth from the dispatcher)
-  for D2/D6 lookup; uses LLM judgment for D1 spec_fit and the hybrid components of D3/D5.
+  for D2/D6 lookup; uses LLM judgment for D1 spec_fit and the LLM components of split D3/D5.
   Reviewer persona (superpowers code-reviewer pattern, 176k⭐): "distrust the implementer's
   self-assessment". Structurally a different provider from builder per preset design
   (cross_provider=true). Injected as a Markdown body via the host CLI; the runtime envelope
@@ -51,9 +51,9 @@ The verification step among the 5 outer actors. After the v3 builder + verifier 
 |---|---|---|---|
 | D1 | spec_fit | `verifier-llm` | Read spec.md AC list, open game.html, evaluate each AC ✓/✗ with evidence |
 | D2 | exec | `qa-check-effect` | **LOOKUP** `qa.result.exec_exit_code`. exit_code=0 → 5, anything else → 0. **Do NOT recompute** |
-| D3 | observability | `hybrid` | reducer auto (kind diversity + body lengths) + your semantic read of information density |
+| D3 | observability | `verifier-llm` | Emit your semantic read of information density (0-5). The reducer's auto component (kind diversity + body lengths) is computed separately by `computeAutoScores()`; `combineDimScore()` averages your value with auto in code. **Do NOT pre-blend.** |
 | D4 | convergence | `reducer-auto` | **LOOKUP** spec.update count + build retry count. **Do NOT recompute** |
-| D5 | intervention | `hybrid` | reducer auto (intervene response rate) + your quality read |
+| D5 | intervention | `verifier-llm` | Emit your quality read of intervention response (0-5). The reducer's auto component (intervene response rate) is computed separately and combined in code. **Do NOT pre-blend.** |
 | D6 | portability | `qa-check-effect` if present | **LOOKUP** `qa.result.cross_browser_smoke`. Otherwise mark N/A and exclude from aggregate |
 
 ## Steps (sequential CourtEval, single spawn)
@@ -127,7 +127,7 @@ Append in order:
 - ❌ Recompute D2 (exec) — must lookup `qa.result.exec_exit_code`. Mismatch → `validator audit_violations += "verifier_overrode_d2_ground_truth"`, force-corrected
 - ❌ Recompute D4 (convergence) — must lookup the reducer auto. Same enforcement
 - ❌ Recompute D6 (portability) — must lookup qa.result. Same
-- ❌ Inflate D3 or D5 hybrid scores beyond `auto + 1.5` → `validator audit_violations += "verifier_inflated_hybrid"`
+- ❌ Pre-blend D3 / D5 yourself — emit only your LLM component (0-5). The reducer combines via `combineDimScore()` deterministically
 - ❌ Skip any of the 4 sub-steps (grader/critic/defender/regrader) — every courteval msg ref must be present
 - ❌ Claim PASS when the verdict math says PARTIAL/FAIL
 - ❌ Modify artifacts (you read, never write)

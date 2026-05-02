@@ -91,21 +91,34 @@ export interface Artifact {
 
 /**
  * v3 score dimension (D1-D6 source-of-truth matrix).
- * source field encodes which layer produced the score:
- *   - "verifier-llm": verifier sandwich CourtEval reasoning
+ * source field encodes which layer produced the score (single origin per dim):
+ *   - "verifier-llm": verifier sandwich CourtEval reasoning (D1, plus the LLM component of D3/D5)
  *   - "qa-check-effect": dispatcher deterministic effect (D2/D6)
- *   - "reducer-auto": reducer auto-computed (D3 auto / D4 / D5 auto)
- *   - "hybrid": auto + LLM blend (D3 / D5)
+ *   - "reducer-auto": reducer auto-computed (D4, plus the auto component of D3/D5)
+ *
+ * D3 / D5 are split: the verifier emits its LLM component as a single dim with
+ * source='verifier-llm'; the reducer-auto component is computed separately by
+ * computeAutoScores() and combined deterministically by combineDimScore() in
+ * src/state/scorer.ts. The combine rule lives in code, not in the verifier — no
+ * LLM can inflate a merged number. The legacy 'hybrid' source value was removed.
+ *
  * lookup encodes the source-of-truth pointer for non-LLM dimensions.
  * anti-deception validator forbids verifier override of non-LLM sources.
  */
 export interface ScoreDimension {
   score: number;
-  source: 'verifier-llm' | 'qa-check-effect' | 'reducer-auto' | 'hybrid';
+  source: 'verifier-llm' | 'qa-check-effect' | 'reducer-auto';
   lookup?: string;
   evidence?: string[];
+  /**
+   * Optional informational mirror of the reducer-auto component for D3/D5.
+   * The canonical auto value is recomputed from transcript via computeAutoScores();
+   * this field is kept for replay convenience and side-by-side display.
+   */
   auto?: number;
+  /** Verifier LLM component for D3 — same as `score` when source='verifier-llm'. */
   semantic?: number;
+  /** Verifier LLM component for D5 — same as `score` when source='verifier-llm'. */
   quality?: number;
 }
 

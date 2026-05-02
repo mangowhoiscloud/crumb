@@ -183,9 +183,9 @@ async function writeVerifierSequence(
     scores: {
       D1: { score: 4.5, source: 'verifier-llm', evidence: ['AC-1 ✓', 'AC-2 ✓', 'AC-3 partial'] },
       D2: { score: 5, source: 'qa-check-effect', lookup: 'qa.result.exec_exit_code' },
-      D3: { score: 4, source: 'hybrid', auto: 4, semantic: 4 },
+      D3: { score: 4, source: 'verifier-llm', semantic: 4 },
       D4: { score: 5, source: 'reducer-auto', lookup: 'scoreHistory' },
-      D5: { score: 5, source: 'hybrid', auto: 5, quality: 5 },
+      D5: { score: 5, source: 'verifier-llm', quality: 5 },
       D6: { score: 4.5, source: 'qa-check-effect', lookup: 'qa.result.crossBrowserSmoke' },
       aggregate: 28,
       verdict: 'PASS',
