@@ -10,19 +10,25 @@
 
 <aside class="sessions" id="sessions-pane">
   <div class="sessions-header">
+    <h2>Adapters</h2>
+    <button id="adapter-refresh" class="icon-btn" title="Re-probe installed adapters">↻</button>
+  </div>
+  <div id="adapter-list" class="adapter-list">
+    <div class="adapter-empty">probing…</div>
+  </div>
+
+  <div class="sessions-header">
     <h2>Sessions</h2>
     <button id="new-session" class="icon-btn" title="Start a new crumb session">＋</button>
   </div>
   <div id="new-session-form" style="display:none;">
     <input type="text" id="new-session-goal" placeholder="game goal (e.g. 60s 고양이 퍼즐)" autocomplete="off">
+    <div id="new-session-preset-chips" class="preset-chips"></div>
+    <details id="new-session-advanced" class="adv-binding">
+      <summary>Custom binding (per-actor harness × model)</summary>
+      <div id="new-session-bindings" class="bindings-grid"></div>
+    </details>
     <div class="new-session-row">
-      <select id="new-session-preset">
-        <option value="">(default — ambient)</option>
-        <option value="bagelcode-cross-3way">bagelcode-cross-3way</option>
-        <option value="mock">mock (deterministic, 0-cost)</option>
-        <option value="sdk-enterprise">sdk-enterprise</option>
-        <option value="solo">solo</option>
-      </select>
       <button id="new-session-go">Run</button>
       <button id="new-session-cancel" class="muted">Cancel</button>
     </div>
@@ -30,6 +36,21 @@
   </div>
   <div id="sess-list"></div>
 </aside>
+
+<!-- Install / auth guide modal — shown when user clicks an inactive adapter row -->
+<div id="adapter-modal" class="adapter-modal" style="display:none;" role="dialog" aria-modal="true">
+  <div class="adapter-modal-backdrop"></div>
+  <div class="adapter-modal-card">
+    <button class="adapter-modal-close" id="adapter-modal-close" aria-label="Close">×</button>
+    <h3 id="adapter-modal-title">Adapter setup</h3>
+    <div id="adapter-modal-body"></div>
+    <div class="adapter-modal-row">
+      <button id="adapter-modal-refresh" class="primary">Re-check status</button>
+      <button id="adapter-modal-dismiss" class="muted">Close</button>
+    </div>
+    <div id="adapter-modal-feedback" class="console-feedback"></div>
+  </div>
+</div>
 <div class="resize-handle resize-handle-sessions" id="sessions-resize" title="Drag to resize sessions pane"></div>
 
 <main>

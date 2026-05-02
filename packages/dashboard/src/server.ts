@@ -37,6 +37,7 @@ import { URL } from 'node:url';
 import { watch as fsWatch, createReadStream } from 'node:fs';
 
 import { DASHBOARD_HTML } from './dashboard-html.js';
+import { probeAdapters } from './doctor.js';
 import { EventBus, type LiveEvent } from './event-bus.js';
 import { computeMetrics } from './metrics.js';
 import { sandwichPath, sessionDirFromTranscript } from './paths.js';
@@ -90,7 +91,13 @@ export async function startDashboardServer(
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? bind}`);
     if (req.method === 'GET' && url.pathname === '/') return serveHtml(res);
     if (req.method === 'GET' && url.pathname === '/api/sessions') {
-      return serveSessions(res, watcher, hiddenSessions);
+      return void serveSessions(res, watcher, hiddenSessions);
+    }
+    if (req.method === 'GET' && url.pathname === '/api/health') {
+      return void serveHealth(res, watcher, hiddenSessions);
+    }
+    if (req.method === 'GET' && url.pathname === '/api/doctor') {
+      return void serveDoctor(res);
     }
     if (req.method === 'GET' && url.pathname === '/api/stream') {
       return serveStream(req, res, url, bus);
@@ -165,14 +172,15 @@ function serveHtml(res: http.ServerResponse): void {
   res.end(DASHBOARD_HTML);
 }
 
-function serveSessions(
+async function serveSessions(
   res: http.ServerResponse,
   watcher: SessionWatcher,
   hiddenSessions: Set<string>,
-): void {
-  const snapshot = watcher.snapshot().filter((s) => !hiddenSessions.has(s.session_id));
-  const sessions = snapshot.map(
-    ({ session_id, project_id, crumb_home, transcript_path, history }) => {
+): Promise<void> {
+  const classified = await watcher.classifiedSnapshot();
+  const visible = classified.filter((s) => !hiddenSessions.has(s.session_id));
+  const sessions = visible.map(
+    ({ session_id, project_id, crumb_home, transcript_path, history, classification }) => {
       const metrics = computeMetrics(history);
       let goal: string | null = null;
       let preset: string | null = null;
@@ -195,13 +203,78 @@ function serveSessions(
         preset,
         metrics,
         actors: [...actorsSeen],
+        // v3.5: state + last_activity_at for sidebar dot color + sort.
+        state: classification?.state ?? null,
+        last_activity_at: classification?.last_activity_at ?? null,
+        done_reason: classification?.done_reason ?? null,
         history,
       };
     },
   );
+  // Newest activity first — turns the sidebar into a recently-active feed.
+  sessions.sort((a, b) => (b.last_activity_at ?? 0) - (a.last_activity_at ?? 0));
   res.setHeader('content-type', 'application/json');
   res.setHeader('cache-control', 'no-cache');
   res.end(JSON.stringify({ sessions }));
+}
+
+/**
+ * GET /api/health — bootstrap summary.
+ *
+ *   { dashboard_version, watcher_paths_tracked, sessions: { total, by_state: {...} } }
+ *
+ * Pattern: Kubernetes readiness probe — separates one-shot bootstrap data from
+ * the periodic state polling done by /api/sessions. Cheap (no syscalls beyond
+ * what classifiedSnapshot already pays).
+ */
+async function serveHealth(
+  res: http.ServerResponse,
+  watcher: SessionWatcher,
+  hiddenSessions: Set<string>,
+): Promise<void> {
+  const classified = await watcher.classifiedSnapshot();
+  const visible = classified.filter((s) => !hiddenSessions.has(s.session_id));
+  const byState: Record<string, number> = {
+    live: 0,
+    idle: 0,
+    interrupted: 0,
+    abandoned: 0,
+    terminal: 0,
+    unknown: 0,
+  };
+  for (const s of visible) {
+    const k = s.classification?.state ?? 'unknown';
+    byState[k] = (byState[k] ?? 0) + 1;
+  }
+  res.setHeader('content-type', 'application/json');
+  res.setHeader('cache-control', 'no-cache');
+  res.end(
+    JSON.stringify({
+      ok: true,
+      watcher_paths_tracked: watcher.trackedPaths().length,
+      sessions: {
+        total: visible.length,
+        by_state: byState,
+      },
+    }),
+  );
+}
+
+/**
+ * GET /api/doctor — adapter probe matrix.
+ *
+ *   { adapters: [{ id, display_name, installed, authenticated, version, models, ... }] }
+ *
+ * Lightweight: PATH lookup + best-effort `--version`. Auth state intentionally
+ * `null` for installed binaries since real auth probe would risk side-effects.
+ * Mirrors src/helpers/doctor.ts of the crumb repo but standalone — see
+ * `packages/dashboard/src/doctor.ts`.
+ */
+async function serveDoctor(res: http.ServerResponse): Promise<void> {
+  const adapters = await probeAdapters();
+  res.setHeader('content-type', 'application/json');
+  res.setHeader('cache-control', 'no-cache');
+  res.end(JSON.stringify({ adapters }));
 }
 
 async function serveSandwich(

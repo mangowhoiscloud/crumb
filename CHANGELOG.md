@@ -4,6 +4,39 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — Dashboard bootstrap state classifier + adapter status sidebar + new-session preset chips (2026-05-03)
+
+Dashboard had two startup gaps and one UX gap. (1) On boot it surfaced every transcript with no liveness signal — the user couldn't tell at a glance which sessions were running, idle, or abandoned. (2) Adapter availability (Claude Code installed? Codex authenticated? Gemini CLI on PATH?) was invisible in the UI; users only learned via failed spawn attempts. (3) Session creation offered a flat preset dropdown with no signal of which presets were even runnable on the current machine. User feedback: "지금 대시보드 시작할 때 현재 열린 세션들 연결하도록 하는 헬스체크 혹은 부트스트랩 넣으려면 어떻게 해? ... [claude code] [Opus 4.7] 이런식으로 현재 지원하는 옵션들을 드러내게 해. 활성=초록 원, 비활성=회색."
+
+**Bootstrap state classifier** (`packages/dashboard/src/bootstrap.ts`)
+
+- Pure-function `classifyFromMtime(mtime, history, now)` + thin `classifySessionState(path, history)` wrapper that pays a single `stat` syscall. Pattern lifted from VS Code's workspaceStorage (mtime + meta scan, no daemon) + Kubernetes init-container vs liveness-probe split.
+- States: `live` (mtime < 10s), `idle` (< 5min), `interrupted` (< 1d), `abandoned` (≥ 1d), `terminal` (any `kind=done` event present, regardless of mtime). `done_reason` extracted from `done.data.reason` or `done.body` for the sidebar tooltip.
+- 9 unit tests (`bootstrap.test.ts`): each state boundary + clock-skew (future mtime) + empty history + done.body fallback + last_event_kind/actor preservation.
+
+**Adapter probe** (`packages/dashboard/src/doctor.ts`)
+
+- Lightweight standalone version of `crumb doctor` — no cross-package import. PATH lookup via `which <bin>` + best-effort `--version` (1.5s timeout, SIGKILL on timeout). 5 adapters catalogued: `claude-local`, `codex-local`, `gemini-cli-local`, `gemini-sdk` (env-var keyed), `mock` (always available).
+- Auth state semantics: `true` = confirmed (SDK env-var or mock), `null` = installed but not probed (binary present; auth probe would risk surfacing login prompts), `false` = binary missing. UI maps `null` → "installed" amber pill, leaves "auth ✓" for confirmed cases.
+- 5 unit tests (`doctor.test.ts`): mock always-on, full catalogue, gemini-sdk env-var toggle, install/auth hint presence, missing-binary→authenticated=false invariant.
+
+**New HTTP endpoints** (`packages/dashboard/src/server.ts`)
+
+- `GET /api/health` — bootstrap summary: `{ ok, watcher_paths_tracked, sessions: { total, by_state: {...} } }`. Lifts the K8s readiness probe pattern: separates one-shot startup data from the periodic `/api/sessions` polling.
+- `GET /api/doctor` — adapter probe matrix.
+- `GET /api/sessions` extended — each session now carries `state`, `last_activity_at`, `done_reason` fields. Server-side sort by `last_activity_at` DESC turns the sidebar into a recently-active feed without client-side resort.
+- `SessionWatcher.classifiedSnapshot()` — async snapshot variant that runs the classifier per session. Sync `snapshot()` kept for SSE replay where the extra stat would multiply latency.
+
+**UI** (`packages/dashboard/src/client/dashboard.{html,css,js}`)
+
+- **Sidebar Adapter Status section** (above Sessions) — one row per adapter with state-aware dot: lime (●) for active, amber for `installed-but-auth-unknown`, gray (○) for missing. `version` (or first model) shown in monospace meta line. Pill text: `auth ✓` / `installed` / `missing`. `↻` button re-probes.
+- **Per-session sidebar dots** state-classed: `state-live` (lime + glow), `state-idle` (amber), `state-interrupted` (audit-fg pink + ⏸ suffix), `state-abandoned` (gray, 0.55 opacity), `state-terminal` (ink-subtle, 0.78 opacity). Hover surfaces full state + `done_reason`.
+- **New session form preset chips** (`PRESETS` table with `requires: ['adapter-id', ...]`) — chip is `disabled` (line-through, low opacity) when any required adapter is missing/unauth.
+- **Advanced binding grid** (`<details>`) — per-actor harness × model dropdown for ad-hoc bindings (planner-lead / researcher / builder / verifier).
+- **Adapter setup modal** — install_hint + auth_hint code blocks + `Re-check status` button.
+
+**Verification**: 14 new unit tests (9 bootstrap + 5 doctor) on top of 398 → 412/412 sweep green; live API smoke confirmed all 3 endpoints + state field on `/api/sessions`.
+
 ### Changed — Dashboard DAG re-grounded against `src/reducer/index.ts` (Phase zones + 6 typed edges + done terminal) (2026-05-03)
 
 The Pipeline DAG drew a `verifier → coordinator → builder-fallback` arc through a coordinator routing node, plus a `verifier → validator` edge, neither of which exist in the actual reducer. User feedback: "지금 이 DAG 모양은 실제 절차에 맞는거야? 코드베이스로 그라운딩하고 좀 디벨롭할 사안 찾을 순 없나?" — every edge is now grounded against a specific `src/reducer/index.ts` line.
