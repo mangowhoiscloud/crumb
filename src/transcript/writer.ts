@@ -17,11 +17,13 @@
  *     `crumb event` CLI), so single-writer-per-process is sufficient for the default
  *     bagelcode-cross-3way preset where actors run sequentially.
  *
- * Adapter session-id policy: when a subprocess agent emits via `crumb event`, the parent
- * harness (Claude Code / Codex / Gemini) propagates its native session id through env
- * (CRUMB_ADAPTER_SESSION_ID). The adapter writes this into msg.metadata.adapter_session_id
- * so the next spawn can use --resume <sid> for cache carry-over. See preset.actors[*]
- * binding spec in `.crumb/presets/*.toml`.
+ * Adapter session-id policy (forward-compat — not yet wired): the schema fields
+ * `metadata.adapter_session_id` and `metadata.cache_carry_over` exist so the
+ * dispatcher can eventually pass `--resume <sid>` to the underlying CLI for
+ * Anthropic prompt-cache carry-over across spawns. As of v3.4 no adapter
+ * captures or consumes these fields; every spawn starts a fresh CLI session
+ * and the system-prompt prefix is re-uploaded. See preset.actors[*] binding
+ * spec in `.crumb/presets/*.toml`.
  */
 
 import { appendFile } from 'node:fs/promises';

@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { existsSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
 
-import { dispatch, type DispatcherDeps } from './live.js';
+import { dispatch, parseInlineRefs, type DispatcherDeps } from './live.js';
 import { TranscriptWriter } from '../transcript/writer.js';
 import {
   AdapterRegistry,
@@ -422,6 +422,256 @@ describe('dispatcher per_spawn_timeout', () => {
       reason: 'per_spawn_timeout',
       timeout_ms: 50,
       exit_code: 124,
+    });
+  }, 5_000);
+});
+
+describe('parseInlineRefs', () => {
+  it('extracts inline_skills + inline_specialists from frontmatter', () => {
+    const md = [
+      '---',
+      'name: planner-lead',
+      'inline_skills:',
+      '  - skills/parallel-dispatch.md',
+      'inline_specialists:',
+      '  - agents/specialists/concept-designer.md',
+      '  - agents/specialists/visual-designer.md',
+      '  - agents/specialists/game-design.md',
+      '---',
+      '',
+      '# body',
+    ].join('\n');
+    const { skills, specialists } = parseInlineRefs(md);
+    expect(skills).toEqual(['skills/parallel-dispatch.md']);
+    expect(specialists).toEqual([
+      'agents/specialists/concept-designer.md',
+      'agents/specialists/visual-designer.md',
+      'agents/specialists/game-design.md',
+    ]);
+  });
+
+  it('returns empty when no frontmatter', () => {
+    expect(parseInlineRefs('# just a heading\n')).toEqual({ skills: [], specialists: [] });
+  });
+
+  it('returns empty when frontmatter unterminated', () => {
+    expect(parseInlineRefs('---\nname: x\ninline_skills:\n  - a.md\n')).toEqual({
+      skills: [],
+      specialists: [],
+    });
+  });
+
+  it('stops list parsing at the next non-list line', () => {
+    const md = [
+      '---',
+      'name: x',
+      'inline_skills:',
+      '  - skills/a.md',
+      '  - skills/b.md',
+      'activation_condition: |',
+      '  some block',
+      '---',
+    ].join('\n');
+    const { skills } = parseInlineRefs(md);
+    expect(skills).toEqual(['skills/a.md', 'skills/b.md']);
+  });
+});
+
+describe('dispatcher — inline-read assembler (v3.4)', () => {
+  it('embeds files declared in inline_skills + inline_specialists', async () => {
+    const { deps, capture, repoRoot } = await makeSandwichDeps();
+    await mkdir(resolve(repoRoot, 'agents/specialists'), { recursive: true });
+    await mkdir(resolve(repoRoot, 'skills'), { recursive: true });
+    await writeFile(
+      resolve(repoRoot, 'agents/builder.md'),
+      [
+        '---',
+        'name: builder',
+        'inline_skills:',
+        '  - skills/tdd-iron-law.md',
+        'inline_specialists:',
+        '  - agents/specialists/game-design.md',
+        '---',
+        '',
+        '# Builder',
+      ].join('\n'),
+    );
+    await writeFile(resolve(repoRoot, 'skills/tdd-iron-law.md'), 'TDD_IRON_LAW_BODY');
+    await writeFile(
+      resolve(repoRoot, 'agents/specialists/game-design.md'),
+      'GAME_DESIGN_CONTRACT_BODY',
+    );
+    const eff: Effect = { type: 'spawn', actor: 'builder', adapter: 'capture' };
+    await dispatch(eff, deps);
+    const assembled = await readFile(capture.lastRequest!.sandwichPath, 'utf-8');
+    expect(assembled).toContain('TDD_IRON_LAW_BODY');
+    expect(assembled).toContain('GAME_DESIGN_CONTRACT_BODY');
+    expect(assembled).toContain('begin inlined skill (skills/tdd-iron-law.md)');
+    expect(assembled).toContain('begin inlined specialist (agents/specialists/game-design.md)');
+  });
+
+  it('emits a MISSING marker when a declared inline file is absent', async () => {
+    const { deps, capture, repoRoot } = await makeSandwichDeps();
+    await writeFile(
+      resolve(repoRoot, 'agents/builder.md'),
+      [
+        '---',
+        'name: builder',
+        'inline_specialists:',
+        '  - agents/specialists/does-not-exist.md',
+        '---',
+        '',
+        '# Builder',
+      ].join('\n'),
+    );
+    const eff: Effect = { type: 'spawn', actor: 'builder', adapter: 'capture' };
+    await dispatch(eff, deps);
+    const assembled = await readFile(capture.lastRequest!.sandwichPath, 'utf-8');
+    expect(assembled).toContain('inline specialist MISSING: agents/specialists/does-not-exist.md');
+  });
+
+  it('places inlined refs after base but before event-protocol', async () => {
+    const { deps, capture, repoRoot } = await makeSandwichDeps();
+    await mkdir(resolve(repoRoot, 'skills'), { recursive: true });
+    await writeFile(resolve(repoRoot, 'agents/_event-protocol.md'), 'EVENT_PROTOCOL_BODY');
+    await writeFile(
+      resolve(repoRoot, 'agents/builder.md'),
+      [
+        '---',
+        'name: builder',
+        'inline_skills:',
+        '  - skills/tdd-iron-law.md',
+        '---',
+        '',
+        'BASE_MARKER',
+      ].join('\n'),
+    );
+    await writeFile(resolve(repoRoot, 'skills/tdd-iron-law.md'), 'SKILL_MARKER');
+    const eff: Effect = { type: 'spawn', actor: 'builder', adapter: 'capture' };
+    await dispatch(eff, deps);
+    const assembled = await readFile(capture.lastRequest!.sandwichPath, 'utf-8');
+    const baseIdx = assembled.indexOf('BASE_MARKER');
+    const skillIdx = assembled.indexOf('SKILL_MARKER');
+    const protoIdx = assembled.indexOf('EVENT_PROTOCOL_BODY');
+    expect(baseIdx).toBeGreaterThanOrEqual(0);
+    expect(skillIdx).toBeGreaterThan(baseIdx);
+    expect(protoIdx).toBeGreaterThan(skillIdx);
+  });
+});
+
+describe('dispatcher idle-timeout (v3.4)', () => {
+  class SilentHangAdapter implements Adapter {
+    readonly id = 'silent-hang';
+    async health(): Promise<{ ok: boolean }> {
+      return { ok: true };
+    }
+    async spawn(req: SpawnRequest): Promise<SpawnResult> {
+      return new Promise<SpawnResult>((resolveResult) => {
+        const start = Date.now();
+        const finish = (exitCode: number, stderr: string): void => {
+          resolveResult({ exitCode, stdout: '', stderr, durationMs: Date.now() - start });
+        };
+        const timer = setTimeout(() => finish(0, ''), 5000);
+        timer.unref?.();
+        req.signal?.addEventListener(
+          'abort',
+          () => {
+            clearTimeout(timer);
+            finish(124, 'aborted');
+          },
+          { once: true },
+        );
+      });
+    }
+  }
+
+  class ChattyHangAdapter implements Adapter {
+    readonly id = 'chatty-hang';
+    async health(): Promise<{ ok: boolean }> {
+      return { ok: true };
+    }
+    async spawn(req: SpawnRequest): Promise<SpawnResult> {
+      return new Promise<SpawnResult>((resolveResult) => {
+        const start = Date.now();
+        const ping = setInterval(() => req.onStdoutActivity?.(), 30);
+        ping.unref?.();
+        const finish = (exitCode: number, stderr: string): void => {
+          clearInterval(ping);
+          resolveResult({ exitCode, stdout: '', stderr, durationMs: Date.now() - start });
+        };
+        const wallTimer = setTimeout(() => finish(0, ''), 5000);
+        wallTimer.unref?.();
+        req.signal?.addEventListener(
+          'abort',
+          () => {
+            clearTimeout(wallTimer);
+            finish(124, 'aborted');
+          },
+          { once: true },
+        );
+      });
+    }
+  }
+
+  async function makeIdleDeps(
+    adapter: Adapter,
+    perSpawnTimeoutMs: number,
+    perSpawnIdleTimeoutMs: number,
+  ): Promise<DispatcherDeps> {
+    const dir = await mkdtemp(resolve(tmpdir(), 'crumb-dispatch-idle-'));
+    const sessionDir = resolve(dir, 'session');
+    await mkdir(sessionDir, { recursive: true });
+    const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
+    await writeFile(transcriptPath, '');
+    const writer = new TranscriptWriter({ path: transcriptPath, sessionId: 'sess-idle' });
+    const registry = new AdapterRegistry();
+    registry.register(adapter);
+    const repoRoot = resolve(dir, 'repo');
+    await mkdir(resolve(repoRoot, 'agents'), { recursive: true });
+    await writeFile(resolve(repoRoot, 'agents', 'builder.md'), '# stub\n');
+    return {
+      writer,
+      registry,
+      sessionId: 'sess-idle',
+      sessionDir,
+      transcriptPath,
+      repoRoot,
+      perSpawnTimeoutMs,
+      perSpawnIdleTimeoutMs,
+    };
+  }
+
+  it('idle-timeout fires when adapter is silent past idle budget', async () => {
+    const adapter = new SilentHangAdapter();
+    const deps = await makeIdleDeps(adapter, 5000, 100);
+    const t0 = Date.now();
+    await dispatch({ ...spawnEffect, adapter: adapter.id }, deps);
+    const elapsed = Date.now() - t0;
+    expect(elapsed).toBeLessThan(2000);
+    const events = await readEvents(deps.transcriptPath);
+    const err = events.find((e) => e.kind === 'error');
+    expect(err?.data).toMatchObject({
+      reason: 'per_spawn_timeout',
+      timeout_kind: 'idle',
+      timeout_ms: 100,
+    });
+    expect(err?.body).toMatch(/silent for 100ms/);
+  }, 5_000);
+
+  it('idle-timeout does NOT fire while adapter pings stdout activity', async () => {
+    const adapter = new ChattyHangAdapter();
+    const deps = await makeIdleDeps(adapter, 200, 100);
+    const t0 = Date.now();
+    await dispatch({ ...spawnEffect, adapter: adapter.id }, deps);
+    const elapsed = Date.now() - t0;
+    expect(elapsed).toBeLessThan(2000);
+    const events = await readEvents(deps.transcriptPath);
+    const err = events.find((e) => e.kind === 'error');
+    // wall-clock fires before idle because activity keeps idle reset
+    expect(err?.data).toMatchObject({
+      reason: 'per_spawn_timeout',
+      timeout_kind: 'wall_clock',
+      timeout_ms: 200,
     });
   }, 5_000);
 });

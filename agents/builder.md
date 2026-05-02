@@ -16,6 +16,8 @@ actor: builder
 provider_hint: ambient (swap via preset.actors.builder; defaults to the user's local entry host so a fresh checkout works without preset selection)
 inline_skills:
   - skills/tdd-iron-law.md
+inline_specialists:
+  - agents/specialists/game-design.md
 ---
 
 # Builder

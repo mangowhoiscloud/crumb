@@ -3,9 +3,9 @@ name: planner-lead
 description: >-
   Crumb planning lead. Two-phase spawn (v3.3): phase A runs Socratic + Concept inside one
   spawn, then hands off to `researcher` (a separate actor in v3.3 — the video-LLM 2026
-  frontier requires gemini-sdk binding, not gemini-cli). Phase B resumes after researcher
-  emits handoff.requested(to=planner-lead) and runs Visual design + Synth in a second
-  spawn (cache_carry_over via adapter_session_id). Outputs spec.md + DESIGN.md (game) +
+  frontier requires gemini-sdk binding, not gemini-cli). Phase B re-spawns after researcher
+  emits handoff.requested(to=planner-lead) and runs Visual design + Synth as a fresh CLI
+  session that re-derives Phase A state from transcript.jsonl. Outputs spec.md + DESIGN.md (game) +
   tuning.json. Two specialists (concept-designer / visual-designer) are inline-read; the
   former researcher specialist was promoted to its own actor. Hands off to `builder` after
   Synth. Injected as a Markdown body via the host CLI; the runtime envelope (XML) is
@@ -105,9 +105,9 @@ Append: `kind=step.concept` with `body=<short summary>` + `data={core_mechanic, 
 
 Emit `kind=handoff.requested(to=researcher)` with `payload={video_refs?, concept_id}`. `video_refs` flows from the original `kind=goal` event's `data.video_refs` if present (else researcher takes the text-only path). STOP this spawn — the coordinator will spawn the researcher actor; planner-lead resumes in phase B once researcher emits `kind=handoff.requested(to=planner-lead)`.
 
-### 4. Design (specialist) — phase B begins (resumed spawn)
+### 4. Design (specialist) — phase B begins (fresh spawn)
 
-Phase B starts in a fresh planner-lead spawn (cache_carry_over via `adapter_session_id` so the system-prompt prefix is cached). The new transcript context now contains `kind=step.research.video` × N + `kind=step.research` (synthesis) from the researcher actor.
+Phase B starts in a brand-new planner-lead CLI session that re-reads transcript.jsonl from scratch (the `adapter_session_id` / `cache_carry_over` schema fields exist for forward-compat but no adapter wires `--resume` yet). The new transcript context now contains `kind=step.research.video` × N + `kind=step.research` (synthesis) from the researcher actor.
 
 Inline-read `agents/specialists/visual-designer.md` AND
 `agents/specialists/game-design.md`. **v3.4 — also inline-read any

@@ -21,8 +21,15 @@ import type { Harness, PresetSpec } from './preset-loader.js';
  * adapter's signal handler and the spawn is recorded as kind=error so the
  * reducer's circuit_breaker trips. Wiki: bagelcode-budget-guardrails.md
  * §"per_spawn_timeout".
+ *
+ * v3.4: split into wall-clock ceiling + idle timeout. The previous single
+ * 5-min wall-clock timer killed actors that were actively producing tokens
+ * (planner-lead Phase B session 01KQMR4Y, builder for multi-file envelopes).
+ * Idle-timeout fires only on genuine stalls (no stdout for N seconds) while
+ * the wall-clock remains as a hard ceiling.
  */
-const PER_SPAWN_TIMEOUT_MS = 5 * 60 * 1000; // 5 min
+const PER_SPAWN_TIMEOUT_MS = 15 * 60 * 1000; // 15 min — hard wall-clock ceiling
+const PER_SPAWN_IDLE_TIMEOUT_MS = 90 * 1000; // 90 s — kill on no stdout for this long
 
 export interface DispatcherDeps {
   writer: TranscriptWriter;
@@ -47,11 +54,19 @@ export interface DispatcherDeps {
   /** Bridge: hook effects surface as user prompts (TUI/CLI). */
   onHook?: (kind: string, body: string, data?: Record<string, unknown>) => Promise<void>;
   /**
-   * Per-spawn timeout override (ms). Defaults to PER_SPAWN_TIMEOUT_MS (5 min).
-   * Tests pass small values (e.g. 50ms) to exercise the abort path without
-   * waiting for the production budget.
+   * Per-spawn wall-clock timeout override (ms). Defaults to PER_SPAWN_TIMEOUT_MS
+   * (15 min). Tests pass small values (e.g. 50ms) to exercise the abort path
+   * without waiting for the production budget.
    */
   perSpawnTimeoutMs?: number;
+  /**
+   * Per-spawn idle-timeout override (ms). When the adapter calls
+   * `req.onStdoutActivity()` the timer resets; if no activity is reported for
+   * this long the dispatcher aborts the spawn. Defaults to
+   * PER_SPAWN_IDLE_TIMEOUT_MS (90 s). Adapters that don't surface activity
+   * effectively fall back to wall-clock-only behavior.
+   */
+  perSpawnIdleTimeoutMs?: number;
 }
 
 const ACTOR_TO_SANDWICH: Partial<Record<Actor, string>> = {
@@ -163,16 +178,13 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         },
       });
 
-      // v3.2 per_spawn_timeout: AbortController fires SIGTERM via the adapter's
-      // signal handler. The Promise.race pattern is unnecessary here — the
-      // adapter's own close handler resolves once SIGTERM lands, and we read
-      // controller.signal.aborted to distinguish a timed-out spawn from a
-      // genuine adapter error.
-      const controller = new AbortController();
-      const timeoutMs = deps.perSpawnTimeoutMs ?? PER_SPAWN_TIMEOUT_MS;
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      // Don't keep the event loop alive on the timer alone.
-      timer.unref?.();
+      // v3.2/v3.4 per_spawn_timeout: AbortController fires SIGTERM via the
+      // adapter's signal handler. See `setupSpawnTimers` for the two-timer
+      // (wall-clock ceiling + idle) policy.
+      const timers = setupSpawnTimers({
+        wallClockMs: deps.perSpawnTimeoutMs ?? PER_SPAWN_TIMEOUT_MS,
+        idleMs: deps.perSpawnIdleTimeoutMs ?? PER_SPAWN_IDLE_TIMEOUT_MS,
+      });
 
       let result;
       try {
@@ -189,13 +201,17 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
           // to the underlying CLI (API-only) — informational only.
           model: binding?.model,
           effort: binding?.effort,
-          signal: controller.signal,
+          signal: timers.controller.signal,
+          onStdoutActivity: timers.onStdoutActivity,
         });
       } finally {
-        clearTimeout(timer);
+        timers.cleanup();
       }
 
-      const timedOut = controller.signal.aborted;
+      const timedOut = timers.controller.signal.aborted;
+      const timeoutReason = timers.timeoutReason;
+      const timeoutMs = timers.wallClockMs;
+      const idleTimeoutMs = timers.idleMs;
 
       // v3.4 ArgoCD-style logs — persist full stdout / stderr to disk under
       // <session>/agent-workspace/<actor>/spawn-<ts>.log so the dashboard's
@@ -257,17 +273,22 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
       // Timeout is a special case: clearer body + structured data so observers
       // and the verifier can distinguish stalled spawn from genuine CLI failure.
       if (result.exitCode !== 0 || timedOut) {
+        const idleHit = timeoutReason === 'idle';
+        const limitMs = idleHit ? idleTimeoutMs : timeoutMs;
         await deps.writer.append({
           session_id: deps.sessionId,
           from: effect.actor,
           kind: 'error',
           body: timedOut
-            ? `per_spawn_timeout: adapter ${adapterId} exceeded ${timeoutMs}ms (SIGTERM sent)`
+            ? `per_spawn_timeout: adapter ${adapterId} ${
+                idleHit ? `silent for ${limitMs}ms` : `exceeded ${limitMs}ms wall-clock`
+              } (SIGTERM sent)`
             : `adapter ${adapterId} exited ${result.exitCode}`,
           data: timedOut
             ? {
                 reason: 'per_spawn_timeout',
-                timeout_ms: timeoutMs,
+                timeout_kind: timeoutReason ?? 'wall_clock',
+                timeout_ms: limitMs,
                 exit_code: result.exitCode,
                 stderr: result.stderr.slice(0, 2000),
               }
@@ -372,6 +393,59 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
  * bias per Rubric-Anchored Judging (NeurIPS 2025). The firewall therefore
  * scopes to D1/D5 — the LLM-judged dims where length confound concentrates.
  */
+/**
+ * v3.4 — two-timer abort policy for adapter spawns.
+ *   1. Wall-clock ceiling — fires after `wallClockMs` regardless of activity.
+ *   2. Idle timeout — fires only if no `onStdoutActivity()` ping for `idleMs`.
+ *      Adapters that don't surface chunk-level activity effectively run under
+ *      wall-clock-only behavior (idle never resets).
+ *
+ * Returns `{ controller, onStdoutActivity, cleanup, timeoutReason, ... }`.
+ * The dispatcher reads `controller.signal.aborted` after the spawn settles
+ * and inspects `timeoutReason` to label the error (`wall_clock` vs `idle`).
+ */
+interface SpawnTimerHandles {
+  controller: AbortController;
+  onStdoutActivity: () => void;
+  cleanup: () => void;
+  /** Reason the controller aborted, or null if the spawn ran to completion. */
+  timeoutReason: 'wall_clock' | 'idle' | null;
+  wallClockMs: number;
+  idleMs: number;
+}
+
+function setupSpawnTimers(opts: { wallClockMs: number; idleMs: number }): SpawnTimerHandles {
+  const handles: SpawnTimerHandles = {
+    controller: new AbortController(),
+    onStdoutActivity: () => {},
+    cleanup: () => {},
+    timeoutReason: null,
+    wallClockMs: opts.wallClockMs,
+    idleMs: opts.idleMs,
+  };
+  const wallTimer = setTimeout(() => {
+    handles.timeoutReason = 'wall_clock';
+    handles.controller.abort();
+  }, opts.wallClockMs);
+  wallTimer.unref?.();
+  let idleTimer: NodeJS.Timeout | null = null;
+  const armIdle = (): void => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      if (!handles.timeoutReason) handles.timeoutReason = 'idle';
+      handles.controller.abort();
+    }, opts.idleMs);
+    idleTimer.unref?.();
+  };
+  armIdle();
+  handles.onStdoutActivity = armIdle;
+  handles.cleanup = (): void => {
+    clearTimeout(wallTimer);
+    if (idleTimer) clearTimeout(idleTimer);
+  };
+  return handles;
+}
+
 const LENGTH_CONTEXT_ARTIFACTS = ['spec.md', 'DESIGN.md', 'tuning.json', 'game.html'] as const;
 
 export async function buildLengthContextAppends(
@@ -423,6 +497,49 @@ const EMITTING_ACTORS: ReadonlySet<Actor> = new Set([
 ]);
 
 /**
+ * Parse YAML-frontmatter list values for `inline_skills` and `inline_specialists`.
+ * Frontmatter shape (delimited by `---` lines at top of file):
+ *
+ *     inline_skills:
+ *       - skills/parallel-dispatch.md
+ *     inline_specialists:
+ *       - agents/specialists/concept-designer.md
+ *       - agents/specialists/visual-designer.md
+ *
+ * We don't pull a YAML dep — the shape is constrained (single-line list items
+ * starting with `  - `, terminated by any non-`  - ` line at column 0/2). Any
+ * unsupported nested structure simply yields an empty list, which is safe.
+ */
+export function parseInlineRefs(content: string): { skills: string[]; specialists: string[] } {
+  const empty = { skills: [], specialists: [] };
+  if (!content.startsWith('---')) return empty;
+  const lines = content.split('\n');
+  let end = -1;
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i] === '---') {
+      end = i;
+      break;
+    }
+  }
+  if (end === -1) return empty;
+
+  const collect = (key: string): string[] => {
+    const out: string[] = [];
+    for (let i = 1; i < end; i++) {
+      if (lines[i] !== `${key}:`) continue;
+      for (let j = i + 1; j < end; j++) {
+        const m = /^\s*-\s+(.+?)\s*$/.exec(lines[j]);
+        if (!m) break;
+        out.push(m[1]);
+      }
+      break;
+    }
+    return out;
+  };
+  return { skills: collect('inline_skills'), specialists: collect('inline_specialists') };
+}
+
+/**
  * v3.2 G4 — assemble per-spawn sandwich from base + per-machine local override
  * + runtime sandwich_appends.
  *
@@ -435,6 +552,16 @@ const EMITTING_ACTORS: ReadonlySet<Actor> = new Set([
  * 1-line mentions of `crumb event`; planner-lead / builder / builder-fallback
  * / researcher had zero. This fix makes the protocol always available.
  *
+ * v3.4 — also inlines specialist + skill files declared in the base sandwich's
+ * YAML frontmatter (`inline_skills`, `inline_specialists`). The actor sandbox
+ * is `cwd: <sessionDir>` + `--add-dir <sessionDir>`, which does NOT expose the
+ * repo root. Without this step, an actor told to "Inline-read
+ * `agents/specialists/game-design.md`" must `find /` for the file (planner-
+ * lead Phase B session 01KQMR4Y burned 4 of 5 minutes hunting two such files
+ * before SIGTERM). Embedding the contents at assemble time matches the
+ * documented "specialist inline-read" pattern (Paperclip #3438) and removes
+ * the filesystem fragility entirely.
+ *
  * Writes the result under the session's agent-workspace so observers / replay
  * can audit exactly what each spawn saw.
  */
@@ -445,14 +572,36 @@ async function assembleSandwich(args: AssembleArgs): Promise<string> {
   const hasBase = baseSandwichPath !== '' && existsSync(baseSandwichPath);
   const hasLocal = baseSandwichPath !== '' && existsSync(localPath);
   const needsEventProtocol = EMITTING_ACTORS.has(actor) && existsSync(eventProtocolPath);
+
+  const baseContent = hasBase ? await readFile(baseSandwichPath, 'utf-8') : '';
+  const refs = baseContent ? parseInlineRefs(baseContent) : { skills: [], specialists: [] };
+  const inlineRefs = [
+    ...refs.skills.map((p) => ({ kind: 'skill' as const, path: p })),
+    ...refs.specialists.map((p) => ({ kind: 'specialist' as const, path: p })),
+  ];
+
   // Skip assembly only when nothing additive applies (no local override, no
-  // runtime appends, and this actor doesn't need the event protocol injection).
-  if (!hasLocal && appends.length === 0 && !needsEventProtocol) {
+  // runtime appends, no event protocol, and no inline refs to embed).
+  if (!hasLocal && appends.length === 0 && !needsEventProtocol && inlineRefs.length === 0) {
     return baseSandwichPath;
   }
   const parts: string[] = [];
   if (hasBase) {
-    parts.push(await readFile(baseSandwichPath, 'utf-8'));
+    parts.push(baseContent);
+  }
+  for (const ref of inlineRefs) {
+    const refPath = resolve(repoRoot, ref.path);
+    if (!existsSync(refPath)) {
+      // Frontmatter declares a file that doesn't exist on disk. Don't crash —
+      // emit a marker so observers / replay can see the gap. The agent will
+      // then fall back to its own knowledge of the contract.
+      parts.push(`<!-- inline ${ref.kind} MISSING: ${ref.path} (not found at ${refPath}) -->`);
+      continue;
+    }
+    const refContent = await readFile(refPath, 'utf-8');
+    parts.push(
+      `<!-- begin inlined ${ref.kind} (${ref.path}) -->\n${refContent}\n<!-- end inlined ${ref.kind} (${ref.path}) -->`,
+    );
   }
   if (needsEventProtocol) {
     const protocol = await readFile(eventProtocolPath, 'utf-8');

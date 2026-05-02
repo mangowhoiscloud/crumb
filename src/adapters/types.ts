@@ -35,14 +35,22 @@ export interface SpawnRequest {
   effort?: 'low' | 'med' | 'high';
   /**
    * Optional cancellation signal. The dispatcher sets a per-spawn timeout
-   * (autoresearch P3 budget guardrail; default 5min, see
-   * wiki/concepts/bagelcode-budget-guardrails.md §"per_spawn_timeout"). On
+   * (autoresearch P3 budget guardrail; default 15 min wall-clock + 90 s idle,
+   * see wiki/concepts/bagelcode-budget-guardrails.md §"per_spawn_timeout"). On
    * abort, the adapter MUST send SIGTERM to the underlying CLI subprocess so
    * the per-spawn budget is enforced even when the agent stalls. Adapters
    * should treat an aborted spawn as a hard exit (non-zero exit code) so the
    * reducer's error branch trips the circuit breaker.
    */
   signal?: AbortSignal;
+  /**
+   * Optional activity ping. Adapters call this on every stdout chunk so the
+   * dispatcher can distinguish a busy spawn from a stalled one. The dispatcher
+   * uses it to reset its idle timer (see `perSpawnIdleTimeoutMs` in
+   * DispatcherDeps). Adapters that don't surface chunk-level activity simply
+   * omit the call — the spawn then falls back to wall-clock-only timeout.
+   */
+  onStdoutActivity?: () => void;
 }
 
 export interface SpawnResult {

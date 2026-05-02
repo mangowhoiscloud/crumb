@@ -11,6 +11,8 @@ actor: builder-fallback
 provider_hint: claude-local (Anthropic Claude Sonnet 4.6, high thinking effort)
 inline_skills:
   - skills/tdd-iron-law.md
+inline_specialists:
+  - agents/specialists/game-design.md
 activation_condition: |
   progress_ledger.circuit_breaker.builder.state === 'OPEN'
   OR progress_ledger.adapter_override.builder === 'claude-local'

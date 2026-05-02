@@ -539,10 +539,14 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
     }
 
     case 'step.research': {
-      // v3.3: researcher synthesis arrived. Resume planner-lead for phase B
-      // (Design + Synth) with cache_carry_over via adapter_session_id so the
-      // system-prompt prefix is cached. The reducer's spawn effect just signals
-      // the dispatcher; actual --resume <session_id> wiring is in the adapter.
+      // v3.3: researcher synthesis arrived. Re-spawn planner-lead for phase B
+      // (Design + Synth). The new spawn re-derives Phase A state from
+      // transcript.jsonl — there is no `--resume` wiring yet, so the underlying
+      // CLI session_id is fresh and the Anthropic prompt cache misses across
+      // phases. The `adapter_session_id` / `cache_carry_over` schema fields
+      // exist as forward-compat declarations (protocol/types.ts) but are not
+      // consumed by any adapter. TODO: wire `--resume <prev_session_id>` in
+      // claude-local so the system-prompt prefix actually caches across phases.
       if (event.from === 'researcher') {
         next.progress_ledger.next_speaker = 'planner-lead';
         effects.push({
