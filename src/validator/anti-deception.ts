@@ -1,5 +1,5 @@
 /**
- * Anti-deception validator — 5 rules enforcing scoring ground-truth integrity.
+ * Anti-deception validator — 7 rules enforcing scoring ground-truth integrity.
  *
  * Frontier backbone:
  *   - NeurIPS 2024 self-bias linear correlation (cross-provider mitigation)
@@ -53,6 +53,17 @@ const SAME_PROVIDER_DISCOUNT = 0.15;
 export interface QaResultLike {
   exec_exit_code: number;
   cross_browser_smoke?: 'ok' | 'fail' | 'skipped';
+  /**
+   * v3.5 — per-AC predicate results from the deterministic AC layer (see
+   * `src/effects/qa-interactive.ts` and `agents/specialists/game-design.md`
+   * §AC-Predicate-Compile). Empty / undefined when the spec emitted no
+   * predicates. Rule 7 reads `status === 'FAIL'` entries as ground truth
+   * that contradicts a high D1 functional fit.
+   */
+  ac_results?: Array<{
+    ac_id: string;
+    status: 'PASS' | 'FAIL' | 'SKIP';
+  }>;
 }
 
 export interface AntiDeceptionInput {
@@ -182,6 +193,34 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
     if (!validCitation) {
       violations.push('researcher_video_evidence_missing');
       scores.D5 = forceScore(scores.D5, 0, scores.D5.source);
+    }
+  }
+
+  // ── Rule 7 (v3.5) — verify_pass_with_ac_failure ─────────────────────────────
+  // The deterministic AC layer (qa-interactive.ts) replays planner-compiled
+  // predicates against the running game. When the verifier emits PASS but the
+  // ground-truth AC results show ≥1 FAIL, the verifier is contradicting a
+  // sandbox+predicate measurement — same firewall pattern as Rule 1 for D2's
+  // exec_exit_code, applied to D1 (spec_fit / functional fit).
+  //
+  // Why cap D1 at 2 instead of forcing 0: D1 spans more than the deterministic
+  // AC layer (subjective AC strings + spec_fit prose), so a hard 0 over-
+  // penalizes mostly-passing builds. 2 is the soft cap matching Rule 6's D1_MIN
+  // floor — combined with the aggregate recompute below it pushes the verdict
+  // to PARTIAL automatically without claiming the artifact is worthless.
+  //
+  // Frontier backing: ArtifactsBench (arXiv:2507.04952) shows sandbox-derived
+  // ground truth outranks LLM-only judgement at 94.4% human agreement;
+  // VideoGameQA-Bench (arXiv:2505.15952) confirms VLM judges collapse on
+  // state-observable assertions. Karpathy autoresearch immutable-harness rule:
+  // a high LLM score that contradicts the deterministic harness is a false
+  // positive, not a judgement call.
+  const acResults = input.qaResult?.ac_results ?? [];
+  const acFailed = acResults.some((r) => r.status === 'FAIL');
+  if (scores.verdict === 'PASS' && acFailed) {
+    violations.push('verify_pass_with_ac_failure');
+    if (scores.D1 && scores.D1.score > 2) {
+      scores.D1 = forceScore(scores.D1, 2, scores.D1.source);
     }
   }
 
