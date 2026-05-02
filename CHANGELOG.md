@@ -4,6 +4,24 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Researcher prompt: named-game lock-in (high-priority research for real game titles cited in goal) (2026-05-03)
+
+Per user feedback: "리서쳐가 레퍼런스 조사할 때 사용자가 전달한 게임 이름이 실제로 존재하면 그 작품 참고율과 자료 조사 비율을 확 높이는 방향". Previously the researcher would land on generic genre proxies even when the user explicitly named an existing game ("레바의 모험 버서커 모드", "Vampire Survivors 같은") — wasting the implicit ground truth.
+
+`agents/researcher.md` step 1.5 added between Triage and Multi-modal extraction:
+
+- **Named-game detection** — scan goal text for proper-noun titles. Coverage list includes Korean Flash-era classics (레바의 모험, 크레이지 아케이드, 메이플스토리, 카트라이더 등), casual mobile / indie hits (Vampire Survivors, Royal Match, Candy Crush, Loop Hero, Slay the Spire, Balatro, Reigns, Suika Game / 스이카 게임 등), retro arcade (Pac-Man, Bubble Bobble, Tetris, Bomberman, Snake 등). Open-ended — title-case or quoted = treat as named.
+- **When detected, research the exact title FIRST and HEAVIEST**:
+  1. Web search canonical name + "gameplay" (`"Royal Match" gameplay 2026 mechanics`)
+  2. Pull from authoritative sources (priority): Wikipedia / 나무위키 → official store page → Speedrun.com / TASVideos → YouTube top-3 gameplay videos → fan wikis
+  3. Extract canonical numbers (HP / attack / palette hex / BGM key / level count) — not guesses
+  4. Cite the named game in `step.research.data.reference_games[0]` with `weight: 0.7+` so planner allocates ~70%+ of design decisions to it
+  5. Emit `kind=note body="named-game lock-in: <Title> — primary reference"` at the top of step 3 — visible binding decision
+  6. Reproduce the named game's CONTROLS faithfully in `tuning.json` + `DESIGN.md` (D-pad / 4-dir / 8-dir / mouse-driven). §1 keyboard policy still applies on top.
+- **No named game detected → fall through** to genre-based research (existing flow). Additive, not a replacement.
+
+Rationale: a user pitching "레바의 모험 버서커 모드" expects the researcher to actually know 레바의 모험 — palette (16-bit pixel-cartoon homage), genre (action platformer), iconic mechanics (sword + dash), Korean Flash-era nostalgia. Generic "casual mobile action survivor" research wastes context and produces a generic clone, not the homage they asked for.
+
 ### Changed — Studio grep toolbar overflow + game-design.md §1 input/asset policy (2026-05-03)
 
 Two small UX/contract fixes from live-session feedback.
