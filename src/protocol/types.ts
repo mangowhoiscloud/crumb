@@ -17,6 +17,7 @@ export type Kind =
   // session lifecycle
   | 'session.start'
   | 'session.end'
+  | 'session.forked'
   | 'agent.wake'
   | 'agent.stop'
   // planning
@@ -56,6 +57,9 @@ export type Kind =
   | 'handoff.accepted'
   | 'handoff.rollback'
   | 'artifact.created'
+  // v3.3: version milestones (immutable releases under projects/<id>/versions/<vN>/)
+  | 'version.released'
+  | 'version.refinement'
   | 'ack'
   | 'error'
   | 'audit'
@@ -182,6 +186,28 @@ export interface Metadata {
   cost_usd?: number;
   thinking_tokens?: number;
   audit_violations?: string[];
+  /**
+   * v3.3: 5-layer hierarchy markers (project → session → run → turn → step → event).
+   * project lives on the filesystem; session_id and step are top-level Message fields;
+   * run_id / turn_id are reducer-derived. parent_session_id / fork_event_id appear
+   * only on the first event of a forked session.
+   */
+  crumb?: {
+    run_id?: string;
+    turn_id?: string;
+    parent_session_id?: string;
+    fork_event_id?: string;
+  };
+  /**
+   * v3.3: OpenTelemetry GenAI Semantic Conventions aliases.
+   * conversation_id ≡ session_id, agent_id ≡ from, workflow_name = 'crumb.coordinator'.
+   * Filled in by the OTel exporter or by the writer when emitting cross-provider events.
+   */
+  gen_ai?: {
+    conversation_id?: string;
+    agent_id?: string;
+    workflow_name?: string;
+  };
 }
 
 export interface Message {
