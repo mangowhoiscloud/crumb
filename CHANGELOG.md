@@ -21,6 +21,40 @@ The MCP server registered 8 read-only `crumb_<verb>` tools (status / suggest / d
 
 **Recovered from `feat/claude-code-usability` branch (2 unmerged commits, 30+ behind main) + `stash@{4}` (skill+test residue)** during the post-PR-#84 stash audit. The branch was abandoned mid-rebase when main moved on; cherry-picking onto a fresh branch from current main was the cleaner path.
 
+### Changed — Multi-file PWA is now the only profile + `§1.2 postgres-anon-leaderboard` opt-in spec (PR-B) (2026-05-03)
+
+User directive: **multi-file is the new default; remove single-file prompts**. Multi-file was already the v3.4 default in `agents/specialists/game-design.md` §1.1, but every actor sandwich and most top-level docs still carried the single-file fallback as a co-equal option. This PR retires it entirely from the prompt surface. Code paths in `src/effects/qa-check.ts` (the 60KB cap) stay backward-compat for the legacy `game.html` test fixtures and will be cleaned up in a follow-up PR-D once Playwright server changes land.
+
+In parallel, the long-deferred postgres persistence dimension lands as `§1.2` (opt-in, never default). Researched against `~/workspace/kiki-appmaker/output/pin-57/match-3-next/` (MariaDB+Prisma+NextAuth match-3 reference — extracted schema patterns, dropped Next.js server-side route requirement) + 2025-2026 Supabase frontier (anonymous-auth GA + RLS for game leaderboards + pg_cron leaderboard MV refresh). Decision matrix scored Supabase 4/4 vs Neon 2/4 vs Cloudflare D1 0/4 for Crumb's 60s ephemeral domain — only Supabase satisfies the §1.1 static-PWA envelope (Phaser browser → SDK direct, no Node.js worker tier).
+
+**Sandwich changes** (multi-file purge):
+- `agents/specialists/game-design.md` — §1.2 single-file fallback removed; new §1.2 is the postgres profile. Preamble updated to "v3.4 retired the v3.0 single-file fallback — multi-file is the only profile."
+- `agents/builder.md` — frontmatter description, position summary, contract table, steps §1, tools, Don'ts, Reminders all rewritten for multi-file-only. New "Postgres persistence profile (§1.2, opt-in)" sub-section in step §1 documents the migrations + PersistenceManager + env reads.
+- `agents/builder-fallback.md` — same purge pattern; `artifacts/game/**` is now the only writable scope.
+- `agents/verifier.md` — `artifacts/game.html` references → `artifacts/game/index.html` + walk `src/`. D1 instructions updated. Length-bias firewall context source list rewritten.
+- `agents/planner-lead.md` — §1 envelope reference + Don'ts list.
+- `agents/specialists/visual-designer.md` — envelope description + reference list.
+
+**§1.2 postgres-anon-leaderboard sub-section** (new, opt-in):
+- **Trigger**: pitch contains `"leaderboard"` / `"랭킹"` / `"ranking"` / `"점수 저장"` / `"hi-score"` markers, or `--persistence postgres` flag, or `actors.builder.profile = "multi-file+postgres"` preset binding.
+- **Backend contract**: Supabase Postgres + `auth.signInAnonymously()` (GA 2024-Q3) + Row-Level Security. The only profile satisfying §1.1 (static Phaser → browser-direct SDK call, no worker tier).
+- **Required env**: `CRUMB_PG_URL` (verifier-only) / `CRUMB_SUPABASE_URL` / `CRUMB_SUPABASE_ANON_KEY` (browser-safe; service_role NEVER ships). All `$CRUMB_HOME`-resolved — zero hardcoded paths.
+- **Required schema**: `players` (PK = `auth.uid()`, RLS self-write), `runs` (append-only — INSERT WITH CHECK self, no UPDATE/DELETE), `leaderboard_top100` materialized view + `pg_cron` 60s refresh.
+- **Client surface**: `@supabase/supabase-js` ESM CDN, `signInAnonymously()` in BootScene, `runs.insert(...)` in GameOverScene, `leaderboard_top100.select(...)` in MenuScene.
+- **Verifier D2 ground truth**: `qa_check` extension verifies (a) migration applies on throwaway docker pg, (b) anon insert succeeds, (c) cross-player insert blocked by RLS, (d) leaderboard MV returns ordered rows after refresh. Any failure → D2=0 enforced by `validator/anti-deception.ts`.
+- **Forbidden**: service_role in client bundle, direct `postgres://` from browser, score UPDATE/DELETE (append-only invariant mirrors transcript), hardcoded paths or DB URLs.
+
+**Top-level doc sweep**:
+- `README.md` artifacts tree shows the multi-file directory shape (game/index.html + src/ + sw.js + manifest + optional migrations/).
+- `AGENTS.md` actor table description + game-design contract pointer updated.
+- `GEMINI.md` verifier-as-Gemini rationale references `artifacts/game/`.
+
+**Out of scope (queued)**:
+- `src/effects/qa-check.ts` `MAX_OWN_CODE_BYTES = 60_000` removal — single-file test fixtures still pin it green; needs Playwright multi-file http-server bringup before flip.
+- `src/effects/qa-check-playwright.ts` server start-up for `artifacts/game/` (currently file:// for legacy `game.html`).
+- `src/dispatcher/qa-runner.ts` D2 persistence sub-check (throwaway docker pg) — opt-in, gated by `CRUMB_PG_URL` presence.
+- README.ko.md mirror (intentional KO translation; its multi-file/postgres update lands with the broader KO-translation track).
+
 ### Added — `CRUMB_PER_SPAWN_TIMEOUT_MS` / `CRUMB_PER_SPAWN_IDLE_MS` / `CRUMB_WALL_CLOCK_HOOK_MS` / `CRUMB_WALL_CLOCK_HARD_MS` env knobs (2026-05-03)
 
 Per-spawn wall-clock + idle timeouts and session wall-clock budget were hard-coded constants. Tests, CI smoke runs, and long debugging sessions had to either monkey-patch the dispatcher or wait the full 15-minute ceiling. All four are now env-overridable while keeping the same defaults.

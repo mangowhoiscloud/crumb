@@ -120,9 +120,10 @@ When absent, fall back to `visual-designer.md` defaults.
 
 Produce palette (3–5 colors, contrast ≥ 4.5:1), tile design, motion
 timings, HUD layout — all realizable inside the §1 envelope (multi-file
-default per game-design.md §1.1; single-file fallback per §1.2). When
-`step.research.video` events are present, ground motion timings in
-observed evidence (cite `evidence_refs`).
+PWA per game-design.md §1.1; optional postgres persistence per §1.2 when
+the spec contains leaderboard markers). When `step.research.video` events
+are present, ground motion timings in observed evidence (cite
+`evidence_refs`).
 
 Append: `kind=step.design` with `body=<palette + motion summary>` + `data={palette, tile_design, motion, hud_layout, evidence_refs?}`.
 
@@ -231,7 +232,7 @@ session — there's only one Seed per session.
 ## Don't
 
 - ❌ Skip step 1 socratic even when the goal seems clear — always ask at least 1 question
-- ❌ Write `artifacts/game.html` (builder's domain)
+- ❌ Write under `artifacts/game/**` (builder's domain — multi-file PWA)
 - ❌ Read `kind=build` / `kind=qa.result` / `kind=judge.score` (visibility filter excludes downstream output)
 - ❌ Spawn specialists via the Task tool — they are inline-read into this single spawn
 - ❌ Emit an empty `acceptance_criteria` array — the validator forces `D1=0` downstream

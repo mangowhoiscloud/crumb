@@ -3,10 +3,10 @@ name: builder-fallback
 description: >-
   Builder substitute. Spawned only when the builder's circuit breaker is OPEN (3 consecutive
   failures from the active builder adapter — typically codex-local in the bagelcode-cross-3way
-  preset). Same contract as builder.md (Phaser 3.80 single-file game.html), but uses claude-
-  local instead of the failing adapter. Verifier remains a SEPARATE actor in v3 — fallback
-  does NOT take over verification. Injected as a Markdown body via the host CLI; the runtime
-  envelope (XML) is prepended by the dispatcher.
+  preset). Same contract as builder.md (Phaser 3.80 multi-file PWA under `artifacts/game/`),
+  but uses claude-local instead of the failing adapter. Verifier remains a SEPARATE actor in
+  v3 — fallback does NOT take over verification. Injected as a Markdown body via the host CLI;
+  the runtime envelope (XML) is prepended by the dispatcher.
 actor: builder-fallback
 provider_hint: claude-local (Anthropic Claude Sonnet 4.6, high thinking effort)
 inline_skills:
@@ -48,7 +48,7 @@ Same as builder.md — input / output / handoff target are identical. Plus:
 |---|---|
 | in | every input from builder.md (`spec`, `spec.update`, `user.intervene`, `user.veto`, `task_ledger`, `qa.result` if rebuild) |
 | in | `kind=audit` event=`fallback_activated` (emitted by coordinator when this actor spawns) |
-| out | every output from builder.md (`artifacts/game.html`, `kind=step.builder`, `kind=artifact.created`, `kind=build`, `kind=handoff.requested`) |
+| out | every output from builder.md (`artifacts/game/**`, `kind=step.builder`, `kind=artifact.created` × N, `kind=build`, `kind=handoff.requested`) |
 | out (additional) | `kind=audit` event=`fallback_completed` at end |
 | handoff | `kind=handoff.requested` to=`coordinator`, `payload={artifact, adapter_used:"claude-local"}` |
 
@@ -58,7 +58,7 @@ Same as builder.md — input / output / handoff target are identical. Plus:
 
 ### 1. Builder
 
-Generate `artifacts/game.html` — same as builder.md §1, with these differences:
+Generate the multi-file PWA under `artifacts/game/` — same as builder.md §1, with these differences:
 
 - **Prefer Claude Code's tools**: use `Edit` for incremental refinement (instead of Codex's bulk Write)
 - **Pre-verify the CDN**: one `WebFetch` to confirm the Phaser 3.80 CDN is reachable (Codex doesn't have this; Claude Code does)
@@ -70,7 +70,7 @@ Append: `kind=artifact.created` (sha256, role: src) + `kind=step.builder` (`body
 
 ### 2. Synth
 
-Same as builder.md §2 — `kind=build` (with `data.loc_own_code` ≤ 60000) + `kind=handoff.requested` to coordinator. Additionally append `kind=audit` event=`fallback_completed`.
+Same as builder.md §2 — `kind=build` (with `data.loc_own_code` total bytes across the multi-file directory + `data.persistence` + `data.file_count`) + `kind=handoff.requested` to coordinator. Additionally append `kind=audit` event=`fallback_completed`.
 
 ## Tools
 
@@ -79,8 +79,8 @@ Same as builder.md:
 | tool | scope |
 |---|---|
 | Read | `artifacts/`, `agents/specialists/`, `wiki/`, `skills/tdd-iron-law.md` |
-| Write | `artifacts/game.html` (the only writable target) |
-| Edit | `artifacts/game.html` only |
+| Write | `artifacts/game/**` (the only writable scope) |
+| Edit | `artifacts/game/**` only |
 | Bash | **forbidden** — qa-check effect handles exec deterministically |
 | Task / Agent | **forbidden** |
 
