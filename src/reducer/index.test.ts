@@ -264,6 +264,137 @@ describe('reducer', () => {
     expect((effects[0] as { reason: string }).reason).toContain('user_approve_partial');
   });
 
+  // v3.2 G3 — actor-targeted intervention (AutoGen UserProxyAgent + GroupChatManager pattern)
+
+  it('v3.2 G3: user.intervene with target_actor tags the fact with @<actor>', () => {
+    const s0 = initialState('sess-test');
+    const ev = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      body: '콤보 보너스 좀 더 짧게',
+      data: { target_actor: 'planner-lead' },
+    });
+    const { state } = reduce(s0, ev);
+    expect(state.task_ledger.facts).toHaveLength(1);
+    expect(state.task_ledger.facts[0].text).toContain('@planner-lead');
+    expect(state.task_ledger.facts[0].text).toContain('콤보 보너스 좀 더 짧게');
+  });
+
+  // v3.2 G6 — LangGraph Command(goto/update) pattern
+
+  it('v3.2 G6: user.intervene with goto forces next_speaker and spawns', () => {
+    const s0 = initialState('sess-test');
+    const ev = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      body: 'redo from spec',
+      data: { goto: 'planner-lead' },
+    });
+    const { state, effects } = reduce(s0, ev);
+    expect(state.progress_ledger.next_speaker).toBe('planner-lead');
+    expect(effects.find((e) => e.type === 'spawn')).toMatchObject({
+      type: 'spawn',
+      actor: 'planner-lead',
+      prompt: 'redo from spec',
+    });
+  });
+
+  it('v3.2 G6: user.intervene with swap updates adapter_override (Paperclip swap pattern)', () => {
+    const s0 = initialState('sess-test');
+    const ev = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      data: { swap: { from: 'builder', to: 'mock' } },
+    });
+    const { state } = reduce(s0, ev);
+    expect(state.progress_ledger.adapter_override.builder).toBe('mock');
+  });
+
+  it('v3.2 G6: user.intervene with reset_circuit clears the named breaker', () => {
+    const s0 = initialState('sess-test');
+    s0.progress_ledger.circuit_breaker.builder = {
+      state: 'OPEN',
+      consecutive_failures: 3,
+    };
+    const ev = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      data: { reset_circuit: 'builder' },
+    });
+    const { state } = reduce(s0, ev);
+    expect(state.progress_ledger.circuit_breaker.builder).toBeUndefined();
+  });
+
+  // v3.2 G5 — per-actor pause (Paperclip "pause any agent" pattern)
+
+  it('v3.2 G5: user.pause with data.actor adds to paused_actors only', () => {
+    const s0 = initialState('sess-test');
+    const ev = fixed({
+      from: 'user',
+      kind: 'user.pause',
+      data: { actor: 'builder' },
+    });
+    const { state } = reduce(s0, ev);
+    expect(state.progress_ledger.paused).toBe(false);
+    expect(state.progress_ledger.paused_actors).toContain('builder');
+  });
+
+  it("v3.2 G5: per-actor pause demotes only that actor's spawn (others continue)", () => {
+    const s0 = initialState('sess-test');
+    s0.progress_ledger.paused_actors = ['builder'];
+    // spec event would normally spawn builder
+    const spec = fixed({
+      from: 'planner-lead',
+      kind: 'spec',
+      data: { acceptance_criteria: ['ac1', 'ac2', 'ac3'] },
+    });
+    const { effects } = reduce(s0, spec);
+    expect(effects.find((e) => e.type === 'spawn')).toBeUndefined();
+    const hook = effects.find((e) => e.type === 'hook') as
+      | { data?: { scope?: string } }
+      | undefined;
+    expect(hook?.data?.scope).toBe('actor');
+  });
+
+  it('v3.2 G5: per-actor pause does NOT block a different actor', () => {
+    const s0 = initialState('sess-test');
+    s0.progress_ledger.paused_actors = ['builder']; // builder is paused...
+    // ...but goal would spawn planner-lead, not builder
+    const goal = fixed({ from: 'user', kind: 'goal', body: 'match-3' });
+    const { effects } = reduce(s0, goal);
+    expect(effects.find((e) => e.type === 'spawn')).toMatchObject({
+      type: 'spawn',
+      actor: 'planner-lead',
+    });
+  });
+
+  it('v3.2 G5: user.resume with data.actor removes only that actor from paused_actors', () => {
+    const s0 = initialState('sess-test');
+    s0.progress_ledger.paused_actors = ['builder', 'verifier'];
+    const ev = fixed({
+      from: 'user',
+      kind: 'user.resume',
+      data: { actor: 'builder' },
+    });
+    const { state } = reduce(s0, ev);
+    expect(state.progress_ledger.paused_actors).toEqual(['verifier']);
+  });
+
+  it('v3.2 G5: user.resume without data clears global AND all per-actor pauses', () => {
+    const s0 = initialState('sess-test');
+    s0.progress_ledger.paused = true;
+    s0.progress_ledger.paused_actors = ['builder', 'verifier'];
+    s0.progress_ledger.next_speaker = 'verifier';
+    const ev = fixed({ from: 'user', kind: 'user.resume' });
+    const { state, effects } = reduce(s0, ev);
+    expect(state.progress_ledger.paused).toBe(false);
+    expect(state.progress_ledger.paused_actors).toEqual([]);
+    expect(effects.find((e) => e.type === 'spawn')).toMatchObject({
+      type: 'spawn',
+      actor: 'verifier',
+    });
+  });
+
   it('v3.2 G1: user.approve is no-op when last verdict was PASS or absent', () => {
     const s0 = initialState('sess-test');
     // No score_history

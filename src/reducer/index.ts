@@ -6,7 +6,7 @@
  * Routing rules mirror agents/coordinator.md §routing-rules.
  */
 
-import type { Message, Verdict } from '../protocol/types.js';
+import type { Actor, Message, Verdict } from '../protocol/types.js';
 import type { CrumbState } from '../state/types.js';
 import type { Effect } from '../effects/types.js';
 
@@ -160,45 +160,123 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
     }
 
     case 'user.intervene': {
+      // v3.2 G3+G6 — actor-targeted intervention + LangGraph Command(goto/update) pattern.
+      //
+      // data.target_actor: route the user message to a specific actor's task_ledger
+      //   (AutoGen UserProxyAgent + GroupChatManager dynamic-speaker pattern).
+      // data.goto: force progress_ledger.next_speaker = <actor> and spawn (LangGraph
+      //   Command(goto)). Skips the normal routing.
+      // data.swap: { from, to } — adapter override (Paperclip "swap agent" pattern).
+      // data.reset_circuit: clear circuit_breaker for the named actor (or all).
+      const data = (event.data ?? {}) as {
+        target_actor?: Actor;
+        goto?: Actor;
+        swap?: { from: Actor; to: string };
+        reset_circuit?: Actor | true;
+      };
+
+      // Always record the intervention as a fact, but tag with the target actor when given.
       next.task_ledger.facts.push({
         source_id: event.id,
-        text: `user intervene: ${event.body ?? ''}`,
+        text: data.target_actor
+          ? `user intervene @${data.target_actor}: ${event.body ?? ''}`
+          : `user intervene: ${event.body ?? ''}`,
         category: 'constraint',
       });
+
+      // G6 — adapter swap (Paperclip-style). Persists in adapter_override for next spawn.
+      if (data.swap) {
+        next.progress_ledger.adapter_override = {
+          ...next.progress_ledger.adapter_override,
+          [data.swap.from]: data.swap.to,
+        };
+      }
+
+      // G6 — circuit breaker reset for the named actor (or all if `true`).
+      if (data.reset_circuit) {
+        const cb = { ...next.progress_ledger.circuit_breaker };
+        if (data.reset_circuit === true) {
+          // Clear all entries.
+          for (const key of Object.keys(cb) as Actor[]) delete cb[key];
+        } else {
+          delete cb[data.reset_circuit];
+        }
+        next.progress_ledger.circuit_breaker = cb;
+      }
+
+      // G6 — goto: force the routing decision. Bypasses last_active_actor heuristics.
+      if (
+        data.goto &&
+        data.goto !== 'user' &&
+        data.goto !== 'system' &&
+        data.goto !== 'coordinator' &&
+        data.goto !== 'validator'
+      ) {
+        next.progress_ledger.next_speaker = data.goto;
+        effects.push({
+          type: 'spawn',
+          actor: data.goto,
+          adapter: pickAdapter(next, data.goto as 'planner-lead' | 'builder' | 'verifier'),
+          prompt: event.body,
+        });
+      }
+
       break;
     }
 
     case 'user.pause': {
-      // v3.2 G1 — global pause. Dispatcher should not spawn while paused;
-      // any spawn decision the reducer would have made surfaces as a hook
-      // ('paused — would spawn <actor>'). LangGraph interrupt() pattern.
-      next.progress_ledger.paused = true;
-      effects.push({
-        type: 'hook',
-        kind: 'confirm',
-        body: `session paused by user${event.body ? `: ${event.body}` : ''}`,
-        data: { paused: true },
-      });
+      // v3.2 G1+G5 — global OR per-actor pause (Paperclip "pause any agent" pattern).
+      // data.actor=<name> → only that actor is paused; others continue.
+      // No data.actor → global pause (G1 default).
+      const pauseActor = (event.data as { actor?: Actor } | undefined)?.actor;
+      if (pauseActor) {
+        if (!next.progress_ledger.paused_actors.includes(pauseActor)) {
+          next.progress_ledger.paused_actors = [...next.progress_ledger.paused_actors, pauseActor];
+        }
+        effects.push({
+          type: 'hook',
+          kind: 'confirm',
+          body: `actor paused by user: ${pauseActor}${event.body ? ` — ${event.body}` : ''}`,
+          data: { paused: true, actor: pauseActor },
+        });
+      } else {
+        next.progress_ledger.paused = true;
+        effects.push({
+          type: 'hook',
+          kind: 'confirm',
+          body: `session paused by user${event.body ? `: ${event.body}` : ''}`,
+          data: { paused: true },
+        });
+      }
       break;
     }
 
     case 'user.resume': {
-      // v3.2 G1 — clears pause. If a next_speaker was queued, re-spawn it.
-      // LangGraph Command(resume=value) pattern.
-      next.progress_ledger.paused = false;
-      const queued = next.progress_ledger.next_speaker;
-      if (
-        queued &&
-        queued !== 'user' &&
-        queued !== 'system' &&
-        queued !== 'coordinator' &&
-        queued !== 'validator'
-      ) {
-        effects.push({
-          type: 'spawn',
-          actor: queued,
-          adapter: pickAdapter(next, queued as 'planner-lead' | 'builder' | 'verifier'),
-        });
+      // v3.2 G1+G5 — clears pause (global OR per-actor). LangGraph Command(resume=value).
+      // data.actor=<name> → only that actor is resumed.
+      // No data.actor → clear global pause AND all per-actor pauses; re-spawn queued.
+      const resumeActor = (event.data as { actor?: Actor } | undefined)?.actor;
+      if (resumeActor) {
+        next.progress_ledger.paused_actors = next.progress_ledger.paused_actors.filter(
+          (a) => a !== resumeActor,
+        );
+      } else {
+        next.progress_ledger.paused = false;
+        next.progress_ledger.paused_actors = [];
+        const queued = next.progress_ledger.next_speaker;
+        if (
+          queued &&
+          queued !== 'user' &&
+          queued !== 'system' &&
+          queued !== 'coordinator' &&
+          queued !== 'validator'
+        ) {
+          effects.push({
+            type: 'spawn',
+            actor: queued,
+            adapter: pickAdapter(next, queued as 'planner-lead' | 'builder' | 'verifier'),
+          });
+        }
       }
       break;
     }
@@ -262,22 +340,35 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
       break;
   }
 
-  // v3.2 G1 — global pause filter. If paused (and the current event is not user.resume,
-  // which already handles its own re-spawn after clearing paused), demote any spawn
-  // effect into a hook so the dispatcher doesn't burn an LLM call. The routing
-  // decision (next_speaker) survives in state for `user.resume` to re-fire later.
-  if (next.progress_ledger.paused && event.kind !== 'user.resume') {
-    const filtered: Effect[] = effects.map((e) =>
-      e.type === 'spawn'
-        ? {
+  // v3.2 G1+G5 — pause filter. If global pause OR per-actor pause matches, demote spawn
+  // to hook so the dispatcher doesn't burn an LLM call. Routing survives in next_speaker
+  // for `user.resume` to re-fire later. user.resume case handles its own re-spawn after
+  // clearing paused state, so we skip it here.
+  if (event.kind !== 'user.resume') {
+    const globalPause = next.progress_ledger.paused;
+    const pausedActors = next.progress_ledger.paused_actors;
+    if (globalPause || pausedActors.length > 0) {
+      const filtered: Effect[] = effects.map((e) => {
+        if (e.type !== 'spawn') return e;
+        if (globalPause || pausedActors.includes(e.actor)) {
+          return {
             type: 'hook' as const,
             kind: 'confirm' as const,
-            body: `paused — would spawn ${e.actor} (queued; emit kind=user.resume to continue)`,
-            data: { actor: e.actor, queued: true, paused: true },
-          }
-        : e,
-    );
-    return { state: next, effects: filtered };
+            body: globalPause
+              ? `paused — would spawn ${e.actor} (queued; emit kind=user.resume to continue)`
+              : `actor paused — would spawn ${e.actor} (queued; emit kind=user.resume with data.actor='${e.actor}' to continue)`,
+            data: {
+              actor: e.actor,
+              queued: true,
+              paused: true,
+              scope: globalPause ? 'global' : 'actor',
+            },
+          };
+        }
+        return e;
+      });
+      return { state: next, effects: filtered };
+    }
   }
 
   return { state: next, effects };

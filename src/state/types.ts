@@ -51,6 +51,14 @@ export interface ProgressLedger {
    * resume pattern (interrupt() + Command(resume=...)).
    */
   paused: boolean;
+  /**
+   * v3.2 G5 — per-actor pause set (Paperclip "pause any agent" pattern). When non-empty,
+   * spawn effects targeting any actor in this set are demoted to hooks even if the global
+   * `paused` is false. `kind=user.pause` with `data.actor=<name>` adds an entry;
+   * `kind=user.resume` with `data.actor=<name>` removes one; `kind=user.resume` without
+   * `data.actor` clears the entire set (and global pause).
+   */
+  paused_actors: Actor[];
 }
 
 export interface CrumbState {
@@ -80,6 +88,7 @@ export const initialState = (sessionId: string): CrumbState => ({
     adapter_override: {},
     circuit_breaker: {},
     paused: false,
+    paused_actors: [],
   },
   last_message: null,
   done: false,
