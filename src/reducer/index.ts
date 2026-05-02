@@ -165,11 +165,16 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         });
       }
       // v3.2 budget cap: verify_count > VERIFY_MAX → done(too_many_verify).
-      next.progress_ledger.verify_count += 1;
-      if (next.progress_ledger.verify_count > VERIFY_MAX) {
-        next.done = true;
-        effects.push({ type: 'done', reason: 'too_many_verify' });
-        break;
+      // Count judge.score only — verify.result is its legacy alias and the
+      // verifier emits BOTH for backwards compat (see agents/verifier.md
+      // §4 Re-grader). Counting both would halve the effective cap.
+      if (event.kind === 'judge.score') {
+        next.progress_ledger.verify_count += 1;
+        if (next.progress_ledger.verify_count > VERIFY_MAX) {
+          next.done = true;
+          effects.push({ type: 'done', reason: 'too_many_verify' });
+          break;
+        }
       }
       // v3.2 ratchet (autoresearch P4 keep/revert): track best aggregate so far;
       // RATCHET_REGRESSION_THRESHOLD-point drop triggers auto-terminate to prevent
