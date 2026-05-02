@@ -4,6 +4,35 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — `crumb copy-artifacts` — v3.3 Phase 2c (2026-05-02)
+
+Closes the Bagelcode submission UX loop. Reviewers expect `cd crumb && open demo/game.html` to just work; with sessions now under `~/.crumb/projects/<id>/`, the user needs an explicit copy step.
+
+- **`crumb copy-artifacts <session-id|vN> --to <dest>`** — pure `copyFile` (no symlinks) of every file under `artifacts/` into `<dest>`. Accepts both raw session ULID and version names (`v1`, or full `v2-combo-bonus`). Version lookup tolerates label-less queries: `crumb copy-artifacts v1 --to ./demo/` resolves to whatever dir matches `v1` regardless of label slug.
+- **Submission story**: `crumb run "..." --label "bagelcode-final"` → `crumb release <ulid> --as v1 --label "bagelcode"` → `crumb copy-artifacts v1 --to ./demo/` → `git add demo/`. Three commands, no symlinks, single-direction copy.
+- **Test**: 217/217 (no test additions — covered by mock e2e). Verified copying from both session ULID and version name resolves the same artifact set.
+
+### Added — Version graph: `crumb release` + `crumb versions` — v3.3 Phase 2b (2026-05-02)
+
+Sessions become *promotable* — `crumb release <session-ulid>` snapshots a WIP session into an immutable milestone under `~/.crumb/projects/<id>/versions/<vN>[-<label>]/` with a TOML manifest, sha256-keyed frozen artifacts, and a `kind=version.released` event appended to the source transcript so replay re-derives the milestone. Realizes the v0.dev (Project → Chat → Version) + Lovable (favorited milestone vs auto-history) hybrid that Phase 1 reserved space for.
+
+- **`src/session/version.ts`** (~150 LOC, 20/20 vitest specs) — VersionManifest schema v1: `{ name (e.g. v2), label?, released_at, source_session, source_event_id?, parent_version?, goal?, scorecard {D1-D6 + aggregate + verdict}, artifacts_sha256 }`. Helpers: `versionDirName(name,label)` (slugifies label → `v2-combo-bonus`), `nextSequentialVersion(dir)` (scans `^v(\d+)` to find next), `readAllManifests` / `readManifest` / `writeManifest` (TOML via @iarna/toml), `deriveScorecard(events)` (last `judge.score`), `deriveSourceEventId(events)` (`done` → last `judge.score` → last event), `snapshotArtifacts(sessionDir,versionDir)` (real `copyFile` per file with sha256, no links).
+- **`crumb release <session-ulid> [--as vN] [--label "<name>"] [--no-parent]`** — auto-numbers `v<N>` by default; `--as v3` overrides; `--label` slugifies into the dir name; `parent_version` is auto-detected as the latest existing manifest unless `--no-parent`. Refuses to overwrite an existing version dir. Appends `kind=version.released` (system, deterministic, tool=`crumb-release@v1`) with `data: { version, label, parent_version, source_event_id, manifest_relpath }` — `manifest_relpath` is project-relative (`versions/<dir>/manifest.toml`) so transcripts replay portably across machines.
+- **`crumb versions`** — lists all manifests sorted by `released_at` ascending with `← parent` chain notation, label tag, verdict, aggregate. `[latest]` footer surfaces the head.
+- **Test**: 217/217 (was 197; +20 version specs). Mock e2e: `init --pin` → `run` → `release v1 --label first-pass` → `release v2 --label second-pass` → `versions` shows v1 + v2 (parent ← v1) + transcript carries 2 `kind=version.released` events.
+- **Frontier basis**: v0.dev's structural rigor (Project → Chat → Version DAG with Fork API), Lovable's favorited-stable-version UX (descriptive labels), Replit's checkpoint metadata richness (scorecard + source pointer). Sequential `v<N>` chosen over pure-descriptive (Replit/Lovable) for `ls versions/` sortability and over opaque ID (v0/Cursor/Cline) for human "the v3 feels too easy" mental model — research recommendation realized.
+
+### Added — Session lifecycle (meta.json) + project pin (`crumb init --pin`) — v3.3 Phase 2a (2026-05-02)
+
+Session lifecycle becomes O(1) inspectable without scanning the transcript head, and projects can survive cwd renames. Builds on Phase 1's `~/.crumb/projects/<id>/` storage hierarchy.
+
+- **`src/session/meta.ts`** (90 LOC, 8/8 vitest specs) — `meta.json` writer/reader. Schema v1: `{ session_id, status: running|paused|done|error|killed, started_at, ended_at?, goal?, preset?, parent_session_id?, fork_event_id?, label? }`. **meta.json is a cache** — losing it doesn't break replay (state derives from transcript). It exists for fast lifecycle lookup by `crumb ls` and forthcoming `crumb resume` / `crumb fork`.
+- **`crumb run` writes meta.json** at session start (status=running), updates on completion (status=done | paused based on `state.done`, fills `ended_at`), updates on exception (status=error). Idempotent on re-run with same `--session <id>` — flips existing meta back to running rather than overwriting.
+- **`crumb init --pin [--label "<name>"]`** — pins the cwd to a fresh ULID written to `<cwd>/.crumb/project.toml`. Subsequent `crumb run` from this cwd (or any cwd that contains the same pin file) resolves to the same `~/.crumb/projects/<ULID>/` regardless of directory rename. Without `--pin`, `crumb init` keeps its existing multi-host entry verifier behavior. Idempotent — re-running on a pinned cwd reports the existing project_id and exits.
+- **`crumb ls` enriched**: shows `[status]` tag (running/paused/done/error/killed) and a truncated goal alongside event count + size. Works for both new sessions (with meta.json) and legacy sessions (falls back to `[legacy]` tag without status).
+- **`crumb run --label "<name>"`** new flag — passes through to `meta.json.label` for human-readable session labeling.
+- **Test**: 197/197 (was 189; +8 meta specs). Mock e2e verified — `crumb init --pin` writes a TOML pin file, `crumb run` from that cwd resolves to the pinned ULID's project dir, meta.json lifecycle full (started_at + ended_at + status=done), `crumb ls` shows status tag.
+
 ### Added — Session storage hierarchy v3.3: `~/.crumb/projects/<id>/{sessions,versions}/` (2026-05-02)
 
 Sessions move out of `<cwd>/sessions/` into a per-user, per-project global store. Project-first hierarchy modeled on **v0.dev (Project → Chat → Version)** + **Cline (`tasks/` vs `checkpoints/` filesystem split)**, with project-id derived from `sha256(canonical(cwd))[:16]` (Cursor's `workspaceStorage` pattern, avoiding Claude Code's lossy dash-encoding). Schema additions are additive — existing transcripts replay unchanged; legacy `<cwd>/sessions/` still resolves via fallback until `crumb migrate` (Phase 3).

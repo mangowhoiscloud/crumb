@@ -28,8 +28,21 @@ import {
   ensureProjectDir,
   ensureSessionRoot,
   getSessionsDir,
+  getVersionsDir,
   resolveSessionDir as resolveStoredSession,
 } from './paths.js';
+import { newMeta, readMeta, updateMeta, writeMeta } from './session/meta.js';
+import {
+  deriveScorecard,
+  deriveSourceEventId,
+  nextSequentialVersion,
+  readAllManifests,
+  readManifest,
+  snapshotArtifacts,
+  versionDirName,
+  writeManifest,
+  type VersionManifest,
+} from './session/version.js';
 import type { DraftMessage } from './protocol/types.js';
 
 interface ParsedArgs {
@@ -73,6 +86,7 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
   const sessionDir = await ensureSessionRoot(cwd, sessionId);
   const adapterOverride = args.flags.get('adapter');
   const presetName = args.flags.get('preset');
+  const label = args.flags.get('label');
   const idleTimeoutMs = Number(args.flags.get('idle-timeout') ?? 60_000);
 
   // eslint-disable-next-line no-console
@@ -84,20 +98,44 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
   // eslint-disable-next-line no-console
   console.log(`[crumb] adapter=${adapterOverride ?? '(preset or ambient)'} repo=${repoRoot}`);
 
-  const { state } = await runSession({
-    goal,
-    sessionDir,
-    sessionId,
-    repoRoot,
-    adapterOverride,
-    presetName,
-    idleTimeoutMs,
-  });
+  // v3.3: write meta.json on start. If --session refers to an existing meta we
+  // patch its status; otherwise create a fresh one. This makes resume + ls O(1).
+  const existingMeta = await readMeta(sessionDir);
+  if (existingMeta) {
+    await updateMeta(sessionDir, { status: 'running' });
+  } else {
+    await writeMeta(sessionDir, newMeta({ sessionId, goal, preset: presetName, label }));
+  }
 
-  // eslint-disable-next-line no-console
-  console.log(`[crumb] done. score_history=${state.progress_ledger.score_history.length} entries`);
-  // eslint-disable-next-line no-console
-  console.log(`[crumb] transcript: ${resolve(sessionDir, 'transcript.jsonl')}`);
+  try {
+    const { state } = await runSession({
+      goal,
+      sessionDir,
+      sessionId,
+      repoRoot,
+      adapterOverride,
+      presetName,
+      idleTimeoutMs,
+    });
+
+    await updateMeta(sessionDir, {
+      status: state.done ? 'done' : 'paused',
+      ended_at: new Date().toISOString(),
+    });
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `[crumb] done. score_history=${state.progress_ledger.score_history.length} entries`,
+    );
+    // eslint-disable-next-line no-console
+    console.log(`[crumb] transcript: ${resolve(sessionDir, 'transcript.jsonl')}`);
+  } catch (err) {
+    await updateMeta(sessionDir, {
+      status: 'error',
+      ended_at: new Date().toISOString(),
+    });
+    throw err;
+  }
 }
 
 async function cmdEvent(): Promise<void> {
@@ -322,20 +360,32 @@ async function cmdExport(args: ParsedArgs): Promise<void> {
 }
 
 /**
- * `crumb init` — multi-host entry verifier (Spec-kit `specify init` pattern).
+ * `crumb init` — multi-host entry verifier + project pin.
  *
- * Subcommands:
+ * Default mode: Spec-kit `specify init` pattern — verify universal identity
+ * (CRUMB.md / AGENTS.md) + each host entry (.claude/skills/crumb,
+ * .codex/agents/crumb.toml, .gemini/extensions/crumb).
+ *
  *   crumb init                       same as --check (verify all)
  *   crumb init --check               verify universal identity + every host entry
  *   crumb init --host <name>         scope to one of: claude | codex | gemini
  *   crumb init --format json         JSON output (default: human-readable)
  *
- * Distinct from `crumb doctor`: `init` only checks repo files
- * (CRUMB.md / AGENTS.md / host entries); `doctor` checks runtime readiness
- * (CLI binaries on PATH, OAuth, adapter health).
+ * Project pin mode (v3.3): pin the cwd to a stable ULID so renames/moves
+ * preserve project identity. Writes <cwd>/.crumb/project.toml with a fresh
+ * ULID; subsequent `crumb run` resolves via the pin instead of sha256(cwd).
+ *
+ *   crumb init --pin [--label "<name>"]   write <cwd>/.crumb/project.toml
+ *
+ * Distinct from `crumb doctor`: `init` only checks repo files; `doctor`
+ * checks runtime readiness (CLI binaries on PATH, OAuth, adapter health).
  */
 async function cmdInit(args: ParsedArgs): Promise<void> {
   const cwd = args.flags.get('root') ?? process.cwd();
+  if (args.flags.has('pin')) {
+    await writeProjectPin(cwd, args.flags.get('label'));
+    return;
+  }
   const hostRaw = args.flags.get('host');
   const formatRaw = args.flags.get('format') ?? 'human';
   if (formatRaw !== 'human' && formatRaw !== 'json') {
@@ -356,6 +406,46 @@ async function cmdInit(args: ParsedArgs): Promise<void> {
   if (!result.ok) {
     process.exitCode = 1;
   }
+}
+
+async function writeProjectPin(cwd: string, label?: string): Promise<void> {
+  const { mkdir, writeFile } = await import('node:fs/promises');
+  const { existsSync } = await import('node:fs');
+  const { PROJECT_PIN_DIR, PROJECT_PIN_FILE, resolveProjectId } = await import('./paths.js');
+  const pinDir = resolve(cwd, PROJECT_PIN_DIR);
+  const pinPath = resolve(pinDir, PROJECT_PIN_FILE);
+  if (existsSync(pinPath)) {
+    const existing = await resolveProjectId(cwd);
+    // eslint-disable-next-line no-console
+    console.log(`[crumb init] project already pinned: ${existing}`);
+    // eslint-disable-next-line no-console
+    console.log(`[crumb init] pin file: ${pinPath}`);
+    return;
+  }
+  await mkdir(pinDir, { recursive: true });
+  const id = ulid();
+  const lines = [
+    '# Crumb project pin (v3.3+).',
+    '# This file pins the project id for ~/.crumb/projects/<id>/ so that renaming',
+    '# or moving the cwd preserves project identity. Without this file the project',
+    '# id is derived from sha256(canonical(cwd))[:16] (ambient mode).',
+    '',
+    `id = "${id}"`,
+    `cwd = "${cwd}"`,
+    `created_at = "${new Date().toISOString()}"`,
+  ];
+  if (label) lines.push(`label = "${label}"`);
+  await writeFile(pinPath, lines.join('\n') + '\n', 'utf8');
+  // eslint-disable-next-line no-console
+  console.log(`[crumb init] pinned ${cwd}`);
+  // eslint-disable-next-line no-console
+  console.log(`[crumb init]   project_id = ${id}`);
+  if (label) {
+    // eslint-disable-next-line no-console
+    console.log(`[crumb init]   label      = ${label}`);
+  }
+  // eslint-disable-next-line no-console
+  console.log(`[crumb init]   pin file   = ${pinPath}`);
 }
 
 /**
@@ -388,7 +478,7 @@ async function cmdLs(args: ParsedArgs): Promise<void> {
   // v3.3: list sessions in this project (~/.crumb/projects/<id>/sessions/).
   // Legacy <cwd>/sessions/ is also surfaced with a marker until `crumb migrate`.
   const dir = await getSessionsDir(cwd);
-  const entries: { id: string; events: number; size: number; legacy: boolean }[] = [];
+  const entries: SessionListing[] = [];
   await collectListing(dir, false, entries);
   const legacyDir = resolve(cwd, 'sessions');
   if (existsSync(legacyDir)) {
@@ -399,18 +489,25 @@ async function cmdLs(args: ParsedArgs): Promise<void> {
     console.log(`(no sessions yet at ${dir})`);
     return;
   }
-  for (const { id, events, size, legacy } of entries) {
+  for (const { id, events, size, legacy, status, goal } of entries) {
     const tag = legacy ? '  [legacy]' : '';
+    const statusTag = status ? `  [${status}]` : '';
+    const goalTag = goal ? `  ${truncate(goal, 60)}` : '';
     // eslint-disable-next-line no-console
-    console.log(`${id}  ${events} events  ${size}B${tag}`);
+    console.log(`${id}  ${events} events  ${size}B${statusTag}${tag}${goalTag}`);
   }
 }
 
-async function collectListing(
-  dir: string,
-  legacy: boolean,
-  out: { id: string; events: number; size: number; legacy: boolean }[],
-): Promise<void> {
+interface SessionListing {
+  id: string;
+  events: number;
+  size: number;
+  legacy: boolean;
+  status?: string;
+  goal?: string;
+}
+
+async function collectListing(dir: string, legacy: boolean, out: SessionListing[]): Promise<void> {
   let names: string[] = [];
   try {
     names = await readdir(dir);
@@ -418,15 +515,205 @@ async function collectListing(
     return;
   }
   for (const e of names) {
-    const t = resolve(dir, e, 'transcript.jsonl');
+    const sessionPath = resolve(dir, e);
+    const t = resolve(sessionPath, 'transcript.jsonl');
+    let entry: SessionListing = { id: e, events: 0, size: 0, legacy };
     try {
       const s = await stat(t);
       const buf = await readFile(t, 'utf8');
       const lines = buf.split('\n').filter((l) => l.trim().length > 0);
-      out.push({ id: e, events: lines.length, size: s.size, legacy });
+      entry = { ...entry, events: lines.length, size: s.size };
     } catch {
-      out.push({ id: e, events: 0, size: 0, legacy });
+      // transcript missing — keep zeros
     }
+    const meta = await readMeta(sessionPath);
+    if (meta) {
+      entry.status = meta.status;
+      entry.goal = meta.goal;
+    }
+    out.push(entry);
+  }
+}
+
+function truncate(s: string, n: number): string {
+  return s.length <= n ? s : s.slice(0, n - 1) + '…';
+}
+
+/**
+ * `crumb copy-artifacts <session-ulid|vN> --to <dest>`
+ *
+ * Copy frozen artifacts (game.html / spec.md / DESIGN.md / tuning.json / ...) out of
+ * `~/.crumb/projects/<id>/` and into a user-chosen destination. Pure copy, no links —
+ * the destination is independent of `~/.crumb/`. The Bagelcode submission story is
+ * `crumb copy-artifacts <demo-ulid> --to ./demo/` followed by `git add demo/`.
+ *
+ * Resolution: positional matches `^v\d+` → version dir; otherwise → session dir
+ * (resolveStoredSession with new-global → legacy fallback).
+ */
+async function cmdCopyArtifacts(args: ParsedArgs): Promise<void> {
+  const target = args.positional[0];
+  if (!target) throw new Error('copy-artifacts <session-id|vN> required');
+  const dest = args.flags.get('to');
+  if (!dest) throw new Error('--to <dest> required');
+  const cwd = args.flags.get('root') ?? process.cwd();
+
+  const isVersion = /^v\d+/.test(target);
+  let srcDir: string;
+  let summary: string;
+  if (isVersion) {
+    const versionsDir = await getVersionsDir(cwd);
+    // Accept exact match (v2-combo-bonus) or bare name (v2 with any label).
+    const all = await readAllManifests(versionsDir);
+    const m =
+      all.find((x) => versionDirName(x.name, x.label) === target) ??
+      all.find((x) => x.name === target);
+    if (!m) throw new Error(`version not found: ${target}`);
+    srcDir = resolve(versionsDir, versionDirName(m.name, m.label), 'artifacts');
+    summary = `${m.name}${m.label ? `-${m.label}` : ''}`;
+  } else {
+    const sessionDir = await resolveStoredSession(target, cwd);
+    srcDir = resolve(sessionDir, 'artifacts');
+    summary = target;
+  }
+  if (!existsSync(srcDir)) {
+    throw new Error(`no artifacts at ${srcDir}`);
+  }
+
+  const { copyFile, mkdir } = await import('node:fs/promises');
+  const destAbs = resolve(cwd, dest);
+  await mkdir(destAbs, { recursive: true });
+  const files = await readdir(srcDir);
+  let count = 0;
+  for (const f of files) {
+    await copyFile(resolve(srcDir, f), resolve(destAbs, f));
+    count++;
+  }
+  // eslint-disable-next-line no-console
+  console.log(`[crumb copy-artifacts] ${summary} → ${destAbs}  (${count} file(s))`);
+}
+
+/**
+ * `crumb release <session-ulid> [--as <vN>] [--label "<name>"] [--no-parent]`
+ *
+ * Promote a WIP session into an immutable milestone under
+ * `~/.crumb/projects/<id>/versions/<vN>[-<label>]/`. Snapshots artifacts (real
+ * copy, no link), extracts scorecard from the last judge.score event, and
+ * appends `kind=version.released` to the source session's transcript so replay
+ * re-derives the version event.
+ */
+async function cmdRelease(args: ParsedArgs): Promise<void> {
+  const target = args.positional[0];
+  if (!target) throw new Error('release requires a session id or session-dir');
+  const cwd = args.flags.get('root') ?? process.cwd();
+  const sessionDir = await resolveStoredSession(target, cwd);
+  const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
+  const events = await readAll(transcriptPath);
+  if (events.length === 0) {
+    throw new Error(`empty transcript at ${transcriptPath}`);
+  }
+  const sessionId = events[0].session_id;
+
+  const versionsDir = await getVersionsDir(cwd);
+  const explicitName = args.flags.get('as');
+  const label = args.flags.get('label');
+  const name = explicitName ?? (await nextSequentialVersion(versionsDir));
+  if (!/^v\d+$/.test(name) && explicitName !== undefined) {
+    throw new Error(`--as must match /^v\\d+$/ (got "${name}")`);
+  }
+
+  const dirName = versionDirName(name, label);
+  const versionDir = resolve(versionsDir, dirName);
+  if (existsSync(versionDir)) {
+    throw new Error(`version already exists: ${versionDir}`);
+  }
+
+  // parent_version = latest existing version by released_at, unless --no-parent.
+  let parentVersion: string | undefined;
+  if (!args.flags.has('no-parent')) {
+    const existing = await readAllManifests(versionsDir);
+    parentVersion = existing.at(-1)?.name;
+  }
+
+  const meta = await readMeta(sessionDir);
+  const scorecard = deriveScorecard(events);
+  const sourceEventId = deriveSourceEventId(events);
+
+  const artifactsSha = await snapshotArtifacts(sessionDir, versionDir);
+
+  const manifest: VersionManifest = {
+    schema_version: 1,
+    name,
+    released_at: new Date().toISOString(),
+    source_session: sessionId,
+  };
+  if (label) manifest.label = label;
+  if (sourceEventId) manifest.source_event_id = sourceEventId;
+  if (parentVersion) manifest.parent_version = parentVersion;
+  if (meta?.goal) manifest.goal = meta.goal;
+  if (scorecard) manifest.scorecard = scorecard;
+  if (Object.keys(artifactsSha).length > 0) manifest.artifacts_sha256 = artifactsSha;
+  await writeManifest(versionDir, manifest);
+
+  // Append kind=version.released to source session transcript so replay re-derives it.
+  // manifest_relpath is project-relative (`versions/<dir>/manifest.toml`) so replay is
+  // portable across machines — never store absolute paths in the transcript.
+  const writer = new TranscriptWriter({ path: transcriptPath, sessionId });
+  await writer.append({
+    session_id: sessionId,
+    from: 'system',
+    kind: 'version.released',
+    body: `Released as ${name}${label ? ` (label: ${label})` : ''}`,
+    data: {
+      version: name,
+      label: label ?? null,
+      parent_version: parentVersion ?? null,
+      source_event_id: sourceEventId ?? null,
+      manifest_relpath: `versions/${dirName}/manifest.toml`,
+    },
+    metadata: { deterministic: true, tool: 'crumb-release@v1' },
+  });
+
+  // eslint-disable-next-line no-console
+  console.log(`[crumb release] ${name}${label ? ` (${label})` : ''} → ${versionDir}`);
+  if (parentVersion) {
+    // eslint-disable-next-line no-console
+    console.log(`[crumb release]   parent_version = ${parentVersion}`);
+  }
+  if (scorecard) {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[crumb release]   scorecard      = aggregate=${scorecard.aggregate ?? '?'} verdict=${scorecard.verdict ?? '?'}`,
+    );
+  }
+  // eslint-disable-next-line no-console
+  console.log(`[crumb release]   artifacts      = ${Object.keys(artifactsSha).length} file(s)`);
+}
+
+/** `crumb versions` — list all versions in the current project, oldest first. */
+async function cmdVersions(args: ParsedArgs): Promise<void> {
+  const cwd = args.flags.get('root') ?? process.cwd();
+  const versionsDir = await getVersionsDir(cwd);
+  const all = await readAllManifests(versionsDir);
+  if (all.length === 0) {
+    // eslint-disable-next-line no-console
+    console.log(`(no versions yet at ${versionsDir})`);
+    return;
+  }
+  for (const m of all) {
+    const labelTag = m.label ? `  (${m.label})` : '';
+    const parentTag = m.parent_version ? `  ← ${m.parent_version}` : '';
+    const verdict = m.scorecard?.verdict ?? '?';
+    const agg = m.scorecard?.aggregate ?? '?';
+    // eslint-disable-next-line no-console
+    console.log(
+      `${m.name}${labelTag}${parentTag}  ${m.released_at}  verdict=${verdict} aggregate=${agg}`,
+    );
+  }
+  // Re-read latest manifest's parent_version chain for visibility.
+  const latest = all.at(-1)!;
+  if (await readManifest(resolve(versionsDir, versionDirName(latest.name, latest.label)))) {
+    // eslint-disable-next-line no-console
+    console.log(`\n[latest] ${latest.name}${latest.label ? ` (${latest.label})` : ''}`);
   }
 }
 
@@ -459,7 +746,17 @@ Usage:
                                           # verify CRUMB.md/AGENTS.md + host entries
                                           # (.claude/skills/crumb, .codex/agents, .gemini/extensions/crumb)
                                           # distinct from doctor — init is repo files; doctor is runtime
-  crumb ls                                 # list sessions/
+  crumb init --pin [--label "<name>"]      # pin cwd to a stable ULID (writes <cwd>/.crumb/project.toml)
+                                          # so renames/moves preserve project identity
+  crumb ls                                 # list current project's sessions
+                                          # (~/.crumb/projects/<id>/sessions/, plus legacy <cwd>/sessions/ marked [legacy])
+  crumb release <session-id> [--as vN] [--label "<name>"] [--no-parent]
+                                          # snapshot session artifacts into versions/<vN>[-<label>]/
+                                          # (frozen copy + manifest.toml + kind=version.released event)
+  crumb versions                           # list released milestones with parent chain
+  crumb copy-artifacts <session-id|vN> --to <dest>
+                                          # copy frozen artifacts (game.html, spec.md, ...) into <dest>
+                                          # Bagelcode submission: crumb copy-artifacts <demo-ulid> --to ./demo/
 
 Flags (run):
   --preset <name>     load .crumb/presets/<name>.toml. e.g. bagelcode-cross-3way / mock /
@@ -524,6 +821,15 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       break;
     case 'ls':
       await cmdLs(args);
+      break;
+    case 'release':
+      await cmdRelease(args);
+      break;
+    case 'versions':
+      await cmdVersions(args);
+      break;
+    case 'copy-artifacts':
+      await cmdCopyArtifacts(args);
       break;
     case 'help':
     case '--help':
