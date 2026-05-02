@@ -14,6 +14,7 @@ import type { TranscriptWriter } from '../transcript/writer.js';
 import type { AdapterRegistry } from '../adapters/types.js';
 import { runQaCheckEffect } from './qa-runner.js';
 import type { Harness, PresetSpec } from './preset-loader.js';
+import { probeAdapter } from '../helpers/adapter-health.js';
 
 /**
  * v0.2.0 budget guardrail (autoresearch P3): an individual spawn cannot run
@@ -117,6 +118,33 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
           metadata: { deterministic: true, tool: 'provider-activation-gate@v1' },
         });
         adapterId = 'claude-local';
+      }
+
+      // Pre-spawn adapter health probe (cached per adapter, ≤2s, no I/O on
+      // happy path). Spawning a 60KB sandwich at a missing/unauthenticated
+      // adapter wastes 5-15s before exit 1 and burns the circuit-breaker.
+      // When unhealthy: emit kind=note with the probe reason and substitute
+      // claude-local (the universal default fallback). Skipped when the
+      // configured adapter is already claude-local — a missing claude binary
+      // means the user has nothing to fall back to anyway.
+      if (adapterId !== 'claude-local' && adapterId !== 'mock') {
+        const health = await probeAdapter(adapterId);
+        if (!health.healthy) {
+          await deps.writer.append({
+            session_id: deps.sessionId,
+            from: 'system',
+            kind: 'note',
+            body: `adapter ${adapterId} unhealthy (${health.reason}) — substituting claude-local for actor ${effect.actor}`,
+            data: {
+              actor: effect.actor,
+              configured_adapter: adapterId,
+              substituting_adapter: 'claude-local',
+              reason: health.reason,
+            },
+            metadata: { deterministic: true, tool: 'adapter-health-probe@v1' },
+          });
+          adapterId = 'claude-local';
+        }
       }
       const baseSandwichPath = effect.sandwich_path
         ? resolve(deps.repoRoot, effect.sandwich_path)

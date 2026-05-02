@@ -99,7 +99,14 @@ export function computeMetrics(transcript: DashboardMessage[]): SessionMetrics {
     if (m.kind === 'done' || m.kind === 'session.end') done = true;
   }
 
-  const cache_ratio = tokens_in > 0 ? cache_read / tokens_in : 0;
+  // Anthropic API conventions:
+  //   `usage.input_tokens`               = cache-miss prefix
+  //   `usage.cache_read_input_tokens`    = cache hit
+  //   `usage.cache_creation_input_tokens`= cache write
+  // Hit rate = read / (read + write + miss). The earlier divide-by-`tokens_in`
+  // returned 1000%+ when the cached prefix dwarfed the miss tokens.
+  const cache_total_input = cache_read + cache_write + tokens_in;
+  const cache_ratio = cache_total_input > 0 ? cache_read / cache_total_input : 0;
   let wall_ms = 0;
   if (transcript.length >= 2) {
     const first = Date.parse(transcript[0]!.ts);
