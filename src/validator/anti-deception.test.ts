@@ -69,12 +69,16 @@ describe('anti-deception validator', () => {
     expect(result.scores.D4?.score).toBe(2);
   });
 
-  it('Rule 4: same-provider verifier discounts D1 + D5 by 0.15 + records both violation tags', () => {
+  it('Rule 4: same-provider verifier discounts D1 + D3 + D5 by 0.15 + records both violation tags', () => {
     // [[bagelcode-same-provider-discount-2026-05-03]] — Stureborg EMNLP 2024
     // §4.2 measured +14-22% PASS inflation when verifier shares provider with
     // builder. We replace v3.3's binary verdict downgrade with a numerical
-    // discount on D1 (spec_fit) + D5 (quality) — the LLM-judged dims where
-    // the bias concentrates per Rubric-Anchored Judging (NeurIPS 2025).
+    // discount on D1 (spec_fit), D3 (schema/observability LLM half), and D5
+    // (quality) — the LLM-judged dims where the bias concentrates per
+    // Rubric-Anchored Judging (NeurIPS 2025). For D3/D5 the discount is on
+    // scores.D{3,5}.score (the verifier's raw LLM-emitted value); the
+    // reducer-auto half is left untouched and combineDimScore averages
+    // them in code, so this is mathematically the LLM-half-only discount.
     const result = checkAntiDeception({
       judgeScore: judgeScore({ metadata: { provider: 'openai' } }),
       qaResult: { exec_exit_code: 0 },
@@ -83,8 +87,10 @@ describe('anti-deception validator', () => {
     });
     expect(result.violations).toContain('self_bias_risk_same_provider');
     expect(result.violations).toContain('self_bias_score_discounted');
-    // Default judgeScore: D1=5, D5=4 → after 0.15 discount: D1=4.25, D5=3.4.
+    // Default judgeScore: D1=5, D3=4, D5=4 → after 0.15 discount: D1=4.25,
+    // D3=3.4, D5=3.4.
     expect(result.scores.D1?.score).toBeCloseTo(4.25, 5);
+    expect(result.scores.D3?.score).toBeCloseTo(3.4, 5);
     expect(result.scores.D5?.score).toBeCloseTo(3.4, 5);
     // D2/D6 (qa-check) and D4 (reducer-auto) are immune.
     expect(result.scores.D2?.score).toBe(5);
@@ -122,10 +128,11 @@ describe('anti-deception validator', () => {
   });
 
   it('Rule 4: same-provider PASS that survives the threshold floor stays PASS', () => {
-    // Raw 28/30 PASS · same-provider with D1=5 D5=4 → discount drops D1 to
-    // 4.25 + D5 to 3.4. Aggregate via combineAggregate = 4.25 + 5 + (4+4)/2 +
-    // 5 + (3.4+4)/2 + 5 = 26.95. Above 24 threshold → PASS holds. The
-    // discount made the score honest but didn't artificially demote.
+    // Raw 28/30 PASS · same-provider with D1=5 D3=4 D5=4 → discount drops
+    // D1 to 4.25, D3 to 3.4, D5 to 3.4. Aggregate via combineAggregate =
+    // 4.25 + 5 + (3.4+4)/2 + 5 + (3.4+4)/2 + 5 = 26.65. Above 24 threshold
+    // → PASS holds. The discount made the score honest but didn't
+    // artificially demote.
     const result = checkAntiDeception({
       judgeScore: judgeScore({ metadata: { provider: 'openai' } }),
       qaResult: { exec_exit_code: 0 },
@@ -171,6 +178,7 @@ describe('anti-deception validator', () => {
     });
     expect(result.violations).toContain('self_bias_risk_same_provider');
     expect(result.scores.D1?.score).toBeCloseTo(0.85, 5);
+    expect(result.scores.D3?.score).toBeCloseTo(0.85, 5);
     expect(result.scores.D5?.score).toBeCloseTo(0.85, 5);
     expect(result.scores.verdict).toBe('FAIL');
   });

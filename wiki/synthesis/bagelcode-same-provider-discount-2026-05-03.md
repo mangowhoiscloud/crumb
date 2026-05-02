@@ -21,8 +21,8 @@ related:
 ## 0. TL;DR
 
 - **이전**: `Rule 4 self_bias_risk_same_provider` 은 violation tag 추가 + verdict 가 PASS 면 PARTIAL 로 강등 (binary).
-- **이후**: D1 (spec_fit) · D5 (quality) 를 `score × (1 − 0.15)` 로 깎음. aggregate 재계산. verdict 은 standard threshold 로 자연스럽게 결정. 추가 violation tag `self_bias_score_discounted` 기록.
-- **Scope**: D2 (qa-check exec) · D6 (qa-check portability) · D4 (reducer-auto budget) 는 면역. D3 는 LLM+auto split 이라 LLM 절반만 깎는 건 P2 (`combineDimScore` 의 LLM 입력에 discount 적용 필요 — 이번 cycle 에선 보수적으로 skip).
+- **이후**: D1 (spec_fit) · D3 (schema/observability LLM 절반) · D5 (quality) 를 `score × (1 − 0.15)` 로 깎음. aggregate 재계산. verdict 은 standard threshold 로 자연스럽게 결정. 추가 violation tag `self_bias_score_discounted` 기록.
+- **Scope**: D2 (qa-check exec) · D6 (qa-check portability) · D4 (reducer-auto budget) 는 면역. D3/D5 는 LLM+auto split 이지만 verifier 가 emit 하는 건 raw LLM-judged `scores.D{3,5}.score` 이고, `combineDimScore` 가 그 값과 `autoScores.D{3,5}_auto` 를 평균. 따라서 combine 전에 `scores.D{3,5}.score` 만 깎는 건 LLM 절반만 깎는 것과 수학적으로 동일 — auto 절반은 그대로 보존.
 - **factor 0.15**: Stureborg EMNLP 2024 의 +14~22% inflation 범위의 보수적 midpoint. 정밀화는 frontier 데이터 축적 후 P1.
 
 ---
@@ -115,6 +115,13 @@ if (sameProvider) {
       scores.D1.source,
     );
   }
+  if (scores.D3) {
+    scores.D3 = forceScore(
+      scores.D3,
+      scores.D3.score * (1 - SAME_PROVIDER_DISCOUNT),
+      scores.D3.source,
+    );
+  }
   if (scores.D5) {
     scores.D5 = forceScore(
       scores.D5,
@@ -135,9 +142,9 @@ if (sameProvider) {
 |---|---|---|---|
 | D1 spec_fit | verifier-llm | ✅ 0.15 | 100% LLM 판단, qualitative |
 | D2 exec | qa-check-effect | ❌ 면역 | deterministic ground truth |
-| D3 schema | LLM + auto split | ⏸ P2 | LLM 절반만 깎으려면 `combineDimScore` 의 raw input 분해 필요 |
+| D3 schema | LLM + auto split | ✅ 0.15 | verifier 가 emit 하는 raw LLM-judged `scores.D3.score` 를 깎고, `combineDimScore` 가 그 값과 `autoScores.D3_auto` 를 평균 — combine 전에 깎는 건 LLM 절반만 깎는 것과 수학적으로 동일 |
 | D4 budget | reducer-auto | ❌ 면역 | deterministic, no LLM |
-| D5 quality | verifier-llm | ✅ 0.15 | 100% LLM 판단, qualitative |
+| D5 quality | verifier-llm | ✅ 0.15 | 100% LLM 판단, qualitative (D3 와 동일 mechanism — D5 도 LLM+auto split) |
 | D6 portability | qa-check-effect | ❌ 면역 | deterministic ground truth |
 
 ### 3.3 효과 케이스
@@ -150,6 +157,8 @@ if (sameProvider) {
 | 27/30 PASS · **cross-provider** | 27 (변화 없음) | PASS | 27 |
 
 같은 raw 점수 (27) 가 same-provider 에선 25.65 cap, cross-provider 에선 27 — **Stureborg evidence 가 그대로 매핑**.
+
+> 위 표는 D1/D5 만 보여 단순화. 실제로는 D3 도 같은 0.15 discount 가 적용되지만, `combineDimScore` 가 `scores.D3.score` (LLM-emitted 절반) 와 `autoScores.D3_auto` (reducer 절반) 를 평균하므로 최종 D3 기여도는 LLM 절반의 7.5% 만 빠짐 (auto 절반은 immune). D5 도 동일 mechanism — verifier 가 emit 한 raw `scores.D5.score` 만 깎이고 `D5_auto` 와 평균.
 
 ---
 
@@ -173,12 +182,6 @@ anthropic/anthropic 과 google/google 의 inflation 이 다를 수 있음 (Sture
 - 이후 mental model: "discount 감안해서 raw 27+ 노려야 PASS".
 
 **처리**: 품질 압력 증가. 의도된 방향.
-
-### 4.4 D3 LLM 절반 미보정
-
-D3 (schema) 는 `combineDimScore` 가 LLM-emitted + reducer-auto 평균. LLM 절반만 깎으려면 reducer 가 raw LLM input 을 따로 보유해야 함.
-
-**처리**: P2 deferred. D3 의 LLM 부분은 schema 형식 적합도 평가 — same-provider bias 가 D1/D5 보다 약하다고 추정 (rubric 형식이 self-bias 에 덜 민감). 보수적 skip 정당.
 
 ---
 
