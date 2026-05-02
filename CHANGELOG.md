@@ -4,6 +4,30 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Fixed — Pipeline resilience bundle: builder-fallback + verifier circuit breaker dead-end termination + handoff observability (2026-05-03)
+
+Three reducer-level fixes from the post-immediate-wake pipeline audit. None individually large, but together they close the remaining "session burns wall-clock with no progress" failure modes.
+
+**P1 #6 — `done(all_builders_open)` when both builder + builder-fallback OPEN** (`src/reducer/index.ts` judge.score FAIL branch)
+
+Previously, when a `judge.score FAIL` arrived with `circuit_breaker.builder.state === 'OPEN'`, the reducer unconditionally spawned `builder-fallback`. If builder-fallback was ALSO OPEN (3+ consecutive failures itself), the spawn would just produce another error → another `judge.score FAIL` → another fallback attempt, until wall-clock cap. Now we check both breakers and emit `done(all_builders_open)` cleanly when both are dead.
+
+**P1 #7 — `done(verifier_unavailable)` when verifier circuit OPEN** (`src/reducer/index.ts` qa.result branch)
+
+Similar dead-end: a `qa.result` with `circuit_breaker.verifier.state === 'OPEN'` would spawn the verifier anyway, fail, and loop until wall-clock. Now we early-terminate with `done(verifier_unavailable)`.
+
+**P1 #8 — handoff.requested unrouted observability** (`src/reducer/index.ts` handoff.requested branch)
+
+The default branch silently dropped any `handoff.requested` whose `(from, to)` pair didn't match the planner→researcher exception. Future routes added without reducer wiring would create silent stalls — no error, no progress, just dead air. Now an unrouted handoff appends a `kind=note body="handoff.requested to=X from=Y — no reducer routing for this pair"` so studio/debug surfaces the missing wiring as a visible warning. Routing is unchanged (still no spawn), only observability.
+
+**P1 #9 — `lastEventAt` reset documentation** (`src/loop/coordinator.ts`)
+
+Audit flagged a possible idle-timer drift on resume; deeper inspection confirmed the existing `let lastEventAt = Date.now()` IS already after replay, so the bug was a false positive. Comment-only update documenting the invariant for future readers.
+
+**Verification**: 3 new reducer specs pinning the dead-end terminations + the handoff note. `v0.4 P1 #6: judge.score FAIL with builder + builder-fallback both OPEN → done(all_builders_open)`, `v0.4 P1 #7: qa.result with verifier OPEN → done(verifier_unavailable)`, plus the existing `handoff.requested(to=other)` test updated to expect a kind=note effect instead of zero effects. 434/434 sweep green; lint+typecheck+format+build clean.
+
+**Deferred to follow-up**: P1 #4 (codex/gemini usage stdout parsing — needs per-CLI format research) and P1 #5 (inbox watcher race + lastSize ordering — needs fs.watch push-trigger refactor). Both bigger PRs.
+
 ### Fixed — qa-runner hard timeout (`CRUMB_QA_CHECK_TIMEOUT_MS`, default 120s) (2026-05-03)
 
 Pipeline audit follow-up to the immediate-wake fix. Session `01KQNAK1` saw 2 builds → 0 qa.results because `runQaCheck` could hang inside Playwright (chromium zombie / network stall / service-worker bootstrap), and the dispatcher's `await runQaCheckEffect` had no upper bound. The reduce/dispatch decoupling shipped in the previous patch removed the chain-level serialization, but a hung qa_check effect still meant the verifier was never spawned for that build.
