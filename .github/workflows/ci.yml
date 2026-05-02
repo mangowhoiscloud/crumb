@@ -95,7 +95,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify required sandwich files
         run: |
-          for f in agents/coordinator.md agents/planner-lead.md agents/engineering-lead.md agents/builder-fallback.md; do
+          # v3: engineering-lead.md split into builder.md + verifier.md.
+          # See wiki/concepts/bagelcode-system-architecture-v3.md §3 (5 actor sandwich).
+          for f in agents/coordinator.md agents/planner-lead.md agents/builder.md agents/verifier.md agents/builder-fallback.md; do
             test -f "$f" || (echo "Missing required sandwich: $f" && exit 1)
           done
-          echo "All 4 sandwich files present"
+          echo "All 5 sandwich files present (v3)"
