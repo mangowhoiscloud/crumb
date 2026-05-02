@@ -11,6 +11,10 @@
  *
  * The subprocess writes transcript events by invoking `crumb event` (sister CLI),
  * which appends validated lines to $CRUMB_TRANSCRIPT_PATH. The path is passed via env.
+ *
+ * Lifecycle helpers (env / abort / health / default-prompt) are shared with
+ * codex-local + gemini-local via `./_shared.ts` — see that file for the
+ * 414-duplicated-lines refactor rationale.
  */
 
 import { spawn } from 'node:child_process';
@@ -18,21 +22,18 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 
 import type { Adapter, SpawnRequest, SpawnResult } from './types.js';
+import {
+  attachAbortHandler,
+  buildAdapterEnv,
+  checkAdapterHealth,
+  resolvePrompt,
+} from './_shared.js';
 
 export class ClaudeLocalAdapter implements Adapter {
   readonly id = 'claude-local';
 
-  async health(): Promise<{ ok: boolean; reason?: string }> {
-    return new Promise((resolve) => {
-      const child = spawn('claude', ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] });
-      let out = '';
-      child.stdout.on('data', (b) => (out += b.toString()));
-      child.on('error', (err) => resolve({ ok: false, reason: err.message }));
-      child.on('close', (code) => {
-        if (code === 0) resolve({ ok: true });
-        else resolve({ ok: false, reason: `claude --version exited ${code}: ${out}` });
-      });
-    });
+  health(): Promise<{ ok: boolean; reason?: string }> {
+    return checkAdapterHealth('claude');
   }
 
   async spawn(req: SpawnRequest): Promise<SpawnResult> {
@@ -45,21 +46,13 @@ export class ClaudeLocalAdapter implements Adapter {
     // or as a prompt argument when using --print"). Most reducer spawn effects
     // (goal → planner-lead, spec → builder, qa.result → verifier, fallback)
     // omit `prompt` because the actor's job is fully described by the sandwich.
-    // Fall back to a generic kickoff so empty prompts don't crash the spawn.
-    // The phrase is action-oriented: "Continue your role" (the v3.3 first
-    // attempt) sometimes produced "awaiting input" stalls — Claude treated it
-    // as a status check. Naming the transcript file + telling the actor to
-    // execute the next step removes that ambiguity.
-    const promptText =
-      req.prompt && req.prompt.trim().length > 0
-        ? req.prompt
-        : 'Begin your turn now. Read $CRUMB_TRANSCRIPT_PATH for full context (latest goal, spec, qa.result, etc.) and execute the next step per the system prompt. Do not wait for additional input.';
+    // resolvePrompt() falls back to DEFAULT_SPAWN_PROMPT in _shared.ts.
     // stream-json output gives us usage telemetry (tokens_in/out, cache, cost)
     // in the final `result` event. We must also pass --verbose; the Claude CLI
     // refuses --output-format=stream-json --print without it.
     const args = [
       '-p',
-      promptText,
+      resolvePrompt(req),
       '--append-system-prompt',
       sandwich,
       '--add-dir',
@@ -70,19 +63,11 @@ export class ClaudeLocalAdapter implements Adapter {
       '--verbose',
     ];
 
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
-      CRUMB_TRANSCRIPT_PATH: req.transcriptPath,
-      CRUMB_SESSION_ID: req.sessionId,
-      CRUMB_SESSION_DIR: req.sessionDir,
-      CRUMB_ACTOR: req.actor,
-    };
-
     const start = Date.now();
     return new Promise<SpawnResult>((resolve, reject) => {
       const child = spawn('claude', args, {
         cwd: req.sessionDir,
-        env,
+        env: buildAdapterEnv(req),
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       let stdout = '';
@@ -90,18 +75,9 @@ export class ClaudeLocalAdapter implements Adapter {
       child.stdout.on('data', (b) => (stdout += b.toString()));
       child.stderr.on('data', (b) => (stderr += b.toString()));
       child.on('error', reject);
-      // Per-spawn timeout (autoresearch P3): the dispatcher passes an
-      // AbortSignal that fires when the spawn exceeds its budget. SIGTERM
-      // gives the CLI a chance to flush stdout before exit.
-      const onAbort = (): void => {
-        if (!child.killed) child.kill('SIGTERM');
-      };
-      if (req.signal) {
-        if (req.signal.aborted) onAbort();
-        else req.signal.addEventListener('abort', onAbort, { once: true });
-      }
+      const detachAbort = attachAbortHandler(child, req.signal);
       child.on('close', (code) => {
-        if (req.signal) req.signal.removeEventListener('abort', onAbort);
+        detachAbort();
         const usage = parseClaudeStreamJsonUsage(stdout);
         resolve({
           exitCode: code ?? -1,

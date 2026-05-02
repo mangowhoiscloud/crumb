@@ -5,6 +5,9 @@
  * If `codex` is unavailable on this machine the adapter health-check fails; the
  * Coordinator should then OPEN the builder circuit and route to
  * builder-fallback (claude-local).
+ *
+ * Lifecycle helpers (env / abort / health / default-prompt) are shared with
+ * claude-local + gemini-local via `./_shared.ts`.
  */
 
 import { spawn } from 'node:child_process';
@@ -12,21 +15,18 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 
 import type { Adapter, SpawnRequest, SpawnResult } from './types.js';
+import {
+  attachAbortHandler,
+  buildAdapterEnv,
+  checkAdapterHealth,
+  resolvePrompt,
+} from './_shared.js';
 
 export class CodexLocalAdapter implements Adapter {
   readonly id = 'codex-local';
 
-  async health(): Promise<{ ok: boolean; reason?: string }> {
-    return new Promise((resolve) => {
-      const child = spawn('codex', ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] });
-      let out = '';
-      child.stdout.on('data', (b) => (out += b.toString()));
-      child.on('error', (err) => resolve({ ok: false, reason: err.message }));
-      child.on('close', (code) => {
-        if (code === 0) resolve({ ok: true });
-        else resolve({ ok: false, reason: `codex --version exited ${code}: ${out}` });
-      });
-    });
+  health(): Promise<{ ok: boolean; reason?: string }> {
+    return checkAdapterHealth('codex');
   }
 
   async spawn(req: SpawnRequest): Promise<SpawnResult> {
@@ -37,19 +37,11 @@ export class CodexLocalAdapter implements Adapter {
 
     const args = buildCodexArgs(req);
 
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
-      CRUMB_TRANSCRIPT_PATH: req.transcriptPath,
-      CRUMB_SESSION_ID: req.sessionId,
-      CRUMB_SESSION_DIR: req.sessionDir,
-      CRUMB_ACTOR: req.actor,
-    };
-
     const start = Date.now();
     return new Promise<SpawnResult>((resolve, reject) => {
       const child = spawn('codex', args, {
         cwd: req.sessionDir,
-        env,
+        env: buildAdapterEnv(req),
         stdio: ['pipe', 'pipe', 'pipe'],
       });
       let stdout = '';
@@ -57,15 +49,9 @@ export class CodexLocalAdapter implements Adapter {
       child.stdout.on('data', (b) => (stdout += b.toString()));
       child.stderr.on('data', (b) => (stderr += b.toString()));
       child.on('error', reject);
-      const onAbort = (): void => {
-        if (!child.killed) child.kill('SIGTERM');
-      };
-      if (req.signal) {
-        if (req.signal.aborted) onAbort();
-        else req.signal.addEventListener('abort', onAbort, { once: true });
-      }
+      const detachAbort = attachAbortHandler(child, req.signal);
       child.on('close', (code) => {
-        if (req.signal) req.signal.removeEventListener('abort', onAbort);
+        detachAbort();
         resolve({
           exitCode: code ?? -1,
           stdout,
@@ -89,10 +75,6 @@ export class CodexLocalAdapter implements Adapter {
  * (`codex exec [OPTIONS] [PROMPT]`). The `--prompt` flag is rejected with
  * "unexpected argument '--prompt' found" — verified against codex-cli 0.123.0.
  *
- * Most reducer spawn effects omit `prompt` because the actor's job is fully
- * described by the sandwich. Fall back to a generic kickoff so codex always
- * receives a positional prompt and doesn't sit waiting on stdin.
- *
  * Effort mapping (Snell ICLR 2025 — test-time compute 4× ≈ 14× pretrain):
  *   crumb effort  → codex model_reasoning_effort
  *   low           → low
@@ -101,10 +83,7 @@ export class CodexLocalAdapter implements Adapter {
  * Backing: wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md §7 P0-1.
  */
 export function buildCodexArgs(req: SpawnRequest): string[] {
-  const promptText =
-    req.prompt && req.prompt.trim().length > 0
-      ? req.prompt
-      : 'Begin your turn now. Read $CRUMB_TRANSCRIPT_PATH for full context (latest goal, spec, qa.result, etc.) and execute the next step per the system prompt. Do not wait for additional input.';
+  const promptText = resolvePrompt(req);
   const effortValue =
     req.effort === 'low'
       ? 'low'

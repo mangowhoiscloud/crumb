@@ -4,6 +4,18 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Refactored — Adapter 3-way dedup: extract `_shared.ts` lifecycle helpers (2026-05-02)
+
+`src/adapters/{claude,codex,gemini}-local.ts` were 95% structurally identical: same health-check spawn pattern, same env construction, same AbortSignal wiring, same default-prompt string. jscpd had flagged 414 duplicated lines / 2.92% across the three files. PR-A audit (`wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md` §10 punch list P1) called this out.
+
+- **`src/adapters/_shared.ts`** (NEW) — 4 helpers + 1 constant: `DEFAULT_SPAWN_PROMPT` (the action-oriented kickoff string previously duplicated 3×), `resolvePrompt(req)` (req.prompt or fallback), `buildAdapterEnv(req)` (CRUMB_TRANSCRIPT_PATH / SESSION_ID / SESSION_DIR / ACTOR layered on parent env), `attachAbortHandler(child, signal)` (returns cleanup callback to avoid signal-listener leaks across long sessions), `checkAdapterHealth(cmd)` (spawn `<cmd> --version`, resolve {ok, reason}).
+- **`claude-local.ts` / `codex-local.ts` / `gemini-local.ts`** — slimmed by replacing local copies with imports from `_shared.ts`. claude-local 110→81, gemini-local 118→90, codex-local 132→117 lines (`buildCodexArgs` retained as adapter-local since it has CLI-specific flag knowledge).
+- **`src/test-helpers/fixtures.ts`** (NEW) — extracted near-identical `fixed()` factories from `src/reducer/index.test.ts` and `src/state/scorer.test.ts`. Centralized as `fixedMessage(overrides, defaultKind)`; per-test-suite the local `fixed = (o) => fixedMessage(o, 'goal' | 'note')` wrapper preserves prior call-site ergonomics.
+
+Frontier rationale: SWE-Bench Pro (arXiv 2509.16941) shows files-touched scales 11× from Easy → Hard task difficulty. A coordinated change to the spawn lifecycle (e.g., adding `req.effort` to gemini-local) previously required editing 3 files in lockstep — exactly the fan-out cost the paper flagged. Consolidating to one shared module + 3 thin adapters collapses that cost to a single file. Also unblocks PR C's gemini-local effort wiring (P0 from the audit) — that change now touches 1 file instead of 3.
+
+Suite: 319/319 (no regressions). Adapter classes preserve their existing `Adapter` interface contract — every external consumer (dispatcher / preset-loader / tests) sees the same surface.
+
 ### Added — Lint pipeline strengthening: knip + dependency-cruiser + sonarjs (2026-05-02)
 
 Three OSS tools added to the verify gate, each backed by 2026 frontier evidence on what specifically makes a TypeScript codebase easier or harder for long-context coding LLMs to navigate. Synthesis page: `wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md`'s sister architectural recommendations (PR-A audit follow-up).

@@ -21,9 +21,8 @@
  *   --yolo                         — skip interactive prompts (subprocess can't answer)
  *   -p "<prompt>"                  — non-interactive single-turn run
  *
- * The subprocess writes transcript events by invoking `crumb event` (sister
- * CLI), which appends validated lines to $CRUMB_TRANSCRIPT_PATH. The path is
- * passed via env, identical to claude-local / codex-local.
+ * Lifecycle helpers (env / abort / health / default-prompt) are shared with
+ * claude-local + codex-local via `./_shared.ts`.
  */
 
 import { spawn } from 'node:child_process';
@@ -31,21 +30,18 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 
 import type { Adapter, SpawnRequest, SpawnResult } from './types.js';
+import {
+  attachAbortHandler,
+  buildAdapterEnv,
+  checkAdapterHealth,
+  resolvePrompt,
+} from './_shared.js';
 
 export class GeminiLocalAdapter implements Adapter {
   readonly id = 'gemini-local';
 
-  async health(): Promise<{ ok: boolean; reason?: string }> {
-    return new Promise((resolve) => {
-      const child = spawn('gemini', ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] });
-      let out = '';
-      child.stdout.on('data', (b) => (out += b.toString()));
-      child.on('error', (err) => resolve({ ok: false, reason: err.message }));
-      child.on('close', (code) => {
-        if (code === 0) resolve({ ok: true });
-        else resolve({ ok: false, reason: `gemini --version exited ${code}: ${out}` });
-      });
-    });
+  health(): Promise<{ ok: boolean; reason?: string }> {
+    return checkAdapterHealth('gemini');
   }
 
   async spawn(req: SpawnRequest): Promise<SpawnResult> {
@@ -57,19 +53,9 @@ export class GeminiLocalAdapter implements Adapter {
     // Gemini CLI flag set is still stabilizing (CLI convergence 2026-04).
     // Best-guess Anthropic-mirror flags; verify via `crumb doctor` if a real
     // run reports unknown-flag errors.
-    //
-    // Most reducer spawn effects omit `prompt` because the actor's job is fully
-    // described by the sandwich. Fall back to a generic kickoff so empty
-    // prompts don't crash the spawn (CLIs reject empty `-p ""`).
-    // See claude-local.ts for why a generic kickoff causes "awaiting input"
-    // stalls — keep the action-oriented variant.
-    const promptText =
-      req.prompt && req.prompt.trim().length > 0
-        ? req.prompt
-        : 'Begin your turn now. Read $CRUMB_TRANSCRIPT_PATH for full context (latest goal, spec, qa.result, etc.) and execute the next step per the system prompt. Do not wait for additional input.';
     const args = [
       '-p',
-      promptText,
+      resolvePrompt(req),
       '--system-prompt',
       sandwich,
       '--add-dir',
@@ -77,19 +63,11 @@ export class GeminiLocalAdapter implements Adapter {
       '--yolo',
     ];
 
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
-      CRUMB_TRANSCRIPT_PATH: req.transcriptPath,
-      CRUMB_SESSION_ID: req.sessionId,
-      CRUMB_SESSION_DIR: req.sessionDir,
-      CRUMB_ACTOR: req.actor,
-    };
-
     const start = Date.now();
     return new Promise<SpawnResult>((resolve, reject) => {
       const child = spawn('gemini', args, {
         cwd: req.sessionDir,
-        env,
+        env: buildAdapterEnv(req),
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       let stdout = '';
@@ -97,15 +75,9 @@ export class GeminiLocalAdapter implements Adapter {
       child.stdout.on('data', (b) => (stdout += b.toString()));
       child.stderr.on('data', (b) => (stderr += b.toString()));
       child.on('error', reject);
-      const onAbort = (): void => {
-        if (!child.killed) child.kill('SIGTERM');
-      };
-      if (req.signal) {
-        if (req.signal.aborted) onAbort();
-        else req.signal.addEventListener('abort', onAbort, { once: true });
-      }
+      const detachAbort = attachAbortHandler(child, req.signal);
       child.on('close', (code) => {
-        if (req.signal) req.signal.removeEventListener('abort', onAbort);
+        detachAbort();
         resolve({
           exitCode: code ?? -1,
           stdout,

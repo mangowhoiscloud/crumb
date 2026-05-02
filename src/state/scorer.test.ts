@@ -2,15 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { computeAutoScores } from './scorer.js';
 import type { Message } from '../protocol/types.js';
+import { fixedMessage } from '../test-helpers/fixtures.js';
 
-const fixed = (overrides: Partial<Message>): Message => ({
-  id: '01H0000000000000000000000A',
-  ts: '2026-05-01T00:00:00.000Z',
-  session_id: 'sess-test',
-  from: 'user',
-  kind: 'note',
-  ...overrides,
-});
+const fixed = (overrides: Partial<Message>): Message => fixedMessage(overrides, 'note');
 
 describe('Layer 1 auto-scorer', () => {
   it('D4=5 for clean 1-pass session', () => {
