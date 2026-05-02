@@ -344,6 +344,31 @@ async function cmdInit(args: ParsedArgs): Promise<void> {
   }
 }
 
+/**
+ * `crumb model` — interactive blessed UI to edit per-actor model + effort + provider activation.
+ *
+ * Reads/writes .crumb/config.toml. Defaults to all high-end models (claude-opus-4-7,
+ * gpt-5.5-codex, gemini-2.5-pro) + effort=high + all 3 local providers enabled.
+ *
+ *   crumb model               interactive TUI (Tab cycle / ↑↓ model / ←→ effort / h harness / p providers)
+ *   crumb model --show        print current config and exit
+ *   crumb model --apply "<NL instruction>"   apply natural-language change ("verifier 모델을 gemini-2.5-pro 로")
+ */
+async function cmdModel(args: ParsedArgs): Promise<void> {
+  const cwd = args.flags.get('root') ?? process.cwd();
+  const { runModelTui, applyNlInstruction, showConfig } = await import('./tui/model-edit.js');
+  if (args.flags.has('show')) {
+    process.stdout.write(showConfig(cwd) + '\n');
+    return;
+  }
+  const apply = args.flags.get('apply');
+  if (apply) {
+    process.stdout.write(applyNlInstruction(cwd, apply) + '\n');
+    return;
+  }
+  await runModelTui({ repoRoot: cwd });
+}
+
 async function cmdLs(args: ParsedArgs): Promise<void> {
   const cwd = args.flags.get('root') ?? process.cwd();
   const dir = resolve(cwd, 'sessions');
@@ -392,6 +417,7 @@ Usage:
   crumb explain <kind>                     # 39 kind schema lookup
   crumb suggest <session-id|dir>           # 다음 사용자 액션 추천
   crumb tui <session-id|dir>               # blessed live observer (P0)
+  crumb model [--show | --apply "NL"]     # per-actor model + effort + provider activation TUI
   crumb export <session-id|dir> [--format otel-jsonl|anthropic-trace|chrome-trace]
                                           # transcript → OTel GenAI / Anthropic / chrome://tracing
   crumb init [--host <name>] [--format human|json]
@@ -448,6 +474,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       break;
     case 'suggest':
       await cmdSuggest(args);
+      break;
+    case 'model':
+      await cmdModel(args);
       break;
     case 'tui':
       await cmdTui(args);

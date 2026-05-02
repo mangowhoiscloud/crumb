@@ -27,6 +27,12 @@ export interface DispatcherDeps {
    * Actors not declared in the preset fall back to `effect.adapter` + ACTOR_TO_SANDWICH.
    */
   preset?: PresetSpec;
+  /**
+   * Per-harness enabled flag from .crumb/config.toml [providers.*].
+   * When binding.harness maps to a disabled provider, dispatcher falls back to
+   * builder-fallback adapter (claude-local) and emits kind=note explaining the substitution.
+   */
+  providersEnabled?: Record<string, boolean>;
   /** Bridge: hook effects surface as user prompts (TUI/CLI). */
   onHook?: (kind: string, body: string, data?: Record<string, unknown>) => Promise<void>;
 }
@@ -58,9 +64,22 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
       // use the binding's sandwich + harness→adapter. Otherwise fall back to the
       // reducer-supplied effect.adapter and the default ACTOR_TO_SANDWICH mapping.
       const binding = deps.preset?.actors[effect.actor];
-      const adapterId = binding
+      let adapterId = binding
         ? (HARNESS_TO_ADAPTER[binding.harness] ?? effect.adapter)
         : effect.adapter;
+      // Provider-activation gate (.crumb/config.toml [providers.*]):
+      // if binding's harness has been disabled by the user, substitute claude-local
+      // (the universal fallback) and emit kind=note so observers see the swap.
+      if (binding && deps.providersEnabled && deps.providersEnabled[binding.harness] === false) {
+        await deps.writer.append({
+          session_id: deps.sessionId,
+          from: 'system',
+          kind: 'note',
+          body: `provider ${binding.harness} is disabled in .crumb/config.toml — substituting claude-local for actor ${effect.actor}`,
+          metadata: { deterministic: true, tool: 'provider-activation-gate@v1' },
+        });
+        adapterId = 'claude-local';
+      }
       const sandwichPath = effect.sandwich_path
         ? resolve(deps.repoRoot, effect.sandwich_path)
         : binding?.sandwich
