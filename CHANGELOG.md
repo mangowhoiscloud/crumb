@@ -13,6 +13,16 @@ Root cause: `agents/_event-protocol.md` (the canonical doc on how to emit events
 - **`src/dispatcher/live.ts` `assembleSandwich()`** — for any actor in `EMITTING_ACTORS = { planner-lead, builder, verifier, builder-fallback, researcher }`, inline `agents/_event-protocol.md` into the assembled sandwich. The early-return fast-path is updated to also fire when no event protocol injection is needed (preserving v3.1 behavior for sessions that don't exercise the override surface).
 - This unblocks Claude/Codex from the JSON-print failure mode discovered in run 01KQMCSC (planner exit 0 in 41s, 2047b stdout, zero transcript events).
 
+### Changed — Rule 4 self-bias enforcement: PASS → PARTIAL when builder.provider == verifier.provider (2026-05-02)
+
+Implements **G-A** of the scoring+ratchet frontier survey (`wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md` §7 P1).
+
+Backing: **Stureborg et al. EMNLP 2024** measured PASS-rate inflation of **+14-22%** when builder and verifier share the same provider (LLM self-recognition + sycophancy compounded). Rule 4 of `validator/anti-deception.ts` was previously warn-only — recording `self_bias_risk_same_provider` in `audit_violations` but not changing the verdict. New behavior: when same-provider self-bias is detected AND the verifier returned PASS, the verdict is demoted to PARTIAL — the user must explicitly approve via `kind=user.approve` (G1 surface). FAIL/REJECT/PARTIAL verdicts are unchanged (self-bias only inflates PASS, not failure).
+
+- **`src/validator/anti-deception.ts`** Rule 4 — added verdict downgrade alongside the existing warn. Order: aggregate-floor check first (PASS → PARTIAL when aggregate < 24), then self-bias downgrade. Both are idempotent.
+- **`src/validator/anti-deception.test.ts`** — Rule 4 spec expanded from 1 → 4: (a) PASS → PARTIAL on self-bias, (b) cross-provider PASS unchanged, (c) self-bias FAIL stays FAIL, (d) self-bias PARTIAL stays PARTIAL. Suite total **281/281** (was 278 + 3 new specs).
+- Frontier alignment matrix moves G-A from "exposed gap" to "defended": `bagelcode-cross-3way` preset is now the recommended path (binds builder=codex/openai + verifier=gemini-cli/google → automatically passes the cross-provider gate). Ambient/solo presets that bind both to the same provider will see the new downgrade until a preset / `crumb_model "verifier 모델을 ..." ` swap restores the cross.
+
 ### Fixed — Real subprocess RCA: planner-lead "awaiting input" stall + observability + 3 minor (2026-05-02)
 
 Closing a 4-issue cluster found while smoke-testing v3.3 against `--preset solo` real subprocess. Root-cause-oriented fixes after dispatcher observability made the silent failures visible.
