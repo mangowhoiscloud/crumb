@@ -37,6 +37,20 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
   // Track the last active actor so user.veto can rebound to them.
   if (event.from !== 'user' && event.from !== 'coordinator' && event.from !== 'system') {
     next.progress_ledger.last_active_actor = event.from;
+    // Circuit breaker recovery: a non-error event from this actor proves the
+    // current spawn produced output, so reset the failure streak. Without
+    // this the breaker is one-way — a single transient failure permanently
+    // pins the actor to OPEN/fallback for the rest of the session.
+    if (event.kind !== 'error') {
+      const cur = next.progress_ledger.circuit_breaker[event.from];
+      if (cur && cur.consecutive_failures > 0) {
+        next.progress_ledger.circuit_breaker[event.from] = {
+          state: 'CLOSED',
+          consecutive_failures: 0,
+          last_failure_id: cur.last_failure_id,
+        };
+      }
+    }
   }
 
   const effects: Effect[] = [];
