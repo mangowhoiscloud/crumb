@@ -43,6 +43,22 @@ export interface SpawnRequest {
    * reducer's error branch trips the circuit breaker.
    */
   signal?: AbortSignal;
+  /**
+   * Optional provider id for the actor's preset binding ('anthropic',
+   * 'openai', 'google', 'none'). Forwarded into the subprocess env as
+   * CRUMB_PROVIDER so `crumb event` can stamp `metadata.provider` and
+   * compute `metadata.cross_provider` on `kind=judge.score`. AGENTS.md §136
+   * invariant ("Set metadata.cross_provider=true when verifier provider
+   * differs from build event provider").
+   */
+  provider?: string;
+  /**
+   * Optional provider id of the latest `kind=build` event's emitter. Set by
+   * the dispatcher when spawning the verifier so the subprocess can stamp
+   * `metadata.cross_provider = (provider !== builderProvider)` on its
+   * judge.score. Anti-deception Rule 4 input.
+   */
+  builderProvider?: string;
 }
 
 export interface SpawnResult {

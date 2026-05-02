@@ -45,7 +45,7 @@ import {
   writeManifest,
   type VersionManifest,
 } from './session/version.js';
-import type { DraftMessage } from './protocol/types.js';
+import type { DraftMessage, Provider } from './protocol/types.js';
 
 interface ParsedArgs {
   command: string;
@@ -181,6 +181,46 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
   }
 }
 
+/**
+ * Stamp provenance metadata onto an actor-emitted draft before append.
+ *
+ *   - `metadata.provider` ← `CRUMB_PROVIDER` env (binding-resolved by dispatcher).
+ *     Without this, anti-deception Rule 4 (validator/anti-deception.ts:111)
+ *     can't compare verifier-vs-builder providers — the `judgeScore.metadata
+ *     .provider` it reads would be undefined.
+ *   - `metadata.cross_provider` ← (CRUMB_PROVIDER !== CRUMB_BUILDER_PROVIDER),
+ *     set only on `kind=judge.score`. AGENTS.md §136: "Set
+ *     metadata.cross_provider=true when the verifier's provider differs from
+ *     the build event's provider." Previously only the mock adapter set this;
+ *     `helpers/status.ts:144` falls back to "⚠" when undefined, producing a
+ *     bogus same-provider warning on every real session.
+ *
+ * Actor-supplied metadata wins (no overwrite) — this is provenance fallback,
+ * not enforcement.
+ */
+const VALID_PROVIDERS = new Set(['anthropic', 'openai', 'google', 'none']);
+
+export function stampEnvMetadata(draft: DraftMessage, env: NodeJS.ProcessEnv): DraftMessage {
+  const provider = env.CRUMB_PROVIDER;
+  const builderProvider = env.CRUMB_BUILDER_PROVIDER;
+  const md = { ...(draft.metadata ?? {}) };
+  let mutated = false;
+  if (provider && VALID_PROVIDERS.has(provider) && md.provider === undefined) {
+    md.provider = provider as Provider;
+    mutated = true;
+  }
+  if (
+    draft.kind === 'judge.score' &&
+    provider &&
+    builderProvider &&
+    md.cross_provider === undefined
+  ) {
+    md.cross_provider = provider !== builderProvider;
+    mutated = true;
+  }
+  return mutated ? { ...draft, metadata: md } : draft;
+}
+
 async function cmdEvent(): Promise<void> {
   // Read JSON from stdin, validate, append to $CRUMB_TRANSCRIPT_PATH.
   const path = process.env.CRUMB_TRANSCRIPT_PATH;
@@ -189,7 +229,7 @@ async function cmdEvent(): Promise<void> {
     throw new Error('CRUMB_TRANSCRIPT_PATH and CRUMB_SESSION_ID env vars required');
   }
   const raw = await readStdin();
-  const draft = JSON.parse(raw) as DraftMessage;
+  const draft = stampEnvMetadata(JSON.parse(raw) as DraftMessage, process.env);
   const writer = getTranscriptWriter({ path, sessionId });
   const msg = await writer.append(draft);
   // eslint-disable-next-line no-console
