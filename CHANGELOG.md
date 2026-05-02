@@ -4,6 +4,16 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — Version graph: `crumb release` + `crumb versions` — v3.3 Phase 2b (2026-05-02)
+
+Sessions become *promotable* — `crumb release <session-ulid>` snapshots a WIP session into an immutable milestone under `~/.crumb/projects/<id>/versions/<vN>[-<label>]/` with a TOML manifest, sha256-keyed frozen artifacts, and a `kind=version.released` event appended to the source transcript so replay re-derives the milestone. Realizes the v0.dev (Project → Chat → Version) + Lovable (favorited milestone vs auto-history) hybrid that Phase 1 reserved space for.
+
+- **`src/session/version.ts`** (~150 LOC, 20/20 vitest specs) — VersionManifest schema v1: `{ name (e.g. v2), label?, released_at, source_session, source_event_id?, parent_version?, goal?, scorecard {D1-D6 + aggregate + verdict}, artifacts_sha256 }`. Helpers: `versionDirName(name,label)` (slugifies label → `v2-combo-bonus`), `nextSequentialVersion(dir)` (scans `^v(\d+)` to find next), `readAllManifests` / `readManifest` / `writeManifest` (TOML via @iarna/toml), `deriveScorecard(events)` (last `judge.score`), `deriveSourceEventId(events)` (`done` → last `judge.score` → last event), `snapshotArtifacts(sessionDir,versionDir)` (real `copyFile` per file with sha256, no links).
+- **`crumb release <session-ulid> [--as vN] [--label "<name>"] [--no-parent]`** — auto-numbers `v<N>` by default; `--as v3` overrides; `--label` slugifies into the dir name; `parent_version` is auto-detected as the latest existing manifest unless `--no-parent`. Refuses to overwrite an existing version dir. Appends `kind=version.released` (system, deterministic, tool=`crumb-release@v1`) with `data: { version, label, parent_version, source_event_id, manifest_relpath }` — `manifest_relpath` is project-relative (`versions/<dir>/manifest.toml`) so transcripts replay portably across machines.
+- **`crumb versions`** — lists all manifests sorted by `released_at` ascending with `← parent` chain notation, label tag, verdict, aggregate. `[latest]` footer surfaces the head.
+- **Test**: 217/217 (was 197; +20 version specs). Mock e2e: `init --pin` → `run` → `release v1 --label first-pass` → `release v2 --label second-pass` → `versions` shows v1 + v2 (parent ← v1) + transcript carries 2 `kind=version.released` events.
+- **Frontier basis**: v0.dev's structural rigor (Project → Chat → Version DAG with Fork API), Lovable's favorited-stable-version UX (descriptive labels), Replit's checkpoint metadata richness (scorecard + source pointer). Sequential `v<N>` chosen over pure-descriptive (Replit/Lovable) for `ls versions/` sortability and over opaque ID (v0/Cursor/Cline) for human "the v3 feels too easy" mental model — research recommendation realized.
+
 ### Added — Session lifecycle (meta.json) + project pin (`crumb init --pin`) — v3.3 Phase 2a (2026-05-02)
 
 Session lifecycle becomes O(1) inspectable without scanning the transcript head, and projects can survive cwd renames. Builds on Phase 1's `~/.crumb/projects/<id>/` storage hierarchy.

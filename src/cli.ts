@@ -28,9 +28,21 @@ import {
   ensureProjectDir,
   ensureSessionRoot,
   getSessionsDir,
+  getVersionsDir,
   resolveSessionDir as resolveStoredSession,
 } from './paths.js';
 import { newMeta, readMeta, updateMeta, writeMeta } from './session/meta.js';
+import {
+  deriveScorecard,
+  deriveSourceEventId,
+  nextSequentialVersion,
+  readAllManifests,
+  readManifest,
+  snapshotArtifacts,
+  versionDirName,
+  writeManifest,
+  type VersionManifest,
+} from './session/version.js';
 import type { DraftMessage } from './protocol/types.js';
 
 interface ParsedArgs {
@@ -527,6 +539,131 @@ function truncate(s: string, n: number): string {
   return s.length <= n ? s : s.slice(0, n - 1) + '…';
 }
 
+/**
+ * `crumb release <session-ulid> [--as <vN>] [--label "<name>"] [--no-parent]`
+ *
+ * Promote a WIP session into an immutable milestone under
+ * `~/.crumb/projects/<id>/versions/<vN>[-<label>]/`. Snapshots artifacts (real
+ * copy, no link), extracts scorecard from the last judge.score event, and
+ * appends `kind=version.released` to the source session's transcript so replay
+ * re-derives the version event.
+ */
+async function cmdRelease(args: ParsedArgs): Promise<void> {
+  const target = args.positional[0];
+  if (!target) throw new Error('release requires a session id or session-dir');
+  const cwd = args.flags.get('root') ?? process.cwd();
+  const sessionDir = await resolveStoredSession(target, cwd);
+  const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
+  const events = await readAll(transcriptPath);
+  if (events.length === 0) {
+    throw new Error(`empty transcript at ${transcriptPath}`);
+  }
+  const sessionId = events[0].session_id;
+
+  const versionsDir = await getVersionsDir(cwd);
+  const explicitName = args.flags.get('as');
+  const label = args.flags.get('label');
+  const name = explicitName ?? (await nextSequentialVersion(versionsDir));
+  if (!/^v\d+$/.test(name) && explicitName !== undefined) {
+    throw new Error(`--as must match /^v\\d+$/ (got "${name}")`);
+  }
+
+  const dirName = versionDirName(name, label);
+  const versionDir = resolve(versionsDir, dirName);
+  if (existsSync(versionDir)) {
+    throw new Error(`version already exists: ${versionDir}`);
+  }
+
+  // parent_version = latest existing version by released_at, unless --no-parent.
+  let parentVersion: string | undefined;
+  if (!args.flags.has('no-parent')) {
+    const existing = await readAllManifests(versionsDir);
+    parentVersion = existing.at(-1)?.name;
+  }
+
+  const meta = await readMeta(sessionDir);
+  const scorecard = deriveScorecard(events);
+  const sourceEventId = deriveSourceEventId(events);
+
+  const artifactsSha = await snapshotArtifacts(sessionDir, versionDir);
+
+  const manifest: VersionManifest = {
+    schema_version: 1,
+    name,
+    released_at: new Date().toISOString(),
+    source_session: sessionId,
+  };
+  if (label) manifest.label = label;
+  if (sourceEventId) manifest.source_event_id = sourceEventId;
+  if (parentVersion) manifest.parent_version = parentVersion;
+  if (meta?.goal) manifest.goal = meta.goal;
+  if (scorecard) manifest.scorecard = scorecard;
+  if (Object.keys(artifactsSha).length > 0) manifest.artifacts_sha256 = artifactsSha;
+  await writeManifest(versionDir, manifest);
+
+  // Append kind=version.released to source session transcript so replay re-derives it.
+  // manifest_relpath is project-relative (`versions/<dir>/manifest.toml`) so replay is
+  // portable across machines — never store absolute paths in the transcript.
+  const writer = new TranscriptWriter({ path: transcriptPath, sessionId });
+  await writer.append({
+    session_id: sessionId,
+    from: 'system',
+    kind: 'version.released',
+    body: `Released as ${name}${label ? ` (label: ${label})` : ''}`,
+    data: {
+      version: name,
+      label: label ?? null,
+      parent_version: parentVersion ?? null,
+      source_event_id: sourceEventId ?? null,
+      manifest_relpath: `versions/${dirName}/manifest.toml`,
+    },
+    metadata: { deterministic: true, tool: 'crumb-release@v1' },
+  });
+
+  // eslint-disable-next-line no-console
+  console.log(`[crumb release] ${name}${label ? ` (${label})` : ''} → ${versionDir}`);
+  if (parentVersion) {
+    // eslint-disable-next-line no-console
+    console.log(`[crumb release]   parent_version = ${parentVersion}`);
+  }
+  if (scorecard) {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[crumb release]   scorecard      = aggregate=${scorecard.aggregate ?? '?'} verdict=${scorecard.verdict ?? '?'}`,
+    );
+  }
+  // eslint-disable-next-line no-console
+  console.log(`[crumb release]   artifacts      = ${Object.keys(artifactsSha).length} file(s)`);
+}
+
+/** `crumb versions` — list all versions in the current project, oldest first. */
+async function cmdVersions(args: ParsedArgs): Promise<void> {
+  const cwd = args.flags.get('root') ?? process.cwd();
+  const versionsDir = await getVersionsDir(cwd);
+  const all = await readAllManifests(versionsDir);
+  if (all.length === 0) {
+    // eslint-disable-next-line no-console
+    console.log(`(no versions yet at ${versionsDir})`);
+    return;
+  }
+  for (const m of all) {
+    const labelTag = m.label ? `  (${m.label})` : '';
+    const parentTag = m.parent_version ? `  ← ${m.parent_version}` : '';
+    const verdict = m.scorecard?.verdict ?? '?';
+    const agg = m.scorecard?.aggregate ?? '?';
+    // eslint-disable-next-line no-console
+    console.log(
+      `${m.name}${labelTag}${parentTag}  ${m.released_at}  verdict=${verdict} aggregate=${agg}`,
+    );
+  }
+  // Re-read latest manifest's parent_version chain for visibility.
+  const latest = all.at(-1)!;
+  if (await readManifest(resolve(versionsDir, versionDirName(latest.name, latest.label)))) {
+    // eslint-disable-next-line no-console
+    console.log(`\n[latest] ${latest.name}${latest.label ? ` (${latest.label})` : ''}`);
+  }
+}
+
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const c of process.stdin) chunks.push(Buffer.from(c));
@@ -560,6 +697,10 @@ Usage:
                                           # so renames/moves preserve project identity
   crumb ls                                 # list current project's sessions
                                           # (~/.crumb/projects/<id>/sessions/, plus legacy <cwd>/sessions/ marked [legacy])
+  crumb release <session-id> [--as vN] [--label "<name>"] [--no-parent]
+                                          # snapshot session artifacts into versions/<vN>[-<label>]/
+                                          # (frozen copy + manifest.toml + kind=version.released event)
+  crumb versions                           # list released milestones with parent chain
 
 Flags (run):
   --preset <name>     load .crumb/presets/<name>.toml. e.g. bagelcode-cross-3way / mock /
@@ -624,6 +765,12 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       break;
     case 'ls':
       await cmdLs(args);
+      break;
+    case 'release':
+      await cmdRelease(args);
+      break;
+    case 'versions':
+      await cmdVersions(args);
       break;
     case 'help':
     case '--help':
