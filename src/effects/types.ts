@@ -23,6 +23,14 @@ export interface SpawnEffect {
   sandwich_path?: string;
   /** Optional first prompt payload (e.g. the goal text). */
   prompt?: string;
+  /**
+   * v3.2 G4 — runtime sandwich appends pulled from task_ledger.facts where
+   * category === 'sandwich_append' and target_actor matches (or is undefined).
+   * The dispatcher concatenates these onto the base sandwich (and any
+   * file-based agents/<actor>.local.md override) before writing the assembled
+   * sandwich for the adapter to read.
+   */
+  sandwich_appends?: { source_id: string; text: string }[];
 }
 
 export interface AppendEffect {

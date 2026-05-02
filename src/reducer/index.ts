@@ -50,7 +50,12 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         category: 'goal',
       });
       next.progress_ledger.next_speaker = 'planner-lead';
-      effects.push({ type: 'spawn', actor: 'planner-lead', adapter: 'claude-local' });
+      effects.push({
+        type: 'spawn',
+        actor: 'planner-lead',
+        adapter: 'claude-local',
+        sandwich_appends: collectSandwichAppends(next, 'planner-lead'),
+      });
       break;
     }
 
@@ -67,7 +72,12 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
       }
       next.progress_ledger.next_speaker = 'builder';
       const adapter = pickAdapter(next, 'builder');
-      effects.push({ type: 'spawn', actor: 'builder', adapter });
+      effects.push({
+        type: 'spawn',
+        actor: 'builder',
+        adapter,
+        sandwich_appends: collectSandwichAppends(next, 'builder'),
+      });
       break;
     }
 
@@ -92,7 +102,12 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
       // Verifier reads qa.result as D2 + D6 ground truth lookup.
       next.progress_ledger.next_speaker = 'verifier';
       const adapter = pickAdapter(next, 'verifier');
-      effects.push({ type: 'spawn', actor: 'verifier', adapter });
+      effects.push({
+        type: 'spawn',
+        actor: 'verifier',
+        adapter,
+        sandwich_appends: collectSandwichAppends(next, 'verifier'),
+      });
       break;
     }
 
@@ -132,6 +147,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
             type: 'spawn',
             actor: 'builder-fallback',
             adapter: 'claude-local',
+            sandwich_appends: collectSandwichAppends(next, 'builder-fallback'),
           });
         } else {
           next.progress_ledger.next_speaker = 'planner-lead';
@@ -154,6 +170,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           actor: target,
           adapter: pickAdapter(next, target),
           prompt: event.body,
+          sandwich_appends: collectSandwichAppends(next, target),
         });
       }
       break;
@@ -173,6 +190,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         goto?: Actor;
         swap?: { from: Actor; to: string };
         reset_circuit?: Actor | true;
+        sandwich_append?: string;
       };
 
       // Always record the intervention as a fact, but tag with the target actor when given.
@@ -183,6 +201,19 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           : `user intervene: ${event.body ?? ''}`,
         category: 'constraint',
       });
+
+      // G4 — sandwich_append: persistent append (across all subsequent spawns
+      // of the matching actor). Stored as a fact with category='sandwich_append'
+      // so the dispatcher can pull it on the next spawn. Optional target_actor
+      // scopes the append; absent target = applies to all actors.
+      if (data.sandwich_append) {
+        next.task_ledger.facts.push({
+          source_id: event.id,
+          text: data.sandwich_append,
+          category: 'sandwich_append',
+          target_actor: data.target_actor,
+        });
+      }
 
       // G6 — adapter swap (Paperclip-style). Persists in adapter_override for next spawn.
       if (data.swap) {
@@ -218,6 +249,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           actor: data.goto,
           adapter: pickAdapter(next, data.goto as 'planner-lead' | 'builder' | 'verifier'),
           prompt: event.body,
+          sandwich_appends: collectSandwichAppends(next, data.goto),
         });
       }
 
@@ -275,6 +307,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
             type: 'spawn',
             actor: queued,
             adapter: pickAdapter(next, queued as 'planner-lead' | 'builder' | 'verifier'),
+            sandwich_appends: collectSandwichAppends(next, queued),
           });
         }
       }
@@ -372,6 +405,22 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
   }
 
   return { state: next, effects };
+}
+
+/**
+ * v3.2 G4 — collect sandwich_append facts that apply to a given actor.
+ * Returns the list of {source_id, text} pairs the dispatcher should concat
+ * onto the actor's sandwich (after the file-based local override, if any).
+ */
+function collectSandwichAppends(
+  state: CrumbState,
+  actor: Actor,
+): { source_id: string; text: string }[] {
+  return state.task_ledger.facts
+    .filter(
+      (f) => f.category === 'sandwich_append' && (!f.target_actor || f.target_actor === actor),
+    )
+    .map((f) => ({ source_id: f.source_id, text: f.text }));
 }
 
 function pickAdapter(state: CrumbState, actor: 'builder' | 'verifier' | 'planner-lead'): string {

@@ -5,8 +5,10 @@
  */
 
 import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
-import type { Effect } from '../effects/types.js';
+import type { Effect, SpawnEffect } from '../effects/types.js';
 import type { Actor } from '../protocol/types.js';
 import type { TranscriptWriter } from '../transcript/writer.js';
 import type { AdapterRegistry } from '../adapters/types.js';
@@ -80,11 +82,24 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         });
         adapterId = 'claude-local';
       }
-      const sandwichPath = effect.sandwich_path
+      const baseSandwichPath = effect.sandwich_path
         ? resolve(deps.repoRoot, effect.sandwich_path)
         : binding?.sandwich
           ? resolve(deps.repoRoot, binding.sandwich)
           : resolve(deps.repoRoot, ACTOR_TO_SANDWICH[effect.actor] ?? '');
+      // v3.2 G4 — sandwich override pipeline:
+      //   base agents/<actor>.md
+      //   + agents/<actor>.local.md (per-machine, gitignored)
+      //   + effect.sandwich_appends (runtime user.intervene with data.sandwich_append)
+      // → sessions/<id>/agent-workspace/<actor>/sandwich.assembled.md
+      // The assembled file becomes the adapter's --append-system-prompt source so
+      // observers can inspect exactly what each spawn saw.
+      const sandwichPath = await assembleSandwich({
+        baseSandwichPath,
+        appends: effect.sandwich_appends ?? [],
+        sessionDir: deps.sessionDir,
+        actor: effect.actor,
+      });
       const adapter = deps.registry.get(adapterId);
       const result = await adapter.spawn({
         actor: effect.actor,
@@ -176,4 +191,50 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
       break;
     }
   }
+}
+
+interface AssembleArgs {
+  baseSandwichPath: string;
+  appends: NonNullable<SpawnEffect['sandwich_appends']>;
+  sessionDir: string;
+  actor: Actor;
+}
+
+/**
+ * v3.2 G4 — assemble per-spawn sandwich from base + per-machine local override
+ * + runtime sandwich_appends. Writes the result under the session's
+ * agent-workspace so observers / replay can audit exactly what each spawn saw.
+ *
+ * When there is no local override file and no runtime appends, the base path is
+ * returned unchanged (no filesystem write) — this preserves the v3.1 behavior
+ * for sessions that don't exercise the override surface.
+ */
+async function assembleSandwich(args: AssembleArgs): Promise<string> {
+  const { baseSandwichPath, appends, sessionDir, actor } = args;
+  const localPath = baseSandwichPath.replace(/\.md$/, '.local.md');
+  const hasBase = baseSandwichPath !== '' && existsSync(baseSandwichPath);
+  const hasLocal = baseSandwichPath !== '' && existsSync(localPath);
+  if (!hasLocal && appends.length === 0) {
+    return baseSandwichPath;
+  }
+  const parts: string[] = [];
+  if (hasBase) {
+    parts.push(await readFile(baseSandwichPath, 'utf-8'));
+  }
+  if (hasLocal) {
+    const localContent = await readFile(localPath, 'utf-8');
+    parts.push(
+      `<!-- begin local override (${localPath}) -->\n${localContent}\n<!-- end local override -->`,
+    );
+  }
+  for (const a of appends) {
+    parts.push(
+      `<!-- begin sandwich_append source=${a.source_id} -->\n${a.text}\n<!-- end sandwich_append -->`,
+    );
+  }
+  const outDir = resolve(sessionDir, 'agent-workspace', actor);
+  await mkdir(outDir, { recursive: true });
+  const outPath = resolve(outDir, 'sandwich.assembled.md');
+  await writeFile(outPath, parts.join('\n\n') + '\n', 'utf-8');
+  return outPath;
 }

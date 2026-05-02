@@ -22,7 +22,9 @@ describe('reducer', () => {
     expect(state.task_ledger.goal).toBe('match-3 game');
     expect(state.task_ledger.facts).toHaveLength(1);
     expect(state.progress_ledger.next_speaker).toBe('planner-lead');
-    expect(effects).toEqual([{ type: 'spawn', actor: 'planner-lead', adapter: 'claude-local' }]);
+    expect(effects).toEqual([
+      { type: 'spawn', actor: 'planner-lead', adapter: 'claude-local', sandwich_appends: [] },
+    ]);
   });
 
   it('routes spec → spawn(builder, codex-local) by default', () => {
@@ -36,7 +38,9 @@ describe('reducer', () => {
 
     expect(state.task_ledger.acceptance_criteria).toEqual(['ac1', 'ac2', 'ac3']);
     expect(state.task_ledger.facts).toHaveLength(3);
-    expect(effects).toEqual([{ type: 'spawn', actor: 'builder', adapter: 'codex-local' }]);
+    expect(effects).toEqual([
+      { type: 'spawn', actor: 'builder', adapter: 'codex-local', sandwich_appends: [] },
+    ]);
   });
 
   it('v3: routes build → qa_check effect (deterministic, no LLM spawn)', () => {
@@ -70,7 +74,9 @@ describe('reducer', () => {
     const { state, effects } = reduce(s0, qaResult);
 
     expect(state.progress_ledger.next_speaker).toBe('verifier');
-    expect(effects).toEqual([{ type: 'spawn', actor: 'verifier', adapter: 'claude-local' }]);
+    expect(effects).toEqual([
+      { type: 'spawn', actor: 'verifier', adapter: 'claude-local', sandwich_appends: [] },
+    ]);
   });
 
   it('routes spec → builder-fallback when codex circuit OPEN', () => {
@@ -393,6 +399,146 @@ describe('reducer', () => {
       type: 'spawn',
       actor: 'verifier',
     });
+  });
+
+  // v3.2 G4 — sandwich override (user.intervene with data.sandwich_append)
+
+  it('v3.2 G4: user.intervene with sandwich_append records a sandwich_append fact', () => {
+    const s0 = initialState('sess-test');
+    const ev = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      body: 'context drift',
+      data: { sandwich_append: 'Always emit kind=note before kind=verify.result.' },
+    });
+    const { state } = reduce(s0, ev);
+    const appends = state.task_ledger.facts.filter((f) => f.category === 'sandwich_append');
+    expect(appends).toHaveLength(1);
+    expect(appends[0].text).toBe('Always emit kind=note before kind=verify.result.');
+    expect(appends[0].target_actor).toBeUndefined();
+  });
+
+  it('v3.2 G4: sandwich_append with target_actor scopes to that actor only', () => {
+    const s0 = initialState('sess-test');
+    // Append scoped to builder
+    const ev1 = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      data: {
+        target_actor: 'builder',
+        sandwich_append: 'Use Phaser 3.80 only.',
+      },
+    });
+    const { state: s1 } = reduce(s0, ev1);
+    // Now spawn builder via spec
+    const spec = fixed({
+      id: '01H0000000000000000000000B',
+      from: 'planner-lead',
+      kind: 'spec',
+      data: { acceptance_criteria: ['ac1'] },
+    });
+    const { effects } = reduce(s1, spec);
+    const spawn = effects.find((e) => e.type === 'spawn') as
+      | { sandwich_appends?: { source_id: string; text: string }[]; actor: string }
+      | undefined;
+    expect(spawn?.actor).toBe('builder');
+    expect(spawn?.sandwich_appends).toHaveLength(1);
+    expect(spawn?.sandwich_appends?.[0].text).toBe('Use Phaser 3.80 only.');
+  });
+
+  it('v3.2 G4: sandwich_append targeted to builder is NOT included in verifier spawn', () => {
+    const s0 = initialState('sess-test');
+    const ev1 = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      data: {
+        target_actor: 'builder',
+        sandwich_append: 'builder-only note',
+      },
+    });
+    const { state: s1 } = reduce(s0, ev1);
+    // qa.result spawns verifier
+    const qa = fixed({
+      id: '01H0000000000000000000000C',
+      from: 'system',
+      kind: 'qa.result',
+      data: { exec_exit_code: 0, lint_passed: true },
+      metadata: { deterministic: true, tool: 'qa-check-effect@v1' },
+    });
+    const { effects } = reduce(s1, qa);
+    const spawn = effects.find((e) => e.type === 'spawn') as
+      | { sandwich_appends?: { source_id: string; text: string }[]; actor: string }
+      | undefined;
+    expect(spawn?.actor).toBe('verifier');
+    expect(spawn?.sandwich_appends).toEqual([]);
+  });
+
+  it('v3.2 G4: untargeted sandwich_append applies to every actor spawn', () => {
+    const s0 = initialState('sess-test');
+    const ev = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      data: { sandwich_append: 'global rule applies everywhere' },
+    });
+    const { state: s1 } = reduce(s0, ev);
+    // Spawn builder
+    const spec = fixed({
+      id: '01H0000000000000000000000B',
+      from: 'planner-lead',
+      kind: 'spec',
+      data: { acceptance_criteria: ['ac1'] },
+    });
+    const r1 = reduce(s1, spec);
+    const builderSpawn = r1.effects.find((e) => e.type === 'spawn') as
+      | { sandwich_appends?: { source_id: string; text: string }[] }
+      | undefined;
+    expect(builderSpawn?.sandwich_appends).toHaveLength(1);
+
+    // Spawn verifier
+    const qa = fixed({
+      id: '01H0000000000000000000000C',
+      from: 'system',
+      kind: 'qa.result',
+      data: { exec_exit_code: 0, lint_passed: true },
+      metadata: { deterministic: true, tool: 'qa-check-effect@v1' },
+    });
+    const r2 = reduce(r1.state, qa);
+    const verifierSpawn = r2.effects.find((e) => e.type === 'spawn') as
+      | { sandwich_appends?: { source_id: string; text: string }[] }
+      | undefined;
+    expect(verifierSpawn?.sandwich_appends).toHaveLength(1);
+    expect(verifierSpawn?.sandwich_appends?.[0].text).toBe('global rule applies everywhere');
+  });
+
+  it('v3.2 G4: multiple sandwich_appends accumulate in order', () => {
+    const s0 = initialState('sess-test');
+    const ev1 = fixed({
+      id: '01H0000000000000000000001A',
+      from: 'user',
+      kind: 'user.intervene',
+      data: { target_actor: 'builder', sandwich_append: 'first' },
+    });
+    const { state: s1 } = reduce(s0, ev1);
+    const ev2 = fixed({
+      id: '01H0000000000000000000002A',
+      from: 'user',
+      kind: 'user.intervene',
+      data: { target_actor: 'builder', sandwich_append: 'second' },
+    });
+    const { state: s2 } = reduce(s1, ev2);
+    const spec = fixed({
+      id: '01H0000000000000000000003A',
+      from: 'planner-lead',
+      kind: 'spec',
+      data: { acceptance_criteria: ['ac1'] },
+    });
+    const { effects } = reduce(s2, spec);
+    const spawn = effects.find((e) => e.type === 'spawn') as
+      | { sandwich_appends?: { source_id: string; text: string }[] }
+      | undefined;
+    expect(spawn?.sandwich_appends).toHaveLength(2);
+    expect(spawn?.sandwich_appends?.[0].text).toBe('first');
+    expect(spawn?.sandwich_appends?.[1].text).toBe('second');
   });
 
   it('v3.2 G1: user.approve is no-op when last verdict was PASS or absent', () => {
