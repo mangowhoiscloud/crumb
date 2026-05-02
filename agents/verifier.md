@@ -62,9 +62,27 @@ The verification step among the 5 outer actors. After the v3 builder + verifier 
 
 Inline-read `skills/verification-before-completion.md` for the evidence-over-claims discipline.
 
-Compute initial scores per dimension following the matrix. Source matters — D2/D4/D6 are LOOKUP only, never your judgment.
+**v3.4 LLM playthrough (additive on top of qa.result lookup).** Before
+scoring, drive a real Playwright MCP session against the running game and
+execute one scenario per `spec.md` AC item:
 
-Append: `kind=step.judge`, `step=grader`, `data={initial_scores: {D1, D2, D3, D4, D5, D6}}`.
+1. Start a static server on the artifact root (`npx http-server -p 0
+   artifacts/game/` for multi-file profile, or open `artifacts/game.html`
+   directly for single-file). The dispatcher's qa_check effect already did
+   this; reuse the URL it surfaces in `qa.result.data.url` when present.
+2. For each AC: derive a `(action, observation)` pair (tap / drag / wait /
+   read DOM). Execute via Playwright MCP. Mark `pass | fail | skipped`.
+3. Append `kind=step.judge`, `step=grader`, `data.scenario_steps = [{ac_id,
+   action, observation, verdict}]` alongside `data.initial_scores`.
+
+The scenario log is the **D1 evidence** — empty or missing scenarios force
+`D1 ≤ 2` per anti-deception Rule 6 (added in this PR's planned follow-up).
+Vision verification is OPT-IN: when the harness exposes Computer Use, also
+emit a screenshot reference per AC and grade visual fidelity vs `DESIGN.md`.
+
+Compute initial scores per dimension following the matrix. Source matters
+— D2/D4/D6 are LOOKUP only, never your judgment. **D2 stays bound to
+`qa.result.exec_exit_code`; the LLM playthrough cannot override it.**
 
 ### 2. Critic
 

@@ -26,14 +26,19 @@ afterEach(() => {
 });
 
 describe('defaultConfig', () => {
-  it('all 5 actors present, all on high-end models, effort=high', () => {
+  it('v3.4 — every actor seeds to ambient (claude-code) with effort=high', () => {
     const c = defaultConfig();
     expect(c.defaults.effort).toBe('high');
-    expect(c.actors.coordinator?.model).toBe('claude-opus-4-7');
-    expect(c.actors.builder?.model).toBe('gpt-5.5-codex');
-    expect(c.actors.verifier?.model).toBe('gemini-3-1-pro');
-    expect(c.actors['planner-lead']?.effort).toBe('high');
+    // Every actor seeds to claude-code so a fresh checkout is single-auth;
+    // cross-provider runs come via `--preset bagelcode-cross-3way` or NL
+    // `crumb model` overrides.
+    for (const actor of ['coordinator', 'planner-lead', 'builder', 'verifier'] as const) {
+      expect(c.actors[actor]?.harness).toBe('claude-code');
+      expect(c.actors[actor]?.model).toBe('claude-opus-4-7');
+      expect(c.actors[actor]?.effort).toBe('high');
+    }
     expect(c.actors['builder-fallback']?.harness).toBe('claude-code');
+    expect(c.actors['builder-fallback']?.model).toBe('claude-sonnet-4-6');
   });
 
   it('all 3 local providers enabled by default', () => {
@@ -104,7 +109,8 @@ describe('saveConfig + loadConfig roundtrip', () => {
     saveConfig(tmp, c);
     const loaded = loadConfig(tmp);
     expect(loaded.defaults.effort).toBe('high');
-    expect(loaded.actors.builder?.model).toBe('gpt-5.5-codex');
+    expect(loaded.actors.builder?.model).toBe('claude-opus-4-7');
+    expect(loaded.actors.builder?.harness).toBe('claude-code');
     expect(loaded.providers['claude-local'].enabled).toBe(true);
   });
 
@@ -131,7 +137,7 @@ describe('formatConfig', () => {
     expect(out).toContain('## providers');
     expect(out).toContain('## actors');
     expect(out).toContain('claude-opus-4-7');
-    expect(out).toContain('gemini-3-1-pro');
+    expect(out).toContain('claude-sonnet-4-6');
   });
 });
 
@@ -140,13 +146,14 @@ describe('formatConfig', () => {
 // extended thinking per Snell ICLR 2025) to effort=high. Backing: wiki/synthesis/
 // bagelcode-scoring-ratchet-frontier-2026-05-02.md §7 P0-1.
 describe('committed .crumb/config.toml', () => {
-  it('parses into v3 schema with verifier effort=high', () => {
+  it('v3.4 — every actor seeds to claude-code with effort=high', () => {
     const repoRoot = join(import.meta.dirname, '..', '..');
     const live = loadConfig(repoRoot);
     expect(live.defaults.effort).toBe('high');
-    expect(live.actors.verifier?.effort).toBe('high');
-    expect(live.actors.verifier?.harness).toBe('gemini-cli');
-    expect(live.actors.verifier?.model).toBe('gemini-3-1-pro');
+    for (const name of ['coordinator', 'planner-lead', 'builder', 'verifier'] as const) {
+      expect(live.actors[name]?.effort).toBe('high');
+      expect(live.actors[name]?.harness).toBe('claude-code');
+    }
   });
 
   it('all 5 actors carry effort=high (no silent low/med drift)', () => {
