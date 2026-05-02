@@ -57,9 +57,17 @@ export class GeminiLocalAdapter implements Adapter {
     // Gemini CLI flag set is still stabilizing (CLI convergence 2026-04).
     // Best-guess Anthropic-mirror flags; verify via `crumb doctor` if a real
     // run reports unknown-flag errors.
+    //
+    // Most reducer spawn effects omit `prompt` because the actor's job is fully
+    // described by the sandwich. Fall back to a generic kickoff so empty
+    // prompts don't crash the spawn (CLIs reject empty `-p ""`).
+    const promptText =
+      req.prompt && req.prompt.trim().length > 0
+        ? req.prompt
+        : 'Continue your role per the system prompt.';
     const args = [
       '-p',
-      req.prompt ?? '',
+      promptText,
       '--system-prompt',
       sandwich,
       '--add-dir',

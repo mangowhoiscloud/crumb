@@ -41,9 +41,18 @@ export class ClaudeLocalAdapter implements Adapter {
     }
     const sandwich = await readFile(req.sandwichPath, 'utf8');
 
+    // Claude CLI rejects `-p ""` ("Input must be provided either through stdin
+    // or as a prompt argument when using --print"). Most reducer spawn effects
+    // (goal → planner-lead, spec → builder, qa.result → verifier, fallback)
+    // omit `prompt` because the actor's job is fully described by the sandwich.
+    // Fall back to a generic kickoff so empty prompts don't crash the spawn.
+    const promptText =
+      req.prompt && req.prompt.trim().length > 0
+        ? req.prompt
+        : 'Continue your role per the system prompt.';
     const args = [
       '-p',
-      req.prompt ?? '',
+      promptText,
       '--append-system-prompt',
       sandwich,
       '--add-dir',

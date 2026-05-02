@@ -4,7 +4,15 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
-### Added — `crumb migrate` for legacy `<cwd>/sessions/` — v3.3 Phase 3 (2026-05-02)
+### Fixed — Adapter empty-prompt crash blocks every real subprocess run (2026-05-02)
+
+Discovered while smoke-testing v3.3 against `--preset solo`: every real subprocess spawn died on the first actor with `error: Input must be provided either through stdin or as a prompt argument when using --print` (claude-local exit 1 in 3.7s). Root cause: most reducer spawn effects (goal → planner-lead, spec → builder, qa.result → verifier, fallback → builder-fallback) intentionally omit `prompt` because the actor's job is fully described by the sandwich — but the adapters then forwarded `req.prompt ?? ''` to the host CLI, and `claude -p ""` / `gemini -p ""` reject empty input. Codex's `exec --prompt <text>` was conditionally appended, so codex sat waiting on stdin instead of crashing.
+
+- **`src/adapters/claude-local.ts`** + **`gemini-local.ts`** + **`codex-local.ts`** — when `req.prompt` is missing or whitespace-only, fall back to `'Continue your role per the system prompt.'` Codex now always receives `--prompt <text>` (no more conditional append).
+- Why a single generic kickoff is right: the sandwich (`agents/<actor>.md`) is the canonical role spec; the prompt is just the wake-up signal. Each actor's first turn is supposed to read the sandwich + `task_ledger` (via `agent-workspace`) and act. A generic kickoff doesn't bias the actor toward any particular branch.
+- This unblocks every real run with `--preset solo` / `bagelcode-cross-3way` / `sdk-enterprise`. Mock adapter was unaffected (it never touches CLI prompts).
+
+
 
 Closes the v3.3 storage refactor by giving v3.2-and-older users a one-shot move into the new `~/.crumb/projects/<id>/sessions/` layout.
 
