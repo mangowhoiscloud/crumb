@@ -149,6 +149,51 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
     scores.verdict = 'PARTIAL';
   }
 
+  // ── Rule 6 — composite_gaming_d1_d5_below_minimum ───────────────────────────
+  // G-D from [[bagelcode-scoring-ratchet-frontier-2026-05-02]] §7 P1.
+  //
+  // The aggregate-floor check above is OR-gate: any combination summing to ≥24
+  // passes. Without per-dimension floors, the builder can game cheap-to-saturate
+  // deterministic dims (D2 exec / D6 portability — typically 5 each from
+  // qa-check-effect ground truth) and overshadow weak LLM-judge dims (D1
+  // spec_fit / D5 quality). Example: D1=2 + D2=5 + D3=5 + D4=5 + D5=2 + D6=5
+  // sums to 24 = PASS, but the builder is failing on the two LLM-judge
+  // dimensions that actually capture spec compliance and player UX.
+  //
+  // Frontier convergence on AND-gate per-dim floor (release/PASS gate, not
+  // training-signal aggregation):
+  //   - SWE-bench Verified 2024 — pass/fail is binary (test ground truth)
+  //   - RewardBench v2 (Lambert 2025, AI2 §4.2) — explicit "per-category to
+  //     prevent compensatory averaging masking safety regressions"
+  //   - LiveCodeBench (Jain ICLR 2025) — per-difficulty + per-contest min
+  //   - HELM Capabilities (Liang Stanford 2024) — "per-scenario worst-case"
+  //     headline metric
+  //   - OpenAI Preparedness Framework 2024-12 — AND-gate per-dim floor on
+  //     capability eval
+  //   - Anthropic RSP v2 2024-10 — every safety dim must clear threshold
+  //
+  // Threshold = 3/5 (60%): judge variance σ≈0.6 (Zheng et al. NeurIPS 2023
+  // MT-Bench analysis) means a 4/5 floor produces too many false negatives;
+  // 3/5 catches the gaming case (D1=2 / D5=2) without false-flagging
+  // legitimate near-PASS work. Tightening to 4/5 is a P1 once judge variance
+  // drops with extended-thinking adopters (Snell ICLR 2025).
+  //
+  // Order: applied LAST so prior downgrades (aggregate floor, Rule 4) compose;
+  // FAIL / PARTIAL verdicts are idempotent under this rule.
+  // Note: the violation fires when the floor is breached AND the verifier had
+  // emitted a PASS (the gaming case). FAIL/PARTIAL verifiers are not gaming —
+  // they're already saying no. We snapshot the *original* verdict so Rule 4's
+  // PASS → PARTIAL downgrade above doesn't mask the gaming signal.
+  const D1_MIN = 3;
+  const D5_MIN = 3;
+  const d1Below = (scores.D1?.score ?? 5) < D1_MIN;
+  const d5Below = (scores.D5?.score ?? 5) < D5_MIN;
+  const verifierIntendedPass = (input.judgeScore.scores?.verdict ?? null) === 'PASS';
+  if (verifierIntendedPass && (d1Below || d5Below)) {
+    violations.push('composite_gaming_d1_d5_below_minimum');
+    if (scores.verdict === 'PASS') scores.verdict = 'PARTIAL';
+  }
+
   scores.audit_violations = violations;
   return { scores, violations };
 }
