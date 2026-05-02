@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "ignoreWorkspaces": ["packages/dashboard"],
+  "workspaces": {
+    ".": {
+      "entry": ["src/cli.ts", "src/mcp-server.ts", "src/**/*.test.ts"],
+      "project": "src/**/*.ts"
+    }
+  }
+}

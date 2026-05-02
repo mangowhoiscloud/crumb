@@ -58,8 +58,15 @@ Reply in **Korean** for design discussion, research summaries, and brainstorming
 ## Verify gate (Pre-PR Quality Gate)
 
 ```bash
-npm run lint && npm run typecheck && npm run format:check && npm test && npm run build
+npm run lint && npm run lint:knip && npm run lint:deps && npm run typecheck && npm run format:check && npm test && npm run build
 ```
+
+Or shorthand: `npm run lint:all && npm run typecheck && npm run format:check && npm test && npm run build`.
+
+The three lint stages map to 2026 frontier evidence:
+- `lint` — eslint + sonarjs (cognitive-complexity 20 / no-identical-functions / no-duplicate-string). Cognitive complexity is a better LLM context-hop proxy than McCabe cyclomatic.
+- `lint:knip` — dead code, unused exports, missing/unlisted deps. Backed by ICST 2026 (arXiv 2504.04372): dead-code injection drops debugging accuracy to 18.5% — worse than misleading variable names.
+- `lint:deps` — dependency-cruiser enforcing architecture invariants (`reducer` purity, `state` purity, `protocol/types.ts` zero-dep, no circular). Backed by MSR '26 *Beyond the Prompt* (arXiv 2512.18925): typed projects with strong layer constraints need less prompt-context budget.
 
 CI runs the same matrix (Node 18 / 20 / 22) on every push to `main`. Don't push if local fails.
 

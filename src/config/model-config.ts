@@ -30,7 +30,7 @@ import { dirname, resolve } from 'node:path';
 
 import { parse as parseToml } from '@iarna/toml';
 
-import type { Harness, Provider } from '../dispatcher/preset-loader.js';
+import type { Harness, Provider } from '../protocol/types.js';
 
 export type Effort = 'low' | 'med' | 'high';
 
@@ -97,7 +97,6 @@ export const ACTORS = [
   'verifier',
   'builder-fallback',
 ] as const;
-export type ActorName = (typeof ACTORS)[number];
 
 /** Effort levels — left/right cycle in TUI. */
 export const EFFORT_LEVELS: Effort[] = ['low', 'med', 'high'];
