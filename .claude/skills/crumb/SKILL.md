@@ -185,7 +185,7 @@ adapter native session id (Claude Code `--resume` / Codex `--thread`) 를 metada
 | Preset | 구성 요지 | 설치/인증 요구 | 어울리는 사용 사례 |
 |---|---|---|---|
 | **(no preset)** ambient | entry host 따라감 (e.g. claude-code + claude-opus-4-7) — Crumb 이 binding 결정 X | entry host 의 인증 1개 | 단순 진입, 환경 그대로 사용 |
-| **`bagelcode-cross-3way`** | builder=codex+gpt-5.5-codex / verifier=gemini-cli+gemini-2.5-pro / 나머지 ambient | claude + codex + gemini 3 인증 | **사용 사례 — cross-provider 시연**: 베이글코드 메일 "Claude Code, Codex, Gemini CLI 등 동시 사용" 정조준. matrix C2 cross-assemble 완전 (CP-WBFT / MAR / Lanham 0.32→0.89). |
+| **`bagelcode-cross-3way`** | builder=codex+gpt-5.5-codex / verifier=gemini-cli+gemini-3-1-pro / 나머지 ambient | claude + codex + gemini 3 인증 | **사용 사례 — cross-provider 시연**: 베이글코드 메일 "Claude Code, Codex, Gemini CLI 등 동시 사용" 정조준. matrix C2 cross-assemble 완전 (CP-WBFT / MAR / Lanham 0.32→0.89). |
 | **`mock`** | 모든 actor = mock adapter, deterministic | 0 | **사용 사례 — CI / 평가자 환경**: 키 없이 동작 보장, replay-deterministic |
 | **`sdk-enterprise`** | API key 직접 호출 (subscription 우회) | 3 API key (ANTHROPIC / OPENAI / GEMINI) | **사용 사례 — production**: ToS 안전 (Anthropic 3rd-party OAuth 차단 회피), 평가자가 enterprise 키 보유 시 |
 | **`solo`** | 단일 entry host 의 단일 model (가장 가벼움) | entry host 1개 | **사용 사례 — 최소 셋업 데모**: subscription 만으로 빠른 demo |
@@ -229,6 +229,63 @@ subagent_spawn                 # host-native primitive 추상화
 | **Headless** | `npx tsx src/index.ts run --goal "..."` | CI / 평가자 키 없음 |
 
 → 사용자가 어떤 host 에서 진입하든 control plane (transcript / reducer / state) 동일. cross-host 시나리오 시 MCP Provider (`localhost:8765`) 가 fan-in.
+
+## Swap cookbook — 모델 / 프로바이더 / 액터 갈아끼우기
+
+Crumb 은 4 차원 (preset / actor binding / model / provider toggle) 모두 사용자 통제권. **정적 (config.toml seed) vs 동적 (mid-session transcript)** 두 종류 swap 표면이 있고, 둘 다 동일 reducer 결정 흐름을 거친다.
+
+### A. 정적 swap — `.crumb/config.toml` 영구 변경
+
+세션 시작 전 / 다음 세션부터 적용. 3 표면 중 muscle-memory 따라 골라 사용:
+
+| 표면 | 호출 | 사용 사례 |
+|---|---|---|
+| **MCP `crumb_model`** ★ | "verifier 모델을 gemini-3-1-pro 로", "set builder model to gpt-4o-mini", "effort 다 high 로", "codex 비활성화", "어떤 모델 쓰고 있어?" (read-only) | Claude Code / Codex / Gemini 어떤 host 든 NL 한 줄 |
+| CLI `crumb model` | `npx tsx src/index.ts model` (interactive blessed TUI) / `--show` (read-only) / `--apply "<NL>"` | 터미널에서 즉시, scripts |
+| Direct edit | `.crumb/config.toml` (TOML, gitignored) | git history 추적이 필요한 운영 환경 |
+
+**값 형식** (resolve order: config.toml → preset.actors → preset.[defaults] → ambient → fallback):
+- `harness ∈ {claude-code, codex, gemini-cli, gemini-sdk, anthropic-sdk, openai-sdk, google-sdk, mock}`
+- `model` — `MODEL_CATALOG` (per-provider, 위→아래 high→low) 의 캐논형. Gemini IDs 점/대시 양쪽 alias (`gemini-3.1-pro` ↔ `gemini-3-1-pro`).
+- `effort ∈ {low, med, high}` — Anthropic `budget_tokens` (8K/24K/64K) / OpenAI `reasoning.effort` / Gemini `thinking_budget` 매핑
+- `providers.<id>.enabled` (boolean) — 비활성 provider 는 dispatcher 가 `claude-local` 로 fallback + `kind=note` 로 substitution 알림
+
+### B. 동적 swap — mid-session transcript event
+
+세션 진행 중 즉시 적용 (`reducer → progress_ledger.adapter_override` 또는 `task_ledger.facts[sandwich_append]`). 3 표면 모두 동일 transcript line:
+
+| 표면 | 예시 | 효과 |
+|---|---|---|
+| TUI 슬래시 바 | `/swap builder=mock` / `/goto verifier` / `/append @verifier check D5 carefully` | 다음 spawn 부터 actor 의 adapter / next_speaker / sandwich 갱신 |
+| `inbox.txt` | `echo "/swap builder=mock" >> sessions/<id>/inbox.txt` | 500ms watcher 가 line → user.intervene |
+| JSON event | `echo '{"from":"user","kind":"user.intervene","data":{"swap":{"from":"builder","to":"mock"}}}' \| crumb event` | 가장 low-level — TUI/inbox 모두 결국 여기로 |
+
+**`data.<key>` 의미** (자세히는 `agents/coordinator.md` Routing Rules):
+- `swap: { from, to }` — `progress_ledger.adapter_override[from] = to` (Paperclip BYO swap)
+- `goto: <actor>` — `next_speaker = <actor>` 강제 + 즉시 spawn (LangGraph `Command(goto)`)
+- `target_actor: <actor>` — fact 가 `@<actor>` 로 태그됨 (다음 spawn sandwich 노출)
+- `sandwich_append: <text>` (+ 옵션 `target_actor`) — dispatcher 가 다음 spawn 부터 system prompt 에 concat (G4)
+- `reset_circuit: <actor> | true` — circuit_breaker 클리어
+- `actor: <actor>` (pause/resume 한정) — 글로벌 대신 해당 actor 만
+
+> **Frontier 매핑**: LangGraph `Command(goto/update={...})` (53/60), Paperclip BYO swap (38/60), Codex `APPEND_SYSTEM.md` (38/60). 자세한 backing: `wiki/synthesis/bagelcode-user-intervention-frontier-2026-05-02.md`. Scoring + ratchet 정렬 분석은 `wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md`.
+
+### C. 시작 시 swap — `--preset <name>`
+
+`crumb run --goal "..." --preset bagelcode-cross-3way` 등 preset 으로 세션 단위 binding 일괄 결정. preset 파일은 `.crumb/presets/*.toml` 에 있고 `crumb config "<NL>"` 로 어떤 preset 이 어울리는지 추천 가능 (강제 X — 사용자 선택).
+
+### 한 눈 정리 — "X 를 Y 로 갈아끼우기"
+
+| 상황 | 가장 가까운 명령 |
+|---|---|
+| 세션 전, verifier 모델만 영구 변경 | `crumb_model "verifier 모델을 gemini-3-1-pro 로"` |
+| 세션 전, 모든 actor effort 한 번에 | `crumb_model "effort 다 high 로"` |
+| 세션 전, codex 잠시 비활성 | `crumb_model "codex 비활성화"` |
+| 세션 전, preset 통째 변경 | `crumb run --preset <name>` |
+| 세션 진행 중, builder 어댑터만 변경 | TUI: `/swap builder=mock` 또는 inbox: `echo "/swap builder=mock" >> sessions/<id>/inbox.txt` |
+| 세션 진행 중, 다음 단계 강제 | TUI: `/goto verifier` |
+| 세션 진행 중, sandwich 보강 | TUI: `/append @verifier <text>` |
+| 세션 진행 중, circuit 리셋 | TUI: `/reset-circuit builder` |
 
 ## Skill enforcement (do NOT)
 

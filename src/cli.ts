@@ -455,11 +455,12 @@ async function writeProjectPin(cwd: string, label?: string): Promise<void> {
  * `crumb model` — interactive blessed UI to edit per-actor model + effort + provider activation.
  *
  * Reads/writes .crumb/config.toml. Defaults to all high-end models (claude-opus-4-7,
- * gpt-5.5-codex, gemini-2.5-pro) + effort=high + all 3 local providers enabled.
+ * gpt-5.5-codex, gemini-3-1-pro) + effort=high + all 3 local providers enabled.
+ * Gemini IDs accept both dot ("gemini-3.1-pro") and dash ("gemini-3-1-pro") forms.
  *
  *   crumb model               interactive TUI (Tab cycle / ↑↓ model / ←→ effort / h harness / p providers)
  *   crumb model --show        print current config and exit
- *   crumb model --apply "<NL instruction>"   apply natural-language change ("verifier 모델을 gemini-2.5-pro 로")
+ *   crumb model --apply "<NL instruction>"   apply natural-language change ("verifier 모델을 gemini-3-1-pro 로")
  */
 async function cmdModel(args: ParsedArgs): Promise<void> {
   // --root: repo path that holds .crumb/config.toml. Default process.cwd().

@@ -105,7 +105,7 @@ Each entry imports / references this AGENTS.md and the matching `agents/*.md` sa
 | Preset | Binding | Use case |
 |---|---|---|
 | **(no preset)** ambient | Every actor follows the entry host | Simplest path — whatever you have authenticated |
-| **`bagelcode-cross-3way`** | builder=codex+gpt-5.5-codex / verifier=gemini-cli+gemini-2.5-pro / rest=ambient | 3-provider cross-assemble (Bagelcode mail's "Claude Code, Codex, Gemini CLI 등 동시 사용") |
+| **`bagelcode-cross-3way`** | builder=codex+gpt-5.5-codex / verifier=gemini-cli+gemini-3-1-pro / rest=ambient | 3-provider cross-assemble (Bagelcode mail's "Claude Code, Codex, Gemini CLI 등 동시 사용") |
 | **`mock`** | All actors = mock adapter, deterministic | CI / no auth / deterministic demo |
 | **`sdk-enterprise`** | API key direct (subscription bypass) | Production / ToS-safe / enterprise key holders |
 | **`solo`** | Single entry host, single model | Minimal-setup demo |

@@ -37,7 +37,7 @@ auth     = "api-key"
 sandwich = "agents/verifier.md"
 harness  = "google-sdk"
 provider = "google"
-model    = "gemini-2.5-pro"
+model    = "gemini-3-1-pro"
 auth     = "api-key"
 
 [actors.builder-fallback]

@@ -60,11 +60,31 @@ describe('applyNlInstruction — effort', () => {
 });
 
 describe('applyNlInstruction — per-actor model', () => {
-  it('"verifier 모델을 gemini-2.5-pro 로" sets verifier model', () => {
+  it('"verifier 모델을 gemini-3-1-pro 로" sets verifier model (dash form)', () => {
+    applyNlInstruction(tmp, 'verifier 모델을 gemini-3-1-pro 로');
+    const c = loadConfig(tmp);
+    expect(c.actors.verifier?.model).toBe('gemini-3-1-pro');
+    expect(c.actors.verifier?.harness).toBe('gemini-cli');
+  });
+
+  it('"verifier 모델을 gemini-3.1-pro 로" sets verifier (dot form aliased to dash)', () => {
+    applyNlInstruction(tmp, 'verifier 모델을 gemini-3.1-pro 로');
+    const c = loadConfig(tmp);
+    expect(c.actors.verifier?.model).toBe('gemini-3-1-pro');
+    expect(c.actors.verifier?.harness).toBe('gemini-cli');
+  });
+
+  it('"verifier 모델을 gemini-2.5-pro 로" still works (dot form is canonical for 2.5)', () => {
     applyNlInstruction(tmp, 'verifier 모델을 gemini-2.5-pro 로');
     const c = loadConfig(tmp);
     expect(c.actors.verifier?.model).toBe('gemini-2.5-pro');
-    expect(c.actors.verifier?.harness).toBe('gemini-cli');
+  });
+
+  it('"verifier 모델을 gemini-2-5-pro 로" also resolves (dash form aliased to dot)', () => {
+    applyNlInstruction(tmp, 'verifier 모델을 gemini-2-5-pro 로');
+    const c = loadConfig(tmp);
+    // Catalog form for 2.5 uses dots, so the saved value preserves dots.
+    expect(c.actors.verifier?.model).toBe('gemini-2.5-pro');
   });
 
   it('"set builder model to gpt-4o-mini" updates builder', () => {

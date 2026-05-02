@@ -92,11 +92,11 @@ const SYSTEM_FALLBACK: AmbientContext = {
 const HARNESS_DEFAULT_MODEL: Record<Harness, { provider: Provider; model: string }> = {
   'claude-code': { provider: 'anthropic', model: 'claude-sonnet-4-6' },
   codex: { provider: 'openai', model: 'gpt-5.5-codex' },
-  'gemini-cli': { provider: 'google', model: 'gemini-2.5-pro' },
+  'gemini-cli': { provider: 'google', model: 'gemini-3-1-pro' },
   'gemini-sdk': { provider: 'google', model: 'gemini-3-1-pro' },
   'anthropic-sdk': { provider: 'anthropic', model: 'claude-sonnet-4-6' },
   'openai-sdk': { provider: 'openai', model: 'gpt-5.5' },
-  'google-sdk': { provider: 'google', model: 'gemini-2.5-pro' },
+  'google-sdk': { provider: 'google', model: 'gemini-3-1-pro' },
   mock: { provider: 'none', model: 'fixture-v1' },
   none: { provider: 'none', model: 'none' },
 };

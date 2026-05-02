@@ -9,7 +9,7 @@ description: >-
   (cross_provider=true). Injected as a Markdown body via the host CLI; the runtime envelope
   (XML) is prepended by the dispatcher.
 actor: verifier
-provider_hint: ambient (swap via preset.actors.verifier; the bagelcode-cross-3way preset binds gemini-cli / gemini-2.5-pro for multimodal screenshot grading)
+provider_hint: ambient (swap via preset.actors.verifier; the bagelcode-cross-3way preset binds gemini-cli / gemini-3-1-pro for multimodal screenshot grading)
 inline_skills:
   - skills/verification-before-completion.md
   - skills/code-review-protocol.md

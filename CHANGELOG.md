@@ -15,6 +15,16 @@ Closing a 4-issue cluster found while smoke-testing v3.3 against `--preset solo`
 - **`--root` flag conflation** (`src/cli.ts`). Twelve session-resolving commands (`replay/resume/debug/status/suggest/tui/export/ls/release/copy-artifacts/versions/migrate`) were using `args.flags.get('root') ?? process.cwd()` for project resolution — meaning `--root` would override the user's actual cwd's pin file. Fix: those commands now use `process.cwd()` unconditionally; `--root` is reserved for `cmdRun/cmdConfig/cmdInit/cmdModel` (preset/agents/config loading). Pin file in cwd always wins for session resolution.
 - **Test count**: 521/521 (was 254 before observability rebase + parallel sessions added researcher/preset tests).
 
+### Changed — Verifier default → `gemini-3-1-pro` + dot/dash NL alias + swap cookbook (2026-05-02)
+
+Three coupled changes addressing the question "왜 verifier가 아직 `gemini-2.5-pro`?" + "갈아끼우기를 한 페이지에서 보고 싶다":
+
+- **Verifier seat default**: bumped `gemini-2.5-pro` → `gemini-3-1-pro` (top of `MODEL_CATALOG.google`) across `.crumb/config.toml`, `defaultConfig().actors.verifier.model`, `HARNESS_DEFAULT_MODEL` (gemini-cli + google-sdk fallbacks), `.crumb/presets/sdk-enterprise.toml`, and surface docs (README / README.ko / AGENTS / GEMINI / `.claude/skills/crumb/SKILL.md` / `.claude/skills/crumb-model/SKILL.md` / `agents/verifier.md` provider_hint / cli.ts / mcp-server.ts crumb_model description). Test fixtures and regression specs follow the rename. **`gemini-2.5-pro` stays in the catalog as a fallback option** — users wanting the older model can still set it explicitly.
+- **NL parser dot/dash alias**: `applyNlInstruction()` now normalizes `<digit>.<digit>` ↔ `<digit>-<digit>` on both sides of the catalog compare, so the user can say either "verifier 모델을 gemini-3.1-pro 로" (Google API canonical) or "verifier 모델을 gemini-3-1-pro 로" (catalog form) — the saved value is whichever form the catalog stores. Reverse alias also works (`gemini-2-5-pro` resolves to `gemini-2.5-pro`). +4 specs in `src/tui/model-edit.test.ts`.
+- **Swap cookbook** in `.claude/skills/crumb/SKILL.md`: a single section listing all model / provider / actor swap surfaces — A) static `.crumb/config.toml` via MCP / CLI / direct edit, B) dynamic mid-session via TUI slash bar / `inbox.txt` / JSON event (`/swap`, `/goto`, `/append`, `/reset-circuit`, `data.target_actor`, `data.sandwich_append`), C) preset-level `--preset <name>` at session start. Includes a one-glance "X 를 Y 로 갈아끼우기" lookup table. Frontier-link references `bagelcode-user-intervention-frontier-2026-05-02.md` and `bagelcode-scoring-ratchet-frontier-2026-05-02.md`.
+
+Test suite total **278/278** (main's local count + 4 new dot/dash alias specs).
+
 ### Changed — D3/D5 split into single-origin dims, drop `'hybrid'` source (2026-05-02)
 
 Every score dimension now reports a single origin in `scores.D*.source`: `verifier-llm` | `qa-check-effect` | `reducer-auto`. The prior `'hybrid'` value forced the verifier and reducer components into one number that the LLM emitted, which (a) duplicated information already carried by the `auto` / `semantic` / `quality` fields and (b) created an attack surface where the verifier could inflate the merged score (mitigated previously by anti-deception Rule 5).

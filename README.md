@@ -140,7 +140,7 @@ For the full canonical spec, see [wiki/concepts/bagelcode-system-architecture-v3
 | Preset | Binding | Use case |
 |---|---|---|
 | **(no preset)** ambient | Every actor follows entry host (e.g. claude-code + claude-opus-4-7) | Simplest path; whatever you have authenticated |
-| **`bagelcode-cross-3way`** | builder=codex+gpt-5.5-codex / verifier=gemini-cli+gemini-2.5-pro / rest=ambient | Bagelcode mail verbatim ("Claude Code, Codex, Gemini CLI 등 동시 사용"). 3-provider cross-assemble |
+| **`bagelcode-cross-3way`** | builder=codex+gpt-5.5-codex / verifier=gemini-cli+gemini-3-1-pro / rest=ambient | Bagelcode mail verbatim ("Claude Code, Codex, Gemini CLI 등 동시 사용"). 3-provider cross-assemble |
 | **`mock`** | All actors = mock adapter | CI / no auth / deterministic demo |
 | **`sdk-enterprise`** | API key direct (subscription bypass) | Production; ToS-safe (avoids Anthropic 3rd-party OAuth restriction) |
 | **`solo`** | Single entry host, single model | Minimal-setup demo |

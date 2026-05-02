@@ -17,7 +17,7 @@ const judgeScore: Message = {
   metadata: {
     harness: 'gemini-cli',
     provider: 'google',
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3-1-pro',
     tokens_in: 5000,
     tokens_out: 1500,
     cache_read: 4500,
@@ -61,7 +61,7 @@ describe('toOtelSpan', () => {
     expect(span.attributes['gen_ai.workflow.name']).toBe('crumb.coordinator');
     expect(span.attributes['gen_ai.step']).toBe('regrader');
     expect(span.attributes['gen_ai.task.id']).toBe('task_main');
-    expect(span.attributes['gen_ai.request.model']).toBe('gemini-2.5-pro');
+    expect(span.attributes['gen_ai.request.model']).toBe('gemini-3-1-pro');
     expect(span.attributes['gen_ai.usage.input_tokens']).toBe(5000);
     expect(span.attributes['gen_ai.usage.output_tokens']).toBe(1500);
     expect(span.attributes['gen_ai.usage.cache_read_tokens']).toBe(4500);

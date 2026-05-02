@@ -302,13 +302,19 @@ export function applyNlInstruction(repoRoot: string, instruction: string): strin
     }
   }
 
-  // Per-actor model: "verifier 모델을 gemini-2.5-pro 로", "set builder model to gpt-4o-mini"
+  // Per-actor model: "verifier 모델을 gemini-3-1-pro 로", "set builder model to gpt-4o-mini",
+  // "verifier 모델을 gemini-3.1-pro 로" (dot/dash forms are aliased — the catalog mixes
+  // both: gemini-2.5-pro uses dots, gemini-3-1-pro uses dashes — we normalize on both
+  // sides of the compare so the user can type whichever form is muscle-memory).
+  const normalizedLower = normalizeModelIds(lower);
   for (const actor of ACTORS) {
-    if (!lower.includes(actor)) continue;
+    if (!normalizedLower.includes(actor)) continue;
     for (const provider of Object.keys(MODEL_CATALOG)) {
       for (const model of MODEL_CATALOG[provider as keyof typeof MODEL_CATALOG]) {
-        if (lower.includes(model.toLowerCase())) {
+        const normalizedModel = normalizeModelIds(model.toLowerCase());
+        if (normalizedLower.includes(normalizedModel)) {
           const harness = providerToHarness(provider as keyof typeof MODEL_CATALOG);
+          // Save the canonical catalog form, not the normalized form.
           config = {
             ...config,
             actors: {
@@ -334,6 +340,16 @@ function providerToHarness(provider: keyof typeof MODEL_CATALOG): Harness {
   if (provider === 'openai') return 'codex';
   if (provider === 'google') return 'gemini-cli';
   return 'mock';
+}
+
+/**
+ * Normalize Google Gemini model IDs for substring matching — collapse `<digit>.<digit>`
+ * into `<digit>-<digit>`. The catalog itself mixes the two forms (gemini-3-1-pro is
+ * dash, gemini-2.5-pro is dot), so we apply this normalization to both sides of the
+ * compare. The canonical catalog form is preserved when writing back to config.
+ */
+function normalizeModelIds(input: string): string {
+  return input.replace(/(\d)\.(\d)/g, '$1-$2');
 }
 
 /** Used by tests + non-interactive callers (formatConfig + apply). */
