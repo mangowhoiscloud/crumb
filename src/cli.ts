@@ -307,6 +307,43 @@ async function cmdExport(args: ParsedArgs): Promise<void> {
   process.stdout.write(out);
 }
 
+/**
+ * `crumb init` — multi-host entry verifier (Spec-kit `specify init` pattern).
+ *
+ * Subcommands:
+ *   crumb init                       same as --check (verify all)
+ *   crumb init --check               verify universal identity + every host entry
+ *   crumb init --host <name>         scope to one of: claude | codex | gemini
+ *   crumb init --format json         JSON output (default: human-readable)
+ *
+ * Distinct from `crumb doctor`: `init` only checks repo files
+ * (CRUMB.md / AGENTS.md / host entries); `doctor` checks runtime readiness
+ * (CLI binaries on PATH, OAuth, adapter health).
+ */
+async function cmdInit(args: ParsedArgs): Promise<void> {
+  const cwd = args.flags.get('root') ?? process.cwd();
+  const hostRaw = args.flags.get('host');
+  const formatRaw = args.flags.get('format') ?? 'human';
+  if (formatRaw !== 'human' && formatRaw !== 'json') {
+    throw new Error(`unknown --format ${formatRaw}. allowed: human, json`);
+  }
+  let filter: 'claude' | 'codex' | 'gemini' | 'all' = 'all';
+  if (hostRaw) {
+    if (hostRaw !== 'claude' && hostRaw !== 'codex' && hostRaw !== 'gemini' && hostRaw !== 'all') {
+      throw new Error(`unknown --host ${hostRaw}. allowed: claude, codex, gemini, all`);
+    }
+    filter = hostRaw;
+  }
+  const { check, formatHuman, formatJson } = await import('./helpers/init.js');
+  const result = check({ projectRoot: cwd, filter });
+  const out = formatRaw === 'json' ? formatJson(result) : formatHuman(result);
+  // eslint-disable-next-line no-console
+  console.log(out);
+  if (!result.ok) {
+    process.exitCode = 1;
+  }
+}
+
 async function cmdLs(args: ParsedArgs): Promise<void> {
   const cwd = args.flags.get('root') ?? process.cwd();
   const dir = resolve(cwd, 'sessions');
@@ -357,6 +394,10 @@ Usage:
   crumb tui <session-id|dir>               # blessed live observer (P0)
   crumb export <session-id|dir> [--format otel-jsonl|anthropic-trace|chrome-trace]
                                           # transcript → OTel GenAI / Anthropic / chrome://tracing
+  crumb init [--host <name>] [--format human|json]
+                                          # verify CRUMB.md/AGENTS.md + host entries
+                                          # (.claude/skills/crumb, .codex/agents, .gemini/extensions/crumb)
+                                          # distinct from doctor — init is repo files; doctor is runtime
   crumb ls                                 # list sessions/
 
 Flags (run):
@@ -410,6 +451,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       break;
     case 'tui':
       await cmdTui(args);
+      break;
+    case 'init':
+      await cmdInit(args);
       break;
     case 'export':
       await cmdExport(args);
