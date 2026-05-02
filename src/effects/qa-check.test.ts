@@ -4,7 +4,7 @@
  * Frontier backing (P0-2): wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md §7.
  */
 
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -108,15 +108,46 @@ describe('runQaCheck — lint + size on real artifact', () => {
     expect(r.lint_findings.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('FAILs when own-code exceeds 60KB', async () => {
+  it('reports bundle bytes for telemetry but does not gate on size (v0.4.0)', async () => {
     mockPlaywrightMissing();
     const { runQaCheck: rerunQaCheck } = await import('./qa-check.js');
     const path = join(tmp, 'game.html');
-    const padding = 'x'.repeat(61_000);
+    const padding = 'x'.repeat(200_000);
     writeFileSync(path, VALID_HTML.replace('// game logic', `// ${padding}`));
     const r = await rerunQaCheck(path);
-    expect(r.exec_exit_code).toBe(1);
-    expect(r.lint_findings.some((f) => /60000 bytes/.test(f))).toBe(true);
+    expect(r.exec_exit_code).toBe(0);
+    expect(r.loc_own_bytes).toBeGreaterThan(200_000);
+    expect(r.lint_findings.some((f) => /bytes|size|exceeds/i.test(f))).toBe(false);
+  });
+});
+
+describe('runQaCheck — multi-file bundle (index.html entry)', () => {
+  it('walks the bundle directory recursively and aggregates bytes + file count', async () => {
+    mockPlaywrightMissing();
+    const { runQaCheck: rerunQaCheck } = await import('./qa-check.js');
+    const bundleRoot = join(tmp, 'game');
+    mkdirSync(join(bundleRoot, 'src', 'scenes'), { recursive: true });
+    writeFileSync(join(bundleRoot, 'index.html'), VALID_HTML);
+    writeFileSync(join(bundleRoot, 'manifest.webmanifest'), '{"name":"g"}');
+    writeFileSync(join(bundleRoot, 'sw.js'), '// sw');
+    writeFileSync(join(bundleRoot, 'src', 'main.js'), 'x'.repeat(1000));
+    writeFileSync(join(bundleRoot, 'src', 'scenes', 'GameScene.js'), 'y'.repeat(2000));
+    const r = await rerunQaCheck(join(bundleRoot, 'index.html'));
+    expect(r.exec_exit_code).toBe(0);
+    expect(r.lint_passed).toBe(true);
+    expect(r.bundle_file_count).toBe(5);
+    expect(r.loc_own_bytes).toBeGreaterThan(3000);
+  });
+
+  it('skips dotfiles when walking the bundle', async () => {
+    mockPlaywrightMissing();
+    const { runQaCheck: rerunQaCheck } = await import('./qa-check.js');
+    const bundleRoot = join(tmp, 'game');
+    mkdirSync(bundleRoot, { recursive: true });
+    writeFileSync(join(bundleRoot, 'index.html'), VALID_HTML);
+    writeFileSync(join(bundleRoot, '.DS_Store'), 'noise');
+    const r = await rerunQaCheck(join(bundleRoot, 'index.html'));
+    expect(r.bundle_file_count).toBe(1);
   });
 });
 

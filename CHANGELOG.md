@@ -4,6 +4,24 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — qa-check multi-file bundle support, single-file size cap removed (PR-D) (2026-05-03)
+
+Aligns deterministic qa-check with the multi-file PWA envelope (`agents/specialists/game-design.md` §1.1). Single-file profile retired in v0.4.0; `MAX_OWN_CODE_BYTES = 60_000` no longer makes sense as a fail gate.
+
+`src/effects/qa-check.ts`:
+- **`MAX_OWN_CODE_BYTES = 60_000` removed.** No bundle size cap. User directive: single-shot quality > compression budget.
+- **Multi-file walker** added — when entry is `index.html`, walk `dirname(artifactPath)` recursively, sum file sizes, count files. Dotfiles skipped (`.DS_Store` etc.).
+- **`bundle_file_count`** added to `QaResult` for telemetry. `loc_own_bytes` now means aggregate bundle bytes for multi-file (file size for single-file, unchanged).
+- Lint findings no longer include any "exceeds N bytes" message — `allOk` derives from lint + Playwright + AC predicates only.
+
+The Playwright smoke + AC-predicate runner already supported multi-file via `dirname` / `basename` split (since v0.3.5); this PR was the last single-file holdout.
+
+`src/effects/qa-check.test.ts`:
+- Replaced "FAILs when own-code exceeds 60KB" with "reports bundle bytes for telemetry but does not gate on size".
+- Added 2 multi-file bundle tests: recursive walk + dotfile skip.
+
+Verification: `npm run lint && npm run typecheck && npm run format:check && npm test && npm run build` — 423 tests pass (12 in `qa-check.test.ts`).
+
 ### Added — `@crumb/studio` separate-publish prep (PR-pkg-2) (2026-05-03)
 
 Builds on the dashboard → studio rename (#96). Prepares `@crumb/studio` for independent npm publish so users can `npm i -g @crumb/studio` without pulling the full `crumb` core, and so dashboard UX patches can iterate on their own SemVer cadence (frontier pattern: Anthropic Claude Code / OpenAI Codex / Vercel `next` + sub-packages).

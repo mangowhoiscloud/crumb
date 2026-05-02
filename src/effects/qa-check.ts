@@ -3,10 +3,12 @@
  *
  * No LLM call. Runs:
  *   1. HTML lint (DOCTYPE / viewport meta / script tag) — built-in regex parser, no dep
- *   2. file size check (≤60KB own code constraint)
- *   3. Phaser CDN reference check (script tag pattern)
- *   4. Playwright headless smoke (auto-detect — runs when `playwright` is installed)
- *   5. Cross-browser portability (single-browser chromium smoke as P0 ground truth)
+ *   2. Phaser CDN reference check (script tag pattern)
+ *   3. Playwright headless smoke (auto-detect — runs when `playwright` is installed)
+ *   4. Cross-browser portability (single-browser chromium smoke as P0 ground truth)
+ *
+ * No bundle size cap (v0.4.0): single-shot quality wins over compression budget.
+ * Multi-file bundle bytes are reported in `loc_own_bytes` for telemetry only.
  *
  * Output: QaResult — fed back to transcript as kind=qa.result with metadata.deterministic=true.
  *
@@ -30,8 +32,9 @@
  *       (silent skip — prior behavior, kept for backward-compat).
  */
 
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { basename, dirname, join } from 'node:path';
 
 import type { ACPredicateItem, ACResult } from './qa-interactive.js';
 
@@ -72,8 +75,14 @@ export interface QaResult {
   ac_pass_count?: number;
   /** Length of `ac_results`. */
   ac_total?: number;
-  /** Own-code size in bytes (excluding CDN-loaded scripts). */
+  /**
+   * Bundle bytes — for multi-file (`index.html` entry), this is the recursive sum
+   * of every file under the bundle root. For a single-file artifact it is the
+   * file's own size. Excludes CDN-loaded scripts (external URLs).
+   */
   loc_own_bytes: number;
+  /** Number of files in the bundle. 1 for single-file artifacts. */
+  bundle_file_count?: number;
   /** Detailed lint findings (one per failed check). */
   lint_findings: string[];
 }
@@ -101,7 +110,43 @@ const LINT_RULES: Array<{ name: string; test: (html: string) => boolean; message
   },
 ];
 
-const MAX_OWN_CODE_BYTES = 60_000;
+// v0.4.0: bundle size cap removed alongside single-file profile retirement
+// (game-design.md §1 line 18). Bytes still walked + reported for telemetry,
+// never used as a pass/fail gate — single-shot quality > compression budget.
+
+function isMultiFileBundle(artifactPath: string): boolean {
+  return basename(artifactPath) === 'index.html';
+}
+
+function walkBundle(root: string): { totalBytes: number; fileCount: number } {
+  let totalBytes = 0;
+  let fileCount = 0;
+  const stack: string[] = [root];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    let entries;
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      const full = join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+      } else if (entry.isFile()) {
+        try {
+          totalBytes += statSync(full).size;
+          fileCount += 1;
+        } catch {
+          // Symlink targets that disappeared mid-walk; ignore.
+        }
+      }
+    }
+  }
+  return { totalBytes, fileCount };
+}
 
 /**
  * Run the deterministic check. Pure function of (artifact path) → result.
@@ -156,7 +201,6 @@ export async function runQaCheck(
 
   const html = readFileSync(artifactPath, 'utf-8');
   const sha256 = createHash('sha256').update(html).digest('hex');
-  const stat = statSync(artifactPath);
 
   const findings: string[] = [];
   for (const rule of LINT_RULES) {
@@ -166,11 +210,18 @@ export async function runQaCheck(
   const phaserLoaded = LINT_RULES[2]!.test(html);
   const lintPassed = findings.length === 0;
 
-  // Compute own-code bytes (file size minus rough CDN-script-tag length estimates).
-  // For single-file HTML this is a bound, not exact; CDN external doesn't count anyway.
-  const ownBytes = stat.size;
-  if (ownBytes > MAX_OWN_CODE_BYTES) {
-    findings.push(`own-code exceeds ${MAX_OWN_CODE_BYTES} bytes (got ${ownBytes})`);
+  // Walk multi-file bundle directory when entry is `index.html`; otherwise
+  // single-file artifact size. Reported as `loc_own_bytes` for telemetry only —
+  // no pass/fail gate (single-shot quality > compression budget).
+  let bundleBytes: number;
+  let bundleFileCount: number;
+  if (isMultiFileBundle(artifactPath)) {
+    const walked = walkBundle(dirname(artifactPath));
+    bundleBytes = walked.totalBytes;
+    bundleFileCount = walked.fileCount;
+  } else {
+    bundleBytes = statSync(artifactPath).size;
+    bundleFileCount = 1;
   }
 
   // Playwright smoke — auto-detect via dynamic import.
@@ -249,7 +300,7 @@ export async function runQaCheck(
   const playwrightFailed = firstInteraction === 'fail';
   const playwrightBlocks = playwrightFailed || (playwrightUnavailable && requirePlaywright);
   const acFailed = acResults.length > 0 && acPassCount < acResults.length;
-  const allOk = lintPassed && ownBytes <= MAX_OWN_CODE_BYTES && !playwrightBlocks && !acFailed;
+  const allOk = lintPassed && !playwrightBlocks && !acFailed;
 
   return {
     lint_passed: lintPassed,
@@ -264,7 +315,8 @@ export async function runQaCheck(
     ...(acResults.length > 0
       ? { ac_results: acResults, ac_pass_count: acPassCount, ac_total: acResults.length }
       : {}),
-    loc_own_bytes: ownBytes,
+    loc_own_bytes: bundleBytes,
+    bundle_file_count: bundleFileCount,
     lint_findings: findings,
   };
 }
