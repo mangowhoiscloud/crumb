@@ -46,10 +46,14 @@ export class ClaudeLocalAdapter implements Adapter {
     // (goal → planner-lead, spec → builder, qa.result → verifier, fallback)
     // omit `prompt` because the actor's job is fully described by the sandwich.
     // Fall back to a generic kickoff so empty prompts don't crash the spawn.
+    // The phrase is action-oriented: "Continue your role" (the v3.3 first
+    // attempt) sometimes produced "awaiting input" stalls — Claude treated it
+    // as a status check. Naming the transcript file + telling the actor to
+    // execute the next step removes that ambiguity.
     const promptText =
       req.prompt && req.prompt.trim().length > 0
         ? req.prompt
-        : 'Continue your role per the system prompt.';
+        : 'Begin your turn now. Read $CRUMB_TRANSCRIPT_PATH for full context (latest goal, spec, qa.result, etc.) and execute the next step per the system prompt. Do not wait for additional input.';
     const args = [
       '-p',
       promptText,

@@ -22,9 +22,17 @@ describe('reducer', () => {
     expect(state.task_ledger.goal).toBe('match-3 game');
     expect(state.task_ledger.facts).toHaveLength(1);
     expect(state.progress_ledger.next_speaker).toBe('planner-lead');
-    expect(effects).toEqual([
-      { type: 'spawn', actor: 'planner-lead', adapter: 'claude-local', sandwich_appends: [] },
-    ]);
+    expect(effects).toHaveLength(1);
+    expect(effects[0]).toMatchObject({
+      type: 'spawn',
+      actor: 'planner-lead',
+      adapter: 'claude-local',
+      sandwich_appends: [],
+    });
+    // v3.3: planner-lead spawn carries the goal as kickoff prompt to avoid
+    // ambiguous "awaiting input" stalls (run 01KQMCCR6M observability finding).
+    expect((effects[0] as { prompt?: string }).prompt).toContain('match-3 game');
+    expect((effects[0] as { prompt?: string }).prompt).toContain('Begin your turn');
   });
 
   it('routes spec → spawn(builder, codex-local) by default', () => {
