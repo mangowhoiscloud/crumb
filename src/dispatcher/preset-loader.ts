@@ -40,6 +40,8 @@ export interface ActorBinding {
   model: string;
   /** Optional auth method (e.g., 'api-key' for sdk-enterprise preset). */
   auth?: string;
+  /** Resolved effort (low/med/high). Provider-specific mapping at adapter spawn. */
+  effort?: 'low' | 'med' | 'high';
   /** True if any field came from ambient fallback (for audit log). */
   ambient_resolved: boolean;
 }
@@ -158,6 +160,48 @@ function resolveActor(
   return { name, sandwich, harness, provider, model, auth, ambient_resolved: ambientResolved };
 }
 
+/**
+ * Apply .crumb/config.toml override on top of resolved bindings.
+ * Override layers (highest first): config.toml → preset → ambient → fallback.
+ * Imported lazily to avoid circular import (model-config imports Harness from this file).
+ */
+async function applyConfigOverride(
+  actors: Record<string, ActorBinding>,
+  projectRoot: string,
+): Promise<{
+  actors: Record<string, ActorBinding>;
+  providersEnabled: Record<string, boolean>;
+}> {
+  const { loadConfig, HARNESS_PROVIDER, PROVIDER_HARNESS } =
+    await import('../config/model-config.js');
+  const config = loadConfig(projectRoot);
+  const out: Record<string, ActorBinding> = {};
+  for (const [name, binding] of Object.entries(actors)) {
+    const o = config.actors[name];
+    if (!o) {
+      out[name] = { ...binding, effort: config.defaults.effort };
+      continue;
+    }
+    const harness = o.harness ?? binding.harness;
+    const provider = o.provider ?? HARNESS_PROVIDER[harness] ?? binding.provider;
+    out[name] = {
+      ...binding,
+      harness,
+      provider,
+      model: o.model ?? binding.model,
+      effort: o.effort ?? config.defaults.effort,
+      ambient_resolved: false, // user-overridden, not ambient
+    };
+  }
+  // Map provider toggles to a flat lookup keyed by Harness for dispatcher checks.
+  const providersEnabled: Record<string, boolean> = {};
+  for (const [pid, toggle] of Object.entries(config.providers)) {
+    const harness = PROVIDER_HARNESS[pid as keyof typeof PROVIDER_HARNESS];
+    if (harness) providersEnabled[harness] = toggle.enabled;
+  }
+  return { actors: out, providersEnabled };
+}
+
 /** Load a preset .toml file and resolve all actor bindings against ambient context. */
 export function loadPreset(
   presetPath: string,
@@ -190,6 +234,19 @@ export function loadPreset(
 export function loadPresetByName(name: string, projectRoot: string = process.cwd()): PresetSpec {
   const path = resolvePath(joinPath(projectRoot, '.crumb', 'presets', `${name}.toml`));
   return loadPreset(path);
+}
+
+/**
+ * Load preset + apply .crumb/config.toml override + return providers-enabled map.
+ * Use this in the runtime path; tests can call loadPreset() directly.
+ */
+export async function loadPresetWithConfig(
+  name: string,
+  projectRoot: string = process.cwd(),
+): Promise<{ preset: PresetSpec; providersEnabled: Record<string, boolean> }> {
+  const preset = loadPresetByName(name, projectRoot);
+  const { actors, providersEnabled } = await applyConfigOverride(preset.actors, projectRoot);
+  return { preset: { ...preset, actors }, providersEnabled };
 }
 
 /** List available preset names by scanning .crumb/presets/. */

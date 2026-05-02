@@ -23,7 +23,7 @@ import { initialState, type CrumbState } from '../state/types.js';
 import { tail, readAll } from '../transcript/reader.js';
 import { TranscriptWriter } from '../transcript/writer.js';
 import { dispatch, type DispatcherDeps } from '../dispatcher/live.js';
-import { loadPresetByName, type PresetSpec } from '../dispatcher/preset-loader.js';
+import { loadPresetWithConfig, type PresetSpec } from '../dispatcher/preset-loader.js';
 import { AdapterRegistry } from '../adapters/types.js';
 import { ClaudeLocalAdapter } from '../adapters/claude-local.js';
 import { CodexLocalAdapter } from '../adapters/codex-local.js';
@@ -71,19 +71,31 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
   registry.register(new MockAdapter());
 
   // Preset 로딩 — 사용자 명시 시만. ambient/binding 결정은 사용자 통제권.
+  // .crumb/config.toml override 도 함께 적용 (provider 활성화 + per-actor effort/model).
   let preset: PresetSpec | undefined;
+  let providersEnabled: Record<string, boolean> | undefined;
   if (opts.presetName) {
     try {
-      preset = loadPresetByName(opts.presetName, opts.repoRoot);
+      const result = await loadPresetWithConfig(opts.presetName, opts.repoRoot);
+      preset = result.preset;
+      providersEnabled = result.providersEnabled;
       const actorCount = Object.keys(preset.actors).length;
       // eslint-disable-next-line no-console
       console.log(
         `[crumb] preset loaded: ${preset.meta.name} — ${actorCount} actor(s), schema=${preset.meta.schema ?? '(unset)'}`,
       );
       for (const [name, b] of Object.entries(preset.actors)) {
+        const effortLabel = b.effort ? ` effort=${b.effort}` : '';
         // eslint-disable-next-line no-console
         console.log(
-          `[crumb]   ${name}: ${b.harness}/${b.provider}/${b.model}${b.ambient_resolved ? ' (ambient)' : ''}`,
+          `[crumb]   ${name}: ${b.harness}/${b.provider}/${b.model}${effortLabel}${b.ambient_resolved ? ' (ambient)' : ''}`,
+        );
+      }
+      const disabled = Object.entries(providersEnabled).filter(([, v]) => !v);
+      if (disabled.length > 0) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `[crumb]   providers disabled: ${disabled.map(([h]) => h).join(', ')} → claude-local fallback`,
         );
       }
     } catch (err) {
@@ -101,6 +113,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
     transcriptPath,
     repoRoot: opts.repoRoot,
     preset,
+    providersEnabled,
     onHook: async (kind, body) => {
       // eslint-disable-next-line no-console
       console.log(`[hook:${kind}] ${body}`);

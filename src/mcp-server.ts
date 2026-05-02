@@ -1,7 +1,7 @@
 /**
  * Crumb MCP Server — single source-of-truth tool registry shared across 3 hosts.
  *
- * Exposes 7 helpers as MCP tools so Claude Code / Codex CLI / Gemini CLI pick
+ * Exposes 8 helpers as MCP tools so Claude Code / Codex CLI / Gemini CLI pick
  * them up via natural-language matching against `description` fields.
  *
  * Naming: brand-forward `crumb_<verb>` mirroring the CLI subcommand 1:1
@@ -199,7 +199,32 @@ export function buildServer(root: string = process.cwd()): McpServer {
     },
   );
 
-  // ─── Tool 7 — export transcript to OTel / Anthropic / Chrome trace ──────
+  // ─── Tool 7 — model + provider config (NL-editable) ─────────────────────
+  server.registerTool(
+    'crumb_model',
+    {
+      title: 'Edit Crumb model + provider config',
+      description:
+        'Show or change Crumb per-actor model, effort (low/med/high), or per-provider activation (claude-local / codex-local / gemini-cli-local). Provide a natural-language instruction to apply a change, or omit to just show current config. Use when the user asks "verifier 모델을 X 로", "effort 다 high 로", "codex 비활성화", "set builder model to Y", "disable gemini", "어떤 모델 쓰고 있어?", "show model config", or any per-actor / per-provider tuning request. Defaults to all high-end models (claude-opus-4-7 / gpt-5.5-codex / gemini-2.5-pro) + effort=high.',
+      inputSchema: {
+        instruction: z
+          .string()
+          .optional()
+          .describe(
+            'Natural-language instruction (Korean or English). Omit to just show current config.',
+          ),
+      },
+    },
+    async ({ instruction }) => {
+      const { applyNlInstruction, showConfig } = await import('./tui/model-edit.js');
+      if (!instruction || instruction.trim().length === 0) {
+        return textResult(showConfig(root));
+      }
+      return textResult(applyNlInstruction(root, instruction));
+    },
+  );
+
+  // ─── Tool 8 — export transcript to OTel / Anthropic / Chrome trace ──────
   server.registerTool(
     'crumb_export',
     {
