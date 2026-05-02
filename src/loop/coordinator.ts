@@ -14,14 +14,14 @@
  * the first finishes (single-stage owner principle, depth=1).
  */
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 
 import { reduce } from '../reducer/index.js';
 import { initialState, type CrumbState } from '../state/types.js';
 import { tail, readAll } from '../transcript/reader.js';
-import { TranscriptWriter } from '../transcript/writer.js';
+import { getTranscriptWriter } from '../transcript/writer.js';
 import { dispatch, type DispatcherDeps } from '../dispatcher/live.js';
 import { loadPresetWithConfig, type PresetSpec } from '../dispatcher/preset-loader.js';
 import { AdapterRegistry } from '../adapters/types.js';
@@ -60,7 +60,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
     await writeFile(transcriptPath, '');
   }
 
-  const writer = new TranscriptWriter({
+  const writer = getTranscriptWriter({
     path: transcriptPath,
     sessionId: opts.sessionId,
   });
@@ -124,23 +124,39 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
   let state = initialState(opts.sessionId);
 
   // Replay any pre-existing transcript — supports resume after crash.
-  for (const event of await readAll(transcriptPath)) {
+  // Capture the file size BEFORE replay so tail() can resume from the byte
+  // offset of the next-appended event, never re-emitting replayed lines.
+  // (Without this, fromOffset:0 caused every replayed event to be reduced
+  // a second time on resume — counters double, score_history duplicates,
+  // spawn effects fire twice.)
+  const replayEndOffset = await safeStatSize(transcriptPath);
+  const replayed = await readAll(transcriptPath);
+  let alreadyStarted = false;
+  for (const event of replayed) {
+    if (event.kind === 'session.start' && event.session_id === opts.sessionId) {
+      alreadyStarted = true;
+    }
     state = reduce(state, event).state;
   }
 
-  // Append session.start + user goal.
-  await writer.append({
-    session_id: opts.sessionId,
-    from: 'system',
-    kind: 'session.start',
-    body: `session ${opts.sessionId} started`,
-  });
-  await writer.append({
-    session_id: opts.sessionId,
-    from: 'user',
-    kind: 'goal',
-    body: opts.goal,
-  });
+  // Idempotent session.start + goal: on resume the transcript already has
+  // a session.start for this id; appending another would double-spawn
+  // planner-lead from the duplicated goal event (the session.start itself
+  // is harmless — reducer is a no-op for goal=null state, but goal is not).
+  if (!alreadyStarted) {
+    await writer.append({
+      session_id: opts.sessionId,
+      from: 'system',
+      kind: 'session.start',
+      body: `session ${opts.sessionId} started`,
+    });
+    await writer.append({
+      session_id: opts.sessionId,
+      from: 'user',
+      kind: 'goal',
+      body: opts.goal,
+    });
+  }
 
   // Apply adapter override (demo mode forces all actors to mock).
   const applyOverride = (effects: Effect[]): Effect[] => {
@@ -244,10 +260,22 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
       },
     });
 
-    tail(transcriptPath, onMessage, { fromOffset: 0 })
+    // PR #7 race fix: tail starts at the byte offset captured before replay —
+    // guarantees that every replayed event was reduced exactly once and tail
+    // picks up only the synthetic appends + future subprocess writes.
+    tail(transcriptPath, onMessage, { fromOffset: replayEndOffset })
       .then((h) => {
         handle = h;
       })
       .catch(fail);
   });
+}
+
+async function safeStatSize(path: string): Promise<number> {
+  try {
+    return (await stat(path)).size;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return 0;
+    throw e;
+  }
 }
