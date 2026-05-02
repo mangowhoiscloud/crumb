@@ -46,7 +46,7 @@ import {
   writeManifest,
   type VersionManifest,
 } from './session/version.js';
-import type { DraftMessage, Message, Provider } from './protocol/types.js';
+import type { DraftMessage, Harness, Message, Provider } from './protocol/types.js';
 
 interface ParsedArgs {
   command: string;
@@ -246,21 +246,52 @@ export async function applyEventFirewall(
 /**
  * Stamp provenance metadata onto an actor-emitted draft before append.
  *
- *   - `metadata.provider` ← `CRUMB_PROVIDER` env (binding-resolved by dispatcher).
+ *
+ *   - `metadata.harness` ← `CRUMB_HARNESS` env (binding-resolved by dispatcher).
+ *   - `metadata.provider` ← `CRUMB_PROVIDER` env. Without this, anti-deception
+ *     Rule 4 (validator/anti-deception.ts:111) can't compare verifier-vs-
+ *     builder providers — the `judgeScore.metadata.provider` it reads would
+ *     be undefined.
+ *   - `metadata.model` ← `CRUMB_MODEL` env.
  *   - `metadata.cross_provider` ← (CRUMB_PROVIDER !== CRUMB_BUILDER_PROVIDER),
  *     set only on `kind=judge.score`. AGENTS.md §136 invariant.
  *
- * Actor-supplied metadata wins (no overwrite).
+ * AGENTS.md §135: "Every emitted message sets metadata.harness +
+ * metadata.provider + metadata.model per the active preset binding."
+ *
+ * Actor-supplied metadata wins (no overwrite) — this is provenance fallback,
+ * not enforcement.
  */
 const VALID_PROVIDERS = new Set(['anthropic', 'openai', 'google', 'none']);
+const VALID_HARNESSES = new Set([
+  'claude-code',
+  'codex',
+  'gemini-cli',
+  'gemini-sdk',
+  'anthropic-sdk',
+  'openai-sdk',
+  'google-sdk',
+  'mock',
+  'none',
+]);
 
 export function stampEnvMetadata(draft: DraftMessage, env: NodeJS.ProcessEnv): DraftMessage {
+  const harness = env.CRUMB_HARNESS;
   const provider = env.CRUMB_PROVIDER;
+  const model = env.CRUMB_MODEL;
   const builderProvider = env.CRUMB_BUILDER_PROVIDER;
   const md = { ...(draft.metadata ?? {}) };
   let mutated = false;
+  if (harness && VALID_HARNESSES.has(harness) && md.harness === undefined) {
+    md.harness = harness as Harness;
+    mutated = true;
+  }
   if (provider && VALID_PROVIDERS.has(provider) && md.provider === undefined) {
     md.provider = provider as Provider;
+    mutated = true;
+  }
+  if (model && md.model === undefined) {
+    md.model = model;
     mutated = true;
   }
   if (
