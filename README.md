@@ -97,33 +97,36 @@ npx tsx src/index.ts replay sessions/<id>              # re-derive state determi
 ```
 USER (자연어) ─ goal/intervene ───▶ COORDINATOR (host harness 자체)
                                         │ Task tool spawn (depth=1)
-              ┌──────────────────┬──────┴───────────┬─────────────────┐
-              ▼                  ▼                  ▼                 ▼
-        PLANNER LEAD        BUILDER ★          VERIFIER ★         BUILDER FALLBACK
-        (Socratic +         (sandwich +        (CourtEval inline   (Codex 죽었을 때)
-         3 specialist        5 skill —          4 sub-step:
-         inline:             tdd-iron-law,      grader/critic/
-         concept /           verification-      defender/
-         research /          before-completion, regrader
-         visual)             code-review,
-                             parallel-dispatch,
-                             subagent-spawn)
-              │                  │                  │
-              └──────────────────┴────────────┬─────┘
-                                              │
+              ┌──────────────────┬───────┴────────┬──────────────┬─────────────────┐
+              ▼                  ▼                ▼              ▼                 ▼
+        PLANNER LEAD       RESEARCHER ★       BUILDER ★      VERIFIER ★       BUILDER FALLBACK
+        (Socratic +        (v3.3:             (sandwich +    (CourtEval        (Codex 죽었을 때)
+         Concept;          gemini-sdk          5 skill —      inline 4 sub-
+         then handoff      Gemini 3.1 Pro      tdd-iron-law,  step: grader/
+         to researcher;    @ 10fps native      verification-  critic/
+         resume for        YouTube URL;        before-        defender/
+         Design + Synth)   step.research.      completion,    regrader)
+                           video × N +         code-review,
+        2 specialist       step.research       parallel-
+        inline +           synthesis)          dispatch,
+        game-design.md                         subagent-spawn)
+        contract
+              │                  │                │              │
+              └──────────────────┴────────┬───────┴──────────────┘
+                                          │
                             qa_check effect (★ deterministic, no LLM)
                             emits kind=qa.result (D2/D6 ground truth)
-                                              │
-                                              ▼
-                              transcript.jsonl (39 kind, append-only)
-                                              │
-                                              ▼
+                                          │
+                                          ▼
+                              transcript.jsonl (40 kind, append-only)
+                                          │
+                                          ▼
                               control plane (pure reducer + state)
 ```
 
-- **Outer 5 actors** + **3 specialist** (planner inline) + **5 skill** (procedural workflow)
+- **Outer 6 actors** (incl. researcher v3.3) + **2 specialist** (planner inline) + **1 contract** (game-design.md, 4+ actors inline-read) + **5 skill** (procedural workflow)
 - **Multi-host 4 entry**: Claude Code skill / Codex CLI / Gemini CLI / headless `crumb run`
-- **Schema**: 39 kinds × 11 fields × 12 specialist steps × 8 actors × OTel GenAI alias
+- **Schema**: 40 kinds × 11 fields × 12 specialist steps × 8 actors × OTel GenAI alias
 - **3-layer scoring**: reducer-auto (D3/D4) + qa-check-effect (D2/D6, deterministic) + verifier-llm (D1, semantic)
 - **Cost**: $0/session via subscriptions (Claude Max + Codex Plus + Gemini Advanced) — or `--adapter mock` for free
 - **Configurability**: `(harness × provider × model)` 3-tuple per actor; user picks via preset; ambient fallback follows entry host

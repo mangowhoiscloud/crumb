@@ -45,7 +45,7 @@ These are non-negotiable across every host harness:
 6. **ULID for message IDs.** Never use sequential or random UUIDs. ULIDs preserve sort order = transcript chronology.
 7. **Append-only transcript.** Use `O_APPEND` (and `flock` once landed). Never modify existing lines.
 8. **Sandbox cwd per actor.** Each actor's working dir is `sessions/<id>/agent-workspace/<actor>/`. Use `--add-dir` for read scope.
-9. **Actor split (v3).** `engineering-lead` was split into `builder` + `verifier` so the cross-provider boundary runs at the actor level. The 8 actors are: `user / coordinator / planner-lead / builder / verifier / builder-fallback / validator / system`.
+9. **Actor split (v3 + v3.3).** `engineering-lead` was split into `builder` + `verifier` (v3) so the cross-provider boundary runs at the actor level. `researcher` was promoted from a planner inline-read specialist into its own actor (v3.3) so the multimodal video-LLM 2026 frontier (Gemini 3.1 Pro) can be bound to a dedicated SDK adapter without forcing the rest of planner-lead onto the same provider. The 9 actors are: `user / coordinator / planner-lead / researcher / builder / verifier / builder-fallback / validator / system`.
 10. **Multi-host × 3-tuple actor binding.** Each actor binds to `(harness × provider × model)` via the active preset. No actor is hard-coded to a specific harness — even the user's preferred verifier provider must come from preset config or ambient fallback.
 11. **`provider × harness × model` is user-controlled.** Crumb suggests via `crumb doctor` but never forces a default. If a preset omits an actor, it follows ambient (the entry host).
 
@@ -54,15 +54,16 @@ These are non-negotiable across every host harness:
 | Actor | Sandwich | Role |
 |---|---|---|
 | `coordinator` | `agents/coordinator.md` | Host-inline routing (Hub-Ledger-Spoke). Decides next_speaker per transcript event. |
-| `planner-lead` | `agents/planner-lead.md` | Spec authoring. 5 sequential steps (socratic / concept / research / design / synth) with 3 specialists inline-read. |
+| `planner-lead` | `agents/planner-lead.md` | Spec authoring. Two-phase spawn (Socratic + Concept → handoff to researcher → resume for Design + Synth). 2 specialists inline-read + game-design.md contract. |
+| `researcher` | `agents/researcher.md` | Video-evidence extractor (v3.3). Ingests gameplay clips via gemini-sdk (Gemini 3.1 Pro, native YouTube URL, 10fps frame sampling) → emits `step.research.video` × N + `step.research` synthesis. Bound to gemini-sdk adapter when video_refs present; ambient text-only fallback otherwise. |
 | `builder` | `agents/builder.md` | Phaser 3.80 single-file `game.html` implementer. Emits `kind=build`; QA is OUT of reach. |
-| `verifier` | `agents/verifier.md` | CourtEval (Grader → Critic → Defender → Re-grader, ACL 2025) inline 4 sub-step. Reads `qa.result` for D2/D6. |
+| `verifier` | `agents/verifier.md` | CourtEval (Grader → Critic → Defender → Re-grader, ACL 2025) inline 4 sub-step. Reads `qa.result` for D2/D6 + `step.research` evidence_refs for D5 (v3.3 anti-deception). |
 | `builder-fallback` | `agents/builder-fallback.md` | Builder substitute. Activates when `circuit_breaker.builder.state === 'OPEN'`. |
 
-Plus 3 specialists (planner-internal inline, no separate Task spawn):
-- `agents/specialists/concept-designer.md`
-- `agents/specialists/researcher.md`
-- `agents/specialists/visual-designer.md`
+Plus 2 specialists (planner-internal inline, no separate Task spawn) + 1 contract spec (read by 4+ actors):
+- `agents/specialists/concept-designer.md` — planner step.concept inline-read
+- `agents/specialists/visual-designer.md` — planner step.design inline-read
+- `agents/specialists/game-design.md` — binding game-design contract: §1 envelope (Phaser 3.80 / ≤60KB) + §3 video evidence schema (researcher) + §5 DESIGN.md synth format (planner). Inline-read by researcher / planner-lead / builder / builder-fallback / verifier.
 
 And 5 procedural skills (sandwich-loaded inline):
 - `skills/tdd-iron-law.md` — RED-GREEN-REFACTOR Iron Law (superpowers)
@@ -205,7 +206,7 @@ tail -f sessions/<session-id>/transcript.jsonl | jq -r '
 
 ### File map
 
-- `agents/*.md`                  — 5 actor sandwiches: `coordinator.md`, `planner-lead.md`, `builder.md`, `verifier.md`, `builder-fallback.md` (NOT auto-loaded by agent CLIs; injected via stdin / `--system-prompt`)
+- `agents/*.md`                  — 6 actor sandwiches: `coordinator.md`, `planner-lead.md`, `researcher.md`, `builder.md`, `verifier.md`, `builder-fallback.md` (NOT auto-loaded by agent CLIs; injected via stdin / `--system-prompt`)
 - `agents/specialists/*.md`      — 3 planner-internal specialist files (concept-designer / researcher / visual-designer); inlined into the planner-lead spawn, no extra Task spawn
 - `agents/_event-protocol.md`    — How subprocess agents emit transcript events via `crumb event`
 - `skills/*.md`                  — 5 procedural workflow skills referenced by agent sandwiches
@@ -262,7 +263,7 @@ Every architecture decision in this repo is grounded in `wiki/`. Before changing
 - [`.gemini/extensions/crumb/`](./.gemini/extensions/crumb/) — Gemini CLI (manifest + GEMINI.md + commands)
 - `.gemini/settings.json` — Gemini CLI `contextFileName` config (loads AGENTS.md auto)
 
-### Sandwiches (5 actors + 3 specialists + 5 skills)
+### Sandwiches (6 actors + 2 specialists + 1 contract + 5 skills)
 - [`agents/coordinator.md`](./agents/coordinator.md), [`planner-lead.md`](./agents/planner-lead.md), [`builder.md`](./agents/builder.md), [`verifier.md`](./agents/verifier.md), [`builder-fallback.md`](./agents/builder-fallback.md)
 - [`agents/specialists/`](./agents/specialists/) — concept-designer / researcher / visual-designer
 - [`skills/`](./skills/) — tdd-iron-law / verification-before-completion / code-review-protocol / parallel-dispatch / subagent-spawn

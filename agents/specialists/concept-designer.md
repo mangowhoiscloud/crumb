@@ -92,6 +92,7 @@ data={core_mechanic, win_condition, lose_condition, combo_rule}
 
 - [[bagelcode-mobile-game-tech-2026]] — Phaser HTML5 reference patterns
 - [[bagelcode-gamestudio-subagents-2026]] §10 — gamestudio sr_game_designer 매핑
-- `agents/specialists/researcher.md` — sister specialist (market reference)
+- `agents/researcher.md` — successor actor (v3.3 promoted from specialist; market reference + video evidence)
 - `agents/specialists/visual-designer.md` — sister specialist (color/UX)
+- `agents/specialists/game-design.md` — binding envelope + DESIGN.md synth format
 - `agents/planner-lead.md` — parent spawn

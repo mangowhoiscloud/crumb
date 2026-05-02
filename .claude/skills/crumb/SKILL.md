@@ -201,13 +201,14 @@ v2 의 "Engineering Lead 안 inline 4 sub-step" → v3 의 **builder + verifier 
 | Actor | Sandwich | Step (sequential within actor) |
 |---|---|---|
 | coordinator | `agents/coordinator.md` | (host-inline routing) |
-| planner-lead | `agents/planner-lead.md` | socratic / concept / research / design / synth (3 specialist inline) |
+| planner-lead | `agents/planner-lead.md` | phase A: socratic + concept (handoff researcher); phase B (resumed): design + synth (2 specialist inline + game-design contract) |
+| **researcher** ★ (v3.3) | `agents/researcher.md` | step.research.video × N + step.research synthesis (gemini-sdk: Gemini 3.1 Pro native YouTube URL @ 10fps) |
 | **builder** ★ | `agents/builder.md` | step.builder + step.qa (Builder + QA inline) |
 | (effect) qa_check | (no sandwich) | dispatcher emits `kind=qa.result` (deterministic, LLM 무관) |
 | **verifier** ★ | `agents/verifier.md` | step.judge × 4 (grader/critic/defender/regrader, CourtEval) + reviewer persona |
 | builder-fallback | `agents/builder-fallback.md` | builder 실패 시 회귀 (builder 와 동일 contract) |
 
-→ 5 outer actor + 3 specialist (planner inline) + 5 skill (procedural workflow):
+→ 6 outer actor + 2 specialist (planner inline) + 1 contract (game-design.md, 4+ actors inline-read) + 5 skill (procedural workflow):
 
 ```
 [skills]
@@ -249,8 +250,8 @@ subagent_spawn                 # host-native primitive 추상화
 - `wiki/concepts/bagelcode-system-architecture.md` (v2) — §3-§9 (envelope / cache / per-turn flow / control plane / OTel) v3 에서도 유효
 - `wiki/references/bagelcode-frontier-cli-convergence-2026.md` — 4 CLI × 7 primitive (multi-host backing)
 - `wiki/references/bagelcode-llm-judge-frontier-2026.md` — 3-layer scoring 학술 backbone
-- `agents/coordinator.md` / `agents/planner-lead.md` / `agents/builder.md` / `agents/verifier.md` / `agents/builder-fallback.md` — 5 actor sandwich
-- `agents/specialists/` — concept-designer / researcher / visual-designer (planner inline)
+- `agents/coordinator.md` / `agents/planner-lead.md` / `agents/researcher.md` / `agents/builder.md` / `agents/verifier.md` / `agents/builder-fallback.md` — 6 actor sandwich
+- `agents/specialists/` — concept-designer / visual-designer (planner inline) + game-design.md (binding contract: §1 envelope + §3 video evidence schema + §5 DESIGN.md synth format, inline-read by researcher / planner / builder / verifier)
 - `agents/_event-protocol.md` — `crumb event` 사용 spec
 - `protocol/schemas/message.schema.json` — 39 kind transcript schema (v3)
 - `.crumb/config.toml` + `.crumb/presets/{bagelcode-cross-3way,mock,sdk-enterprise,solo}.toml` — preset 시스템

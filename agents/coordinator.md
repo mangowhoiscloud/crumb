@@ -36,7 +36,9 @@ This table mirrors the reducer's `case` branches. The sandwich's instruction is 
 
 | Incoming kind | Effect | Next |
 |---|---|---|
-| `goal` | `spawn(planner-lead)` | planner-lead |
+| `goal` | `spawn(planner-lead)` (data.video_refs are stashed in task_ledger and forwarded to researcher on the phase-A handoff) | planner-lead |
+| `handoff.requested(to=researcher)` | `spawn(researcher)` (v3.3) | researcher |
+| `step.research` | resume `spawn(planner-lead)` for phase B (cache_carry_over via adapter_session_id) | planner-lead |
 | `spec` / `spec.update` | `spawn(builder)` | builder |
 | `build` | **`qa_check` effect** (deterministic, no LLM) | (effect — emits `kind=qa.result`) |
 | `qa.result` | `spawn(verifier)` | verifier |

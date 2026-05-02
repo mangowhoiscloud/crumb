@@ -96,8 +96,12 @@ jobs:
       - name: Verify required sandwich files
         run: |
           # v3: engineering-lead.md split into builder.md + verifier.md.
-          # See wiki/concepts/bagelcode-system-architecture-v3.md §3 (5 actor sandwich).
-          for f in agents/coordinator.md agents/planner-lead.md agents/builder.md agents/verifier.md agents/builder-fallback.md; do
+          # v3.3: researcher promoted from inline-read specialist to standalone actor
+          #       so multimodal video understanding can bind to gemini-sdk independently.
+          # See wiki/concepts/bagelcode-system-architecture-v3.md §3 + AGENTS.md §"Actors".
+          for f in agents/coordinator.md agents/planner-lead.md agents/researcher.md agents/builder.md agents/verifier.md agents/builder-fallback.md; do
             test -f "$f" || (echo "Missing required sandwich: $f" && exit 1)
           done
-          echo "All 5 sandwich files present (v3)"
+          # game-design.md is the binding contract inline-read by 4+ actors.
+          test -f agents/specialists/game-design.md || (echo "Missing game-design contract" && exit 1)
+          echo "All 6 sandwich files + game-design contract present (v3.3)"
