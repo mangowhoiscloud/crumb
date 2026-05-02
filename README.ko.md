@@ -30,7 +30,17 @@
 
 ## 빠른 시작
 
-환경 따라 3 가지 진입점:
+**최초 1회 셋업** (어떤 머신, 어떤 cwd 든 그 후 동일):
+
+```bash
+git clone https://github.com/mangowhoiscloud/crumb.git
+cd crumb
+npm install
+npm run build
+npm link            # `crumb` + `crumb-dashboard` 가 PATH 에 등록 (또는: npm i -g .)
+```
+
+이후 `crumb` 와 `crumb-dashboard` 를 어떤 디렉터리에서든 호출 가능 — repo-root 와 preset path 는 install 위치에서 자동 감지 (`--root` 가 escape hatch).
 
 ### A. 자연어 (Claude Code 사용자 — 권장)
 
@@ -41,21 +51,13 @@ $ claude
 
 `.claude/skills/crumb/SKILL.md` skill 이 피치를 받아 headless `crumb run` 호출 + transcript 이벤트 스트리밍. 자연어 추가 발화 ("이 부분 다르게", "콤보 보너스 좀 더 짧게") 도 `kind=user.intervene` 으로 자동 라우팅.
 
-### B. Headless / CI / 인증 없음
+### B. Mock adapter (인증 없음, 결정론)
 
 ```bash
-git clone https://github.com/mangowhoiscloud/crumb.git
-cd crumb
-npm install
-npm run build
-
-# Mock 어댑터 — 인증 0, 결정론 보장
-npx tsx src/index.ts run \
-  --goal "60초 매치-3 + 콤보 보너스" \
-  --adapter mock --idle-timeout 5000
+crumb run --goal "60-second match-3 with combo bonus" --adapter mock --idle-timeout 5000
 ```
 
-**26-event v3 flow** 생성: `session.start → goal → planner-lead (5 step + spec + handoff) → builder (artifact + build + handoff) → qa.result (system, deterministic ground truth) → verifier (4 step.judge inline + judge.score aggregate=28/30 PASS + handoff) → done → session.end`. replay 결과 동일.
+인증 0 으로 동작 보장. **26-event v3 flow** 생성: `session.start → goal → planner-lead (5 step + spec + handoff) → builder (artifact + build + handoff) → qa.result (system, deterministic ground truth) → verifier (4 step.judge inline + judge.score aggregate=28/30 PASS + handoff) → done → session.end`. replay 결과 동일.
 
 ### C. 실 에이전트 (preset 선택)
 
@@ -65,10 +67,14 @@ claude login           # Anthropic Claude Max
 codex login            # OpenAI Codex Plus
 gemini login           # Google Gemini Advanced
 
-# preset 선택:
-npx tsx src/index.ts run \
-  --goal "60초 매치-3 + 콤보 보너스" \
-  --preset bagelcode-cross-3way
+# 프로젝트 핀 + 임의 디렉터리에서 실행:
+mkdir -p ~/projects/match3 && cd ~/projects/match3
+crumb init --pin --label "match3"
+crumb run --goal "60-second match-3 with combo bonus" --preset solo
+
+# 결과 promote + checkable 폴더로 export:
+crumb release <session-ulid> --as v1 --label "demo"
+crumb copy-artifacts v1 --to ./demo
 ```
 
 `provider × harness × model` 결정은 **사용자 통제권** — Crumb 은 강제 default 박지 않음. `crumb doctor` 로 환경에서 어떤 preset 이 실 동작 가능한지 확인.
@@ -76,11 +82,44 @@ npx tsx src/index.ts run \
 ## 세션 검사
 
 ```bash
-ls sessions/                                          # ULID 디렉터리 1개 생성
-jq -r '"\(.kind)\t\(.from)"' sessions/<id>/transcript.jsonl
-open sessions/<id>/index.html                          # 자동 생성 HTML 리포트
-npx tsx src/index.ts replay sessions/<id>              # 결정론 재실행
+crumb ls                                          # ~/.crumb/projects/*/sessions/ 모든 세션
+jq -r '"\(.kind)\t\(.from)"' \
+  ~/.crumb/projects/<project-id>/sessions/<ulid>/transcript.jsonl
+crumb replay <ulid>                               # 결정론 재실행
 ```
+
+## 라이브 대시보드 (브라우저 콘솔)
+
+대시보드는 단일 바이너리 Node HTTP + SSE 서버. **기본 포트 `7321`, `127.0.0.1` 만 바인드** — 새 체크아웃 + 새 브라우저 탭이 macOS / Windows 방화벽 prompt 없이 즉시 동작. Cross-platform (chokidar + WSL/NFS polling fallback, 플랫폼-특화 syscall 0).
+
+```bash
+# `npm install && npm run build` (빠른 시작 단계) 후:
+npx crumb-dashboard                  # http://127.0.0.1:7321/  (브라우저 자동 오픈)
+npx crumb-dashboard --no-open        # 헤드리스 / SSH / CI    (URL 만 출력)
+npx crumb-dashboard --port 8080      # 다른 포트
+npx crumb-dashboard --bind 0.0.0.0   # LAN / SSH 터널 노출 (방화벽 prompt)
+```
+
+브라우저에서 보이는 것:
+
+| 영역 | 내용 |
+|---|---|
+| **사이드바 (좌측)** | 프로젝트별 세션 그룹 + ＋ 버튼 (새 `crumb run` form: goal + preset). 행 hover 시 × 로 dashboard 에서 dismiss (디스크 transcript 는 보존). |
+| **헤더 strip** | D1–D6 source-of-truth scorecard, 항상 보임, `kind=judge.score` 마다 갱신. |
+| **Pipeline 탭** | 9-actor DAG topology (활성 actor 라임 펄스, 모든 transcript event 마다 sender → next-likely target 으로 lavender 리플 "weaving") + actor 별 swimlane chip 타임라인. |
+| **Logs 탭** (ArgoCD-inspired) | actor 별 `<session>/agent-workspace/<actor>/spawn-*.log` 라이브 tail (모든 adapter spawn 의 stdout / stderr). filter / follow / clear / copy. DAG 노드 click 시 자동 점프. |
+| **Output 탭** | sandboxed iframe 으로 `artifacts/game/index.html` (multi-file profile) 또는 `artifacts/game.html` (single-file fallback) 라이브 렌더. reload + open-in-new-tab. 즉석에서 플레이. |
+| **Live execution feed** (입력창 위) | 활성 세션의 모든 transcript event **+** 모든 actor spawn log chunk 가 한 줄씩, kind 별 color-code 된 터미널-스타일 stream. |
+| **Console input** (하단) | 슬래시 명령 (`/approve` `/veto <reason>` `/pause [@actor]` `/goto <actor>` `/note <text>`), `@actor` 멘션, plain-text user.intervene. **`/crumb <goal>`** 은 새 세션 spawn. |
+| **Detail panel** (우측, 이벤트 클릭) | 파이프라인 위치 narrative ("PHASE B → C — Spec sealed"), parent → this → children thread, actor 별 sandwich preview, actor 별 mini-console. |
+
+Cross-platform 환경 변수:
+
+| 변수 | 효과 |
+|---|---|
+| `CRUMB_HOME` | `~/.crumb` 오버라이드 (sandbox / CI / 멀티유저 셋업) |
+| `CRUMB_POLL=1` | chokidar polling 강제 (WSL2 / Docker / NFS / SMB) |
+| `CRUMB_NO_OPEN=1` | 브라우저 자동 오픈 안 함 (`--no-open` 와 동일) |
 
 ## CLI
 
@@ -93,7 +132,8 @@ npx tsx src/index.ts replay sessions/<id>              # 결정론 재실행
 | `crumb doctor` | 환경 종합 점검 (3 host OAuth + adapter health + preset gating) |
 | `crumb config <자연어>` | 자연어 설명에서 preset 추천 |
 | `crumb debug <session-id\|dir>` | F1-F7 routing 장애 진단 |
-| `crumb ls` | `sessions/` 디렉터리 목록 + 이벤트 수 |
+| `crumb ls` | `~/.crumb/projects/*/sessions/` 모든 세션 + 이벤트 수 |
+| `npx crumb-dashboard [--port 7321] [--bind 127.0.0.1] [--no-open]` | 라이브 관측 대시보드 (HTTP + SSE) — 위 "라이브 대시보드" 섹션 참조 |
 
 ## 아키텍처 (v3, 한 화면)
 
