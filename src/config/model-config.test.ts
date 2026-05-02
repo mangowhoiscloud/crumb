@@ -31,7 +31,7 @@ describe('defaultConfig', () => {
     expect(c.defaults.effort).toBe('high');
     expect(c.actors.coordinator?.model).toBe('claude-opus-4-7');
     expect(c.actors.builder?.model).toBe('gpt-5.5-codex');
-    expect(c.actors.verifier?.model).toBe('gemini-2.5-pro');
+    expect(c.actors.verifier?.model).toBe('gemini-3-1-pro');
     expect(c.actors['planner-lead']?.effort).toBe('high');
     expect(c.actors['builder-fallback']?.harness).toBe('claude-code');
   });
@@ -131,7 +131,7 @@ describe('formatConfig', () => {
     expect(out).toContain('## providers');
     expect(out).toContain('## actors');
     expect(out).toContain('claude-opus-4-7');
-    expect(out).toContain('gemini-2.5-pro');
+    expect(out).toContain('gemini-3-1-pro');
   });
 });
 
@@ -146,7 +146,7 @@ describe('committed .crumb/config.toml', () => {
     expect(live.defaults.effort).toBe('high');
     expect(live.actors.verifier?.effort).toBe('high');
     expect(live.actors.verifier?.harness).toBe('gemini-cli');
-    expect(live.actors.verifier?.model).toBe('gemini-2.5-pro');
+    expect(live.actors.verifier?.model).toBe('gemini-3-1-pro');
   });
 
   it('all 5 actors carry effort=high (no silent low/med drift)', () => {

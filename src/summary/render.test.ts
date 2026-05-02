@@ -78,7 +78,7 @@ function fixture(): { transcript: Message[]; state: ReturnType<typeof initialSta
       metadata: {
         harness: 'gemini-cli',
         provider: 'google',
-        model: 'gemini-2.5-pro',
+        model: 'gemini-3-1-pro',
         cross_provider: true,
         tokens_in: 4000,
         tokens_out: 1500,

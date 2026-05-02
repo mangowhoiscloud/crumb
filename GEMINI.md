@@ -34,10 +34,10 @@ The `.gemini/extensions/crumb/` extension provides:
 | coordinator | ambient (entry host = gemini-cli when entered via `/crumb` here) |
 | planner-lead | ambient |
 | builder | `codex` + `gpt-5.5-codex` (cross-provider for cross-assemble) |
-| **verifier** | **`gemini-cli` + `gemini-2.5-pro`** ← Gemini's natural seat |
+| **verifier** | **`gemini-cli` + `gemini-3-1-pro`** ← Gemini's natural seat |
 | builder-fallback | ambient |
 
-**Why Gemini = verifier in the default preset**: Gemini 2.5 Pro's multimodal capability is well-suited for screenshot-based grading of `artifacts/game.html` (D1 spec_fit + D3 semantic). CourtEval's 4 sub-step (Grader → Critic → Defender → Re-grader, ACL 2025) runs inline within the verifier spawn; D2 / D6 are looked up from the prior `qa.result` (deterministic, dispatcher-emitted, no LLM).
+**Why Gemini = verifier in the default preset**: Gemini 3.1 Pro's multimodal capability is well-suited for screenshot-based grading of `artifacts/game.html` (D1 spec_fit + D3 semantic). CourtEval's 4 sub-step (Grader → Critic → Defender → Re-grader, ACL 2025) runs inline within the verifier spawn; D2 / D6 are looked up from the prior `qa.result` (deterministic, dispatcher-emitted, no LLM).
 
 User can override per-actor binding via `.crumb/presets/<name>.toml`. `crumb doctor` reports which presets are reachable in the current environment.
 

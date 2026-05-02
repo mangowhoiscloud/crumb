@@ -140,7 +140,7 @@ actor 별 `(harness × provider × model)` 결정은 **사용자가** 선택. Cr
 | Preset | Binding | 사용 사례 |
 |---|---|---|
 | **(no preset)** ambient | 모든 actor 가 entry host 따라감 (e.g. claude-code + claude-opus-4-7) | 가장 단순 — 인증된 환경 그대로 |
-| **`bagelcode-cross-3way`** | builder=codex+gpt-5.5-codex / verifier=gemini-cli+gemini-2.5-pro / 나머지 ambient | 베이글코드 메일 verbatim "Claude Code, Codex, Gemini CLI 등 동시 사용" 정조준. 3-provider cross-assemble |
+| **`bagelcode-cross-3way`** | builder=codex+gpt-5.5-codex / verifier=gemini-cli+gemini-3-1-pro / 나머지 ambient | 베이글코드 메일 verbatim "Claude Code, Codex, Gemini CLI 등 동시 사용" 정조준. 3-provider cross-assemble |
 | **`mock`** | 모든 actor = mock adapter | CI / 인증 없음 / 결정론 데모 |
 | **`sdk-enterprise`** | API key 직접 (subscription 우회) | Production / ToS 안전 (Anthropic 3rd-party OAuth 차단 회피) |
 | **`solo`** | 단일 entry host + 단일 model | 최소 셋업 데모 |

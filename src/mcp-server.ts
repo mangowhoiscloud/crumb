@@ -204,7 +204,7 @@ export function buildServer(root: string = process.cwd()): McpServer {
     {
       title: 'Edit Crumb model + provider config',
       description:
-        'Show or change Crumb per-actor model, effort (low/med/high), or per-provider activation (claude-local / codex-local / gemini-cli-local). Provide a natural-language instruction to apply a change, or omit to just show current config. Use when the user asks "verifier 모델을 X 로", "effort 다 high 로", "codex 비활성화", "set builder model to Y", "disable gemini", "어떤 모델 쓰고 있어?", "show model config", or any per-actor / per-provider tuning request. Defaults to all high-end models (claude-opus-4-7 / gpt-5.5-codex / gemini-2.5-pro) + effort=high.',
+        'Show or change Crumb per-actor model, effort (low/med/high), or per-provider activation (claude-local / codex-local / gemini-cli-local). Provide a natural-language instruction to apply a change, or omit to just show current config. Use when the user asks "verifier 모델을 X 로", "effort 다 high 로", "codex 비활성화", "set builder model to Y", "disable gemini", "어떤 모델 쓰고 있어?", "show model config", or any per-actor / per-provider tuning request. Defaults to all high-end models (claude-opus-4-7 / gpt-5.5-codex / gemini-3-1-pro) + effort=high. Gemini IDs accept both dot ("gemini-3.1-pro") and dash ("gemini-3-1-pro") forms.',
       inputSchema: {
         instruction: z
           .string()

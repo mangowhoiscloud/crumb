@@ -3,7 +3,9 @@ name: crumb-model
 description: >-
   Show or change Crumb per-actor model + effort + per-provider activation
   (claude-local / codex-local / gemini-cli-local). Defaults to all high-end
-  models (claude-opus-4-7 / gpt-5.5-codex / gemini-2.5-pro) + effort=high.
+  models (claude-opus-4-7 / gpt-5.5-codex / gemini-3-1-pro) + effort=high.
+  Gemini model IDs accept both dot ("gemini-3.1-pro") and dash
+  ("gemini-3-1-pro") forms — internally normalized.
   Trigger on "verifier 모델을 X 로", "set builder model to Y", "effort 다 high
   로", "effort all to low", "codex 비활성화", "disable gemini", "어떤 모델
   쓰고 있어?", "모델 설정 보여줘", "show model config", "어떤 effort?", or any
@@ -20,7 +22,8 @@ effort level, or per-provider activation:
 **Preferred path** — call the `crumb_model` MCP tool. Pass `instruction` for changes,
 omit for read-only show:
 
-- "verifier 모델을 gemini-2.5-pro 로" → instruction sets verifier model
+- "verifier 모델을 gemini-3-1-pro 로" → instruction sets verifier model
+  (also accepts dot form "gemini-3.1-pro" — normalized to dash)
 - "effort 다 high 로" → instruction sets all-actor effort=high
 - "codex 비활성화" → instruction disables codex-local provider
 - (no instruction) → returns the current config table
@@ -38,7 +41,7 @@ Output is a status table:
 Defaults (when `.crumb/config.toml` is missing):
 - coordinator + planner-lead → claude-opus-4-7 / claude-code / high
 - builder → gpt-5.5-codex / codex / high
-- verifier → gemini-2.5-pro / gemini-cli / high
+- verifier → gemini-3-1-pro / gemini-cli / high
 - builder-fallback → claude-sonnet-4-6 / claude-code / high
 - All 3 local providers enabled.
 

@@ -16,7 +16,7 @@ const judgeScore: Message = {
   scores: { aggregate: 27, verdict: 'PASS' },
   metadata: {
     harness: 'gemini-cli',
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3-1-pro',
     cost_usd: 0.08,
     tokens_in: 4000,
     cache_read: 3000,
@@ -105,6 +105,6 @@ describe('formatActorList', () => {
     const lines = formatActorList([judgeScore, qaResult]);
     expect(lines).toHaveLength(1); // qaResult is system → skipped
     expect(lines[0]).toContain('verifier');
-    expect(lines[0]).toContain('gemini-cli/gemini-2.5-pro');
+    expect(lines[0]).toContain('gemini-cli/gemini-3-1-pro');
   });
 });

@@ -15,7 +15,7 @@
  * High-end defaults (Anthropic 2026-04 / OpenAI 2026-04 / Google Cloud Next 2026):
  *   - Anthropic: claude-opus-4-7 (premium) > claude-sonnet-4-6 (workhorse) > claude-haiku-4-5
  *   - OpenAI:    gpt-5.5-codex (code-tuned) ≈ gpt-5.5 > gpt-4o
- *   - Google:    gemini-2.5-pro (premium) > gemini-2.5-flash
+ *   - Google:    gemini-3-1-pro (premium, multimodal) > gemini-3-pro > gemini-2.5-pro > gemini-2.5-flash
  *
  * Effort levels (3 levels, mapped to provider-specific values at adapter spawn):
  *   - low  : OpenAI reasoning.effort=low,  Anthropic thinking_budget=8000,  Gemini thinking_budget=8000
@@ -137,7 +137,7 @@ export function defaultConfig(): ModelConfig {
       coordinator: { harness: 'claude-code', model: 'claude-opus-4-7', effort: 'high' },
       'planner-lead': { harness: 'claude-code', model: 'claude-opus-4-7', effort: 'high' },
       builder: { harness: 'codex', model: 'gpt-5.5-codex', effort: 'high' },
-      verifier: { harness: 'gemini-cli', model: 'gemini-2.5-pro', effort: 'high' },
+      verifier: { harness: 'gemini-cli', model: 'gemini-3-1-pro', effort: 'high' },
       'builder-fallback': { harness: 'claude-code', model: 'claude-sonnet-4-6', effort: 'high' },
     },
     providers: {
