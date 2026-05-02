@@ -4,6 +4,45 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — Dashboard live exec feed: Claude-Code-style stream-json narrative (2026-05-03)
+
+The per-session live execution feed (above the chat input) was dumping spawn-log stream-json as raw text. User feedback: "이건 세션 내 채팅 입력창 위에 붙어있어야 해" — the user wants the same `⏺` / `⎿` / `✓` narrative bubbles they see inside Claude Code, faithfully mirrored in the dashboard so they can watch what the agent is doing without context-switching to the terminal.
+
+- **`renderStreamJsonLine()` parser** in `dashboard.js` — turns each spawn-log line (Claude CLI stream-json shape: `{type: 'assistant'|'user'|'system'|'result', ...}`) into one or more rendered bubbles:
+  - `type=assistant` content blocks → `⏺ <text>` (assistant text), `⏺ ToolName(summary)` (tool_use), `· (thinking)` (extended thinking)
+  - `type=user` tool_result → `⎿ <preview>` (collapsed) with `is_error` upgrading to `tool-error` style
+  - `type=system subtype=task_started|task_notification` → `⎿ Async <desc> started|completed|killed`
+  - `type=system subtype=hook_started|hook_response` → `· hook <name> <outcome>`
+  - `type=system subtype=init` → `· init session <id-tail> (model=…, tools=N, skills=N)`
+  - `type=result` → `✓ turn complete · <out> out · $<cost> · <dur> · cache <N>`
+  - `type=rate_limit_event` → silent (noise)
+- **Tool-call summarizers** — domain-specific input summary per tool: `Bash` shows the command first 90 chars, `Read/Write/Edit` shows file_path, `Grep/Glob` shows pattern (+ optional path), `Task/Agent` shows description + subagent_type, `TodoWrite` shows the in-progress todo or count, `WebSearch/WebFetch` shows query/url. Generic JSON-truncated fallback for unknown tools.
+- **Tool-result summarizer** — flattens array/object content to a single line, collapses whitespace, truncates to 180 chars (240 for errors so context isn't lost on failures).
+- **CSS for the new kindClasses** in `dashboard.css`:
+  - `kind-assistant-text` — full ink color, weight 500, white-space: pre-wrap (assistant text often spans multiple paragraphs)
+  - `kind-tool-call` — accent-warm color, monospace, slight transparency (so it visually stands as "agent action")
+  - `kind-tool-result` — muted ink, 16 px left padding, smaller font (78% opacity, indented under its call)
+  - `kind-tool-error` — audit-fg color, weight 500, indented (errors stand out in red)
+  - `kind-turn-complete` — accent-warm bold + dashed top border (visual anchor between turns)
+  - `kind-thinking` — tertiary color, 55% opacity, italic (deemphasized — usually just signature payloads)
+- **`FEED_MAX_LINES` bumped 800 → 2000** because stream-json rendering produces 3-5× line density vs raw transcript events. With 2000 lines × ~40 chars/line the DOM stays under ~80 KB which is well within smooth-scroll budget.
+- **Pre-check optimization** — `renderStreamJsonLine` returns null fast for non-JSON lines (charCode 123 check) so the chunk handler falls through to raw rendering without paying JSON.parse cost on plain log output.
+
+The same convention now powers both the Claude Code terminal view and the dashboard exec feed — when the agent is running, the user can watch the same `⏺ Bash(npm test)` / `⎿ 342 passed` / `✓ turn complete · 4280 out · $0.42 · 18s` narrative whether they look at the terminal or the browser. No code changes outside `packages/dashboard/src/client/`. 342/342 tests passing, lint clean, build clean.
+
+### Added — Dashboard hardening: resizable panes / click-outside / Resume / Transcript viewer / coordinator visibility (2026-05-03)
+
+Six interactive-quality fixes to `packages/dashboard/`:
+
+- **Resizable session + detail panes.** Both side panes now have draggable split bars (Mac/Windows-feel `col-resize` cursor). Width is persisted in `localStorage` (`crumb.sessions-w` / `crumb.detail-w`) so a refresh keeps the user's layout. Bounds clamped (sessions 160–560 px, detail 280–800 px). The grid-template uses CSS variables (`--sessions-w`, `--detail-w`) and the body grid gains a 4 px handle column. Touch (passive: false on `touchmove`) and mouse both wired.
+- **Click-outside-to-close detail pane.** Right-side detail aside dismisses on any `mousedown` outside its bounds, with two opt-outs: clicks on `[data-evt-id]` swimlane rows (which re-open detail with a new event) and clicks on the pane's own resize handle.
+- **Resume button.** New CTA in the view-tabs row. Surfaces only when the last actor event was an `error` or a timeout-tagged `agent.stop` (regex `timed out|exit=[1-9]`) and no healthy follow-up event landed since. On click, posts `/redo @<actor> resume after timeout/error` to the inbox endpoint — the existing inbox parser turns that into a `kind=user.intervene data.action="redo" target_actor=<actor>` event, which the reducer routes back into the dispatcher's normal spawn loop.
+- **Transcript viewer tab.** New `Transcript` tab next to Pipeline / Logs / Output. Pretty-printed JSONL with substring filter, copy-all button, live event count. Re-renders on `append` SSE events while the tab is active.
+- **Coordinator visibility (root-cause + fix).** The user reported the coordinator pane appears silent during normal routing. Investigation: `src/dispatcher/live.ts` only emits `from=coordinator` events on `rollback` / `stop` / `done` effects (lines 320 / 332 / 341 / 347) — by design, since the coordinator is host-inline (v3 invariant 9, depth=1) and doesn't run as a subprocess that emits `agent.wake` / `agent.stop`. Routing decisions surface as `from=system kind=note body="dispatch.spawn → ..."`. The dashboard fix attributes those system spawn-notes to the coordinator lane in the live execution feed (`→ route: spawn(<actor>) via <adapter> [host-inline routing]`), so the lane no longer reads as silent. The underlying invariant is preserved.
+- **Resume button + transcript viewer wired into the existing SSE handlers** so they self-update on every appended event.
+
+Test plan: lint clean (0 errors, 26 informational sonarjs warnings), typecheck clean, format clean, **342/342 tests passing**, build inlined the new client (78991 bytes) into `dashboard-html.generated.ts`. No code changes outside `packages/dashboard/src/client/{dashboard.html, dashboard.css, dashboard.js}`. The dashboard pretest hook re-inlines automatically; CI ratchet preserved.
+
 ### Added — Dashboard multi-home support (`--home <path>` repeatable + `CRUMB_HOMES` env) (2026-05-02)
 
 The dashboard could only watch a single Crumb home (default `~/.crumb`), so test sessions under `/tmp/crumb-test-home/` and production sessions under `~/.crumb/` couldn't appear together. Now one dashboard instance aggregates from any number of homes.

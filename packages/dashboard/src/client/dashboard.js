@@ -741,7 +741,7 @@ selectSession = function(id) {
 // ── (1) Live execution feed — terminal-like console above the input bar ──
 
 let feedPaused = false;
-const FEED_MAX_LINES = 800;
+const FEED_MAX_LINES = 2000; // bumped from 800 — stream-json rendering produces 3-5× line density
 
 function appendFeedLine(meta) {
   const root = $('console-feed-body');
@@ -873,6 +873,21 @@ function attachFeedLogStream(actor) {
       if (/^--- stdout ---$/.test(line)) { inStderr = false; continue; }
       if (/^=== adapter /.test(line)) {
         appendFeedLine({ ts: new Date().toISOString(), actor: actor, body: line, kindClass: 'system' });
+        continue;
+      }
+      // Try stream-json (Claude Code shape) first — render Claude-Code-style
+      // ⏺/⎿/✓ narrative bubbles above the per-session chat input.
+      const bubbles = renderStreamJsonLine(line);
+      if (bubbles) {
+        for (const b of bubbles) {
+          appendFeedLine({
+            ts: new Date().toISOString(),
+            actor: actor,
+            body: b.glyph + ' ' + b.body,
+            kindClass: b.kindClass,
+            stderr: b.stderr || false,
+          });
+        }
         continue;
       }
       appendFeedLine({
@@ -1096,3 +1111,335 @@ setActiveView = function(view) {
   _origSetActiveView(view);
   if (view === 'output') refreshOutputTab();
 };
+
+// ─── v3.5 Dashboard hardening: resize, dismiss, resume, transcript ───────
+
+// (1) Draggable pane resize. Persists widths in localStorage so a refresh
+// keeps the user's chosen layout.
+function makeResizable(handleId, onDelta, persistKey, getInitial) {
+  const handle = $(handleId);
+  if (!handle) return;
+  let startX = 0;
+  let startVal = 0;
+  let dragging = false;
+  const persisted = persistKey ? Number(localStorage.getItem(persistKey)) : NaN;
+  if (persisted && persisted > 0) onDelta(persisted, /*absolute*/true);
+  const onMove = (e) => {
+    if (!dragging) return;
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    const dx = x - startX;
+    onDelta(startVal, false, dx);
+    e.preventDefault();
+  };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener('touchend', onUp);
+  };
+  const onDown = (e) => {
+    dragging = true;
+    handle.classList.add('dragging');
+    startX = e.touches ? e.touches[0].clientX : e.clientX;
+    startVal = getInitial();
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchend', onUp);
+    e.preventDefault();
+  };
+  handle.addEventListener('mousedown', onDown);
+  handle.addEventListener('touchstart', onDown, { passive: false });
+}
+
+makeResizable(
+  'sessions-resize',
+  (start, abs, dx) => {
+    const w = abs ? start : Math.max(160, Math.min(560, start + (dx ?? 0)));
+    document.body.style.setProperty('--sessions-w', w + 'px');
+    if (!abs) localStorage.setItem('crumb.sessions-w', String(w));
+  },
+  'crumb.sessions-w',
+  () => parseInt(getComputedStyle(document.body).getPropertyValue('--sessions-w'), 10) || 240,
+);
+makeResizable(
+  'detail-resize',
+  (start, abs, dx) => {
+    const w = abs ? start : Math.max(280, Math.min(800, start - (dx ?? 0)));
+    document.body.style.setProperty('--detail-w', w + 'px');
+    if (!abs) localStorage.setItem('crumb.detail-w', String(w));
+  },
+  'crumb.detail-w',
+  () => parseInt(getComputedStyle(document.body).getPropertyValue('--detail-w'), 10) || 420,
+);
+
+// (2) Click-outside-to-close detail pane. Avoids closing on its own resize handle.
+document.addEventListener('mousedown', (e) => {
+  const detail = $('detail');
+  if (!detail.classList.contains('open')) return;
+  if (detail.contains(e.target)) return;
+  // Don't close when click originates on a swimlane row that re-opens detail.
+  if (e.target.closest && e.target.closest('[data-evt-id]')) return;
+  detail.classList.remove('open');
+});
+
+// (3) Resume button — re-spawn last interrupted actor via inbox /redo.
+function lastActorErrorEvent() {
+  const arr = eventCache.get(activeSession) || [];
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const e = arr[i];
+    if (e.kind === 'error' || (e.kind === 'agent.stop' && /timed out|exit=[1-9]/.test(e.body || ''))) {
+      return e;
+    }
+    if (e.kind === 'agent.wake' || e.kind === 'build' || e.kind === 'spec' || e.kind === 'judge.score') {
+      return null; // a healthy event after the failure → no resume needed
+    }
+  }
+  return null;
+}
+function refreshResumeButton() {
+  const btn = $('resume-btn');
+  if (!btn) return;
+  if (!activeSession) { btn.style.display = 'none'; return; }
+  const evt = lastActorErrorEvent();
+  if (!evt) { btn.style.display = 'none'; return; }
+  const actor = evt.from && evt.from !== 'system' ? evt.from : 'last actor';
+  btn.style.display = '';
+  btn.textContent = '▶ Resume ' + actor;
+  btn.disabled = false;
+  btn.dataset.actor = evt.from || '';
+}
+$('resume-btn')?.addEventListener('click', async () => {
+  const btn = $('resume-btn');
+  const actor = btn.dataset.actor;
+  btn.disabled = true;
+  btn.textContent = 'spawning…';
+  // Inbox parser already handles `/redo` and `/resume` lines.
+  const line = actor ? `/redo @${actor} resume after timeout/error` : '/resume';
+  await sendInboxLine(activeSession, line, $('console-feedback'));
+  setTimeout(refreshResumeButton, 1000);
+});
+es.addEventListener('append', () => refreshResumeButton());
+
+// (4) Transcript viewer — pretty-printed jsonl, filterable, copyable.
+function renderTranscriptView() {
+  const root = $('transcript-content');
+  if (!root) return;
+  if (!activeSession) { root.textContent = '(no session selected)'; return; }
+  const arr = eventCache.get(activeSession) || [];
+  const filter = ($('transcript-filter')?.value || '').toLowerCase();
+  const pretty = $('transcript-pretty')?.checked ?? true;
+  const lines = arr
+    .filter(e => {
+      if (!filter) return true;
+      return JSON.stringify(e).toLowerCase().includes(filter);
+    })
+    .map(e => pretty ? JSON.stringify(e, null, 2) : JSON.stringify(e));
+  root.textContent = lines.join('\n\n');
+  $('transcript-status').textContent = `${arr.length} events · showing ${lines.length}`;
+}
+$('transcript-filter')?.addEventListener('input', renderTranscriptView);
+$('transcript-pretty')?.addEventListener('change', renderTranscriptView);
+$('transcript-copy')?.addEventListener('click', () => {
+  navigator.clipboard?.writeText($('transcript-content').textContent || '');
+});
+const _origSetActiveView2 = setActiveView;
+setActiveView = function(view) {
+  _origSetActiveView2(view);
+  if (view === 'transcript') renderTranscriptView();
+};
+es.addEventListener('append', e => {
+  if (activeView === 'transcript') {
+    const d = JSON.parse(e.data);
+    if (d.session_id === activeSession) renderTranscriptView();
+  }
+});
+
+// (5) Coordinator visibility: surface system "dispatch.spawn" notes as
+// coordinator routing decisions in the live exec feed. Coordinator is
+// host-inline (v3 invariant) so it doesn't emit `agent.wake`/`agent.stop`
+// during normal routing — only on rollback/stop/done. Without this attribution
+// the coordinator lane appears silent even though routing is happening.
+const _origAppendFeedLine = appendFeedLine;
+es.addEventListener('append', e => {
+  const d = JSON.parse(e.data);
+  if (activeSession && d.session_id !== activeSession) return;
+  const m = d.msg;
+  if (m && m.from === 'system' && m.kind === 'note' && /dispatch\.spawn/.test(m.body || '')) {
+    const target = m.data?.actor || '?';
+    _origAppendFeedLine({
+      ts: m.ts,
+      actor: 'coordinator',
+      body: `→ route: spawn(${target}) via ${m.data?.adapter || '?'} [host-inline routing]`,
+      kindClass: 'system',
+    });
+  }
+});
+
+// Init: refresh resume button on session select.
+const _origSelectSessionFinal = selectSession;
+selectSession = function(id) {
+  _origSelectSessionFinal(id);
+  refreshResumeButton();
+  if (activeView === 'transcript') renderTranscriptView();
+};
+
+// ─── v3.5 Stream-JSON renderer — Claude-Code-style narrative bubbles ────────
+
+// The Claude CLI emits per-line stream-json: each line is a JSON object
+// describing one assistant turn step (text / tool_use / tool_result / system /
+// result). Codex and Gemini emit similar shapes for their tool-call narratives.
+// This parser turns each line into one or more rendered "bubbles" using the
+// same ⏺ / ⎿ / ✓ glyphs the user sees inside Claude Code so the dashboard
+// live exec feed reads as a faithful mirror of what the agent is doing.
+//
+// Convention:
+//   ⏺ <text>             — assistant text content block
+//   ⏺ ToolName(summary)  — tool call (Bash / Read / Edit / Grep / Monitor / …)
+//   ⎿ <preview>          — tool result (collapsed; tool_result content)
+//   ⎿ Async X completed  — system task notification
+//   ✓ turn complete · …  — result event with cost + tokens
+
+function _summarizeToolInput(name, input) {
+  if (!input || typeof input !== 'object') return '';
+  if (name === 'Bash') return (input.command || '').replace(/\s+/g, ' ').slice(0, 90);
+  if (name === 'Read') return input.file_path || '';
+  if (name === 'Write') return input.file_path || '';
+  if (name === 'Edit') return input.file_path || '';
+  if (name === 'Grep') return (input.pattern || '') + (input.path ? ' in ' + input.path : '');
+  if (name === 'Glob') return input.pattern || '';
+  if (name === 'Monitor') return JSON.stringify(input).slice(0, 90);
+  if (name === 'Task' || name === 'Agent') {
+    return (input.description || '') + (input.subagent_type ? ' [' + input.subagent_type + ']' : '');
+  }
+  if (name === 'TodoWrite') {
+    const todos = input.todos || [];
+    const inProgress = todos.filter(t => t.status === 'in_progress').map(t => t.content);
+    return inProgress.length ? '▶ ' + inProgress[0] : todos.length + ' todos';
+  }
+  if (name === 'WebSearch') return input.query || '';
+  if (name === 'WebFetch') return input.url || '';
+  // Generic fallback: short JSON preview
+  try {
+    const j = JSON.stringify(input);
+    return j.length > 90 ? j.slice(0, 87) + '…' : j;
+  } catch {
+    return '';
+  }
+}
+
+function _summarizeToolResult(content, isError) {
+  let body = content;
+  if (Array.isArray(body)) {
+    body = body.map(b => {
+      if (typeof b === 'string') return b;
+      if (b.text) return b.text;
+      if (b.content) return typeof b.content === 'string' ? b.content : JSON.stringify(b.content);
+      return JSON.stringify(b);
+    }).join(' ');
+  } else if (typeof body === 'object' && body !== null) {
+    body = JSON.stringify(body);
+  }
+  body = String(body ?? '');
+  // Compact: collapse newlines and tabs, then truncate.
+  body = body.replace(/\s+/g, ' ').trim();
+  const max = isError ? 240 : 180;
+  return body.length > max ? body.slice(0, max - 1) + '…' : body;
+}
+
+function renderStreamJsonLine(raw) {
+  // Cheap pre-check: stream-json lines start with '{'. Anything else is plain
+  // log output and should fall through to the raw renderer.
+  if (!raw || raw.charCodeAt(0) !== 123) return null;
+  let obj;
+  try { obj = JSON.parse(raw); } catch { return null; }
+  if (!obj || typeof obj !== 'object' || !obj.type) return null;
+
+  if (obj.type === 'assistant') {
+    const content = obj.message?.content || [];
+    const out = [];
+    for (const block of content) {
+      if (block.type === 'text' && block.text && block.text.trim()) {
+        out.push({ glyph: '⏺', body: block.text.trim(), kindClass: 'assistant-text' });
+      } else if (block.type === 'tool_use') {
+        const name = block.name || 'tool';
+        const summary = _summarizeToolInput(name, block.input);
+        out.push({ glyph: '⏺', body: name + (summary ? '(' + summary + ')' : '()'), kindClass: 'tool-call' });
+      } else if (block.type === 'thinking' && block.thinking && block.thinking.length > 4) {
+        // Render extended thinking as dim italic — usually empty signature
+        // payloads, so this branch fires only when actual reasoning leaked.
+        out.push({ glyph: '·', body: '(thinking)', kindClass: 'thinking' });
+      }
+    }
+    return out.length ? out : null;
+  }
+
+  if (obj.type === 'user') {
+    const content = obj.message?.content || [];
+    const out = [];
+    for (const block of content) {
+      if (block.type === 'tool_result') {
+        const isError = block.is_error === true;
+        const summary = _summarizeToolResult(block.content, isError);
+        out.push({
+          glyph: '⎿',
+          body: summary || (isError ? '(error)' : '(no output)'),
+          kindClass: isError ? 'tool-error' : 'tool-result',
+          stderr: isError,
+        });
+      }
+    }
+    return out.length ? out : null;
+  }
+
+  if (obj.type === 'system') {
+    const sub = obj.subtype;
+    if (sub === 'task_started') {
+      return [{
+        glyph: '⎿',
+        body: 'Async ' + (obj.description || obj.task_type || 'task') + ' started',
+        kindClass: 'tool-result',
+      }];
+    }
+    if (sub === 'task_notification') {
+      const status = obj.status || 'updated';
+      const desc = obj.description || obj.summary || obj.task_type || 'task';
+      return [{
+        glyph: '⎿',
+        body: 'Async ' + desc + ' ' + status,
+        kindClass: status === 'completed' ? 'tool-result' : (status === 'killed' ? 'tool-error' : 'tool-result'),
+      }];
+    }
+    if (sub === 'hook_started' || sub === 'hook_response') {
+      const outcome = obj.outcome || (sub === 'hook_started' ? 'started' : 'ok');
+      return [{ glyph: '·', body: 'hook ' + (obj.hook_name || '?') + ' ' + outcome, kindClass: 'system' }];
+    }
+    if (sub === 'init') {
+      const tools = (obj.tools || []).length;
+      const skills = (obj.skills || []).length;
+      const tail = obj.session_id ? obj.session_id.slice(-8) : '';
+      return [{
+        glyph: '·',
+        body: 'init session ' + tail + ' (model=' + (obj.model || '?') + ', tools=' + tools + ', skills=' + skills + ')',
+        kindClass: 'system',
+      }];
+    }
+    return null; // other system subtypes — silent
+  }
+
+  if (obj.type === 'result') {
+    const cost = typeof obj.total_cost_usd === 'number' ? '$' + obj.total_cost_usd.toFixed(4) : '$?';
+    const out = obj.usage?.output_tokens ?? '?';
+    const cacheRead = obj.usage?.cache_read_input_tokens;
+    const dur = obj.duration_ms ? Math.round(obj.duration_ms / 1000) + 's' : '?';
+    let body = 'turn complete · ' + out + ' out · ' + cost + ' · ' + dur;
+    if (cacheRead) body += ' · cache ' + (cacheRead >= 1000 ? (cacheRead / 1000).toFixed(1) + 'k' : cacheRead);
+    return [{ glyph: '✓', body, kindClass: 'turn-complete' }];
+  }
+
+  if (obj.type === 'rate_limit_event') return null; // silent
+  return null;
+}

@@ -8,7 +8,7 @@
 </head>
 <body>
 
-<aside class="sessions">
+<aside class="sessions" id="sessions-pane">
   <div class="sessions-header">
     <h2>Sessions</h2>
     <button id="new-session" class="icon-btn" title="Start a new crumb session">＋</button>
@@ -30,6 +30,7 @@
   </div>
   <div id="sess-list"></div>
 </aside>
+<div class="resize-handle resize-handle-sessions" id="sessions-resize" title="Drag to resize sessions pane"></div>
 
 <main>
   <header class="summary">
@@ -57,6 +58,9 @@
     <button data-view="pipeline" class="active">Pipeline</button>
     <button data-view="logs">Logs</button>
     <button data-view="output">Output</button>
+    <button data-view="transcript">Transcript</button>
+    <span style="flex:1;"></span>
+    <button id="resume-btn" class="resume-btn" style="display:none;" title="Re-spawn the last interrupted actor">▶ Resume</button>
   </nav>
 
   <div class="view-pane active" id="view-pipeline">
@@ -103,6 +107,18 @@
     </section>
   </div>
 
+  <div class="view-pane" id="view-transcript">
+    <section class="transcript-view">
+      <div class="transcript-toolbar">
+        <span id="transcript-status">—</span>
+        <input type="text" id="transcript-filter" placeholder="filter kind / from / body…">
+        <label><input type="checkbox" id="transcript-pretty" checked> pretty</label>
+        <button id="transcript-copy">copy all</button>
+      </div>
+      <pre id="transcript-content" class="transcript-content"></pre>
+    </section>
+  </div>
+
   <section class="console-feed" id="console-feed-section">
     <div class="console-feed-toolbar">
       <span class="console-feed-title">Live execution feed</span>
@@ -124,6 +140,7 @@
 </main>
 
 <aside class="detail" id="detail">
+  <div class="resize-handle resize-handle-detail" id="detail-resize" title="Drag to resize detail pane"></div>
   <button class="close" id="detail-close" aria-label="Close detail">×</button>
   <h3 id="detail-title">Event detail</h3>
   <div id="detail-pipeline-pos" style="font-size:11px;color:var(--ink-subtle);margin-bottom:8px;font-family:ui-monospace,monospace;"></div>
