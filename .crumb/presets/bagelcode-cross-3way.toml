@@ -31,14 +31,19 @@ sandwich = "agents/coordinator.md"
 [actors.planner-lead]
 sandwich = "agents/planner-lead.md"
 
-# researcher (v3.3): ★ 명시 — 비디오 evidence = Google Gemini SDK
-# (gemini-cli 의 비디오 인식이 4 closed/p1-unresolved bug — #1556, #1691, #3379, #15634 — 라
-#  SDK 직호출이 deterministic 경로. 이 actor 만 SDK 로 묶어 planner-lead 는 ambient 유지.)
+# researcher (v3.3 → v3.4): NO explicit harness binding. The reducer's
+# pickAdapter('researcher') routes by goal.data.video_refs presence:
+#   - has video_refs → gemini-sdk (deterministic frame sampling; gemini-cli has
+#     4 closed/p1-unresolved video bugs #1556/#1691/#3379/#15634, so SDK-direct
+#     is the only reliable path)
+#   - no video_refs  → claude-local (LLM-driven text research per
+#     agents/researcher.md step 1+3 fallback — real wiki references + design
+#     lessons, not the v3.3 stub which emitted empty arrays).
+# Removing the binding lets one preset serve both modes; users who want to
+# FORCE gemini-sdk regardless can override via .crumb/config.toml.
 [actors.researcher]
 sandwich = "agents/researcher.md"
-harness  = "gemini-sdk"
-provider = "google"
-model    = "gemini-3-1-pro"
+# harness/provider/model: ambient → pickAdapter routes per video_refs
 
 # builder: ★ 명시 — 구현 = OpenAI Codex
 [actors.builder]

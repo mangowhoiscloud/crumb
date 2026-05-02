@@ -117,6 +117,16 @@ export interface CrumbState {
    * time without re-walking the transcript.
    */
   research_video_evidence_ids: string[];
+  /**
+   * Whether the session's `kind=goal` carried `data.video_refs: string[]` with
+   * at least one entry. Set in the goal reducer case; consumed by
+   * `pickAdapter('researcher')` to route the spawn:
+   *   true  → gemini-sdk (programmatic video evidence path, real SDK calls)
+   *   false → claude-local / ambient (LLM-driven text research, real reasoning)
+   * Replaces the previous gemini-sdk text-only stub branch (which emitted
+   * empty reference_games[] + design_lessons[] regardless of input).
+   */
+  goal_has_video_refs: boolean;
   // Has the session reached a terminal state?
   done: boolean;
 }
@@ -151,5 +161,6 @@ export const initialState = (sessionId: string): CrumbState => ({
   last_qa_result: null,
   last_builder_provider: null,
   research_video_evidence_ids: [],
+  goal_has_video_refs: false,
   done: false,
 });

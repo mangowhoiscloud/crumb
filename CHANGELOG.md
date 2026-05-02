@@ -4,6 +4,19 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — researcher actor: real text research replaces v3.3 stub (v3.4) (2026-05-02)
+
+The v3.3 researcher had two paths: video → real Gemini SDK, no-video → **empty stub** (`reference_games: []`, `design_lessons: []`). Verifier saw the stub but downstream planner-lead phase B got nothing. Now the no-video path runs a real LLM-driven text research turn.
+
+- **`src/state/types.ts`** — new `goal_has_video_refs: boolean` field on CrumbState. Set in the goal reducer case from `event.data.video_refs` array; consumed by `pickAdapter('researcher')`.
+- **`src/reducer/index.ts` `pickAdapter('researcher')`** — branches on `state.goal_has_video_refs`:
+  - `true` → `gemini-sdk` (programmatic frame sampling, deterministic via cache_key)
+  - `false` → `claude-local` (LLM-driven text research, runs `agents/researcher.md` step 1+3 fallback: 3-5 reference games + design lessons grounded in `wiki/`)
+- **`src/adapters/gemini-sdk.ts`** — text-only stub branch removed. If invoked without `video_refs` (e.g. user hard-bound the actor via `.crumb/config.toml`), emits `kind=error` with `data.reason=gemini_sdk_no_video_refs` explaining how to rebind. Exit code 2.
+- **`.crumb/presets/bagelcode-cross-3way.toml`** — researcher binding's `harness/provider/model` removed. The preset now defers to `pickAdapter` so one preset serves both video and text-only modes. Users who want to FORCE gemini-sdk regardless can override via `.crumb/config.toml`.
+- **Tests**: 292/292 (was 291). Two reducer specs replace the v3.3 always-gemini-sdk routing test; gemini-sdk adapter spec replaces the text-only-stub assertion with the new error path.
+- The runtime sandwich `agents/researcher.md` already documented step 1+3 text-only fallback (3 reference games × 3 actionable lessons grounded in wiki) — no change needed there. The fix is in routing + adapter behavior so that path actually executes.
+
 ### Added — NL Intervention 12-system frontier survey (2026-05-02)
 
 New reference page `wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md` extends the existing `wiki/synthesis/bagelcode-user-intervention-frontier-2026-05-02.md` matrix from 5 systems to 12, with a fresh dimension: NL classification mechanism. Survey result: 9/12 frontier systems use **implicit LLM judgment** (LangGraph, Cursor, Cline, OpenHands, Devin, Manus, Claude Code skill matcher, Codex CLI, AutoGen UserProxy), 2/12 use **protocol gates only** (Inspect AI, Aider), and 1/12 (bkit) uses an **explicit regex enum classifier** with documented FP-precision bug history (ENH-226 patch). Crumb's PR-A/PR-B path (raw NL → `kind=user.intervene body` + `collectSandwichAppends` → next actor LLM judges in context) matches the majority pattern; the page records the avoid-decision against introducing an `intent.schema.json` enum classifier as bkit-style regression. Cross-references: OpenHands #5500 stuck-detector exclusion (verify our circuit_breaker), Cursor 2.0 worktree isolation (matches our v3 invariant 8), AutoGen GroupChatManager known-broken (matches our v3 Must 5 STOP-after-handoff), LangGraph `Command` tagged-union (matches our `data.{goto, swap, target_actor, sandwich_append, reset_circuit}` 6-field shape from PR-B).

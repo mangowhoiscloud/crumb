@@ -213,46 +213,37 @@ export class GeminiSdkAdapter implements Adapter {
     const transcript = await readAll(req.transcriptPath);
     const videoRefs = parseVideoRefs(transcript);
 
-    // Text-only fallback path: no video_refs present → emit a note so the
-    // verifier knows evidence_refs may be empty for D5, then synthesize from
-    // wiki references only (handled by the planner-lead phase B with cached
-    // wiki context — researcher just emits a stub step.research).
+    // v3.4: text-only stub branch removed. The previous behavior emitted empty
+    // reference_games[] + design_lessons[] regardless of input — pretending to
+    // research while doing nothing. Now the reducer's pickAdapter('researcher')
+    // routes text-only sessions to `claude-local` (LLM-driven, runs the
+    // researcher.md sandwich step 1+3 fallback for real wiki-based research),
+    // and only sends video_refs sessions here.
+    //
+    // If we still get here with no video_refs, it means a preset explicitly
+    // bound researcher = gemini-sdk (e.g. bagelcode-cross-3way) but the goal
+    // didn't carry video_refs. Surface this as kind=error so the user can
+    // either provide videos or rebind the actor.
     if (videoRefs.length === 0) {
       await writer.append({
         session_id: req.sessionId,
         from: req.actor,
-        kind: 'note',
-        body: 'video_refs absent — text-only research path (researcher actor)',
-        metadata: { evidence_kind: 'text' },
-      });
-      await writer.append({
-        session_id: req.sessionId,
-        from: req.actor,
-        kind: 'step.research',
-        body: '3-lesson synthesis (text-only path; verifier should expect empty evidence_refs)',
+        kind: 'error',
+        body: 'gemini-sdk adapter requires goal.data.video_refs[]; got empty. Either provide video URLs/paths or rebind the researcher actor (e.g. via .crumb/config.toml or a preset without explicit gemini-sdk binding) so it routes to claude-local for text-only research.',
         data: {
-          reference_games: [],
-          design_lessons: [],
-          evidence_kind: 'text',
+          reason: 'gemini_sdk_no_video_refs',
+          adapter: 'gemini-sdk',
+          actor: req.actor,
         },
         metadata: {
-          harness: 'gemini-sdk',
-          provider: 'google',
-          model: DEFAULT_MODEL,
-          evidence_kind: 'text',
+          deterministic: true,
+          tool: 'gemini-sdk@v1',
         },
       });
-      await writer.append({
-        session_id: req.sessionId,
-        from: req.actor,
-        kind: 'handoff.requested',
-        to: 'planner-lead',
-        data: { phase: 'B', reason: 'text-only research synthesis ready' },
-      });
       return {
-        exitCode: 0,
-        stdout: 'text-only research path',
-        stderr: '',
+        exitCode: 2,
+        stdout: '',
+        stderr: 'gemini-sdk: no video_refs in goal — see kind=error event for guidance',
         durationMs: Date.now() - start,
       };
     }

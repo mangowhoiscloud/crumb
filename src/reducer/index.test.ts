@@ -710,10 +710,16 @@ describe('reducer', () => {
     expect(state.progress_ledger.circuit_breaker['builder']).toBeUndefined();
   });
 
-  // v3.3 — researcher actor routing
+  // v3.3 → v3.4 — researcher actor routing.
+  // v3.4 split: pickAdapter('researcher') routes by goal.data.video_refs presence
+  // (set in the goal reducer case → state.goal_has_video_refs):
+  //   - has video → 'gemini-sdk' (programmatic SDK, frame sampling)
+  //   - no video  → 'claude-local' (LLM-driven text research, real wiki refs)
+  // Replaces v3.3 stub which always returned 'gemini-sdk' even for empty videos.
 
-  it('v3.3: handoff.requested(to=researcher) from planner-lead → spawn(researcher, gemini-sdk)', () => {
+  it('v3.4: handoff.requested(to=researcher) with no video_refs → spawn(researcher, claude-local)', () => {
     const s0 = initialState('sess-test');
+    // No prior goal → goal_has_video_refs stays false (initial state default).
     const handoff = fixed({
       from: 'planner-lead',
       kind: 'handoff.requested',
@@ -724,6 +730,30 @@ describe('reducer', () => {
 
     expect(state.progress_ledger.next_speaker).toBe('researcher');
     expect(effects).toHaveLength(1);
+    expect(effects[0]).toMatchObject({
+      type: 'spawn',
+      actor: 'researcher',
+      adapter: 'claude-local',
+    });
+  });
+
+  it('v3.4: handoff.requested(to=researcher) with video_refs → spawn(researcher, gemini-sdk)', () => {
+    let s = initialState('sess-test');
+    // Prime state via a goal event that carries video_refs.
+    const goal = fixed({
+      kind: 'goal',
+      body: 'match-3 with reference videos',
+      data: { video_refs: ['https://www.youtube.com/watch?v=abc'] },
+    });
+    s = reduce(s, goal).state;
+    expect(s.goal_has_video_refs).toBe(true);
+    const handoff = fixed({
+      id: '01H0000000000000000000HND',
+      from: 'planner-lead',
+      kind: 'handoff.requested',
+      to: 'researcher',
+    });
+    const { effects } = reduce(s, handoff);
     expect(effects[0]).toMatchObject({
       type: 'spawn',
       actor: 'researcher',
