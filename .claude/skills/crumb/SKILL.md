@@ -10,6 +10,8 @@ description: >-
   `crumb doctor` based on what is installed/authenticated, but never forces a default.
   Cross-provider is a use case example, not a separate flag. Do NOT trigger for general code
   requests, library questions, or non-game tasks.
+allowed-tools: Bash Task Read Write Edit Glob Grep
+argument-hint: <자연어 게임 goal — 예: "60초 매치-3 콤보 보너스">
 ---
 
 # Crumb — Multi-Agent Game Prototyping Skill (v3)
@@ -196,8 +198,8 @@ subagent_spawn                 # host-native primitive 추상화
 
 ## References
 
-- `CRUMB.md` (repo root) — ★ Crumb runtime identity (universal, every host loads this); imported by every host entry. Read this before any actor sandwich.
-- `AGENTS.md` (repo root) — contributor identity (Linux Foundation Agentic AI Foundation standard); sibling of CRUMB.md.
+- `AGENTS.md` (repo root) — ★ universal Crumb identity (Linux Foundation Agentic AI Foundation standard). Architecture invariants, actors, schema, multi-host entries, preset philosophy, universal Don't / Must. Auto-imported by `CLAUDE.md` (this skill's parent context) via `@AGENTS.md`. Read this before any actor sandwich.
+- `CLAUDE.md` (repo root) — Claude Code-specific augmentation (.skills/ 24 매핑 / Korean policy / progress / verify gate). Auto-loaded by Claude Code; imports AGENTS.md inline.
 - `wiki/concepts/bagelcode-system-architecture-v3.md` — ★ canonical v3 시스템 구조 (multi-host + 3-tuple + 5 actor + 3-layer scoring + MCP Provider + persistence)
 - `wiki/synthesis/bagelcode-host-harness-decision.md` — Hybrid (Skill + headless CLI) lock 결정
 - `wiki/concepts/bagelcode-verifier-isolation-matrix.md` — actor-level split 의 backing

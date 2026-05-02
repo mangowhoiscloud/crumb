@@ -69,6 +69,7 @@ updated: 2026-05-01
 - [[bagelcode-naming-crumb]] — **프로젝트명 Crumb 확정** (Bagel motif + breadcrumb pattern + transcript trail = 3중 의미)
 - [[bagelcode-frontier-rationale-5-claims]] — **4-actor 결정의 5 frontier 근거 + TradingAgents §4 정합 매핑** (claim 별 a/b/c/d 분해 + 학술 prior + 운영 layer)
 - [[bagelcode-final-design-2026]] — ★ **최종 설계 종합** (Lead-Specialists + Socratic + CourtEval + 28 kind + envelope/handoff/state machine + OTel alias)
+- [[bagelcode-identity-files-decomposition-2026-05-02]] ★ — **Identity files lock**: AGENTS.md = universal source (LF AAIF 표준), CLAUDE.md / GEMINI.md = host-specific augmentation, `.gemini/settings.json` `contextFileName`. CRUMB.md drop. 3 host (Claude Code / Codex / Gemini) 모두 어떤 머신에서든 단순 셋업.
 - [[bagelcode-system-architecture-v3]] ★★ — **canonical v3 시스템 구조 lock**. Multi-host 4 entry (Claude Code + Codex + Gemini + headless) + (harness × provider × model) 3-tuple actor binding + ambient fallback + 3-layer scoring + 자연어 helper 5종 + Kiki 패턴 차용 정적 대시보드. v2 [[bagelcode-system-architecture]] §1-§2 그림 대체.
 
 ## 핵심 가설
