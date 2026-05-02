@@ -43,8 +43,18 @@ This table mirrors the reducer's `case` branches. The sandwich's instruction is 
 | `judge.score` verdict=PASS | `done(verdict_pass)` | — |
 | `judge.score` verdict=PARTIAL | `hook(partial)` | (user modal) |
 | `judge.score` verdict=FAIL/REJECT | `rollback → planner-lead` (respec) **OR** `spawn(builder-fallback)` if `circuit_breaker.builder.state === 'OPEN'` | planner-lead / builder-fallback |
-| `user.veto` | `spawn(last_active_actor)` with `instructionOverride` | (rebound to planner-lead or builder) |
-| `user.intervene` | add to `task_ledger` facts, no spawn | (next pending) |
+| `user.veto` | `spawn(last_active_actor)` with `instructionOverride` + carries `sandwich_appends` snapshot | (rebound to planner-lead or builder) |
+| `user.intervene` (no data) | add fact (constraint), no spawn | (next pending) |
+| `user.intervene` `data.target_actor=<a>` | tag fact `@<a>`, no spawn | (constraint visible to next spawn of `<a>`) |
+| `user.intervene` `data.goto=<a>` | force `next_speaker=<a>` + `spawn(<a>)` (LangGraph `Command(goto=<a>)`) | `<a>` |
+| `user.intervene` `data.swap={from,to}` | `progress_ledger.adapter_override[from] = to` (Paperclip swap) | (next spawn of `from` uses `to`) |
+| `user.intervene` `data.reset_circuit=<a\|true>` | clear `circuit_breaker[<a>]` (or all when `true`) | (re-enable normal routing) |
+| `user.intervene` `data.sandwich_append=<text>` | append fact `category='sandwich_append'` (+ optional `target_actor`); dispatcher concatenates onto every subsequent matching spawn | (persistent system-prompt addendum) |
+| `user.pause` (no data) | global pause: every subsequent `spawn` demoted to `hook` | — (LangGraph `interrupt()`) |
+| `user.pause` `data.actor=<a>` | per-actor pause: only `spawn(<a>)` demoted, others continue (Paperclip "pause any agent") | — |
+| `user.resume` (no data) | clears global + all per-actor pauses; re-spawns `progress_ledger.next_speaker` if pending | (queued speaker resumes) |
+| `user.resume` `data.actor=<a>` | clears `<a>` from `paused_actors`; no re-spawn | — |
+| `user.approve` | promotes the most recent `PARTIAL` verdict to `done(user_approve_partial)`; no-op when last verdict is `PASS` or absent | — |
 | `error` (3 consecutive from same actor) | `circuit_breaker.<actor> = OPEN` | (fallback path) |
 | `progress.stuck_count >= 5` | `hook(stuck)` | (manual escalation) |
 | `score_history` variance < 1.0 over 2 rounds | `done(adaptive_stop)` | — (NeurIPS 2025 multi-agent debate judge) |
@@ -54,7 +64,7 @@ This table mirrors the reducer's `case` branches. The sandwich's instruction is 
 **Update on:**
 - `kind=goal` → add fact `"user goal: <body>"`
 - `kind=spec` / `spec.update` → add facts from `data.acceptance_criteria`
-- `kind=user.intervene` → add constraint from `data`
+- `kind=user.intervene` → add constraint fact (tagged `@<actor>` when `data.target_actor` set); add `category='sandwich_append'` fact when `data.sandwich_append` set (the dispatcher concatenates these onto every subsequent matching spawn — v3.2 G4)
 - `kind=judge.score` PARTIAL → add fact `"verifier feedback: <reason>"`
 - `kind=qa.result` → no ledger update (deterministic ground truth, consumed by verifier)
 
@@ -102,3 +112,10 @@ This table mirrors the reducer's `case` branches. The sandwich's instruction is 
 
 **Adaptive stopping (NeurIPS 2025).**
 > Once `progress_ledger.score_history` accumulates 4 rounds and the variance over the last 2 falls below 1.0, route `done(adaptive_stop)` regardless of verdict. This stops infinite verifier polishing.
+
+**User-intervention surfaces (G1-G6 + G4).**
+> The 5 `user.*` event kinds (`pause` / `resume` / `approve` / `veto` / `intervene`) reach the transcript through three modalities — all of them write the same JSONL line, so routing is identical regardless of source:
+> 1. **TUI slash bar** (`crumb tui`) — `/pause`, `/resume`, `/approve`, `/veto`, `/goto`, `/swap`, `/reset-circuit`, `/append [@<actor>] <text>`, `/note`, `/redo`, `@<actor> <body>` (free-text mention). Delegates to `parseInboxLine`; quit (`/q`, `/quit`) is the only TUI-local case.
+> 2. **Headless `inbox.txt` watcher** — `sessions/<id>/inbox.txt` polled every 500 ms; identical grammar, useful when no TUI is attached (CI / remote / scripted).
+> 3. **`crumb event` JSON shell** — pipe `{"from":"user","kind":"user.intervene","data":{...}}` to `npx tsx src/index.ts event`. The lowest-level surface; the TUI and inbox watcher both end here.
+> Frontier alignment: LangGraph `Command(goto/update={...})` (53/60 in `wiki/synthesis/bagelcode-user-intervention-frontier-2026-05-02.md`) + Paperclip BYO swap (38/60) + Codex `APPEND_SYSTEM.md` (38/60).

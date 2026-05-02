@@ -34,7 +34,17 @@ Extension 의 commands/crumb.toml 이 trigger. coordinator role 으로 진입.
 
 ## 사용자 개입
 
-자연어로 진행 중 message → kind=user.intervene. 다음 spec/build 에 반영.
+3 표면 모두 동일 transcript line 으로 떨어짐 — routing 은 source 무관.
+
+| 표면 | Gemini CLI 시 권장도 | 입력 방법 |
+|---|---|---|
+| `inbox.txt` | ★ 1순위 | `echo "@verifier ..." >> $CRUMB_SESSION_DIR/inbox.txt` (shell 친화) |
+| TUI 슬래시 바 | 별도 터미널 필요 | `crumb tui` 후 `/goto verifier`, `/append @builder ...` 등 |
+| JSON event | 스크립트용 | `echo '{...}' \| npx tsx src/index.ts event` |
+
+상세 grammar + `data` 필드 (`target_actor` / `goto` / `swap` / `reset_circuit` / `sandwich_append` / `actor`) 는 `commands/crumb.toml` §4 + `agents/coordinator.md` Routing Rules 참조.
+
+→ Frontier: LangGraph `Command(goto/update={...})` (53/60), Paperclip BYO swap (38/60), Codex `APPEND_SYSTEM.md` (38/60). 배경: `wiki/synthesis/bagelcode-user-intervention-frontier-2026-05-02.md`.
 
 ## 산출
 
