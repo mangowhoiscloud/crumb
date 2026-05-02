@@ -40,8 +40,16 @@ export interface AppendEffect {
 
 export interface HookEffect {
   type: 'hook';
-  /** stuck | partial | confirm — the TUI/CLI surfaces this as a modal. */
-  kind: 'stuck' | 'partial' | 'confirm' | 'error';
+  /**
+   * Hook kind surfaced to the TUI/CLI as a modal:
+   * - stuck         — too many errors (stuck_count >= 5)
+   * - partial       — verifier verdict=PARTIAL, user confirm/veto
+   * - confirm       — generic confirmation
+   * - error         — adapter/runtime error
+   * - token_budget  — v3.2: session_token_total crossed 40K (50K = hard done)
+   * - time_budget   — v3.2: session_wall_clock crossed 24min (30min = hard done)
+   */
+  kind: 'stuck' | 'partial' | 'confirm' | 'error' | 'token_budget' | 'time_budget';
   body: string;
   data?: Record<string, unknown>;
 }
