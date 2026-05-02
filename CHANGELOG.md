@@ -14,8 +14,17 @@ The v3.3 researcher had two paths: video → real Gemini SDK, no-video → **emp
   - `false` → `claude-local` (LLM-driven text research, runs `agents/researcher.md` step 1+3 fallback: 3-5 reference games + design lessons grounded in `wiki/`)
 - **`src/adapters/gemini-sdk.ts`** — text-only stub branch removed. If invoked without `video_refs` (e.g. user hard-bound the actor via `.crumb/config.toml`), emits `kind=error` with `data.reason=gemini_sdk_no_video_refs` explaining how to rebind. Exit code 2.
 - **`.crumb/presets/bagelcode-cross-3way.toml`** — researcher binding's `harness/provider/model` removed. The preset now defers to `pickAdapter` so one preset serves both video and text-only modes. Users who want to FORCE gemini-sdk regardless can override via `.crumb/config.toml`.
-- **Tests**: 292/292 (was 291). Two reducer specs replace the v3.3 always-gemini-sdk routing test; gemini-sdk adapter spec replaces the text-only-stub assertion with the new error path.
+- **Tests**: 294/294 (was 293; +2 reducer specs for video/no-video routing, -1 stub adapter spec, +1 error-path adapter spec). Builds on PR #41's OpenHands #5500 regression specs.
 - The runtime sandwich `agents/researcher.md` already documented step 1+3 text-only fallback (3 reference games × 3 actionable lessons grounded in wiki) — no change needed there. The fix is in routing + adapter behavior so that path actually executes.
+
+### Added — OpenHands #5500 regression specs for circuit_breaker user-exclusion (2026-05-02)
+
+Pin down the OpenHands #5500 invariant ("stuck-detector must exclude user messages") with explicit regression tests in `src/reducer/index.test.ts`. The property was already correctly implemented at `src/reducer/index.ts:{49,477,489}` (both breaker recovery and failure branches exclude `from='user'`/`'coordinator'`/`'system'`; `stuck_count` only increments on `kind=error`), but lacked a negative test guarding against future refactor regression.
+
+- **`src/reducer/index.test.ts`** (+2 specs, suite total **293/293**):
+  - "OpenHands #5500: user.intervene does not reset an OPEN circuit breaker" — given `circuit_breaker.builder = OPEN/3-failures`, a `kind=user.intervene` event leaves the breaker untouched. Without this, a chatty user mid-session could mask a broken builder by appearing to be "actor activity" and drifting the breaker state to CLOSED.
+  - "OpenHands #5500: user.* events never increment stuck_count" — four user.* events (intervene/veto/pause/resume) in a row keep `stuck_count = 0`. Stuck detection is reserved for `kind=error` events from actors.
+- **`wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md`** §4.1 + §5 entries upgraded ⚠ → ✅ verified, with file:line citations + spec names. Cross-references the All-Hands-AI/OpenHands #5500 + #5480 thread.
 
 ### Added — NL Intervention 12-system frontier survey (2026-05-02)
 

@@ -710,6 +710,47 @@ describe('reducer', () => {
     expect(state.progress_ledger.circuit_breaker['builder']).toBeUndefined();
   });
 
+  // OpenHands #5500 regression — a chatty user must not mask a broken actor.
+  // Cross-frontier evidence: All-Hands-AI/OpenHands #5500 + #5480 documented
+  // a stuck-detector that *did* count user messages as activity, locking
+  // users out of recovery flows. See
+  // wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md §4.1
+  // (steal: stuck-detector excludes user.* events).
+
+  it('OpenHands #5500: user.intervene does not reset an OPEN circuit breaker', () => {
+    const s0 = initialState('sess-test');
+    s0.progress_ledger.circuit_breaker['builder'] = {
+      state: 'OPEN',
+      consecutive_failures: 3,
+      last_failure_id: '01H0000000000000000000000F',
+    };
+    const intervene = fixed({
+      id: '01H0000000000000000000000U',
+      from: 'user',
+      kind: 'user.intervene',
+      body: 'try harder',
+    });
+    const { state } = reduce(s0, intervene);
+    const breaker = state.progress_ledger.circuit_breaker['builder'];
+    expect(breaker?.state).toBe('OPEN');
+    expect(breaker?.consecutive_failures).toBe(3);
+    expect(breaker?.last_failure_id).toBe('01H0000000000000000000000F');
+  });
+
+  it('OpenHands #5500: user.* events never increment stuck_count', () => {
+    const s0 = initialState('sess-test');
+    expect(s0.progress_ledger.stuck_count).toBe(0);
+    const events = [
+      fixed({ id: '01H0000000000000000000U01', from: 'user', kind: 'user.intervene', body: 'a' }),
+      fixed({ id: '01H0000000000000000000U02', from: 'user', kind: 'user.veto', body: 'b' }),
+      fixed({ id: '01H0000000000000000000U03', from: 'user', kind: 'user.pause' }),
+      fixed({ id: '01H0000000000000000000U04', from: 'user', kind: 'user.resume' }),
+    ];
+    let s = s0;
+    for (const e of events) s = reduce(s, e).state;
+    expect(s.progress_ledger.stuck_count).toBe(0);
+  });
+
   // v3.3 → v3.4 — researcher actor routing.
   // v3.4 split: pickAdapter('researcher') routes by goal.data.video_refs presence
   // (set in the goal reducer case → state.goal_has_video_refs):
