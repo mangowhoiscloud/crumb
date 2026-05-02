@@ -4,6 +4,20 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — Dashboard IDE-style grep highlight + ↑↓ nav across Logs / Transcript / Live feed (2026-05-03)
+
+The dashboard's text panels supported a substring filter that highlighted whole matching lines in faint blue (logs only), filtered entries (transcript), or had no search at all (live execution feed). User feedback: "grep 했을 때 해당되는 패턴 주황색으로 표시하고 위아래로 조작 가능(IDE처럼)하게 세팅이 아직 안되었거든." — they wanted the inline-substring orange highlight + IDE-style match navigation present in every modern editor.
+
+- **`mark.grep-hit` substring highlight** in `dashboard.css` — translucent 32% orange normal state, full `--accent-grep` (#ff9f1c) with deeper `--accent-grep-active` (#ff5e00) border on the current match. New tokens `--accent-grep` + `--accent-grep-active` are visually distinct from `--warn` peach and `--accent-warm` gold (already taken by stream-json `⏺/✓`).
+- **Shared `.grep-controls`** — `count / total` (e.g. `3 / 17`, orange when hits > 0, dim when no query) + `↑ ↓` nav buttons, disabled when no matches.
+- **Per-panel grep state** in `dashboard.js` — `grepState = { logs, transcript, feed }` with `query` + `cursor` preserved across re-renders (streaming content doesn't reset nav position).
+- **Helpers**: `highlightHTML(text, query)` (HTML-escapes then wraps case-insensitive substring matches with `<mark>`, regex meta chars escaped via `escapeRegExp`), `refreshGrepNav()` (re-collects `mark.grep-hit` after each render, syncs counter + active class), `gotoGrepMatch(panel, dir)` (mod-N cursor advance + `scrollIntoView({block:'center'})`), `bindGrepInput()` (input event → `onChange`; Enter = next, Shift+Enter = prev, Esc = clear+blur).
+- **Logs panel**: substring `<mark>` replaces the old whole-line `.match` blue background. Matching lines now also get a faint orange `.has-match` row tint for at-a-glance scanning.
+- **Transcript panel**: render switched from `textContent` to `innerHTML` (still inside `<pre>` so whitespace preserved) so the pretty-printed JSON layout keeps formatting while inline matches are markable. Entry-level filtering (only matching events shown) is preserved on top of substring highlight.
+- **Live execution feed**: new search input added to the toolbar (was pause/clear only). Each `appendFeedLine` records the raw text on `bodySpan.dataset.raw` so `rehighlightFeed()` can rebuild highlight on query change without reparsing the stream-json again.
+- **Tests** — `escapeRegExp` + `highlightHTML` verified via 6 unit cases (case-insensitive multi-match, HTML escape `<div>`, regex meta `.*+?` literal match, empty query, single-space query). Full sweep 342/342 green.
+- Verified server-side: served HTML contains all 43 grep identifiers; build artifact bumped 95781 → 103212 bytes.
+
 ### Added — Dashboard live exec feed: Claude-Code-style stream-json narrative (2026-05-03)
 
 The per-session live execution feed (above the chat input) was dumping spawn-log stream-json as raw text. User feedback: "이건 세션 내 채팅 입력창 위에 붙어있어야 해" — the user wants the same `⏺` / `⎿` / `✓` narrative bubbles they see inside Claude Code, faithfully mirrored in the dashboard so they can watch what the agent is doing without context-switching to the terminal.
