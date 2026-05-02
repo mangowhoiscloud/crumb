@@ -52,6 +52,20 @@ export interface SpawnResult {
   /** Stderr — surfaced into kind=error if non-zero exit. */
   stderr: string;
   durationMs: number;
+  /**
+   * Token usage parsed from the subprocess output (when --output-format
+   * stream-json or json is used, the CLIs emit a final usage block). Adapters
+   * that can't recover usage (text mode, mock) leave this undefined; the
+   * dispatcher then writes only `latency_ms` into the agent.stop metadata.
+   */
+  usage?: {
+    tokens_in?: number;
+    tokens_out?: number;
+    cache_read?: number;
+    cache_write?: number;
+    cost_usd?: number;
+    model?: string;
+  };
 }
 
 export interface Adapter {

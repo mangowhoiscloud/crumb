@@ -47,9 +47,23 @@ Spec authoring within the 5 outer actors. Sits immediately before Builder — em
 
 ## Steps (sequential, single spawn)
 
-### 1. Socratic round
+### 1. Socratic round (OPT-IN — skip by default)
 
-Analyze ambiguity in the goal. Pick 1–3 unclear axes (max 3 questions, 30s timeout each):
+**Eager auto-progression is the rule, not the exception.** Only ask socratic
+questions when the goal contains explicit ambiguity markers:
+
+- "어떤 X 로 할까", "X or Y", "고민 중", "결정해줘", "추천해줘"
+- "[OPTION-A | OPTION-B]" forced-choice syntax
+- goal length < 20 chars AND missing both genre + mechanic
+
+Otherwise — and this is the common case — **skip step 1 entirely**, emit a
+single `kind=step.socratic` with `data.skipped=true` + `data.applied_defaults`
+listing the categories you locked in (target platform / session length / core
+mechanic / monetization hint / art style), and proceed directly to step 2
+(concept). The user can still steer via `kind=user.intervene` at any point;
+their inbox messages flow through the reducer as constraints on the next spawn.
+
+When you DO ask (rare path), use this shape, max 1–3 questions, 60s soft timeout each:
 
 - target platform (iOS Safari / Android Chrome / both)
 - session length (60s / unlimited / level-based)
@@ -65,7 +79,12 @@ Each question follows this shape:
   "data": { "options": ["..."], "default": "<timeout fallback>", "category": "platform|mechanic|..." } }
 ```
 
-Wait for `kind=answer.socratic` from the user (timeout=30s, then fall back to `data.default` and emit `kind=audit`). Append answers to `task_ledger.constraints`.
+Wait for `kind=answer.socratic` from the user (60s soft timeout, then fall back to `data.default` and emit `kind=audit`). Append answers to `task_ledger.constraints`.
+
+**Why eager-by-default**: the dispatcher's hard per-spawn budget is 300s; if
+this step alone burns 90s on questions the user can't reach a terminal in time
+to answer, the spawn is SIGTERM'd and the session dies before reaching spec.
+Socratic must be the exception, not the gate.
 
 ### 2. Concept (specialist) — phase A
 
@@ -128,7 +147,7 @@ Append in order:
 ## Reminders
 
 **Step 1 socratic discipline.**
-> Max 3 questions, 30s timeout each. **Don't ask "easy" questions** — ask the questions whose answers most narrow the design space. The timeout fallback (`data.default`) must be set on every question.
+> **Skip socratic by default.** Only ask if the goal contains explicit ambiguity markers (see step 1). When you do ask: max 3 questions, 60s soft timeout each, and the timeout fallback (`data.default`) must be set on every question. Burning the per-spawn budget on questions the user can't reach kills the session — eager auto-progression with `user.intervene` open is the right tradeoff.
 
 **Step 5 synth must be self-contained.**
 > `spec.md` must stand alone. Builder will not read your `step.*` messages or `agent.thought_summary` — only the final `spec.md`. All concept / research / design decisions must end up in spec.md.
