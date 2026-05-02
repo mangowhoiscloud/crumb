@@ -44,6 +44,13 @@ export interface ProgressLedger {
   score_history: ScoreEntry[];
   adapter_override: Partial<Record<Actor, string>>;
   circuit_breaker: Partial<Record<Actor, CircuitInfo>>;
+  /**
+   * v3.2 — global pause state. When true, the reducer emits `kind: 'hook'` instead of
+   * `kind: 'spawn'` so dispatched effects can surface the pause without losing the
+   * routing decision. `kind=user.resume` clears it. Mirrors LangGraph's interrupt-then-
+   * resume pattern (interrupt() + Command(resume=...)).
+   */
+  paused: boolean;
 }
 
 export interface CrumbState {
@@ -72,6 +79,7 @@ export const initialState = (sessionId: string): CrumbState => ({
     score_history: [],
     adapter_override: {},
     circuit_breaker: {},
+    paused: false,
   },
   last_message: null,
   done: false,

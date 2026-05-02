@@ -168,6 +168,56 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
       break;
     }
 
+    case 'user.pause': {
+      // v3.2 G1 — global pause. Dispatcher should not spawn while paused;
+      // any spawn decision the reducer would have made surfaces as a hook
+      // ('paused — would spawn <actor>'). LangGraph interrupt() pattern.
+      next.progress_ledger.paused = true;
+      effects.push({
+        type: 'hook',
+        kind: 'confirm',
+        body: `session paused by user${event.body ? `: ${event.body}` : ''}`,
+        data: { paused: true },
+      });
+      break;
+    }
+
+    case 'user.resume': {
+      // v3.2 G1 — clears pause. If a next_speaker was queued, re-spawn it.
+      // LangGraph Command(resume=value) pattern.
+      next.progress_ledger.paused = false;
+      const queued = next.progress_ledger.next_speaker;
+      if (
+        queued &&
+        queued !== 'user' &&
+        queued !== 'system' &&
+        queued !== 'coordinator' &&
+        queued !== 'validator'
+      ) {
+        effects.push({
+          type: 'spawn',
+          actor: queued,
+          adapter: pickAdapter(next, queued as 'planner-lead' | 'builder' | 'verifier'),
+        });
+      }
+      break;
+    }
+
+    case 'user.approve': {
+      // v3.2 G1 — explicit user approval. Promotes the most recent PARTIAL verdict
+      // to done; harmless if the last verdict was PASS (already done) or absent.
+      const lastEntry =
+        next.progress_ledger.score_history[next.progress_ledger.score_history.length - 1];
+      if (lastEntry?.verdict === 'PARTIAL') {
+        next.done = true;
+        effects.push({
+          type: 'done',
+          reason: `user_approve_partial (msg=${lastEntry.msg_id})`,
+        });
+      }
+      break;
+    }
+
     case 'error': {
       // Increment circuit breaker on the failing actor.
       const actor = event.from;
@@ -210,6 +260,24 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
     default:
       // No state transition for note/debate/audit/tool.*/etc.
       break;
+  }
+
+  // v3.2 G1 — global pause filter. If paused (and the current event is not user.resume,
+  // which already handles its own re-spawn after clearing paused), demote any spawn
+  // effect into a hook so the dispatcher doesn't burn an LLM call. The routing
+  // decision (next_speaker) survives in state for `user.resume` to re-fire later.
+  if (next.progress_ledger.paused && event.kind !== 'user.resume') {
+    const filtered: Effect[] = effects.map((e) =>
+      e.type === 'spawn'
+        ? {
+            type: 'hook' as const,
+            kind: 'confirm' as const,
+            body: `paused — would spawn ${e.actor} (queued; emit kind=user.resume to continue)`,
+            data: { actor: e.actor, queued: true, paused: true },
+          }
+        : e,
+    );
+    return { state: next, effects: filtered };
   }
 
   return { state: next, effects };

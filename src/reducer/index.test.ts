@@ -203,4 +203,84 @@ describe('reducer', () => {
     const b = replay();
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
+
+  // v3.2 G1 — 5 user.* event reducer completeness (LangGraph interrupt+Command pattern)
+
+  it('v3.2 G1: user.pause sets progress_ledger.paused=true and emits hook', () => {
+    const s0 = initialState('sess-test');
+    const pause = fixed({ from: 'user', kind: 'user.pause', body: 'lunch break' });
+    const { state, effects } = reduce(s0, pause);
+
+    expect(state.progress_ledger.paused).toBe(true);
+    expect(effects).toHaveLength(1);
+    expect(effects[0]).toMatchObject({ type: 'hook', kind: 'confirm' });
+  });
+
+  it('v3.2 G1: while paused, spawn effects are demoted to hook (LangGraph interrupt)', () => {
+    const s0 = initialState('sess-test');
+    s0.progress_ledger.paused = true;
+    const spec = fixed({
+      from: 'planner-lead',
+      kind: 'spec',
+      data: { acceptance_criteria: ['ac1', 'ac2', 'ac3'] },
+    });
+    const { effects } = reduce(s0, spec);
+
+    // Would have been spawn(builder); paused demotes to hook.
+    expect(effects.every((e) => e.type !== 'spawn')).toBe(true);
+    expect(effects.find((e) => e.type === 'hook')).toMatchObject({
+      type: 'hook',
+      data: { actor: 'builder', queued: true, paused: true },
+    });
+  });
+
+  it('v3.2 G1: user.resume clears paused and re-spawns the queued next_speaker', () => {
+    const s0 = initialState('sess-test');
+    s0.progress_ledger.paused = true;
+    s0.progress_ledger.next_speaker = 'builder';
+    const resume = fixed({ from: 'user', kind: 'user.resume' });
+    const { state, effects } = reduce(s0, resume);
+
+    expect(state.progress_ledger.paused).toBe(false);
+    expect(effects.find((e) => e.type === 'spawn')).toMatchObject({
+      type: 'spawn',
+      actor: 'builder',
+    });
+  });
+
+  it('v3.2 G1: user.approve promotes most recent PARTIAL verdict to done', () => {
+    const s0 = initialState('sess-test');
+    s0.progress_ledger.score_history.push({
+      msg_id: '01H0000000000000000000PART',
+      aggregate: 19,
+      verdict: 'PARTIAL',
+    });
+    const approve = fixed({ from: 'user', kind: 'user.approve' });
+    const { state, effects } = reduce(s0, approve);
+
+    expect(state.done).toBe(true);
+    expect(effects).toHaveLength(1);
+    expect(effects[0]).toMatchObject({ type: 'done' });
+    expect((effects[0] as { reason: string }).reason).toContain('user_approve_partial');
+  });
+
+  it('v3.2 G1: user.approve is no-op when last verdict was PASS or absent', () => {
+    const s0 = initialState('sess-test');
+    // No score_history
+    const approve1 = fixed({ from: 'user', kind: 'user.approve' });
+    const r1 = reduce(s0, approve1);
+    expect(r1.state.done).toBe(false);
+    expect(r1.effects).toHaveLength(0);
+
+    // PASS history
+    const s1 = initialState('sess-test');
+    s1.progress_ledger.score_history.push({
+      msg_id: '01H0000000000000000000PASS',
+      aggregate: 28,
+      verdict: 'PASS',
+    });
+    const approve2 = fixed({ from: 'user', kind: 'user.approve' });
+    const r2 = reduce(s1, approve2);
+    expect(r2.effects).toHaveLength(0);
+  });
 });
