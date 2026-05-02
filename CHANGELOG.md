@@ -4,6 +4,16 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Fixed — qa-runner hard timeout (`CRUMB_QA_CHECK_TIMEOUT_MS`, default 120s) (2026-05-03)
+
+Pipeline audit follow-up to the immediate-wake fix. Session `01KQNAK1` saw 2 builds → 0 qa.results because `runQaCheck` could hang inside Playwright (chromium zombie / network stall / service-worker bootstrap), and the dispatcher's `await runQaCheckEffect` had no upper bound. The reduce/dispatch decoupling shipped in the previous patch removed the chain-level serialization, but a hung qa_check effect still meant the verifier was never spawned for that build.
+
+- **`src/dispatcher/qa-runner.ts`** — new `runQaCheckWithTimeout()` wraps `runQaCheck` in a `Promise.race` against a sentinel rejecting with `QaCheckTimeoutError` after `CRUMB_QA_CHECK_TIMEOUT_MS` (default 120,000 ms). Existing exception path (lines 27-52) catches the timeout the same way as a thrown error and emits a deterministic FAIL `qa.result` with `exec_exit_code=2` and `lint_findings: ['exception: qa-check exceeded …ms — Playwright likely hung']`. Timer is cleared in `finally` so a fast pass doesn't leak the setTimeout.
+- **120s default rationale**: 2× the per-step Playwright internal budgets (5s nav + 5s canvas + 5s scene-running + 1.5s console + 5s offline-reload + cross-browser pass + smoke iframe ≈ 30-90s typical). CI smoke runs can drop to 30s via `CRUMB_QA_CHECK_TIMEOUT_MS=30000`; debugging can raise to 5min.
+- **`src/dispatcher/qa-runner.test.ts`** (NEW) — 2 specs: (1) `runQaCheckEffect` emits FAIL `qa.result` within ~120ms when `runQaCheck` is mocked to never resolve; the writer.append is called exactly once with `exec_exit_code=2` + lint_findings explaining the timeout. (2) Pass-through path still works when qa-check resolves normally — body matches `qa-check PASS`, `exec_exit_code=0`. 431/431 sweep green.
+
+This closes the F4 (qa.result missing) failure mode in the fault matrix. Combined with `#100`'s reduce/dispatch decoupling, the pipeline now: (a) doesn't serialize behind subprocess exit, and (b) cannot get stuck on a hung qa check — every build event WILL produce a qa.result event in bounded wall-time.
+
 ### Fixed — Coordinator immediate-wake: decouple reduce from dispatch in event chain (2026-05-03)
 
 Session `01KQNAK1CXTBDEBX2WP2QQK891` (레바의 모험 버서커, 레바의 모험 버서커) hit `wall_clock_exhausted` twice with `2 builds vs 0 qa.results`. Root cause was structural in `src/loop/coordinator.ts:267 onMessage`:
