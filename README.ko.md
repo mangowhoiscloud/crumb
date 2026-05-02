@@ -35,12 +35,15 @@
 ```bash
 git clone https://github.com/mangowhoiscloud/crumb.git
 cd crumb
-npm install
+npm install         # Playwright + Chromium 자동 설치 (~110 MB, 1회, optional dep)
 npm run build
 npm link            # `crumb` + `crumb-dashboard` 가 PATH 에 등록 (또는: npm i -g .)
+crumb doctor        # 인증 + chromium binary cache 확인 (D6 portability 준비)
 ```
 
 이후 `crumb` 와 `crumb-dashboard` 를 어떤 디렉터리에서든 호출 가능 — repo-root 와 preset path 는 install 위치에서 자동 감지 (`--root` 가 escape hatch).
+
+> **Chromium 다운로드 건너뛰기** (CI / air-gapped 환경): `CRUMB_SKIP_PLAYWRIGHT_INSTALL=1 npm install`. qa-check D6 portability gate 는 signal-only 로 남고, D2 lint + size gate 는 그대로 동작.
 
 ### A. 자연어 (Claude Code 사용자 — 권장)
 

@@ -33,12 +33,15 @@ Built for the [Bagelcode 신작팀 AI 개발자 과제 전형](https://career.ba
 ```bash
 git clone https://github.com/mangowhoiscloud/crumb.git
 cd crumb
-npm install
+npm install         # auto-installs Playwright + Chromium (~110 MB, one-time, optional dep)
 npm run build
 npm link            # registers `crumb` on PATH (or: npm i -g .)
+crumb doctor        # verify auth + chromium binary cached (D6 portability ready)
 ```
 
 After that, `crumb` works from **any directory** — repo-root and preset paths are auto-detected from the install location (`--root` flag remains as escape hatch).
+
+> **Skipping the Chromium download** (CI / air-gapped): `CRUMB_SKIP_PLAYWRIGHT_INSTALL=1 npm install`. The qa-check D6 portability gate stays signal-only; the D2 lint + size gate still runs.
 
 ### A. Natural language (Claude Code user — recommended)
 
