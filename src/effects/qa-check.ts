@@ -5,13 +5,29 @@
  *   1. HTML lint (DOCTYPE / viewport meta / script tag) — built-in regex parser, no dep
  *   2. file size check (≤60KB own code constraint)
  *   3. Phaser CDN reference check (script tag pattern)
- *   4. (optional) playwright headless smoke if PLAYWRIGHT_AVAILABLE=1
- *   5. (optional) cross-browser portability if PLAYWRIGHT_AVAILABLE=1
+ *   4. Playwright headless smoke (auto-detect — runs when `playwright` is installed)
+ *   5. Cross-browser portability (single-browser chromium smoke as P0 ground truth)
  *
  * Output: QaResult — fed back to transcript as kind=qa.result with metadata.deterministic=true.
  *
  * Pattern: AutoGen Executor (57.6k⭐). See [[bagelcode-system-architecture-v3]] §7.
  * Sister: skills/verification-before-completion.md (verifier reads qa.result as D2 ground truth).
+ *
+ * Frontier backing (P0-2 of `wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md`):
+ * SWE-bench Verified 2025 top10 / Cognition Devin "Don't Build Multi-Agents" Jun 2025 /
+ * DeepSeek-R1 Jan 2025 — all converge on rule-based exec gate as the strongest D2 signal.
+ *
+ * Playwright detection contract:
+ *   - Auto-detected via dynamic import. Install locally with:
+ *       npm i -D playwright && npx playwright install chromium
+ *   - When installed and smoke run succeeds → `first_interaction='ok'`, `cross_browser_smoke='ok'`.
+ *   - When installed and smoke run fails → `first_interaction='fail'`, `exec_exit_code=1`.
+ *   - When NOT installed (default behavior):
+ *       `first_interaction='skipped'`, lint_findings includes guidance, `exec_exit_code` unchanged.
+ *   - When `CRUMB_QA_REQUIRE_PLAYWRIGHT=1` is set and Playwright is missing →
+ *       `first_interaction='fail'`, `exec_exit_code=1` (strict gate; recommended for CI).
+ *   - When `CRUMB_QA_PLAYWRIGHT_OPTIONAL=1` is set → suppress the missing-dep finding
+ *       (silent skip — prior behavior, kept for backward-compat).
  */
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
@@ -106,21 +122,50 @@ export async function runQaCheck(artifactPath: string): Promise<QaResult> {
     findings.push(`own-code exceeds ${MAX_OWN_CODE_BYTES} bytes (got ${ownBytes})`);
   }
 
-  // Optional playwright smoke (only if available; never fails the check on absence)
+  // Playwright smoke — auto-detect via dynamic import.
+  // See module header for the full detection contract (env: CRUMB_QA_REQUIRE_PLAYWRIGHT,
+  // CRUMB_QA_PLAYWRIGHT_OPTIONAL).
   let firstInteraction: QaResult['first_interaction'] = 'skipped';
   let crossBrowserSmoke: QaResult['cross_browser_smoke'] = 'skipped';
-  if (process.env.PLAYWRIGHT_AVAILABLE === '1') {
-    try {
-      const { runPlaywrightSmoke } = await import('./qa-check-playwright.js');
-      const smoke = await runPlaywrightSmoke(artifactPath);
-      firstInteraction = smoke.firstInteraction;
-      crossBrowserSmoke = smoke.crossBrowser;
-    } catch {
-      // Playwright unavailable or browser binary missing — keep skipped, do not fail check.
+  const requirePlaywright = process.env.CRUMB_QA_REQUIRE_PLAYWRIGHT === '1';
+  const playwrightOptional = process.env.CRUMB_QA_PLAYWRIGHT_OPTIONAL === '1';
+  let playwrightUnavailable = false;
+  try {
+    const { runPlaywrightSmoke } = await import('./qa-check-playwright.js');
+    const smoke = await runPlaywrightSmoke(artifactPath);
+    firstInteraction = smoke.firstInteraction;
+    crossBrowserSmoke = smoke.crossBrowser;
+    if (smoke.firstInteraction === 'fail') {
+      findings.push(`playwright smoke failed: ${smoke.reason ?? 'unknown'}`);
+    }
+  } catch (err) {
+    // Distinguish "playwright not installed" (module-not-found) from "smoke errored".
+    const msg = (err as Error)?.message ?? String(err);
+    const isMissing = /Cannot find (module|package)|MODULE_NOT_FOUND|playwright/i.test(msg);
+    playwrightUnavailable = isMissing;
+    if (isMissing) {
+      if (requirePlaywright) {
+        firstInteraction = 'fail';
+        findings.push(
+          'playwright required (CRUMB_QA_REQUIRE_PLAYWRIGHT=1) but not installed; install: npm i -D playwright && npx playwright install chromium',
+        );
+      } else if (!playwrightOptional) {
+        // Default: signal the gap without failing — verifier sees the warning in lint_findings.
+        findings.push(
+          'playwright not installed (D6 portability unverified); install: npm i -D playwright && npx playwright install chromium',
+        );
+      }
+      // If CRUMB_QA_PLAYWRIGHT_OPTIONAL=1 → silent skip, no finding.
+    } else {
+      // Real runtime error in the smoke run itself (not a missing-dep): always surface as fail.
+      firstInteraction = 'fail';
+      findings.push(`playwright smoke errored: ${msg}`);
     }
   }
 
-  const allOk = lintPassed && ownBytes <= MAX_OWN_CODE_BYTES;
+  const playwrightFailed = firstInteraction === 'fail';
+  const playwrightBlocks = playwrightFailed || (playwrightUnavailable && requirePlaywright);
+  const allOk = lintPassed && ownBytes <= MAX_OWN_CODE_BYTES && !playwrightBlocks;
 
   return {
     lint_passed: lintPassed,
