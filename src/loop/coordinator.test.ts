@@ -14,6 +14,32 @@ import { resolve } from 'node:path';
 import { runSession } from './coordinator.js';
 import { TranscriptWriter, _resetWriterRegistryForTests } from '../transcript/writer.js';
 import type { Message } from '../protocol/types.js';
+import type { Adapter, SpawnRequest, SpawnResult } from '../adapters/types.js';
+
+// Wall-clock-budget test fixture — hangs until aborted so the watchdog
+// reliably trips before any natural verdict path completes.
+class HangingAdapter implements Adapter {
+  readonly id = 'hanging';
+  async health(): Promise<{ ok: boolean }> {
+    return { ok: true };
+  }
+  async spawn(req: SpawnRequest): Promise<SpawnResult> {
+    return new Promise<SpawnResult>((resolveResult) => {
+      const start = Date.now();
+      req.signal?.addEventListener(
+        'abort',
+        () =>
+          resolveResult({
+            exitCode: 124,
+            stdout: '',
+            stderr: 'aborted',
+            durationMs: Date.now() - start,
+          }),
+        { once: true },
+      );
+    });
+  }
+}
 
 async function makeSession(): Promise<{
   sessionDir: string;
@@ -157,16 +183,23 @@ describe('runSession wall_clock budget', () => {
     _resetWriterRegistryForTests();
     const { sessionDir, transcriptPath, repoRoot } = await makeSession();
 
+    // Use a hanging adapter so the planner spawn never returns events. With
+    // mock as the default, the canned planner→builder→verifier path can
+    // race the watchdog and finish with verdict_pass first. Hanging guarantees
+    // the wall-clock hard cap is the only terminal path.
     const result = await runSession({
       goal: 'force wall-clock timeout',
       sessionDir,
       sessionId: 'sess-wallclock-1',
       repoRoot,
-      adapterOverride: 'mock',
+      adapterOverride: 'hanging',
+      extraAdapters: [new HangingAdapter()],
       idleTimeoutMs: 5_000,
       wallClockHookMs: 20,
-      wallClockHardMs: 50,
-      watchdogTickMs: 10,
+      wallClockHardMs: 100,
+      watchdogTickMs: 20,
+      // Per-spawn timeout above hard cap — wall-clock kicks in first.
+      perSpawnTimeoutMs: 200,
     });
 
     expect(result.state.done).toBe(true);
