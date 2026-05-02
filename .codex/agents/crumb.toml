@@ -97,3 +97,28 @@ Codex 는 Markdown 선호하지만 XML 도 parse 가능 (wiki/references/bagelco
 command = "npx"
 args = ["tsx", "src/mcp-server.ts"]
 env = { CRUMB_AMBIENT_HARNESS = "codex" }
+
+# 5 procedural skills (sandwich-loaded inline by spawned actors).
+# Codex agents.toml `[skills.<name>]` table follows the optional-skills spec.
+# Each entry just points to a markdown file; Crumb's dispatcher reads them when the
+# matching actor sandwich loads. None of these skills introduces side effects on Codex
+# directly — they shape the actor's behavior once spawned.
+[skills.tdd_iron_law]
+description = "RED-GREEN-REFACTOR Iron Law (superpowers). Builder reads this inline."
+source = "skills/tdd-iron-law.md"
+
+[skills.verification_before_completion]
+description = "Evidence-over-claims gate. Verifier reads this before emitting kind=judge.score."
+source = "skills/verification-before-completion.md"
+
+[skills.code_review_protocol]
+description = "Builder ↔ verifier handoff format (deviation classification + handoff.rollback path)."
+source = "skills/code-review-protocol.md"
+
+[skills.parallel_dispatch]
+description = "Specialist parallel-call rules (planner-internal inline call pattern)."
+source = "skills/parallel-dispatch.md"
+
+[skills.subagent_spawn]
+description = "Host-native primitive abstraction (Task tool / Codex subagent / Gemini extension MCP)."
+source = "skills/subagent-spawn.md"

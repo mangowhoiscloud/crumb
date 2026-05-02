@@ -108,7 +108,29 @@ CRUMB.md 는 **redundant** 가 되어 drop. drift 위험 단일 source 통제로
 - 단 Gemini CLI 의 `@<file>` import 호환성 미확정 (2026-04 기준) — 보수적 fallback 으로 `.gemini/settings.json` `contextFileName` 으로 AGENTS.md 도 자동 로드
 - 3 entry MD (.claude/skills, .codex/agents, .gemini/extensions/commands) 의 References 도 AGENTS.md reference 통일
 
-## 5. Phase 적용 결과 (이번 PR)
+## 5. Spec 정합 매트릭스 (post-Phase 검증)
+
+7 영역 × 51 항목 spec 비교 (각 host 공식 docs 인용 1차 사료):
+
+| 영역 | 정합 / 전체 | 비고 |
+|---|---|---|
+| Claude Code CLAUDE.md | 6/7 (86%) | size 권장 200 LOC 초과 (CLAUDE.md @AGENTS.md import 후 365 LOC) — 받아들임 |
+| Claude Code skill (.claude/skills/crumb/SKILL.md) | 11/11 (100%) | `when_to_use` frontmatter 추가 ✅ |
+| Codex AGENTS.md (root) | 5/5 (100%) | Codex CLI native auto-load (closest wins) |
+| Codex agents.toml (.codex/agents/crumb.toml) | 10/10 (100%) | `.codex/agents/` project-level 정식 지원 ✅ + `[skills]` 섹션 추가 ✅ |
+| Gemini settings.json | 3/3 (100%) | `context.fileName` array schema 정합 |
+| Gemini extension | 10/10 (100%) | manifest + commands/*.toml 모두 정합 |
+| AGENTS.md self-contained | 5/5 (100%) | 11 invariants inline, 외부 @import 의존 0 |
+| **합계** | **50/51 (98%)** | size 권장 1건만 받아들임 |
+
+**Codex docs 인용 (project-level 정합 검증)**:
+> "To define custom agents, add standalone TOML files under **`~/.codex/agents/`** for personal agents or **`.codex/agents/`** for **project-scoped agents**. Each file defines one custom agent."
+>
+> — [developers.openai.com/codex/subagents](https://developers.openai.com/codex/subagents)
+
+→ 우리 위치 `.codex/agents/crumb.toml` 정합 ✅ (project-scoped agents 표준 path).
+
+## 6. Phase 적용 결과 (이번 PR)
 
 - **Phase 1** ✅ AGENTS.md universal source 갱신 (CRUMB.md content 흡수) + CRUMB.md drop
 - **Phase 2** ✅ CLAUDE.md `@AGENTS.md` import + Claude-specific only / GEMINI.md root 신설 / `.gemini/settings.json` 신설

@@ -12,6 +12,14 @@ description: >-
   requests, library questions, or non-game tasks.
 allowed-tools: Bash Task Read Write Edit Glob Grep
 argument-hint: <자연어 게임 goal — 예: "60초 매치-3 콤보 보너스">
+when_to_use: >-
+  Trigger when the user pitches a casual game in natural Korean or English (e.g. "60초 매치-3
+  게임 만들어줘", "make a swipe-to-merge clicker", "build a 30s tap defender", "캐주얼 퍼즐
+  하나 만들어봐") OR explicitly types `/crumb <pitch>`. Also trigger on preset-intent phrases:
+  "Codex 와 Gemini 도 같이" → recommend `bagelcode-cross-3way`; "키 없이 돌려봐" / "demo only" →
+  recommend `mock`; "API key 로 돌려" / "production" → recommend `sdk-enterprise`. Do NOT trigger
+  on general code-review / debugging / library-Q&A / non-game tasks (3D, FPS, MMO, strategy with
+  > 100 entities — Phaser single-file fit ❌). When in doubt, ask the user before activating.
 ---
 
 # Crumb — Multi-Agent Game Prototyping Skill (v3)

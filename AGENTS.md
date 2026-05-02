@@ -91,7 +91,7 @@ Pick the one your environment authenticates:
 | Host | Entry path | Trigger | AGENTS.md auto-load |
 |---|---|---|---|
 | **Claude Code** | `.claude/skills/crumb/SKILL.md` | natural-language pitch or `/crumb <pitch>` | via `CLAUDE.md` `@AGENTS.md` import |
-| **Codex CLI** | `.codex/agents/crumb.toml` | `codex run crumb "<pitch>"` | ✅ native (closest AGENTS.md wins) |
+| **Codex CLI** | `.codex/agents/crumb.toml` (project-scoped) | `codex run crumb "<pitch>"` | ✅ native: AGENTS.md (closest wins, recursive) + `.codex/agents/<name>.toml` (project-scoped agent definition, OpenAI Codex docs) |
 | **Gemini CLI** | `.gemini/extensions/crumb/` (manifest + GEMINI.md + commands/) | `/crumb <pitch>` | via `.gemini/settings.json` `contextFileName: ["AGENTS.md", "GEMINI.md"]` |
 | **Headless** | `crumb run --goal "<pitch>" [--preset <name>] [--adapter <id>]` | CI / no auth (mock adapter is deterministic) | (no host, runtime reads files explicitly) |
 
