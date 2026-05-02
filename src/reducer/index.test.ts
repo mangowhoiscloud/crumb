@@ -559,6 +559,7 @@ describe('reducer', () => {
     const approve2 = fixed({ from: 'user', kind: 'user.approve' });
     const r2 = reduce(s1, approve2);
     expect(r2.effects).toHaveLength(0);
+  });
 
   it('resets circuit breaker on successful event from previously-failing actor', () => {
     // Simulate the breaker having opened on builder after 3 consecutive errors.

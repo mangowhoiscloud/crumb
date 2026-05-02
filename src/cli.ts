@@ -672,7 +672,7 @@ async function cmdRelease(args: ParsedArgs): Promise<void> {
   // Append kind=version.released to source session transcript so replay re-derives it.
   // manifest_relpath is project-relative (`versions/<dir>/manifest.toml`) so replay is
   // portable across machines — never store absolute paths in the transcript.
-  const writer = new TranscriptWriter({ path: transcriptPath, sessionId });
+  const writer = getTranscriptWriter({ path: transcriptPath, sessionId });
   await writer.append({
     session_id: sessionId,
     from: 'system',

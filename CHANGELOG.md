@@ -104,6 +104,17 @@ Per-actor model + effort tuning, per-provider activation toggle, and `/model` na
 - `wiki/concepts/bagelcode-system-architecture-v3.md`: §3.3 header "39 kind 어휘" → "40 kind 어휘"; "artifact / meta (6)" → "(7)" (counts 7 entries: artifact.created/ack/error/audit/tool.call/tool.result/hook); architecture diagram "39 kind × 11 field" → "40 kind × 11 field"; §10.2 Kiki dashboard mapping similarly updated.
 - `src/helpers/explain.ts` jsdoc "39 kinds × 11 fields" → "40 kinds × 11 identification fields". `KIND_REGISTRY` already had 40 entries from prior session — only doc string was stale.
 
+### Fixed — Coordinator race conditions (2026-05-02)
+
+Three concurrency defects surfaced by an end-to-end audit of `src/loop/coordinator.ts`, `src/transcript/reader.ts`, and `src/transcript/writer.ts` against the Hub-Ledger-Spoke topology promise.
+
+- **`coordinator.ts` resume double-reduce** — `tail(transcriptPath, onMessage, { fromOffset: 0 })` re-emitted every replayed event to `onMessage`, so on resume each prior event was reduced twice (counters doubled, `score_history` duplicated, spawn effects fired twice). Now captures `replayEndOffset = stat(path).size` before `readAll()` and passes that as `fromOffset` so tail picks up only new bytes. Added `src/loop/coordinator.test.ts` with a regression test asserting `task_ledger.facts.length === 3` (not 6) after replay-then-tail with three pre-seeded events.
+- **`coordinator.ts` duplicate session.start/goal on resume** — every `runSession()` invocation unconditionally appended `session.start` + `goal`, so resuming an existing session double-fired the goal event and double-spawned planner-lead. Now skips the synthetic appends if any prior `session.start` for the same `session_id` is found in the replayed events. Two regression tests cover the resume-skips and fresh-writes paths.
+- **`transcript/writer.ts` multi-instance breaks single-writer-per-process** — the file header documents Promise-chain serialization, but two parts of the process (TUI + coordinator, or coordinator + mock-adapter) each constructed their own `TranscriptWriter` and held independent chains. Added `getTranscriptWriter({ path, sessionId })` factory backed by a path-keyed module-level registry; production callers (`coordinator.ts`, `cli.ts`, `tui/app.ts`, `adapters/mock.ts`) all use it. Path canonicalization via `node:path.resolve` so relative + absolute references reach the same instance. Four new tests cover same-path identity, path canonicalization, distinct-path isolation, and serialization across two-call-site appends.
+- **`reducer/index.ts` circuit breaker stuck open** — the breaker incremented `consecutive_failures` on every `kind=error` event but never reset on success, so a single transient adapter failure permanently pinned the actor to OPEN/fallback for the rest of the session. Now any non-error event from a previously-failing actor closes the breaker and zeroes the failure streak (`last_failure_id` preserved for audit). Two regression tests in `src/reducer/index.test.ts`.
+
+102 tests pass (was 93). All four fixes are determinism-preserving — no clock or randomness introduced; replay over the same transcript still yields identical state.
+
 ### Added — v3.1 Multi-host harness pivot (2026-05-02)
 
 Universal identity layer + sandwich Markdown unification + multi-host entry verifier. Closes the "host-aware control harness" loop opened by v3.
