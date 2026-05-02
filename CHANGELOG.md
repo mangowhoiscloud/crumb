@@ -4,6 +4,19 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — codex-local adapter `--model` + reasoning_effort plumbing (2026-05-02)
+
+Closes the signaling-only gap acknowledged in PR #29 (verifier extended thinking default landed in `.crumb/config.toml` but adapters didn't pass `effort` to the underlying CLI). Codex CLI is the first adapter wired end-to-end.
+
+- **`src/adapters/types.ts`** — `SpawnRequest` gains `model?: string` and `effort?: 'low' | 'med' | 'high'` fields. JSDoc documents the per-adapter contract: codex consumes both; claude / gemini are API-only and remain informational until SDK adapters land.
+- **`src/adapters/codex-local.ts`** — argv composition extracted as exported pure function `buildCodexArgs(req)`. When `req.model` set: appends `--model <id>`. When `req.effort` set: appends `-c model_reasoning_effort=<low|medium|high>` (crumb `med` → codex `medium`). Order: base flags → `--model` → `-c effort` → positional prompt. Verified against `codex exec --help` (codex CLI 0.123.0 — `-c` config override surface).
+- **`src/dispatcher/live.ts`** — passes `binding.model` + `binding.effort` from preset / `.crumb/config.toml` resolve order through `adapter.spawn()`. claude-local + gemini-local accept the fields silently (no behavior change there yet).
+- **`src/adapters/codex-local.test.ts`** (NEW) — 10 specs covering argv composition: base flags, prompt fallback, --model presence/absence, all 3 effort values + the missing case, and the canonical flag ordering. Suite total **291/291** (was 281 + 10).
+
+Frontier backing: **Snell et al. ICLR 2025** — test-time compute 4× ≈ 14× pretrain. Verifier benefits most from `effort=high` per CourtEval ACL 2025 (multi-role judgment). With `bagelcode-cross-3way` preset binding builder=codex, this PR makes the builder spawn actually receive the codex `model_reasoning_effort=high` flag the catalog has been asserting since model-config UI shipped.
+
+Limitation acknowledged: claude-local / gemini-local effort plumbing remains API-only (extended thinking budget_tokens is not exposed via `claude -p` / `gemini -p`). SDK adapters are the next ratchet for those.
+
 ### Fixed — `_event-protocol.md` not inlined into emitting sandwiches (2026-05-02)
 
 Followup to PR #36 RCA. After fixing the goal-prompt and observability, real subprocess STILL didn't emit transcript events: the post-spawn note captured 2KB of well-formed `kind=question.socratic` JSON in stdout, but Claude printed it instead of invoking `crumb event` via the Bash tool.
