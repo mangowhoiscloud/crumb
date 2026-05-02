@@ -39,7 +39,7 @@ The verification step among the 5 outer actors. After the v3 builder + verifier 
 | in | `spec`, `build`, `qa.result`, `artifact.created` (visibility=public) |
 | in | `artifacts/game.html` (read for D1 spec_fit; `artifact.created.sha256` must match) |
 | in | `artifacts/spec.md` (read for AC list — every item is scored) |
-| in | `kind=qa.result` event (REQUIRED — D2/D6 ground truth lookup) |
+| in | `kind=qa.result` event (REQUIRED — D2/D6 ground truth lookup; v3.5 also exposes `data.ac_results: [{ac_id, status: PASS\|FAIL\|SKIP}]` from the deterministic AC predicate runner — read it as D1 ground truth, the LLM may not contradict) |
 | in | auto-scores from the reducer (Layer 1: D3 auto, D4, D5 auto) injected by the coordinator |
 | in | `task_ledger` (constraints, decisions) |
 | out (transcript) | `kind=step.judge` × 4 (grader → critic → defender → regrader) |
@@ -58,7 +58,7 @@ The verification step among the 5 outer actors. After the v3 builder + verifier 
 
 | Dim | Name | source | How |
 |---|---|---|---|
-| D1 | spec_fit | `verifier-llm` | Read spec.md AC list, open game.html, evaluate each AC ✓/✗ with evidence |
+| D1 | spec_fit | `verifier-llm` | Read spec.md AC list, open game.html, evaluate each AC ✓/✗ with evidence. **v3.5 ground truth assist**: when `qa.result.data.ac_results` is present, every entry with `status === 'FAIL'` is a hard contradiction — your D1 MUST reflect those failures. PASS verdict with any FAIL ac_result triggers anti-deception Rule 7 (D1 capped at 2). |
 | D2 | exec | `qa-check-effect` | **LOOKUP** `qa.result.exec_exit_code`. exit_code=0 → 5, anything else → 0. **Do NOT recompute** |
 | D3 | observability | `verifier-llm` | Emit your semantic read of information density (0-5). The reducer's auto component (kind diversity + body lengths) is computed separately by `computeAutoScores()`; `combineDimScore()` averages your value with auto in code. **Do NOT pre-blend.** |
 | D4 | convergence | `reducer-auto` | **LOOKUP** spec.update count + build retry count. **Do NOT recompute** |
@@ -88,6 +88,26 @@ The scenario log is the **D1 evidence** — empty or missing scenarios force
 `D1 ≤ 2` per anti-deception Rule 6 (added in this PR's planned follow-up).
 Vision verification is OPT-IN: when the harness exposes Computer Use, also
 emit a screenshot reference per AC and grade visual fidelity vs `DESIGN.md`.
+
+**v3.5 deterministic AC ground truth (additive on top of LLM playthrough).**
+The dispatcher's `qa-interactive.ts` (see `agents/specialists/game-design.md`
+§AC-Predicate-Compile) replays planner-compiled `predicate_js` strings
+against the running game and emits per-AC `PASS / FAIL / SKIP` into
+`qa.result.data.ac_results[]`. When this field is present:
+
+- Every `status === 'FAIL'` entry is a **hard ground truth** — your D1
+  evidence MUST cite the failing `ac_id` if you score it ≤ 4, and you MUST
+  NOT score D1 ≥ 3 while a FAIL is present.
+- `status === 'PASS'` entries strengthen the corresponding AC's evidence
+  but do not blindly fix D1 — your CourtEval Critic step still challenges
+  high D1 from subjective ACs.
+- `status === 'SKIP'` (playwright unavailable) leaves D1 fully on the LLM
+  playthrough — no ground truth boost or penalty.
+
+If the verifier emits PASS while any `ac_result.status === 'FAIL'`,
+anti-deception Rule 7 (`verify_pass_with_ac_failure`) caps D1 at 2 in code
+and demotes the verdict to PARTIAL via the standard threshold check. The
+LLM cannot route around this — same firewall pattern as Rule 1 for D2.
 
 Compute initial scores per dimension following the matrix. Source matters
 — D2/D4/D6 are LOOKUP only, never your judgment. **D2 stays bound to
@@ -129,7 +149,15 @@ Final scores after weighing Critic + Defender:
   - 18 ≤ aggregate < 24 → **PARTIAL** (user_modal_required)
   - aggregate < 18 → **FAIL**
 
-**CRITICAL:** the anti-deception validator runs after this. If your `D2 ≠ qa.result.exec_exit_code` lookup, the validator force-corrects and adds an `audit_violations` entry. **Don't try.**
+**CRITICAL:** the anti-deception validator runs after this. Two firewalls:
+- Rule 1/2: if your `D2 ≠ qa.result.exec_exit_code` lookup, the validator
+  force-corrects D2 and adds `verifier_overrode_d2_ground_truth`.
+- Rule 7 (v3.5): if you emit `verdict=PASS` while any
+  `qa.result.data.ac_results[].status === 'FAIL'`, the validator caps D1 at
+  2 and adds `verify_pass_with_ac_failure`, then the standard threshold
+  check demotes verdict to PARTIAL.
+
+**Don't try.** The LLM cannot route around the deterministic harness.
 
 Append in order:
 1. `kind=step.judge`, `step=regrader`, `data={final_scores, adjustments}`
