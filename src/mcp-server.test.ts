@@ -11,7 +11,7 @@ describe('buildServer', () => {
     expect(typeof server.connect).toBe('function');
   });
 
-  it('registers exactly 8 brand-forward tools matching CLI subcommands 1:1', () => {
+  it('registers 10 brand-forward tools (8 read + 2 write) matching CLI surface', () => {
     const server = buildServer();
     // Access internal registry — McpServer stores registered tools on _registeredTools.
     // The shape is implementation-detail but stable enough to smoke-test.
@@ -27,6 +27,9 @@ describe('buildServer', () => {
     expect(names).toContain('crumb_doctor');
     expect(names).toContain('crumb_model');
     expect(names).toContain('crumb_export');
-    expect(names).toHaveLength(8);
+    // Write tools registered via registerWriteTools (src/mcp-write-tools.ts).
+    expect(names).toContain('crumb_run');
+    expect(names).toContain('crumb_intervene');
+    expect(names).toHaveLength(10);
   });
 });
