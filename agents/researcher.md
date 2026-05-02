@@ -61,6 +61,32 @@ For each non-empty video_ref:
 - Local file path → resolve under `sessions/<id>/inbox/` ONLY (sandbox); upload via Files API
 - Reject anything else (data: URLs, http://, paths outside sandbox) — emit `kind=error` body `"invalid video_ref: <ref>"`
 
+### 1.5. Named-game lock-in (HIGH PRIORITY — when the goal cites a real existing game)
+
+Before generic genre research, **scan the goal text** (`task_ledger.goal`) for proper-noun game names:
+- Korean Flash-era classics: 레바의 모험, 크레이지 아케이드, 메이플스토리, 카트라이더, 던전 앤 파이터, 바람의 나라, 라그나로크, 메탈 슬러그, 시드 마이어의 문명
+- Casual mobile / indie hits: Vampire Survivors, Magic Survival, Brotato, 20 Minutes Till Dawn, Royal Match, Candy Crush, Threes, 2048, Loop Hero, Slay the Spire, Balatro, Reigns, Suika Game (스이카 게임), 떨어뜨려 합치기
+- Retro / arcade: Pac-Man, Bubble Bobble, Tetris, Bomberman, Snake, Asteroids, Galaga, Donkey Kong
+- The set is open-ended; if the user spelled a name in title-case or quoted it (e.g. "레바의 모험 모드", "Vampire Survivors 같은"), treat it as named.
+
+When a named game is detected, **research that exact title FIRST and HEAVIEST**:
+
+1. **Web search the canonical name + "gameplay"** (e.g. `"Royal Match" gameplay 2026 mechanics`, `레바의 모험 게임플레이 분석`). Spend most of your research budget here — this is THE reference, not a generic genre proxy.
+2. **Pull from authoritative sources** (priority order):
+   - Wikipedia / 나무위키 article for the named game (mechanics, release year, genre, level structure, controls, art style, sound design)
+   - Official store page (Steam / App Store / Google Play) — current screenshots + feature list
+   - Speedrun.com / TASVideos / SuperPlay — exact timing data, frame counts, level layouts
+   - YouTube top 3 "X gameplay" videos — clip evidence (use video_refs path if user provided one)
+   - Fan wikis (Fandom, Bulbapedia-style) for level/enemy/mechanic catalog
+3. **Extract canonical numbers**, not guesses: HP values, attack patterns, palette hex, BGM key, level count, boss count, scoring formula. The whole point of named-game research is to faithfully reproduce, not vaguely echo.
+4. **Cite the specific game by name** in `step.research.data.reference_games[0]`. The other 1-2 reference_games stay as genre/style siblings to broaden the design vocabulary, but the named game gets `weight: 0.7` (or higher in `step.research.data.weights`) so the planner allocates ~70%+ of design decisions to it.
+5. **Emit a kind=note** at the top of step 3 with `body: "named-game lock-in: <Title> — primary reference"` so the verifier sees the explicit decision and the planner reads it as binding.
+6. **If the named game has movement**, the §1 envelope keyboard policy applies (Arrow keys + WASD). The named game's CONTROLS (D-pad / 4-direction / 8-direction / mouse) are reproduced in `tuning.json` and `DESIGN.md` faithfully.
+
+When NO named game is detected, fall through to genre-based research (the existing flow). The named-game branch is additive, not a replacement.
+
+**Why this matters**: a user who pitches "레바의 모험 버서커 모드" expects the researcher to actually know what 레바의 모험 is — palette (16-bit pixel-cartoon homage), genre (action platformer), iconic mechanics (sword swing + dash), Korean Flash-era nostalgia. Generic "casual mobile action survivor" research wastes their context budget and produces a generic clone, not the homage they asked for.
+
 ### 2. Multi-modal extraction (per video, max 5 videos per spawn)
 
 For each accepted video_ref, call the SDK with prompt structure:
