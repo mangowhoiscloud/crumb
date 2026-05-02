@@ -141,7 +141,18 @@ aside.sessions h2 {
 .session-row .row-dot {
   display: inline-block; width: 6px; height: 6px; border-radius: 50%;
   background: var(--ink-tertiary); margin-right: 6px; vertical-align: 1px;
+  transition: background 200ms ease, box-shadow 200ms ease;
 }
+/* v3.5 state-aware sidebar dots — bootstrap classifier output */
+.session-row.state-live    .row-dot { background: var(--lime); box-shadow: 0 0 6px var(--lime); }
+.session-row.state-idle    .row-dot { background: var(--warn); }
+.session-row.state-interrupted .row-dot { background: var(--audit-fg); box-shadow: 0 0 4px rgba(250, 127, 170, 0.4); }
+.session-row.state-abandoned   .row-dot { background: var(--ink-tertiary); opacity: 0.4; }
+.session-row.state-terminal    .row-dot { background: var(--ink-subtle); opacity: 0.6; }
+.session-row.state-terminal { opacity: 0.78; }
+.session-row.state-abandoned { opacity: 0.55; }
+.session-row.state-interrupted .row-id::after { content: ' · ⏸'; color: var(--audit-fg); }
+/* Legacy `.live` class kept for backward compat with any external SSE subscribers. */
 .session-row.live .row-dot { background: var(--lime); box-shadow: 0 0 6px var(--lime); }
 .project-group { margin-bottom: 8px; }
 .project-label {
@@ -958,3 +969,236 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   font-style: italic;
   font-size: 10px;
 }
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Adapter status sidebar (v3.5) — left rail, above sessions                */
+/* ───────────────────────────────────────────────────────────────────────── */
+.adapter-list { padding: 4px 0 8px; }
+.adapter-empty {
+  padding: 6px 16px;
+  font-size: 11px;
+  color: var(--ink-tertiary);
+  font-style: italic;
+}
+.adapter-row {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 16px 6px 14px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: background 80ms ease, border-color 80ms ease;
+}
+.adapter-row:hover { background: var(--surface-1); }
+.adapter-row .adapter-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--ink-tertiary);
+  transition: background 200ms ease, box-shadow 200ms ease;
+}
+.adapter-row.active .adapter-dot {
+  background: var(--lime);
+  box-shadow: 0 0 6px var(--lime);
+}
+.adapter-row.maybe .adapter-dot { background: var(--warn); }
+.adapter-row.in-use { border-left-color: var(--lime); background: var(--surface-2); }
+.adapter-row .adapter-info { min-width: 0; }
+.adapter-row .adapter-name {
+  font-size: 12px;
+  color: var(--ink);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.adapter-row .adapter-meta {
+  font-size: 10px;
+  color: var(--ink-subtle);
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.adapter-row.inactive .adapter-name,
+.adapter-row.inactive .adapter-meta { color: var(--ink-tertiary); opacity: 0.55; }
+.adapter-row.inactive { cursor: pointer; }
+.adapter-row.inactive:hover .adapter-name { color: var(--accent-warm, #FFB627); opacity: 0.85; }
+.adapter-row .adapter-pill {
+  font-size: 9px;
+  font-family: ui-monospace, monospace;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.adapter-row.active .adapter-pill {
+  background: rgba(194, 239, 78, 0.14);
+  color: var(--lime);
+}
+.adapter-row.maybe .adapter-pill {
+  background: rgba(255, 178, 135, 0.16);
+  color: var(--warn);
+}
+.adapter-row.inactive .adapter-pill {
+  background: var(--surface-2);
+  color: var(--ink-tertiary);
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* New session form — preset chips + per-actor binding chips               */
+/* ───────────────────────────────────────────────────────────────────────── */
+.preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0 4px;
+}
+.preset-chip {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--hairline);
+  background: var(--surface-2);
+  color: var(--ink-muted);
+  cursor: pointer;
+  font-family: ui-monospace, monospace;
+  transition: border-color 80ms ease, background 80ms ease, color 80ms ease;
+}
+.preset-chip:hover { border-color: var(--primary); color: var(--ink); }
+.preset-chip.active {
+  background: rgba(94, 106, 210, 0.18);
+  border-color: var(--primary);
+  color: var(--ink);
+}
+.preset-chip.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+.adv-binding {
+  margin-top: 4px;
+  font-size: 10px;
+}
+.adv-binding summary {
+  cursor: pointer;
+  color: var(--ink-tertiary);
+  padding: 2px 0;
+  user-select: none;
+  letter-spacing: 0.2px;
+}
+.adv-binding summary:hover { color: var(--ink-subtle); }
+.bindings-grid {
+  display: grid;
+  grid-template-columns: 80px 1fr 1fr;
+  gap: 4px 6px;
+  margin: 6px 0 4px;
+  align-items: center;
+}
+.bindings-grid .bg-actor {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--ink-subtle);
+}
+.bindings-grid select {
+  font-size: 10px;
+  padding: 2px 4px;
+  background: var(--canvas);
+  color: var(--ink);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  font-family: ui-monospace, monospace;
+}
+.bindings-grid select:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Adapter setup modal — install / auth guide                              */
+/* ───────────────────────────────────────────────────────────────────────── */
+.adapter-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.adapter-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(1, 1, 2, 0.7);
+  backdrop-filter: blur(2px);
+}
+.adapter-modal-card {
+  position: relative;
+  background: var(--surface-1);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-lg);
+  padding: 24px 24px 18px;
+  max-width: 480px;
+  width: 90vw;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  font-size: 13px;
+}
+.adapter-modal-card h3 {
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 12px;
+  color: var(--ink);
+}
+.adapter-modal-card .adapter-modal-step {
+  margin: 10px 0;
+}
+.adapter-modal-card .adapter-modal-step-label {
+  font-size: 10px;
+  color: var(--ink-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 4px;
+}
+.adapter-modal-card pre {
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--lime);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.adapter-modal-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+  justify-content: flex-end;
+}
+.adapter-modal-row button {
+  font-size: 11px;
+  padding: 5px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline);
+  background: var(--surface-2);
+  color: var(--ink-muted);
+  cursor: pointer;
+  font-family: ui-monospace, monospace;
+}
+.adapter-modal-row button.primary {
+  background: var(--primary);
+  color: var(--canvas);
+  border-color: var(--primary);
+}
+.adapter-modal-row button:hover { color: var(--ink); border-color: var(--primary); }
+.adapter-modal-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--ink-subtle);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+.adapter-modal-close:hover { color: var(--ink); }

@@ -133,13 +133,16 @@ function renderSessionList() {
     const rows = arr.map(s => {
       const cls = ['session-row'];
       if (s.live) cls.push('live');
+      // v3.5 bootstrap classifier: live / idle / interrupted / abandoned / terminal
+      if (s.state) cls.push('state-' + s.state);
       if (activeSession === s.id) cls.push('active');
       const cost = s.metrics ? formatCost(s.metrics.cost_usd) : '—';
       const verdict = s.metrics?.last_verdict;
       const status = verdict
         ? (verdict === 'PASS' ? '✓' : verdict === 'PARTIAL' ? '~' : '✗')
         : (s.metrics?.done ? '·' : '▶');
-      return '<div class="' + cls.join(' ') + '" data-id="' + s.id + '">' +
+      const stateTitle = s.state ? `state: ${s.state}${s.done_reason ? ' (' + s.done_reason + ')' : ''}` : '';
+      return '<div class="' + cls.join(' ') + '" data-id="' + s.id + '" title="' + escapeHTML(stateTitle) + '">' +
         '<button class="row-close" data-close="' + s.id + '" title="dismiss from sidebar (transcript preserved on disk)">×</button>' +
         '<div><span class="row-dot"></span><span class="row-id">' + escapeHTML(s.id.slice(0, 12)) + '…</span> <span style="color:var(--ink-tertiary);">' + status + '</span></div>' +
         '<div class="row-goal">' + escapeHTML(s.goal ?? '(no goal yet)') + '</div>' +
@@ -386,6 +389,11 @@ fetch('/api/sessions').then(r => r.json()).then(payload => {
       actors: s.actors,
     });
     sess.metrics = s.metrics;
+    // v3.5 bootstrap: preserve classifier output for sidebar dot color + sort.
+    sess.state = s.state ?? null;
+    sess.last_activity_at = s.last_activity_at ?? null;
+    sess.done_reason = s.done_reason ?? null;
+    sess.live = s.state === 'live'; // legacy flag for back-compat
     eventCache.set(s.session_id, s.history ?? []);
   }
   if (!activeSession && payload.sessions?.[0]) selectSession(payload.sessions[0].session_id);
@@ -1127,7 +1135,6 @@ $('new-session-goal').addEventListener('keydown', e => {
 
 async function spawnNewCrumbRun() {
   const goalEl = $('new-session-goal');
-  const presetEl = $('new-session-preset');
   const fb = $('new-session-feedback');
   const goal = (goalEl.value || '').trim();
   if (!goal) {
@@ -1138,7 +1145,11 @@ async function spawnNewCrumbRun() {
   fb.textContent = 'spawning crumb run…';
   fb.className = 'console-feedback';
   const body = { goal };
-  if (presetEl.value) body.preset = presetEl.value;
+  // v3.5: preset is set from chip selection; per-actor binding from advanced grid.
+  if (newSessionForm.preset) body.preset = newSessionForm.preset;
+  // (Per-actor binding payload reserved for a future /api/crumb/run extension —
+  // current backend honours `preset` only. We still surface the bindings UI so
+  // the user can preview the resolved harness × model per actor.)
   try {
     const res = await fetch('/api/crumb/run', {
       method: 'POST',
@@ -1639,3 +1650,258 @@ function renderStreamJsonLine(raw) {
   if (obj.type === 'rate_limit_event') return null; // silent
   return null;
 }
+
+// ─── v3.5 Adapter status sidebar + new-session preset chips + setup modal ──
+//
+// /api/doctor returns: { adapters: [{ id, display_name, installed,
+//   authenticated, version, models, install_hint, auth_hint, ... }] }
+// authenticated semantics:
+//   true  → confirmed (env-var SDK or mock)
+//   null  → installed but auth not probed (CLI; risk side-effects)
+//   false → binary missing
+// Sidebar dot:
+//   active = installed && authenticated !== false  (lime, ●)
+//   maybe  = installed && authenticated === null   (amber, ●)
+//   inactive = !installed                          (gray, ○)
+
+let adapterCache = [];
+
+async function refreshAdapterList() {
+  const root = $('adapter-list');
+  if (!root) return;
+  try {
+    const res = await fetch('/api/doctor');
+    const j = await res.json();
+    adapterCache = j.adapters ?? [];
+    renderAdapterList();
+    renderPresetChips(); // re-disable preset chips that reference unavailable adapters
+    renderBindingsGrid();
+  } catch (err) {
+    root.innerHTML = '<div class="adapter-empty">probe failed: ' + escapeHTML(err.message) + '</div>';
+  }
+}
+
+// Adapters used by the current session's preset (or live binding) get an
+// `in-use` indicator on top of their active/maybe/inactive state.
+function adaptersInUseForActiveSession() {
+  if (!activeSession) return new Set();
+  const sess = sessions.get(activeSession);
+  const events = eventCache.get(activeSession) ?? [];
+  const used = new Set();
+  for (const e of events) {
+    const adapter = e.metadata?.adapter || e.metadata?.harness;
+    if (adapter) used.add(adapter);
+  }
+  if (used.size === 0 && sess?.preset) {
+    // Best-effort fallback by preset name.
+    if (sess.preset === 'mock') used.add('mock');
+    else if (sess.preset === 'sdk-enterprise') used.add('gemini-sdk');
+    else used.add('claude-local');
+  }
+  return used;
+}
+
+function renderAdapterList() {
+  const root = $('adapter-list');
+  if (!root) return;
+  if (adapterCache.length === 0) {
+    root.innerHTML = '<div class="adapter-empty">no adapters detected</div>';
+    return;
+  }
+  const inUse = adaptersInUseForActiveSession();
+  root.innerHTML = adapterCache.map(a => {
+    const cls = ['adapter-row'];
+    if (a.installed && a.authenticated !== false) cls.push(a.authenticated === true ? 'active' : 'maybe');
+    else cls.push('inactive');
+    if (inUse.has(a.id)) cls.push('in-use');
+    const meta = a.version ? a.version.replace(/^.*?\b(\d[\w.-]*).*$/, '$1') : (a.models?.[0] ?? '');
+    let pillText = '○';
+    if (a.installed && a.authenticated === true) pillText = 'auth ✓';
+    else if (a.installed) pillText = 'installed';
+    else pillText = 'missing';
+    return '<div class="' + cls.join(' ') + '" data-adapter="' + escapeHTML(a.id) + '">' +
+      '<span class="adapter-dot"></span>' +
+      '<div class="adapter-info">' +
+        '<div class="adapter-name">' + escapeHTML(a.display_name) + '</div>' +
+        '<div class="adapter-meta">' + escapeHTML(meta) + '</div>' +
+      '</div>' +
+      '<span class="adapter-pill">' + escapeHTML(pillText) + '</span>' +
+    '</div>';
+  }).join('');
+  root.querySelectorAll('.adapter-row').forEach(el => {
+    el.addEventListener('click', () => openAdapterModal(el.dataset.adapter));
+  });
+}
+
+$('adapter-refresh')?.addEventListener('click', () => {
+  refreshAdapterList();
+});
+
+// Re-render adapter list when active session changes (in-use highlight).
+const _origSelectSessionForAdapter = selectSession;
+selectSession = function(id) {
+  _origSelectSessionForAdapter(id);
+  renderAdapterList();
+};
+
+// ── New session form: preset chips + advanced bindings grid ──────────────
+
+const PRESETS = [
+  {
+    id: '',                 // ambient
+    label: '(ambient)',
+    description: 'follow the entry host (whatever you have authed)',
+    requires: [],
+  },
+  {
+    id: 'mock',
+    label: 'mock',
+    description: 'deterministic, $0',
+    requires: ['mock'],
+  },
+  {
+    id: 'solo',
+    label: 'solo',
+    description: 'single host, single model',
+    requires: ['claude-local'],
+  },
+  {
+    id: 'bagelcode-cross-3way',
+    label: 'cross-3way',
+    description: 'builder=codex · verifier=gemini-cli · rest=ambient',
+    requires: ['codex-local', 'gemini-cli-local'],
+  },
+  {
+    id: 'sdk-enterprise',
+    label: 'sdk-enterprise',
+    description: 'API key direct (no subscription)',
+    requires: ['gemini-sdk'],
+  },
+];
+
+const ACTORS_FOR_BINDING = ['planner-lead', 'researcher', 'builder', 'verifier'];
+
+const newSessionForm = {
+  preset: '',
+  bindings: {}, // actor -> adapter id (informational only)
+};
+
+function presetIsRunnable(preset) {
+  return preset.requires.every(req =>
+    adapterCache.some(a => a.id === req && a.installed && a.authenticated !== false));
+}
+
+function renderPresetChips() {
+  const root = $('new-session-preset-chips');
+  if (!root) return;
+  root.innerHTML = PRESETS.map(p => {
+    const cls = ['preset-chip'];
+    if (newSessionForm.preset === p.id) cls.push('active');
+    if (!presetIsRunnable(p)) cls.push('disabled');
+    return '<button type="button" class="' + cls.join(' ') + '" data-preset="' + escapeHTML(p.id) + '" ' +
+      'title="' + escapeHTML(p.description + (p.requires.length ? ' · needs ' + p.requires.join(', ') : '')) + '">' +
+      escapeHTML(p.label) + '</button>';
+  }).join('');
+  root.querySelectorAll('.preset-chip').forEach(el => {
+    el.addEventListener('click', () => {
+      if (el.classList.contains('disabled')) {
+        // surface why
+        const id = el.dataset.preset;
+        const p = PRESETS.find(x => x.id === id);
+        const missing = p?.requires.filter(req =>
+          !adapterCache.some(a => a.id === req && a.installed && a.authenticated !== false));
+        const fb = $('new-session-feedback');
+        fb.className = 'console-feedback err';
+        fb.textContent = `preset needs: ${(missing ?? []).join(', ')} — click an adapter to set up`;
+        return;
+      }
+      newSessionForm.preset = el.dataset.preset;
+      renderPresetChips();
+    });
+  });
+}
+
+function renderBindingsGrid() {
+  const root = $('new-session-bindings');
+  if (!root) return;
+  root.innerHTML = ACTORS_FOR_BINDING.map(actor => {
+    const adapterOptions = adapterCache.map(a => {
+      const disabled = !a.installed || a.authenticated === false;
+      return '<option value="' + escapeHTML(a.id) + '"' + (disabled ? ' disabled' : '') + '>' +
+        escapeHTML(a.display_name + (disabled ? ' (×)' : '')) + '</option>';
+    }).join('');
+    const modelOptions = adapterCache.flatMap(a => a.models.map(m => m)).filter((m, i, arr) => arr.indexOf(m) === i)
+      .map(m => '<option value="' + escapeHTML(m) + '">' + escapeHTML(m) + '</option>').join('');
+    return '<span class="bg-actor">' + escapeHTML(actor) + '</span>' +
+      '<select data-actor="' + escapeHTML(actor) + '" data-kind="adapter"><option value="">(ambient)</option>' + adapterOptions + '</select>' +
+      '<select data-actor="' + escapeHTML(actor) + '" data-kind="model"><option value="">(default)</option>' + modelOptions + '</select>';
+  }).join('');
+  root.querySelectorAll('select').forEach(el => {
+    el.addEventListener('change', () => {
+      const actor = el.dataset.actor;
+      const kind = el.dataset.kind;
+      newSessionForm.bindings[actor] ||= {};
+      newSessionForm.bindings[actor][kind] = el.value;
+    });
+  });
+}
+
+// ── Adapter setup modal (install / auth guide) ───────────────────────────
+
+function openAdapterModal(adapterId) {
+  const a = adapterCache.find(x => x.id === adapterId);
+  if (!a) return;
+  $('adapter-modal-title').textContent = a.display_name + ' — setup';
+  const body = $('adapter-modal-body');
+  const stateLine = a.installed
+    ? (a.authenticated === true ? '✓ installed and authenticated' : a.authenticated === null ? '◐ installed (auth not probed)' : '✗ installed but auth missing')
+    : '✗ not installed';
+  const blocks = [
+    '<div class="adapter-modal-step">' +
+      '<div class="adapter-modal-step-label">current status</div>' +
+      '<div>' + escapeHTML(stateLine) + (a.version ? ' · ' + escapeHTML(a.version) : '') + '</div>' +
+    '</div>',
+    a.install_hint ? '<div class="adapter-modal-step">' +
+      '<div class="adapter-modal-step-label">' + (a.installed ? 'reinstall' : 'install') + '</div>' +
+      '<pre>' + escapeHTML(a.install_hint) + '</pre>' +
+    '</div>' : '',
+    a.auth_hint ? '<div class="adapter-modal-step">' +
+      '<div class="adapter-modal-step-label">login</div>' +
+      '<pre>' + escapeHTML(a.auth_hint) + '</pre>' +
+    '</div>' : '',
+    a.models?.length ? '<div class="adapter-modal-step">' +
+      '<div class="adapter-modal-step-label">models</div>' +
+      '<div style="font-size:11px;color:var(--ink-subtle);font-family:ui-monospace,monospace;">' +
+        a.models.map(escapeHTML).join(' · ') +
+      '</div>' +
+    '</div>' : '',
+  ].filter(Boolean).join('');
+  body.innerHTML = blocks;
+  $('adapter-modal-feedback').textContent = '';
+  $('adapter-modal').style.display = 'flex';
+}
+function closeAdapterModal() {
+  $('adapter-modal').style.display = 'none';
+}
+$('adapter-modal-close')?.addEventListener('click', closeAdapterModal);
+$('adapter-modal-dismiss')?.addEventListener('click', closeAdapterModal);
+$('adapter-modal-refresh')?.addEventListener('click', async () => {
+  const fb = $('adapter-modal-feedback');
+  fb.textContent = 're-probing…';
+  fb.className = 'console-feedback';
+  await refreshAdapterList();
+  fb.textContent = '✓ refreshed — see status above';
+  fb.className = 'console-feedback ok';
+});
+// Backdrop click closes modal.
+document.querySelector('.adapter-modal-backdrop')?.addEventListener('click', closeAdapterModal);
+// Esc closes modal.
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('adapter-modal').style.display === 'flex') closeAdapterModal();
+});
+
+// Initial probe + render
+refreshAdapterList();
+renderPresetChips();
+renderBindingsGrid();
+

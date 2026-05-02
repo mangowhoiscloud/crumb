@@ -13,6 +13,7 @@ import { readFile } from 'node:fs/promises';
 
 import chokidar, { type FSWatcher } from 'chokidar';
 
+import { classifySessionState, type SessionClassification } from './bootstrap.js';
 import type { EventBus } from './event-bus.js';
 import { JsonlTail } from './jsonl-tail.js';
 import {
@@ -115,6 +116,37 @@ export class SessionWatcher {
       transcript_path: path,
       history: s.history,
     }));
+  }
+
+  /**
+   * Async snapshot with state classification. One stat() per session — kept on
+   * the /api/sessions slow path so the synchronous `snapshot()` for SSE replay
+   * stays cheap.
+   */
+  async classifiedSnapshot(): Promise<
+    Array<{
+      session_id: string;
+      project_id: string;
+      crumb_home: string;
+      transcript_path: string;
+      history: DashboardMessage[];
+      classification: SessionClassification | null;
+    }>
+  > {
+    const entries = [...this.sessions.entries()];
+    return Promise.all(
+      entries.map(async ([path, s]) => {
+        const classification = await classifySessionState(path, s.history).catch(() => null);
+        return {
+          session_id: sessionIdFromPath(path),
+          project_id: projectIdFromPath(path),
+          crumb_home: crumbHomeFromPath(path),
+          transcript_path: path,
+          history: s.history,
+          classification,
+        };
+      }),
+    );
   }
 
   private getOrCreate(path: string): PerSession {
