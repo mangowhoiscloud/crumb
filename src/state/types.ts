@@ -21,10 +21,30 @@ export interface TaskFact {
   target_actor?: Actor;
 }
 
+/**
+ * Deterministic AC predicate compiled by planner-lead at spec-seal. Mirrors
+ * `src/effects/qa-interactive.ts::ACPredicateItem` but typed in the state
+ * layer (state/types.ts is zero-dep — no import from effects/).
+ */
+export interface ACPredicateLedgerItem {
+  id: string;
+  intent: string;
+  predicate_js: string;
+  action_js?: string | null;
+  wait_ms?: number;
+  timeout_ms?: number;
+}
+
 export interface TaskLedger {
   facts: TaskFact[];
   goal: string | null;
   acceptance_criteria: string[];
+  /**
+   * v3.5 — deterministic AC predicates compiled by planner-lead at spec-seal.
+   * The dispatcher's `qa-runner` passes these to `runQaCheck` so the AC layer
+   * runs alongside the static smoke. Empty when planner emits no predicates.
+   */
+  ac_predicates: ACPredicateLedgerItem[];
   artifacts: { path: string; sha256: string }[];
 }
 
@@ -137,6 +157,7 @@ export const initialState = (sessionId: string): CrumbState => ({
     facts: [],
     goal: null,
     acceptance_criteria: [],
+    ac_predicates: [],
     artifacts: [],
   },
   progress_ledger: {
