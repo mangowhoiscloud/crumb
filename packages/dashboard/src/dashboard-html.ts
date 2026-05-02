@@ -96,6 +96,18 @@ aside.sessions h2 {
   background: var(--ink-tertiary); margin-right: 6px; vertical-align: 1px;
 }
 .session-row.live .row-dot { background: var(--lime); box-shadow: 0 0 6px var(--lime); }
+.project-group { margin-bottom: 8px; }
+.project-label {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 6px 16px 4px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--surface-1);
+}
 
 main { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 
@@ -329,6 +341,9 @@ section.scorecard {
   <pre id="detail-body"></pre>
   <h3>Data</h3>
   <pre id="detail-data"></pre>
+  <h3>Sandwich preview</h3>
+  <div id="sandwich-actor-bar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+  <pre id="sandwich-content" style="display:none;max-height:360px;overflow:auto;"></pre>
 </aside>
 
 <script>
@@ -359,30 +374,57 @@ function formatCost(n) { return '$' + (n ?? 0).toFixed(3); }
 function ensureSession(id, hints) {
   let s = sessions.get(id);
   if (!s) {
-    s = { id, goal: hints?.goal ?? null, preset: hints?.preset ?? null, metrics: null, live: true };
+    s = {
+      id,
+      project_id: hints?.project_id ?? '—',
+      goal: hints?.goal ?? null,
+      preset: hints?.preset ?? null,
+      metrics: null,
+      actors: hints?.actors ?? [],
+      live: true,
+    };
     sessions.set(id, s);
     eventCache.set(id, []);
   } else {
+    if (hints?.project_id && (!s.project_id || s.project_id === '—')) s.project_id = hints.project_id;
     if (hints?.goal && !s.goal) s.goal = hints.goal;
     if (hints?.preset && !s.preset) s.preset = hints.preset;
+    if (hints?.actors) s.actors = hints.actors;
   }
   return s;
 }
 
 function renderSessionList() {
   const list = $('sess-list');
-  const rows = [...sessions.values()].map(s => {
-    const cls = ['session-row'];
-    if (s.live) cls.push('live');
-    if (activeSession === s.id) cls.push('active');
-    const cost = s.metrics ? formatCost(s.metrics.cost_usd) : '—';
-    return '<div class="' + cls.join(' ') + '" data-id="' + s.id + '">' +
-      '<div><span class="row-dot"></span><span class="row-id">' + escapeHTML(s.id.slice(0, 12)) + '…</span></div>' +
-      '<div class="row-goal">' + escapeHTML(s.goal ?? '(no goal yet)') + '</div>' +
-      '<div class="row-meta">' + cost + ' · ' + (s.metrics?.events ?? 0) + ' evt</div>' +
+  // Group sessions by project_id; within a group, newest first (reverse insertion order).
+  const groups = new Map();
+  for (const s of sessions.values()) {
+    const pid = s.project_id || '—';
+    if (!groups.has(pid)) groups.set(pid, []);
+    groups.get(pid).push(s);
+  }
+  if (groups.size === 0) {
+    list.innerHTML = '<div class="empty">No sessions yet.</div>';
+    return;
+  }
+  const blocks = [...groups.entries()].map(([pid, arr]) => {
+    const rows = arr.map(s => {
+      const cls = ['session-row'];
+      if (s.live) cls.push('live');
+      if (activeSession === s.id) cls.push('active');
+      const cost = s.metrics ? formatCost(s.metrics.cost_usd) : '—';
+      return '<div class="' + cls.join(' ') + '" data-id="' + s.id + '">' +
+        '<div><span class="row-dot"></span><span class="row-id">' + escapeHTML(s.id.slice(0, 12)) + '…</span></div>' +
+        '<div class="row-goal">' + escapeHTML(s.goal ?? '(no goal yet)') + '</div>' +
+        '<div class="row-meta">' + cost + ' · ' + (s.metrics?.events ?? 0) + ' evt</div>' +
+      '</div>';
+    }).join('');
+    return '<div class="project-group">' +
+      '<h3 class="project-label" title="' + escapeHTML(pid) + '">' + escapeHTML(pid.slice(0, 12)) + '</h3>' +
+      rows +
     '</div>';
   });
-  list.innerHTML = rows.join('') || '<div class="empty">No sessions yet.</div>';
+  list.innerHTML = blocks.join('');
   list.querySelectorAll('.session-row').forEach(el => {
     el.addEventListener('click', () => selectSession(el.dataset.id));
   });
@@ -503,7 +545,43 @@ function showDetail(id) {
   $('detail-meta').textContent = fields;
   $('detail-body').textContent = evt.body ?? '(empty)';
   $('detail-data').textContent = evt.data ? JSON.stringify(evt.data, null, 2) : '(none)';
+  renderSandwichBar();
+  $('sandwich-content').style.display = 'none';
   $('detail').classList.add('open');
+}
+
+function renderSandwichBar() {
+  const bar = $('sandwich-actor-bar');
+  if (!activeSession) { bar.innerHTML = ''; return; }
+  const s = sessions.get(activeSession);
+  const actors = s?.actors ?? [];
+  if (actors.length === 0) {
+    bar.innerHTML = '<span style="color:var(--ink-tertiary);font-size:11px;">no actors spawned yet</span>';
+    return;
+  }
+  bar.innerHTML = actors.map(a =>
+    '<button class="sw-btn" data-actor="' + escapeHTML(a) + '" style="' +
+    'background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);' +
+    'padding:4px 10px;border-radius:var(--r-sm);font-family:inherit;font-size:11px;cursor:pointer;">' +
+    escapeHTML(a) + '</button>'
+  ).join('');
+  bar.querySelectorAll('.sw-btn').forEach(btn => {
+    btn.addEventListener('click', () => loadSandwich(btn.dataset.actor));
+  });
+}
+
+async function loadSandwich(actor) {
+  if (!activeSession) return;
+  const pre = $('sandwich-content');
+  pre.style.display = 'block';
+  pre.textContent = 'loading…';
+  try {
+    const res = await fetch('/api/sessions/' + encodeURIComponent(activeSession) + '/sandwich/' + encodeURIComponent(actor));
+    const text = await res.text();
+    pre.textContent = res.ok ? text : '(' + res.status + ') ' + text;
+  } catch (err) {
+    pre.textContent = 'fetch failed: ' + err.message;
+  }
 }
 
 $('detail-close').addEventListener('click', () => $('detail').classList.remove('open'));
@@ -514,7 +592,7 @@ const target = params.get('session') ?? '*';
 const es = new EventSource('/api/stream?session=' + encodeURIComponent(target));
 es.addEventListener('session_start', (e) => {
   const d = JSON.parse(e.data);
-  ensureSession(d.session_id, { goal: d.goal, preset: d.preset });
+  ensureSession(d.session_id, { project_id: d.project_id, goal: d.goal, preset: d.preset });
   if (!activeSession) selectSession(d.session_id);
   else renderSessionList();
 });
@@ -523,7 +601,13 @@ es.addEventListener('append', (e) => {
   let arr = eventCache.get(d.session_id);
   if (!arr) { arr = []; eventCache.set(d.session_id, arr); }
   arr.push(d.msg);
-  ensureSession(d.session_id, null);
+  // Track actors that have actually spawned so the sandwich preview only
+  // surfaces buttons for sandwiches that exist on disk.
+  const s = ensureSession(d.session_id, null);
+  if (d.msg.kind === 'agent.wake' && d.msg.from && !s.actors.includes(d.msg.from)) {
+    s.actors = [...s.actors, d.msg.from];
+    if (d.session_id === activeSession) renderSandwichBar();
+  }
   if (d.session_id === activeSession) {
     renderSwimlane();
     renderScorecard();
@@ -546,7 +630,13 @@ es.onerror = () => {
 
 fetch('/api/sessions').then(r => r.json()).then(payload => {
   for (const s of payload.sessions ?? []) {
-    ensureSession(s.session_id, { goal: s.goal, preset: s.preset });
+    const sess = ensureSession(s.session_id, {
+      project_id: s.project_id,
+      goal: s.goal,
+      preset: s.preset,
+      actors: s.actors,
+    });
+    sess.metrics = s.metrics;
     eventCache.set(s.session_id, s.history ?? []);
   }
   if (!activeSession && payload.sessions?.[0]) selectSession(payload.sessions[0].session_id);

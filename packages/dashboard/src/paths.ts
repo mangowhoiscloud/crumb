@@ -38,3 +38,36 @@ export function sessionIdFromPath(path: string): string {
   // last component is "transcript.jsonl"; the parent directory is the ULID.
   return parts[parts.length - 2] ?? '';
 }
+
+/**
+ * Extract the project id from a transcript path.
+ *   <crumbHome>/projects/<projectId>/sessions/<ulid>/transcript.jsonl
+ *                        ^^^^^^^^^^^
+ * Returns an empty string when the path doesn't match the expected layout.
+ */
+export function projectIdFromPath(path: string): string {
+  const norm = path.split(sep).join('/');
+  const parts = norm.split('/');
+  // ... / projects / <projectId> / sessions / <ulid> / transcript.jsonl
+  // index from the right: -1 file, -2 ulid, -3 'sessions', -4 projectId
+  if (parts.length < 4) return '';
+  return parts[parts.length - 4] ?? '';
+}
+
+/**
+ * Resolve the assembled sandwich path for a given session + actor.
+ * Lives at <session>/agent-workspace/<actor>/sandwich.assembled.md.
+ */
+export function sandwichPath(sessionDir: string, actor: string): string {
+  return join(sessionDir, 'agent-workspace', actor, 'sandwich.assembled.md');
+}
+
+/**
+ * Compute the absolute session dir from a transcript path (drop the trailing
+ * `transcript.jsonl` filename).
+ */
+export function sessionDirFromTranscript(path: string): string {
+  const norm = path.split(sep).join('/');
+  const idx = norm.lastIndexOf('/');
+  return idx < 0 ? path : norm.slice(0, idx);
+}

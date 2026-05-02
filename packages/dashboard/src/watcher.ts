@@ -15,7 +15,7 @@ import chokidar, { type FSWatcher } from 'chokidar';
 
 import type { EventBus } from './event-bus.js';
 import { JsonlTail } from './jsonl-tail.js';
-import { defaultTranscriptGlob, sessionIdFromPath } from './paths.js';
+import { defaultTranscriptGlob, projectIdFromPath, sessionIdFromPath } from './paths.js';
 import { shouldPoll } from './poll-detect.js';
 import type { DashboardMessage } from './types.js';
 import { computeMetrics } from './metrics.js';
@@ -81,9 +81,16 @@ export class SessionWatcher {
   }
 
   /** Snapshot of all sessions' history — used by the HTTP /api/sessions endpoint. */
-  snapshot(): Array<{ session_id: string; history: DashboardMessage[] }> {
+  snapshot(): Array<{
+    session_id: string;
+    project_id: string;
+    transcript_path: string;
+    history: DashboardMessage[];
+  }> {
     return [...this.sessions.entries()].map(([path, s]) => ({
       session_id: sessionIdFromPath(path),
+      project_id: projectIdFromPath(path),
+      transcript_path: path,
       history: s.history,
     }));
   }
@@ -113,6 +120,7 @@ export class SessionWatcher {
       this.bus.publish({
         type: 'session_start',
         session_id: sessionId,
+        project_id: projectIdFromPath(path),
         goal: meta?.goal ?? null,
         preset: meta?.preset ?? null,
       });

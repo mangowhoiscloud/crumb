@@ -144,4 +144,69 @@ describeServer('dashboard server', () => {
       await server.close();
     }
   });
+
+  it('serves /api/sessions/:id/sandwich/:actor when assembled file exists', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'crumb-dash-'));
+    const sessionDir = join(home, 'projects', 'p1', 'sessions', 'sess-S');
+    const swDir = join(sessionDir, 'agent-workspace', 'planner-lead');
+    await mkdir(swDir, { recursive: true });
+    await writeFile(join(sessionDir, 'transcript.jsonl'), '', 'utf8');
+    await writeFile(
+      join(swDir, 'sandwich.assembled.md'),
+      '# planner-lead sandwich (assembled for sess-S)\n',
+      'utf8',
+    );
+    const glob = posix.join(
+      home.split(sep).join('/'),
+      'projects',
+      '*',
+      'sessions',
+      '*',
+      'transcript.jsonl',
+    );
+    const server = await startDashboardServer({
+      port: 0,
+      bind: '127.0.0.1',
+      glob,
+      pollInterval: 50,
+    });
+    try {
+      await new Promise((r) => setTimeout(r, 200));
+      const r = await fetch(server.url + 'api/sessions/sess-S/sandwich/planner-lead');
+      expect(r.status).toBe(200);
+      const body = await r.text();
+      expect(body).toContain('planner-lead sandwich');
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('rejects sandwich requests with traversal in actor name', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'crumb-dash-'));
+    const sessionDir = join(home, 'projects', 'p1', 'sessions', 'sess-T');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(join(sessionDir, 'transcript.jsonl'), '', 'utf8');
+    const glob = posix.join(
+      home.split(sep).join('/'),
+      'projects',
+      '*',
+      'sessions',
+      '*',
+      'transcript.jsonl',
+    );
+    const server = await startDashboardServer({
+      port: 0,
+      bind: '127.0.0.1',
+      glob,
+      pollInterval: 50,
+    });
+    try {
+      await new Promise((r) => setTimeout(r, 200));
+      const r = await fetch(server.url + 'api/sessions/sess-T/sandwich/..%2Fevil');
+      // path-traversal characters survive URL-decoding into the regex check
+      expect([400, 404]).toContain(r.status);
+    } finally {
+      await server.close();
+    }
+  });
 });

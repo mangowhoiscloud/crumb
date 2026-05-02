@@ -2,10 +2,11 @@
  * HTTP + SSE server for the Crumb live dashboard.
  *
  * Endpoints:
- *   GET  /                  → dashboard HTML
- *   GET  /api/sessions      → JSON snapshot { sessions: [{session_id, goal, preset, history}] }
- *   GET  /api/stream?session=<id|*>
- *                           → SSE stream of LiveEvents
+ *   GET  /                              → dashboard HTML
+ *   GET  /api/sessions                  → JSON snapshot, project-grouped
+ *   GET  /api/sessions/:id/sandwich/:actor
+ *                                       → assembled sandwich text (read-only)
+ *   GET  /api/stream?session=<id|*>     → SSE stream of LiveEvents
  *
  * Heartbeat every 15s on the SSE connection prevents proxy timeouts.
  *
@@ -13,12 +14,14 @@
  * SessionWatcher already abstracts via chokidar.
  */
 
+import { readFile } from 'node:fs/promises';
 import http from 'node:http';
 import { URL } from 'node:url';
 
 import { DASHBOARD_HTML } from './dashboard-html.js';
 import { EventBus, type LiveEvent } from './event-bus.js';
 import { computeMetrics } from './metrics.js';
+import { sandwichPath, sessionDirFromTranscript } from './paths.js';
 import { SessionWatcher } from './watcher.js';
 
 const HEARTBEAT_MS = 15_000;
@@ -55,6 +58,9 @@ export async function startDashboardServer(
     if (url.pathname === '/') return serveHtml(res);
     if (url.pathname === '/api/sessions') return serveSessions(res, watcher);
     if (url.pathname === '/api/stream') return serveStream(req, res, url, bus);
+    // /api/sessions/:id/sandwich/:actor
+    const sandwichMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/sandwich\/([^/]+)$/);
+    if (sandwichMatch) return serveSandwich(res, watcher, sandwichMatch[1]!, sandwichMatch[2]!);
     res.statusCode = 404;
     res.end('not found');
   });
@@ -87,23 +93,69 @@ function serveHtml(res: http.ServerResponse): void {
 
 function serveSessions(res: http.ServerResponse, watcher: SessionWatcher): void {
   const snapshot = watcher.snapshot();
-  const sessions = snapshot.map(({ session_id, history }) => {
+  const sessions = snapshot.map(({ session_id, project_id, transcript_path, history }) => {
     const metrics = computeMetrics(history);
     let goal: string | null = null;
     let preset: string | null = null;
-    for (const m of history.slice(0, 30)) {
+    const actorsSeen = new Set<string>();
+    for (const m of history) {
       if (m.kind === 'goal' && !goal) goal = m.body ?? null;
       if (m.kind === 'session.start' && !preset) {
         const data = (m.data ?? {}) as Record<string, unknown>;
         if (typeof data.preset === 'string') preset = data.preset;
       }
-      if (goal && preset) break;
+      // Track actors that actually ran so the dashboard can offer sandwich previews.
+      if (m.kind === 'agent.wake' && m.from) actorsSeen.add(m.from);
     }
-    return { session_id, goal, preset, metrics, history };
+    return {
+      session_id,
+      project_id,
+      transcript_path,
+      goal,
+      preset,
+      metrics,
+      actors: [...actorsSeen],
+      history,
+    };
   });
   res.setHeader('content-type', 'application/json');
   res.setHeader('cache-control', 'no-cache');
   res.end(JSON.stringify({ sessions }));
+}
+
+async function serveSandwich(
+  res: http.ServerResponse,
+  watcher: SessionWatcher,
+  sessionId: string,
+  actor: string,
+): Promise<void> {
+  // Find the transcript path for this session via the watcher's snapshot.
+  const match = watcher.snapshot().find((s) => s.session_id === sessionId);
+  if (!match) {
+    res.statusCode = 404;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end(`session not found: ${sessionId}`);
+    return;
+  }
+  // Constrain actor name to prevent path traversal — alphanumeric + hyphen only.
+  if (!/^[a-z0-9-]+$/i.test(actor)) {
+    res.statusCode = 400;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end(`invalid actor name: ${actor}`);
+    return;
+  }
+  const sessionDir = sessionDirFromTranscript(match.transcript_path);
+  const path = sandwichPath(sessionDir, actor);
+  try {
+    const content = await readFile(path, 'utf8');
+    res.setHeader('content-type', 'text/markdown; charset=utf-8');
+    res.setHeader('cache-control', 'no-cache');
+    res.end(content);
+  } catch {
+    res.statusCode = 404;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end(`sandwich not assembled for ${actor} yet (no spawn this session)`);
+  }
 }
 
 function serveStream(
