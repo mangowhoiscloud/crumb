@@ -115,6 +115,12 @@ export async function startDashboardServer(
     if (req.method === 'GET' && logsStreamMatch) {
       return void serveActorLogsStream(req, res, watcher, logsStreamMatch[1]!, logsStreamMatch[2]!);
     }
+    // /api/sessions/:id/artifacts/list (GET — disk listing fallback for the
+    // Output tab when builder skipped emitting kind=artifact.created)
+    const artifactsListMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/artifacts\/list$/);
+    if (req.method === 'GET' && artifactsListMatch) {
+      return void serveArtifactsList(res, watcher, artifactsListMatch[1]!);
+    }
     // /api/sessions/:id/artifact/* (GET — serve any file under <session>/artifacts/ for iframe)
     const artifactMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/artifact\/(.+)$/);
     if (req.method === 'GET' && artifactMatch) {
@@ -644,4 +650,62 @@ function serveSessionClose(
   res.statusCode = 200;
   res.setHeader('content-type', 'application/json');
   res.end(JSON.stringify({ ok: true, hidden: sessionId }));
+}
+
+/**
+ * v3.5 — disk listing fallback for the Output tab. Walks <session>/artifacts/
+ * recursively and returns relative paths + sizes. Used when builder skipped
+ * emitting kind=artifact.created (LLMs sometimes do; the artifact still exists
+ * on disk because the file was actually written).
+ *
+ * Limited to artifacts/ root — never escapes. Recursion bounded at depth 6 +
+ * 200 entries to keep the response cheap.
+ */
+async function serveArtifactsList(
+  res: http.ServerResponse,
+  watcher: SessionWatcher,
+  sessionId: string,
+): Promise<void> {
+  const match = watcher.snapshot().find((s) => s.session_id === sessionId);
+  if (!match) {
+    res.statusCode = 404;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end(`session not found: ${sessionId}`);
+    return;
+  }
+  const sessionDir = sessionDirFromTranscript(match.transcript_path);
+  const artifactsRoot = join(sessionDir, 'artifacts');
+  const out: Array<{ path: string; size: number }> = [];
+  const MAX_ENTRIES = 200;
+  const MAX_DEPTH = 6;
+  async function walk(dir: string, relPrefix: string, depth: number): Promise<void> {
+    if (depth > MAX_DEPTH || out.length >= MAX_ENTRIES) return;
+    let entries: string[];
+    try {
+      entries = await readdir(dir);
+    } catch {
+      return;
+    }
+    for (const name of entries) {
+      if (out.length >= MAX_ENTRIES) return;
+      const full = join(dir, name);
+      let st: Awaited<ReturnType<typeof stat>>;
+      try {
+        st = await stat(full);
+      } catch {
+        continue;
+      }
+      const rel = relPrefix ? relPrefix + '/' + name : name;
+      if (st.isDirectory()) {
+        await walk(full, rel, depth + 1);
+      } else if (st.isFile()) {
+        out.push({ path: 'artifacts/' + rel, size: st.size });
+      }
+    }
+  }
+  await walk(artifactsRoot, '', 0);
+  res.statusCode = 200;
+  res.setHeader('content-type', 'application/json');
+  res.setHeader('cache-control', 'no-cache');
+  res.end(JSON.stringify({ session_id: sessionId, root: 'artifacts/', files: out }));
 }
