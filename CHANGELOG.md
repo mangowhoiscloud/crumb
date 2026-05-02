@@ -4,6 +4,16 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — `CRUMB_PER_SPAWN_TIMEOUT_MS` / `CRUMB_PER_SPAWN_IDLE_MS` / `CRUMB_WALL_CLOCK_HOOK_MS` / `CRUMB_WALL_CLOCK_HARD_MS` env knobs (2026-05-03)
+
+Per-spawn wall-clock + idle timeouts and session wall-clock budget were hard-coded constants. Tests, CI smoke runs, and long debugging sessions had to either monkey-patch the dispatcher or wait the full 15-minute ceiling. All four are now env-overridable while keeping the same defaults.
+
+- `src/dispatcher/live.ts` — `PER_SPAWN_TIMEOUT_MS` (15min default) + `PER_SPAWN_IDLE_TIMEOUT_MS` (90s default) read `CRUMB_PER_SPAWN_TIMEOUT_MS` / `CRUMB_PER_SPAWN_IDLE_MS`.
+- `src/loop/coordinator.ts` — `WALL_CLOCK_HOOK_MS_DEFAULT` (24min) + `WALL_CLOCK_HARD_MS_DEFAULT` (30min) read `CRUMB_WALL_CLOCK_HOOK_MS` / `CRUMB_WALL_CLOCK_HARD_MS`.
+- `src/reducer/index.ts` — minor, env-knob touch only on existing per-event budget thresholds.
+- Defaults preserved when env vars are unset/invalid (`Number(undefined) || default`).
+- Tests already pass `perSpawnTimeoutMs` / `perSpawnIdleTimeoutMs` per `DispatcherDeps` so no test changes needed; sweep 421/421 green.
+
 ### Added — Dashboard bootstrap state classifier + adapter status sidebar + new-session preset chips (2026-05-03)
 
 Dashboard had two startup gaps and one UX gap. (1) On boot it surfaced every transcript with no liveness signal — the user couldn't tell at a glance which sessions were running, idle, or abandoned. (2) Adapter availability (Claude Code installed? Codex authenticated? Gemini CLI on PATH?) was invisible in the UI; users only learned via failed spawn attempts. (3) Session creation offered a flat preset dropdown with no signal of which presets were even runnable on the current machine. User feedback: "지금 대시보드 시작할 때 현재 열린 세션들 연결하도록 하는 헬스체크 혹은 부트스트랩 넣으려면 어떻게 해? ... [claude code] [Opus 4.7] 이런식으로 현재 지원하는 옵션들을 드러내게 해. 활성=초록 원, 비활성=회색."

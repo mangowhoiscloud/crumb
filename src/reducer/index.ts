@@ -18,8 +18,8 @@ const CIRCUIT_OPEN_AT = 3;
 // v3.2 budget guardrails — hard caps. Wiki: bagelcode-budget-guardrails.md §"P0".
 const RESPEC_MAX = 3; // max # of spec.update events before done(too_many_respec)
 const VERIFY_MAX = 5; // max # of judge.score events before done(too_many_verify)
-const TOKEN_BUDGET_HOOK = 40_000; // hook(token_budget) at this threshold
-const TOKEN_BUDGET_HARD = 50_000; // done(token_exhausted) at this threshold
+const TOKEN_BUDGET_HOOK = Number(process.env.CRUMB_TOKEN_BUDGET_HOOK) || 40_000;
+const TOKEN_BUDGET_HARD = Number(process.env.CRUMB_TOKEN_BUDGET_HARD) || 50_000;
 
 // v3.2 ratchet (autoresearch P4 keep/revert) — score regression beyond this many
 // aggregate points triggers done(ratchet_revert) to stop unbounded loops.
