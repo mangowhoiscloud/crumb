@@ -25,7 +25,7 @@
  *   .codex/agents/crumb.toml [mcp_servers.crumb]
  *   .gemini/extensions/crumb/gemini-extension.json mcpServers
  *
- * See [[bagelcode-system-architecture-v3]] §2 (4 entry path) + §12 (5 helper).
+ * See [[bagelcode-system-architecture-v0.1]] §2 (4 entry path) + §12 (5 helper).
  */
 
 import { resolve } from 'node:path';
@@ -50,7 +50,7 @@ import { registerWriteTools } from './mcp-write-tools.js';
 const VERSION = '0.2.0';
 
 async function loadSession(target: string, root: string) {
-  // v3.3: resolveStoredSession checks ~/.crumb/projects/<id>/sessions/<ulid>/ first,
+  // v0.3.0: resolveStoredSession checks ~/.crumb/projects/<id>/sessions/<ulid>/ first,
   // falls back to legacy <cwd>/sessions/<ulid>/ until migration.
   const sessionDir = await resolveStoredSession(target, root);
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');

@@ -25,7 +25,7 @@ export interface SpawnEffect {
   /** Optional first prompt payload (e.g. the goal text). */
   prompt?: string;
   /**
-   * v3.2 G4 — runtime sandwich appends pulled from task_ledger.facts where
+   * v0.2.0 G4 — runtime sandwich appends pulled from task_ledger.facts where
    * category === 'sandwich_append' and target_actor matches (or is undefined).
    * The dispatcher concatenates these onto the base sandwich (and any
    * file-based agents/<actor>.local.md override) before writing the assembled
@@ -47,8 +47,8 @@ export interface HookEffect {
    * - partial       — verifier verdict=PARTIAL, user confirm/veto
    * - confirm       — generic confirmation
    * - error         — adapter/runtime error
-   * - token_budget  — v3.2: session_token_total crossed 40K (50K = hard done)
-   * - time_budget   — v3.2: session_wall_clock crossed 24min (30min = hard done)
+   * - token_budget  — v0.2.0: session_token_total crossed 40K (50K = hard done)
+   * - time_budget   — v0.2.0: session_wall_clock crossed 24min (30min = hard done)
    */
   kind: 'stuck' | 'partial' | 'confirm' | 'error' | 'token_budget' | 'time_budget';
   body: string;
@@ -74,13 +74,13 @@ export interface StopEffect {
 }
 
 /**
- * v3 qa_check — deterministic ground-truth check (no LLM).
+ * v0.1 qa_check — deterministic ground-truth check (no LLM).
  *
  * Pattern: AutoGen Executor (57.6k⭐, "Assistant writes code, Executor executes deterministically").
  * Emitted by reducer after kind=build; dispatcher runs htmlhint + optional playwright;
  * result becomes kind=qa.result transcript event with metadata.deterministic=true.
  *
- * See [[bagelcode-system-architecture-v3]] §3.5 (qa.result schema), §7 (3-layer scoring),
+ * See [[bagelcode-system-architecture-v0.1]] §3.5 (qa.result schema), §7 (3-layer scoring),
  * skills/verification-before-completion.md.
  */
 export interface QaCheckEffect {
@@ -92,7 +92,7 @@ export interface QaCheckEffect {
   /** sha256 of the artifact (for tamper detection between build and qa). */
   artifact_sha256?: string;
   /**
-   * v3.5 — deterministic AC predicates compiled by planner-lead at spec-seal,
+   * v0.3.5 — deterministic AC predicates compiled by planner-lead at spec-seal,
    * pulled from `state.task_ledger.ac_predicates` by the reducer's `build`
    * case. The dispatcher passes these to `runQaCheck` so the AC layer runs
    * alongside the static smoke. Empty when the spec emitted no predicates.

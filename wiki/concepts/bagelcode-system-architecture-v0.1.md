@@ -1,7 +1,7 @@
 ---
-title: Crumb 시스템 구조 v3 — Multi-host × (harness × provider × model) tuple + 3-layer scoring
+title: Crumb 시스템 구조 v0.1 — Multi-host × (harness × provider × model) tuple + 3-layer scoring
 category: concepts
-tags: [bagelcode, crumb, system-architecture, v3, multi-host, harness-tuple, ambient-fallback, scoring, dashboard, observability, frontier-convergence, 2026]
+tags: [bagelcode, crumb, system-architecture, v0.1, multi-host, harness-tuple, ambient-fallback, scoring, dashboard, observability, frontier-convergence, 2026]
 sources:
   - "[[bagelcode-host-harness-decision]]"
   - "[[bagelcode-system-architecture]] (v2, replaced)"
@@ -19,7 +19,7 @@ sources:
   - "https://aclanthology.org/2025.findings-acl.1327/ — CourtEval ACL 2025"
   - "Kiki dashboard pattern (~/workspace/Kiki/app/dashboard)"
 summary: >-
-  Crumb 의 v3 canonical 시스템 구조. Multi-host 4 entry (Claude Code + Codex CLI + Gemini CLI + headless),
+  Crumb 의 v0.1 canonical 시스템 구조. Multi-host 4 entry (Claude Code + Codex CLI + Gemini CLI + headless),
   (harness × provider × model) 3-tuple actor binding, ambient harness fallback, 3-layer scoring (reducer +
   qa_check effect + verifier CourtEval), 정적 대시보드, 자연어 보조 장치. v2 ([[bagelcode-system-architecture]])
   대체.
@@ -31,9 +31,9 @@ created: 2026-05-02
 updated: 2026-05-02
 ---
 
-# Crumb 시스템 구조 v3 — Multi-host × (harness × provider × model)
+# Crumb 시스템 구조 v0.1 — Multi-host × (harness × provider × model)
 
-> **canonical 종합 lock.** v2 ([[bagelcode-system-architecture]] §1-§2 그림) 를 본 페이지가 대체. v2 의 §3-§9 (38 kind schema 코어, prompt assemble 절차) 는 본 페이지의 §3-§4 로 흡수 후 40 kind 로 정정 (v3 +qa.result 추가, meta 카운트 6→7 정정). [[bagelcode-host-harness-decision]] Hybrid lock 위에 (a) Multi-host 3 entry 추가, (b) 3-tuple actor binding, (c) ambient fallback, (d) 3-layer scoring 추가.
+> **canonical 종합 lock.** v2 ([[bagelcode-system-architecture]] §1-§2 그림) 를 본 페이지가 대체. v2 의 §3-§9 (38 kind schema 코어, prompt assemble 절차) 는 본 페이지의 §3-§4 로 흡수 후 40 kind 로 정정 (v0.1 +qa.result 추가, meta 카운트 6→7 정정). [[bagelcode-host-harness-decision]] Hybrid lock 위에 (a) Multi-host 3 entry 추가, (b) 3-tuple actor binding, (c) ambient fallback, (d) 3-layer scoring 추가.
 
 ---
 
@@ -46,7 +46,7 @@ gamestudio 12  superpowers 14         AutoGen Executor         Paperclip BYO    
   (193 ⭐)        (176k ⭐)              (57.6k ⭐)               (61.4k ⭐)            (61.4k ⭐)
 ```
 
-**Crumb v3** = 4 frontier 합성 (gamestudio + superpowers + AutoGen + Paperclip) × 4 CLI convergence (2026-04 Claude Code/Codex/Gemini/OpenCode) × 메일 verbatim 1:1 매핑. 자체 발명 비중 < 10%.
+**Crumb v0.1** = 4 frontier 합성 (gamestudio + superpowers + AutoGen + Paperclip) × 4 CLI convergence (2026-04 Claude Code/Codex/Gemini/OpenCode) × 메일 verbatim 1:1 매핑. 자체 발명 비중 < 10%.
 
 ---
 
@@ -232,20 +232,20 @@ metadata?:       { visibility, harness, provider, model, turn, tokens_in/out,
                    audit_violations, deterministic? }
 ```
 
-### 3.2 from enum (8개, v2 → v3 변경)
+### 3.2 from enum (8개, v2 → v0.1 변경)
 
 ```
 ─── v2 (7) ──────────────────────────
   user / coordinator / planner-lead / engineering-lead / builder-fallback /
   validator / system
 
-─── v3 (8) ★ ─────────────────────────
+─── v0.1 (8) ★ ─────────────────────────
   user / coordinator / planner-lead / builder / verifier / builder-fallback /
   validator / system
                            ★ engineering-lead 제거, builder + verifier 추가
 ```
 
-### 3.3 40 kind 어휘 (v2 38 → v3 40, +qa.result, +meta count 정정)
+### 3.3 40 kind 어휘 (v2 38 → v0.1 40, +qa.result, +meta count 정정)
 
 ```
 ─── system (4) ──────────────────────
@@ -738,9 +738,9 @@ After /crumb debug          → coordinator → fault-detector → kind=note
 
 ---
 
-## 13. 변경 영향 (v2 → v3)
+## 13. 변경 영향 (v2 → v0.1)
 
-| 항목 | v2 | v3 |
+| 항목 | v2 | v0.1 |
 |---|---|---|
 | Entry 수 | 1 (Claude Code) + headless | **3 first-class + headless = 4** |
 | actor 수 | 4 외부 + 7 내부 | **5 외부 + 3 specialist + 5 skill** |
@@ -760,10 +760,10 @@ After /crumb debug          → coordinator → fault-detector → kind=note
 
 ## 14. See also
 
-- ★ **[[bagelcode-system-architecture-v3.5]]** — v3.5 incremental layer (Rule 7 / numerical R4 / judge-input bundle / fallback audit)
-- ★ **[[bagelcode-system-diagrams-v3.5]]** — 6 Mermaid (spawn / score / anti-deception / judge-input / routing / preset)
+- ★ **[[bagelcode-system-architecture-v0.3.5]]** — v0.3.5 incremental layer (Rule 7 / numerical R4 / judge-input bundle / fallback audit)
+- ★ **[[bagelcode-system-diagrams-v0.3.5]]** — 6 Mermaid (spawn / score / anti-deception / judge-input / routing / preset)
 - [[bagelcode]] / [[bagelcode-task-direction]] / [[bagelcode-recruitment-task]] — 메일 verbatim
-- [[bagelcode-host-harness-decision]] — Hybrid lock (v3 이전)
+- [[bagelcode-host-harness-decision]] — Hybrid lock (v0.1 이전)
 - [[bagelcode-system-architecture]] — v2 (본 페이지가 §1-§2 그림 대체)
 - [[bagelcode-frontier-cli-convergence-2026]] — 4 CLI convergence 1차 사료 ★ new
 - [[bagelcode-llm-judge-frontier-2026]] — CourtEval / G-Eval / bias 6 사료 ★ new

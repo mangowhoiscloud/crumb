@@ -1,7 +1,7 @@
 /**
  * Version graph — immutable milestones under `~/.crumb/projects/<id>/versions/<vN>/`.
  *
- * v3.3 introduces a 2-tier session model:
+ * v0.3.0 introduces a 2-tier session model:
  *  - `sessions/<ulid>/` = WIP attempt (mutable lifecycle: running/paused/done/error/killed)
  *  - `versions/<vN>/`   = released milestone (immutable; manifest.toml + frozen artifacts copy)
  *

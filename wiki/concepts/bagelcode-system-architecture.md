@@ -12,7 +12,7 @@ sources:
   - "agents/_event-protocol.md"
 summary: >-
   Hybrid lock 직후 v2 시스템 구조 — 외부 1 host (Claude Code) + Task subagent N + Verifier inline.
-  §1-§2 토폴로지는 v3 (system-architecture-v3) 가 canonical 로 대체, §3-§9 는 v3 에서도 유효.
+  §1-§2 토폴로지는 v0.1 (system-architecture-v0.1) 가 canonical 로 대체, §3-§9 는 v0.1 에서도 유효.
 provenance:
   extracted: 0.65
   inferred: 0.30
@@ -23,7 +23,7 @@ updated: 2026-05-02
 
 # Crumb 시스템 구조 + Prompt Assemble 절차 (v2)
 
-> ★ **2026-05-02 supersession** — 본 페이지 §1-§2 (토폴로지 + 38 kind) 는 [[bagelcode-system-architecture-v3]] 로 대체. v3 변화 요지: 외부 1 host → Multi-host 4 entry, Engineering Lead inline → builder + verifier actor split, 38 kind → 39 kind (+`qa.result`), single-layer Verifier → 3-layer scoring (reducer auto + qa_check effect + verifier CourtEval), MCP Provider 신규, persistence boost (`crumb resume`) 신규. 본 페이지 §3 (prompt assemble 5단계) / §4 (per-turn flow) / §5 (cache 경계) / §6 (control plane vs LLM layer 책임 분담) / §7 (default vs cross-provider) / §8 (headless) / §9 (sub-system 변경 영향) 은 v3 에서도 변경 없이 유효 — 단 actor enum / kind 수 / metadata 필드는 v3 기준 갱신 필요.
+> ★ **2026-05-02 supersession** — 본 페이지 §1-§2 (토폴로지 + 38 kind) 는 [[bagelcode-system-architecture-v0.1]] 로 대체. v0.1 변화 요지: 외부 1 host → Multi-host 4 entry, Engineering Lead inline → builder + verifier actor split, 38 kind → 39 kind (+`qa.result`), single-layer Verifier → 3-layer scoring (reducer auto + qa_check effect + verifier CourtEval), MCP Provider 신규, persistence boost (`crumb resume`) 신규. 본 페이지 §3 (prompt assemble 5단계) / §4 (per-turn flow) / §5 (cache 경계) / §6 (control plane vs LLM layer 책임 분담) / §7 (default vs cross-provider) / §8 (headless) / §9 (sub-system 변경 영향) 은 v0.1 에서도 변경 없이 유효 — 단 actor enum / kind 수 / metadata 필드는 v0.1 기준 갱신 필요.
 >
 > [[bagelcode-host-harness-decision]] (Hybrid lock) 후의 **v2 시스템 구조**. 전체 개요도 + transcript schema (v2 시점 38 kind 기준) + sandwich/envelope assemble 절차 + per-turn flow.
 >

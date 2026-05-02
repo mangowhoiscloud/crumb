@@ -1,24 +1,24 @@
 ---
-title: Crumb v3.5 시스템 다이어그램 — 6 Mermaid (spawn / score / anti-deception / judge-input / routing / preset)
+title: Crumb v0.3.5 시스템 다이어그램 — 6 Mermaid (spawn / score / anti-deception / judge-input / routing / preset)
 category: concepts
-tags: [bagelcode, crumb, diagrams, mermaid, v3.5, system-architecture]
+tags: [bagelcode, crumb, diagrams, mermaid, v0.3.5, system-architecture]
 sources:
-  - "[[bagelcode-system-architecture-v3.5]] — text spec, 이 페이지의 짝"
-  - "[[bagelcode-system-architecture-v3]] §1-§14 baseline"
+  - "[[bagelcode-system-architecture-v0.3.5]] — text spec, 이 페이지의 짝"
+  - "[[bagelcode-system-architecture-v0.1]] §1-§14 baseline"
   - "src/dispatcher/live.ts (spawn lifecycle)"
   - "src/reducer/index.ts (routing)"
   - "src/validator/anti-deception.ts (rules 1-7)"
   - "src/state/scorer.ts (combine D3/D5)"
   - "src/dispatcher/preset-loader.ts (binding resolution)"
 summary: >-
-  Crumb v3.5 의 6 다이어그램. 모두 Mermaid; 각 그림이 [[bagelcode-system-architecture-v3.5]] 의
+  Crumb v0.3.5 의 6 다이어그램. 모두 Mermaid; 각 그림이 [[bagelcode-system-architecture-v0.3.5]] 의
   특정 섹션과 1:1 대응. (1) spawn lifecycle, (2) score path, (3) anti-deception waterfall,
   (4) judge-input bundle projection, (5) routing matrix, (6) preset binding resolution.
 ---
 
-# Crumb v3.5 시스템 다이어그램
+# Crumb v0.3.5 시스템 다이어그램
 
-> 6 Mermaid 다이어그램. 텍스트 spec 은 [[bagelcode-system-architecture-v3.5]].
+> 6 Mermaid 다이어그램. 텍스트 spec 은 [[bagelcode-system-architecture-v0.3.5]].
 > 색상 — Tailwind CSS 기반 (Claude Code `mermaid-diagrams` skill 가이드 참조).
 
 ---
@@ -147,7 +147,7 @@ flowchart TD
     FY[verdict→PARTIAL]:::verdict
     R6{R6: PASS but D1<3 AND D5<3?}:::rule
     R6Y[verdict→PARTIAL<br/>tag composite_gaming_d1_d5_below_minimum]:::force
-    R7{R7 v3.5: PASS but ac_results FAIL?}:::rule
+    R7{R7 v0.3.5: PASS but ac_results FAIL?}:::rule
     R7Y[D1 cap 2<br/>verdict→PARTIAL<br/>tag verify_pass_with_ac_failure]:::force
     OUT[final scores + violations<br/>kind=audit emit if any]:::verdict
 
@@ -315,8 +315,8 @@ flowchart TD
 
 ## See also
 
-- [[bagelcode-system-architecture-v3.5]] — text spec (이 페이지의 짝)
-- [[bagelcode-system-architecture-v3]] — v3 baseline 다이어그램 6 종 (orchestration topology / handoff / scoring layers / etc.)
+- [[bagelcode-system-architecture-v0.3.5]] — text spec (이 페이지의 짝)
+- [[bagelcode-system-architecture-v0.1]] — v0.1 baseline 다이어그램 6 종 (orchestration topology / handoff / scoring layers / etc.)
 - [[bagelcode-orchestration-topology]] — Hub-Ledger-Spoke 도형
 - [[bagelcode-fault-tolerance-design]] — F1-F5 fault matrix (Rule 7 이 F2 verdict-without-evidence 보강)
 - `~/.claude/skills/mermaid-diagrams/SKILL.md` — Tailwind 색감 가이드 (Claude Code skill)

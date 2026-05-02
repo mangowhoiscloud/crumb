@@ -28,7 +28,7 @@ export type Kind =
   | 'spec'
   | 'spec.update'
   | 'build'
-  // v3: deterministic ground truth (dispatcher emit, no LLM)
+  // v0.1: deterministic ground truth (dispatcher emit, no LLM)
   | 'qa.result'
   // verification
   | 'verify.request'
@@ -59,7 +59,7 @@ export type Kind =
   | 'handoff.accepted'
   | 'handoff.rollback'
   | 'artifact.created'
-  // v3.3: version milestones (immutable releases under projects/<id>/versions/<vN>/)
+  // v0.3.0: version milestones (immutable releases under projects/<id>/versions/<vN>/)
   | 'version.released'
   | 'version.refinement'
   | 'ack'
@@ -93,7 +93,7 @@ export interface Artifact {
 }
 
 /**
- * v3 score dimension (D1-D6 source-of-truth matrix).
+ * v0.1 score dimension (D1-D6 source-of-truth matrix).
  * source field encodes which layer produced the score (single origin per dim):
  *   - "verifier-llm": verifier sandwich CourtEval reasoning (D1, plus the LLM component of D3/D5)
  *   - "qa-check-effect": dispatcher deterministic effect (D2/D6)
@@ -126,7 +126,7 @@ export interface ScoreDimension {
 }
 
 export interface Scores {
-  // v3 D1-D6 (preferred)
+  // v0.1 D1-D6 (preferred)
   D1?: ScoreDimension;
   D2?: ScoreDimension;
   D3?: ScoreDimension;
@@ -164,7 +164,7 @@ export interface Content {
   text: string;
 }
 
-/** v3 harness identifier — mirrors preset binding 3-tuple. v3.3 added gemini-sdk for the researcher actor's video understanding path (Gemini 3.1 Pro native YouTube URL + 10fps frame sampling — gemini-cli has p1-unresolved video bugs). */
+/** v0.1 harness identifier — mirrors preset binding 3-tuple. v0.3.0 added gemini-sdk for the researcher actor's video understanding path (Gemini 3.1 Pro native YouTube URL + 10fps frame sampling — gemini-cli has p1-unresolved video bugs). */
 export type Harness =
   | 'claude-code'
   | 'codex'
@@ -180,23 +180,23 @@ export type Provider = 'anthropic' | 'openai' | 'google' | 'none';
 
 export interface Metadata {
   visibility?: 'public' | 'private';
-  // v3: 3-tuple actor binding
+  // v0.1: 3-tuple actor binding
   harness?: Harness;
   provider?: Provider;
   model?: string;
-  /** v3: native session id from host harness for cache carry-over (S15). */
+  /** v0.1: native session id from host harness for cache carry-over (S15). */
   adapter_session_id?: string;
-  /** v3: signals next spawn may use --resume <adapter_session_id> for cache hit. */
+  /** v0.1: signals next spawn may use --resume <adapter_session_id> for cache hit. */
   cache_carry_over?: boolean;
-  /** v3: true on judge.score events when verifier provider !== builder provider. */
+  /** v0.1: true on judge.score events when verifier provider !== builder provider. */
   cross_provider?: boolean;
-  /** v3: true for events emitted by dispatcher effects (qa_check / validator / reducer audit). */
+  /** v0.1: true for events emitted by dispatcher effects (qa_check / validator / reducer audit). */
   deterministic?: boolean;
-  /** v3: tool/effect identifier for deterministic events (e.g., 'qa-check-effect@v1'). */
+  /** v0.1: tool/effect identifier for deterministic events (e.g., 'qa-check-effect@v1'). */
   tool?: string;
-  /** v3.3: classifies researcher / verifier evidence source for D5 anti-deception checks. */
+  /** v0.3.0: classifies researcher / verifier evidence source for D5 anti-deception checks. */
   evidence_kind?: 'video' | 'screenshot' | 'text';
-  /** v3.3: sha256(video_ref + model + prompt_version) for the gemini-sdk adapter's replay cache. */
+  /** v0.3.0: sha256(video_ref + model + prompt_version) for the gemini-sdk adapter's replay cache. */
   cache_key?: string;
   turn?: number;
   tokens_in?: number;
@@ -208,7 +208,7 @@ export interface Metadata {
   thinking_tokens?: number;
   audit_violations?: string[];
   /**
-   * v3.3: 5-layer hierarchy markers (project → session → run → turn → step → event).
+   * v0.3.0: 5-layer hierarchy markers (project → session → run → turn → step → event).
    * project lives on the filesystem; session_id and step are top-level Message fields;
    * run_id / turn_id are reducer-derived. parent_session_id / fork_event_id appear
    * only on the first event of a forked session.
@@ -220,7 +220,7 @@ export interface Metadata {
     fork_event_id?: string;
   };
   /**
-   * v3.3: OpenTelemetry GenAI Semantic Conventions aliases.
+   * v0.3.0: OpenTelemetry GenAI Semantic Conventions aliases.
    * conversation_id ≡ session_id, agent_id ≡ from, workflow_name = 'crumb.coordinator'.
    * Filled in by the OTel exporter or by the writer when emitting cross-provider events.
    */

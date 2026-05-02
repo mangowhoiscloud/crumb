@@ -146,7 +146,7 @@ CRUMB.md 는 **redundant** 가 되어 drop. drift 위험 단일 source 통제로
 
 ## See also
 
-- [[bagelcode-system-architecture-v3]] — canonical v3 architecture (multi-host × 3-tuple + 5 actor + 3-layer scoring)
+- [[bagelcode-system-architecture-v0.1]] — canonical v0.1 architecture (multi-host × 3-tuple + 5 actor + 3-layer scoring)
 - [[bagelcode-host-harness-decision]] — Hybrid (Skill + headless CLI) lock
 - [[bagelcode-frontier-cli-convergence-2026]] — 4 CLI × 7 primitive convergence (LF AAIF 표준 채택 추진력)
 - `AGENTS.md` (repo root) — universal source 본 페이지

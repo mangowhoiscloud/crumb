@@ -9,7 +9,7 @@ name = "solo"
 description = "단일 host (Claude Max only). Codex / Gemini 미로그인 시 안전. self-bias risk warn."
 recommended = false
 requires_cli = ["claude"]
-schema = "crumb/v3"
+schema = "crumb/v0.1"
 
 # 모든 actor: 명시 없음 → ambient (보통 claude-code)
 [actors.coordinator]

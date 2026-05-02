@@ -8,12 +8,12 @@
  *   crumb-dashboard --bind 0.0.0.0          # expose on LAN / SSH tunnel
  *   crumb-dashboard --no-open               # headless (CI / SSH)
  *   crumb-dashboard --home ~/.crumb --home /tmp/crumb-test-home
- *                                           # v3.4: watch multiple Crumb homes
+ *                                           # v0.3.1: watch multiple Crumb homes
  *                                           #       in one server (sessions from
  *                                           #       all roots show up together).
  *
  * Env:
- *   CRUMB_HOMES=/a:/b                       # v3.4 multi-home (path-list separator)
+ *   CRUMB_HOMES=/a:/b                       # v0.3.1 multi-home (path-list separator)
  *   CRUMB_HOME=/path/to/.crumb              # legacy single-home
  *   CRUMB_POLL=1                            # force chokidar polling
  *   CRUMB_NO_OPEN=1                         # headless without --no-open flag
@@ -31,7 +31,7 @@ interface Args {
   bind: string;
   open: boolean;
   pollInterval?: number;
-  /** v3.4: repeatable --home flag. Empty array → fall through to env / default. */
+  /** v0.3.1: repeatable --home flag. Empty array → fall through to env / default. */
   homes: string[];
 }
 
@@ -75,7 +75,7 @@ Usage:
 
 Options:
   --home <path>         Crumb home to watch. Repeatable — passes are merged.
-                        v3.4: replaces single-CRUMB_HOME limitation; sessions
+                        v0.3.1: replaces single-CRUMB_HOME limitation; sessions
                         from every listed home appear together.
   --port <n>            HTTP port (default 7321)
   --bind <ip>           Bind address (default 127.0.0.1; use 0.0.0.0 for LAN)
@@ -84,7 +84,7 @@ Options:
   -h, --help            Show this help
 
 Env (precedence: --home > CRUMB_HOMES > CRUMB_HOME > $HOME/.crumb):
-  CRUMB_HOMES           v3.4 multi-home, path-list separated (':' POSIX, ';' Windows)
+  CRUMB_HOMES           v0.3.1 multi-home, path-list separated (':' POSIX, ';' Windows)
   CRUMB_HOME            Legacy single-home
   CRUMB_POLL=1          Force chokidar polling (WSL / Docker / NFS)
   CRUMB_NO_OPEN=1       Headless mode without --no-open flag
@@ -102,7 +102,7 @@ async function main(): Promise<void> {
     bind: args.bind,
   };
   if (args.pollInterval !== undefined) opts.pollInterval = args.pollInterval;
-  // v3.4 multi-home: --home flags take precedence over env (CRUMB_HOMES /
+  // v0.3.1 multi-home: --home flags take precedence over env (CRUMB_HOMES /
   // CRUMB_HOME), which in turn fall through to $HOME/.crumb. The watcher
   // sees an array of globs only when more than one home is active; otherwise
   // we leave opts unset to preserve legacy single-glob behavior.

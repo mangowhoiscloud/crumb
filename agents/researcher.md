@@ -4,7 +4,7 @@ description: >-
   Crumb video-evidence researcher. Ingests gameplay video references (YouTube URLs, local
   mp4) and extracts mechanics + timing + palette evidence the planner can ground spec
   decisions on. Promoted from a planner-lead inline-read specialist to its own actor in
-  v3.3 because video-LLM 2026 frontier (Gemini 3.1 Pro, native YouTube URL ingestion,
+  v0.3.0 because video-LLM 2026 frontier (Gemini 3.1 Pro, native YouTube URL ingestion,
   10fps frame sampling for fast-paced action) only reliably runs through an SDK adapter,
   not the gemini-cli subprocess (4 closed/p1-unresolved video bugs as of 2026-05).
   Injected as a Markdown body via the SDK adapter; the runtime envelope is the SDK's
@@ -23,9 +23,9 @@ inline_specialists:
 
 ## Position
 
-A new outer actor in the v3.3 split. Runs between planner-lead's step.concept and step.design — planner emits `kind=handoff.requested(to=researcher)` after concept lock, the coordinator routes a researcher spawn, the researcher returns control with `kind=handoff.requested(to=planner-lead)` once evidence is captured. No direct planner ↔ researcher communication; everything flows through the transcript (Hub-Ledger-Spoke).
+A new outer actor in the v0.3.0 split. Runs between planner-lead's step.concept and step.design — planner emits `kind=handoff.requested(to=researcher)` after concept lock, the coordinator routes a researcher spawn, the researcher returns control with `kind=handoff.requested(to=planner-lead)` once evidence is captured. No direct planner ↔ researcher communication; everything flows through the transcript (Hub-Ledger-Spoke).
 
-### Role / Goal / Visibility (v3.4 — TradingAgents §4.1 alignment)
+### Role / Goal / Visibility (v0.3.1 — TradingAgents §4.1 alignment)
 
 | | |
 |---|---|
@@ -162,4 +162,4 @@ Emit `kind=handoff.requested(to=planner-lead)` with `payload={research_id: <step
 > Planner-lead is bound to the entry host (claude-code in bagelcode-cross-3way preset) for socratic / concept / design reasoning where Claude leads. Researcher is bound to gemini-sdk for video understanding where Gemini 3.1 Pro leads (10fps frame sampling, native YouTube URL ingestion, 1-hour duration cap). Splitting the actor lets the preset assign each step to the strongest provider — this is a textbook (harness × provider × model) 3-tuple binding case.
 
 **verifier interaction.**
-> Verifier's D3.semantic + D5.quality dimensions read `evidence_refs` from `step.research` and cross-reference them against the actual `step.research.video` events. The anti-deception rule (`validator/anti-deception.ts`, v3.3) enforces D5=0 when a lesson claims grounding but evidence_refs is empty — same firewall pattern as the qa.result D2/D6 rule.
+> Verifier's D3.semantic + D5.quality dimensions read `evidence_refs` from `step.research` and cross-reference them against the actual `step.research.video` events. The anti-deception rule (`validator/anti-deception.ts`, v0.3.0) enforces D5=0 when a lesson claims grounding but evidence_refs is empty — same firewall pattern as the qa.result D2/D6 rule.

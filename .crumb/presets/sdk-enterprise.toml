@@ -10,7 +10,7 @@ name = "sdk-enterprise"
 description = "Anthropic Managed Agents-style direct SDK orchestration (API key 필요, production-grade, Notion/Rakuten/Sentry pattern)"
 recommended = false
 requires_api_keys = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY"]
-schema = "crumb/v3"
+schema = "crumb/v0.1"
 
 [actors.coordinator]
 sandwich = "agents/coordinator.md"

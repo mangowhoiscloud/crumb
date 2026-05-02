@@ -136,7 +136,7 @@ describe('inbox parser', () => {
     });
   });
 
-  // /append (v3.2 G4 — sandwich override)
+  // /append (v0.2.0 G4 — sandwich override)
 
   it('/append <text> writes broadcast sandwich_append (no target_actor)', () => {
     const m = parseInboxLine('/append always emit kind=note before kind=verify.result', SID);

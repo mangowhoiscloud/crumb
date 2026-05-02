@@ -1,7 +1,7 @@
 /**
  * Transcript writer — append-only JSONL with ULID + ISO-8601 ts injection.
  *
- * Concurrency policy (v3 S15 persistence boost — see [[bagelcode-system-architecture-v3]] §"S15"):
+ * Concurrency policy (v0.1 S15 persistence boost — see [[bagelcode-system-architecture-v0.1]] §"S15"):
  *   - **Single-writer-per-process** is enforced via Promise chain serialization. JS-level
  *     interleaving is impossible because every append() awaits the previous one.
  *   - **Cross-process atomicity** rides on POSIX O_APPEND: writes ≤ PIPE_BUF (4096 bytes on
@@ -20,7 +20,7 @@
  * Adapter session-id policy (forward-compat — not yet wired): the schema fields
  * `metadata.adapter_session_id` and `metadata.cache_carry_over` exist so the
  * dispatcher can eventually pass `--resume <sid>` to the underlying CLI for
- * Anthropic prompt-cache carry-over across spawns. As of v3.4 no adapter
+ * Anthropic prompt-cache carry-over across spawns. As of v0.3.1 no adapter
  * captures or consumes these fields; every spawn starts a fresh CLI session
  * and the system-prompt prefix is re-uploaded. See preset.actors[*] binding
  * spec in `.crumb/presets/*.toml`.

@@ -16,13 +16,13 @@ import { runQaCheckEffect } from './qa-runner.js';
 import type { Harness, PresetSpec } from './preset-loader.js';
 
 /**
- * v3.2 budget guardrail (autoresearch P3): an individual spawn cannot run
+ * v0.2.0 budget guardrail (autoresearch P3): an individual spawn cannot run
  * longer than this. The dispatcher AbortController fires SIGTERM via the
  * adapter's signal handler and the spawn is recorded as kind=error so the
  * reducer's circuit_breaker trips. Wiki: bagelcode-budget-guardrails.md
  * §"per_spawn_timeout".
  *
- * v3.4: split into wall-clock ceiling + idle timeout. The previous single
+ * v0.3.1: split into wall-clock ceiling + idle timeout. The previous single
  * 5-min wall-clock timer killed actors that were actively producing tokens
  * (planner-lead Phase B session 01KQMR4Y, builder for multi-file envelopes).
  * Idle-timeout fires only on genuine stalls (no stdout for N seconds) while
@@ -75,14 +75,14 @@ const ACTOR_TO_SANDWICH: Partial<Record<Actor, string>> = {
   verifier: 'agents/verifier.md',
   'builder-fallback': 'agents/builder-fallback.md',
   coordinator: 'agents/coordinator.md',
-  // v3.4 fix: missing researcher entry caused baseSandwichPath to fall back
+  // v0.3.1 fix: missing researcher entry caused baseSandwichPath to fall back
   // to '' → resolve(repoRoot, '') = repoRoot (a directory) → readFile threw
   // EISDIR when the no-video researcher path routed through claude-local.
   // Stack trace from session 01KQMGNW: assembleSandwich → readFileHandle EISDIR.
   researcher: 'agents/researcher.md',
 };
 
-/** Harness → adapter id mapping for preset bindings. v3.3 added gemini-sdk for the researcher actor (Gemini 3.1 Pro native YouTube URL + 10fps frame sampling — gemini-cli has p1-unresolved video bugs). */
+/** Harness → adapter id mapping for preset bindings. v0.3.0 added gemini-sdk for the researcher actor (Gemini 3.1 Pro native YouTube URL + 10fps frame sampling — gemini-cli has p1-unresolved video bugs). */
 const HARNESS_TO_ADAPTER: Record<Harness, string> = {
   'claude-code': 'claude-local',
   codex: 'codex-local',
@@ -123,7 +123,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         : binding?.sandwich
           ? resolve(deps.repoRoot, binding.sandwich)
           : resolve(deps.repoRoot, ACTOR_TO_SANDWICH[effect.actor] ?? '');
-      // v3.2 G4 — sandwich override pipeline:
+      // v0.2.0 G4 — sandwich override pipeline:
       //   base agents/<actor>.md
       //   + agents/<actor>.local.md (per-machine, gitignored)
       //   + effect.sandwich_appends (runtime user.intervene with data.sandwich_append)
@@ -156,7 +156,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
       });
       const adapter = deps.registry.get(adapterId);
 
-      // v3.3+ observability — record dispatcher's intent BEFORE invoking adapter.
+      // v0.3.0+ observability — record dispatcher's intent BEFORE invoking adapter.
       // Lets us distinguish "dispatcher never reached spawn" from "adapter ran but
       // produced no output". Marked private + deterministic so anti-deception/
       // verifier ignore it but `crumb debug` can read it.
@@ -178,7 +178,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         },
       });
 
-      // v3.2/v3.4 per_spawn_timeout: AbortController fires SIGTERM via the
+      // v0.2.0/v0.3.1 per_spawn_timeout: AbortController fires SIGTERM via the
       // adapter's signal handler. See `setupSpawnTimers` for the two-timer
       // (wall-clock ceiling + idle) policy.
       const timers = setupSpawnTimers({
@@ -186,7 +186,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         idleMs: deps.perSpawnIdleTimeoutMs ?? PER_SPAWN_IDLE_TIMEOUT_MS,
       });
 
-      // v3.4 cross_provider wiring (AGENTS.md §136). Resolve the latest build
+      // v0.3.1 cross_provider wiring (AGENTS.md §136). Resolve the latest build
       // event's provider when spawning the verifier so `crumb event` can stamp
       // metadata.cross_provider on the judge.score it emits. Without this, the
       // anti-deception Rule 4 self-bias check still works (it compares
@@ -198,7 +198,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         effect.actor === 'verifier'
           ? await readLatestBuildProvider(deps.transcriptPath)
           : undefined;
-      // v3.4 verifier hard input isolation. Project the transcript down to
+      // v0.3.1 verifier hard input isolation. Project the transcript down to
       // the minimum context the judge needs (goal / spec / build / qa.result
       // / artifact.created / step.research.video), excluding planner
       // reasoning + prior verifier output + private CoT + dispatcher meta.
@@ -241,7 +241,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
       const timeoutMs = timers.wallClockMs;
       const idleTimeoutMs = timers.idleMs;
 
-      // v3.4 ArgoCD-style logs — persist full stdout / stderr to disk under
+      // v0.3.1 ArgoCD-style logs — persist full stdout / stderr to disk under
       // <session>/agent-workspace/<actor>/spawn-<ts>.log so the dashboard's
       // log viewer can tail it. The transcript-side `kind=note` summary
       // remains a 4KB preview; the full stream lives on disk and is offered
@@ -268,7 +268,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         // on disk failure so the spawn lifecycle isn't disrupted.
       }
 
-      // v3.3+ observability — always capture truncated stdout/stderr as
+      // v0.3.0+ observability — always capture truncated stdout/stderr as
       // kind=note so an exit-0-but-silent spawn (planner-lead emits no
       // transcript events) is still diagnosable. Without this, exit=0 with
       // empty stdout looks identical to exit=0 with a successful run.
@@ -324,7 +324,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         });
       }
       // Always append agent.stop so observers know the turn ended.
-      // v3.3 — token usage / cost / model from the adapter's parsed output
+      // v0.3.0 — token usage / cost / model from the adapter's parsed output
       // (Anthropic stream-json `result` event, OpenAI Codex `usage`, etc.)
       // get folded into metadata here so the dashboard surfaces real numbers
       // instead of zeros. Adapters that can't recover usage (text mode / mock)
@@ -400,8 +400,8 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
       break;
     }
     case 'qa_check': {
-      // v3: deterministic ground-truth check (no LLM). Emits kind=qa.result.
-      // See [[bagelcode-system-architecture-v3]] §3.5, §7 (3-layer scoring).
+      // v0.1: deterministic ground-truth check (no LLM). Emits kind=qa.result.
+      // See [[bagelcode-system-architecture-v0.1]] §3.5, §7 (3-layer scoring).
       await runQaCheckEffect(effect, {
         writer: deps.writer,
         sessionId: deps.sessionId,
@@ -412,7 +412,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
   }
 }
 
-/** v3.4 G-C — length-bias firewall artifacts the verifier consumes. The byte
+/** v0.3.1 G-C — length-bias firewall artifacts the verifier consumes. The byte
  * counts come from the on-disk artifact files; token counts use the standard
  * 4-byte heuristic (good enough for length-context disclosure — the LLM only
  * needs an order-of-magnitude signal that "this doc is N tokens, not 4N").
@@ -422,7 +422,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
  * scopes to D1/D5 — the LLM-judged dims where length confound concentrates.
  */
 /**
- * v3.4 — two-timer abort policy for adapter spawns.
+ * v0.3.1 — two-timer abort policy for adapter spawns.
  *   1. Wall-clock ceiling — fires after `wallClockMs` regardless of activity.
  *   2. Idle timeout — fires only if no `onStdoutActivity()` ping for `idleMs`.
  *      Adapters that don't surface chunk-level activity effectively run under
@@ -475,7 +475,7 @@ function setupSpawnTimers(opts: { wallClockMs: number; idleMs: number }): SpawnT
 }
 
 /**
- * v3.4 — scan the transcript for the latest `kind=build` event and return its
+ * v0.3.1 — scan the transcript for the latest `kind=build` event and return its
  * `metadata.provider`. Used by the verifier spawn path so `crumb event` can
  * stamp `metadata.cross_provider` on judge.score (AGENTS.md §136). Returns
  * `undefined` if no build event yet, or if the build event omitted provider
@@ -505,7 +505,7 @@ export async function readLatestBuildProvider(transcriptPath: string): Promise<s
 }
 
 /**
- * v3.4 — verifier hard input isolation. Project the transcript down to the
+ * v0.3.1 — verifier hard input isolation. Project the transcript down to the
  * minimum context the verifier needs and write it to
  * `<sessionDir>/agent-workspace/verifier/judge-input.jsonl`. The verifier
  * sandwich reads `$CRUMB_JUDGE_INPUT_PATH` instead of the full transcript;
@@ -630,7 +630,7 @@ interface AssembleArgs {
   appends: NonNullable<SpawnEffect['sandwich_appends']>;
   sessionDir: string;
   actor: Actor;
-  /** Repo root for resolving agents/_event-protocol.md (v3.3+ injection). */
+  /** Repo root for resolving agents/_event-protocol.md (v0.3.0+ injection). */
   repoRoot: string;
 }
 
@@ -687,10 +687,10 @@ export function parseInlineRefs(content: string): { skills: string[]; specialist
 }
 
 /**
- * v3.2 G4 — assemble per-spawn sandwich from base + per-machine local override
+ * v0.2.0 G4 — assemble per-spawn sandwich from base + per-machine local override
  * + runtime sandwich_appends.
  *
- * v3.3+ — also injects `agents/_event-protocol.md` for any actor that emits
+ * v0.3.0+ — also injects `agents/_event-protocol.md` for any actor that emits
  * transcript events. The standalone protocol file documents the `crumb event`
  * Bash heredoc pattern; without inlining it into the sandwich, Claude/Codex
  * tend to PRINT JSON to stdout instead of invoking the CLI (observed: run
@@ -699,7 +699,7 @@ export function parseInlineRefs(content: string): { skills: string[]; specialist
  * 1-line mentions of `crumb event`; planner-lead / builder / builder-fallback
  * / researcher had zero. This fix makes the protocol always available.
  *
- * v3.4 — also inlines specialist + skill files declared in the base sandwich's
+ * v0.3.1 — also inlines specialist + skill files declared in the base sandwich's
  * YAML frontmatter (`inline_skills`, `inline_specialists`). The actor sandbox
  * is `cwd: <sessionDir>` + `--add-dir <sessionDir>`, which does NOT expose the
  * repo root. Without this step, an actor told to "Inline-read

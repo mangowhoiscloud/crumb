@@ -8,7 +8,7 @@
  *   - CRUMB_HOME env var → override
  *   - Otherwise: $HOME/.crumb (POSIX) or %USERPROFILE%/.crumb (Windows)
  *
- * Multi-home (v3.4):
+ * Multi-home (v0.3.1):
  *   - CRUMB_HOMES (path-list-separated) takes precedence over CRUMB_HOME.
  *   - The CLI also accepts repeatable `--home <path>` flags.
  *   - All discovered homes are watched in parallel; sessions from any home
@@ -58,9 +58,9 @@ function dedupe(xs: string[]): string[] {
 
 /**
  * Per-home glob list. Each home contributes TWO globs:
- *   1. project-scoped (current runtime layout, v3.4+):
+ *   1. project-scoped (current runtime layout, v0.3.1+):
  *        `<home>/projects/<projectId>/sessions/<ulid>/transcript.jsonl`
- *   2. flat legacy layout (pre-v3.4 + dev `<repo>/sessions/<ulid>/`):
+ *   2. flat legacy layout (pre-v0.3.1 + dev `<repo>/sessions/<ulid>/`):
  *        `<home>/sessions/<ulid>/transcript.jsonl`
  *
  * Both layouts are watched simultaneously so a single dashboard instance

@@ -5,7 +5,7 @@ description: |
   Defines deviation classification (Critical/Important/Suggestion) and handoff routing.
 when_to_use: builder/verifier 양쪽이 inline read. builder는 emit 형식 참조, verifier는 분류 룰 참조.
 source: https://github.com/obra/superpowers/blob/main/agents/code-reviewer.md
-adapted_for: Crumb v3 (handoff.requested + handoff.rollback + spec.update routing)
+adapted_for: Crumb v0.1 (handoff.requested + handoff.rollback + spec.update routing)
 ---
 
 # Code Review Protocol (Crumb adaptation)
@@ -80,7 +80,7 @@ Counter (per [[bagelcode-budget-guardrails]]): max `respec_count <= 3` per sessi
 
 ## See also
 
-- [[bagelcode-system-architecture-v3]] §4.2 (handoff protocol) + §8.2 (F1-F7 fault matrix)
+- [[bagelcode-system-architecture-v0.1]] §4.2 (handoff protocol) + §8.2 (F1-F7 fault matrix)
 - `agents/builder.md` — emits per this protocol
 - `agents/verifier.md` — classifies per this protocol
 - `skills/verification-before-completion.md` — sister gate

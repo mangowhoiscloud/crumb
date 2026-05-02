@@ -4,7 +4,7 @@
  * Reads last N transcript events + reducer state, runs F1-F7 detector functions,
  * outputs table of {fault_id, detected, evidence_msg_id, suggested_action}.
  *
- * See [[bagelcode-system-architecture-v3]] §8.2 (F1-F7 fault matrix).
+ * See [[bagelcode-system-architecture-v0.1]] §8.2 (F1-F7 fault matrix).
  */
 
 import type { Message } from '../protocol/types.js';

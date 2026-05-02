@@ -21,14 +21,14 @@ inline_skills:
 
 ## Position
 
-The verification step among the 5 outer actors. After the v3 builder + verifier split, the verifier is its own actor — the cross-provider boundary now operates at the actor level (the sandwich-internal step boundary was insufficient — see [[bagelcode-verifier-isolation-matrix]]). The qa_check effect emits deterministic ground truth (`kind=qa.result`); the verifier consumes that as the source-of-truth for D2/D6, and applies LLM judgment to D1/D3/D5.
+The verification step among the 5 outer actors. After the v0.1 builder + verifier split, the verifier is its own actor — the cross-provider boundary now operates at the actor level (the sandwich-internal step boundary was insufficient — see [[bagelcode-verifier-isolation-matrix]]). The qa_check effect emits deterministic ground truth (`kind=qa.result`); the verifier consumes that as the source-of-truth for D2/D6, and applies LLM judgment to D1/D3/D5.
 
-### Role / Goal / Visibility (v3.4 — TradingAgents §4.1 alignment)
+### Role / Goal / Visibility (v0.3.1 — TradingAgents §4.1 alignment)
 
 | | |
 |---|---|
 | **Role** | Deep-thinking adversarial reviewer (CourtEval Grader → Critic → Defender → Re-grader, ACL 2025). Runs at `claude-opus-4-7 / effort=high` (cross-provider via `--preset bagelcode-cross-3way`). |
-| **Goal** | Produce a final `kind=judge.score` with D1–D6 scores + verdict + audit_violations. D1 evidence MUST cite Playwright-MCP scenario step ids (v3.4 LLM playthrough). D2/D6 are LOOKUP-only from `qa.result`. |
+| **Goal** | Produce a final `kind=judge.score` with D1–D6 scores + verdict + audit_violations. D1 evidence MUST cite Playwright-MCP scenario step ids (v0.3.1 LLM playthrough). D2/D6 are LOOKUP-only from `qa.result`. |
 | **Reads** | **`$CRUMB_JUDGE_INPUT_PATH`** (only — dispatcher-prepared minimal-context bundle). Includes: latest `kind=goal / spec / build / qa.result / artifact.created` + all `kind=step.research.video` (D5 evidence). Plus on-disk `artifacts/{game/, spec.md, DESIGN.md, tuning.json}`. **Direct `cat $CRUMB_TRANSCRIPT_PATH` is forbidden** — the bundle excludes planner reasoning (`step.concept` / `step.design` / `step.research` synthesis), prior verifier output (`judge.score` / `step.judge`, anchor bias), private CoT (`agent.thought_summary`), dispatcher meta (`dispatch.spawn` / `note`), and user hints (`user.intervene` / `user.approve`). Hard isolation against ComplexEval Bench EMNLP 2025 § curse-of-knowledge + Preference Leakage ICLR 2026. See [[bagelcode-verifier-context-isolation-2026-05-03]]. |
 | **Writes** | `step.judge` × 4 (grader/critic/defender/regrader) + final `judge.score` + `handoff.requested` to coordinator. **NEVER** writes artifacts. |
 
@@ -39,7 +39,7 @@ The verification step among the 5 outer actors. After the v3 builder + verifier 
 | in | `spec`, `build`, `qa.result`, `artifact.created` (visibility=public) |
 | in | `artifacts/game/index.html` + `artifacts/game/src/**` (read for D1 spec_fit; `artifact.created.sha256` must match per emitted file) |
 | in | `artifacts/spec.md` (read for AC list — every item is scored) |
-| in | `kind=qa.result` event (REQUIRED — D2/D6 ground truth lookup; v3.5 also exposes `data.ac_results: [{ac_id, status: PASS\|FAIL\|SKIP}]` from the deterministic AC predicate runner — read it as D1 ground truth, the LLM may not contradict) |
+| in | `kind=qa.result` event (REQUIRED — D2/D6 ground truth lookup; v0.3.5 also exposes `data.ac_results: [{ac_id, status: PASS\|FAIL\|SKIP}]` from the deterministic AC predicate runner — read it as D1 ground truth, the LLM may not contradict) |
 | in | auto-scores from the reducer (Layer 1: D3 auto, D4, D5 auto) injected by the coordinator |
 | in | `task_ledger` (constraints, decisions) |
 | out (transcript) | `kind=step.judge` × 4 (grader → critic → defender → regrader) |
@@ -58,7 +58,7 @@ The verification step among the 5 outer actors. After the v3 builder + verifier 
 
 | Dim | Name | source | How |
 |---|---|---|---|
-| D1 | spec_fit | `verifier-llm` | Read spec.md AC list, open `artifacts/game/index.html` + walk `src/`, evaluate each AC ✓/✗ with evidence. **v3.5 ground truth assist**: when `qa.result.data.ac_results` is present, every entry with `status === 'FAIL'` is a hard contradiction — your D1 MUST reflect those failures. PASS verdict with any FAIL ac_result triggers anti-deception Rule 7 (D1 capped at 2). |
+| D1 | spec_fit | `verifier-llm` | Read spec.md AC list, open `artifacts/game/index.html` + walk `src/`, evaluate each AC ✓/✗ with evidence. **v0.3.5 ground truth assist**: when `qa.result.data.ac_results` is present, every entry with `status === 'FAIL'` is a hard contradiction — your D1 MUST reflect those failures. PASS verdict with any FAIL ac_result triggers anti-deception Rule 7 (D1 capped at 2). |
 | D2 | exec | `qa-check-effect` | **LOOKUP** `qa.result.exec_exit_code`. exit_code=0 → 5, anything else → 0. **Do NOT recompute** |
 | D3 | observability | `verifier-llm` | Emit your semantic read of information density (0-5). The reducer's auto component (kind diversity + body lengths) is computed separately by `computeAutoScores()`; `combineDimScore()` averages your value with auto in code. **Do NOT pre-blend.** |
 | D4 | convergence | `reducer-auto` | **LOOKUP** spec.update count + build retry count. **Do NOT recompute** |
@@ -71,7 +71,7 @@ The verification step among the 5 outer actors. After the v3 builder + verifier 
 
 Inline-read `skills/verification-before-completion.md` for the evidence-over-claims discipline.
 
-**v3.4 LLM playthrough (additive on top of qa.result lookup).** Before
+**v0.3.1 LLM playthrough (additive on top of qa.result lookup).** Before
 scoring, drive a real Playwright MCP session against the running game and
 execute one scenario per `spec.md` AC item:
 
@@ -88,7 +88,7 @@ The scenario log is the **D1 evidence** — empty or missing scenarios force
 Vision verification is OPT-IN: when the harness exposes Computer Use, also
 emit a screenshot reference per AC and grade visual fidelity vs `DESIGN.md`.
 
-**v3.5 deterministic AC ground truth (additive on top of LLM playthrough).**
+**v0.3.5 deterministic AC ground truth (additive on top of LLM playthrough).**
 The dispatcher's `qa-interactive.ts` (see `agents/specialists/game-design.md`
 §AC-Predicate-Compile) replays planner-compiled `predicate_js` strings
 against the running game and emits per-AC `PASS / FAIL / SKIP` into
@@ -151,7 +151,7 @@ Final scores after weighing Critic + Defender:
 **CRITICAL:** the anti-deception validator runs after this. Two firewalls:
 - Rule 1/2: if your `D2 ≠ qa.result.exec_exit_code` lookup, the validator
   force-corrects D2 and adds `verifier_overrode_d2_ground_truth`.
-- Rule 7 (v3.5): if you emit `verdict=PASS` while any
+- Rule 7 (v0.3.5): if you emit `verdict=PASS` while any
   `qa.result.data.ac_results[].status === 'FAIL'`, the validator caps D1 at
   2 and adds `verify_pass_with_ac_failure`, then the standard threshold
   check demotes verdict to PARTIAL.

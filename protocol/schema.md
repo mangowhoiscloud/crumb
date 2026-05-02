@@ -1,6 +1,6 @@
 # Crumb Transcript Schema (1-page spec)
 
-> v3.3: 43 kinds × 11 fields × OTel GenAI alias. 5-layer hierarchy (project → session → run → turn → step → event) — run_id/turn_id in `metadata.crumb`, conversation_id/agent_id/workflow_name in `metadata.gen_ai`.
+> v0.3.0: 43 kinds × 11 fields × OTel GenAI alias. 5-layer hierarchy (project → session → run → turn → step → event) — run_id/turn_id in `metadata.crumb`, conversation_id/agent_id/workflow_name in `metadata.gen_ai`.
 > See `wiki/concepts/bagelcode-transcripts-schema.md` and `wiki/bagelcode-final-design-2026.md` for full design.
 
 ## Message structure (TypeScript)

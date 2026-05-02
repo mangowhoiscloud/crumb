@@ -110,7 +110,7 @@ echo '{"from":"user","kind":"user.intervene","body":"<원문>","data":{"goto":"p
 | `goto: <actor>` | `next_speaker=<actor>` 강제 + 즉시 spawn (LangGraph Command(goto)) |
 | `swap: { from, to }` | `adapter_override[from]=to` (Paperclip BYO swap) |
 | `reset_circuit: <a> or true` | `circuit_breaker[<a>]` 클리어 (또는 전체) |
-| `sandwich_append: <text>` | dispatcher 가 다음 spawn 부터 system prompt 에 concatenate (v3.2 G4) |
+| `sandwich_append: <text>` | dispatcher 가 다음 spawn 부터 system prompt 에 concatenate (v0.2.0 G4) |
 | `actor: <actor>` (pause/resume 한정) | 글로벌 대신 해당 actor 만 일시정지/해제 |
 
 → Frontier: LangGraph `Command` (53/60), Paperclip swap (38/60), Codex `APPEND_SYSTEM.md` (38/60). 배경: `wiki/synthesis/bagelcode-user-intervention-frontier-2026-05-02.md`.
@@ -128,7 +128,7 @@ Codex 는 Markdown 선호하지만 XML 도 parse 가능 (wiki/references/bagelco
 """
 
 [mcp_servers.crumb]
-# v3 S11: Crumb MCP server — 7 NL-triggered tools shared by Claude Code / Codex / Gemini.
+# v0.1 S11: Crumb MCP server — 7 NL-triggered tools shared by Claude Code / Codex / Gemini.
 # Auto-registers: crumb_recommend_preset / crumb_session_status / crumb_explain_kind /
 # crumb_suggest_next_action / crumb_diagnose_faults / crumb_doctor_environment / crumb_export_transcript.
 command = "npx"

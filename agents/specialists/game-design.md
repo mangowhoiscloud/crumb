@@ -2,7 +2,7 @@
 
 > The binding game-design contract for Crumb. Replaces the former `design/DESIGN.md` (root) and the never-shipped `agents/specialists/game-stack-constraint.md` planning. Inline-read by `agents/researcher.md` (video evidence schema), `agents/planner-lead.md` step.design (synth output format), `agents/builder.md` (envelope), `agents/builder-fallback.md` (envelope), and `agents/verifier.md` (evidence validation).
 >
-> Extends `wiki/concepts/bagelcode-mobile-game-tech-2026.md` (Phaser stack rationale) with the v3.3 video-evidence schema introduced when `researcher` was promoted to its own actor.
+> Extends `wiki/concepts/bagelcode-mobile-game-tech-2026.md` (Phaser stack rationale) with the v0.3.0 video-evidence schema introduced when `researcher` was promoted to its own actor.
 
 ## §1 Hard envelope (every artifact MUST conform)
 
@@ -15,7 +15,7 @@ Verifier reads these as D6.portability ground truth via the `qa_check` effect
 `Yakoub-ai/phaser4-gamedev`, `OpusGameLabs/game-creator`, Phaser-official Claude
 Code tutorial 2026-02, Troy Scott "2D shooter in one evening") shows every
 production-quality LLM-generated Phaser game in 2026 ships as a multi-file
-modular project. v3.4 retired the v3.0 single-file fallback — multi-file is
+modular project. v0.3.1 retired the v0.1.0 single-file fallback — multi-file is
 the only profile.
 
 ### §1.1 Required profile — `multi-file` (every session)
@@ -224,7 +224,7 @@ When NO DESIGN.md is supplied, planner-lead falls back to its own visual
 designer specialist (`agents/specialists/visual-designer.md`) for palette
 + motion choices — same code path as before.
 
-## §3 Video evidence schema (v3.3 — researcher actor)
+## §3 Video evidence schema (v0.3.0 — researcher actor)
 
 When the `researcher` actor extracts mechanics from a gameplay clip, it emits `kind=step.research.video` events conforming to this schema. The schema is the ground truth the planner reads in step.design and the verifier reads for D5 evidence validation.
 
@@ -366,11 +366,11 @@ Planner-lead's final synth combines step.research + step.design into `artifacts/
 | `builder-fallback` | Same as builder | Fallback substitute |
 | `verifier` | §1 + §2 (D6.portability via qa.result lookup) + §3.3/§4 evidence schema (D5 anti-deception rule) | CourtEval D5/D6 input |
 
-## §6.5 LLM playthrough — verifier responsibility (v3.4)
+## §6.5 LLM playthrough — verifier responsibility (v0.3.1)
 
 The deterministic `qa_check` effect (htmlhint + Playwright headless smoke
 served via `npx http-server artifacts/game/`) gives D2 / D6 ground truth and
-is **never replaced** — that's the anti-deception floor. v3.4 layers an
+is **never replaced** — that's the anti-deception floor. v0.3.1 layers an
 **LLM playthrough** on top:
 
 - The verifier's CourtEval Grader sub-step uses **Playwright MCP** (Anthropic's
@@ -396,7 +396,7 @@ The LLM playthrough is **additive evidence**, never overrides the
 deterministic D2 / D6 ground truth from `qa.result`. Anti-deception Rules 1-2
 still force-correct any verifier attempt to claim D2 ≠ qa.result.
 
-## §AC-Predicate-Compile — deterministic AC layer (v3.5)
+## §AC-Predicate-Compile — deterministic AC layer (v0.3.5)
 
 The verifier-side LLM playthrough above (§6.5) covers subjective AC
 verification; `qa-interactive` covers the **deterministic** layer right
@@ -479,17 +479,17 @@ attribute check), it goes into `ac_predicates`. If it contains adjectives
 
 ## §7 Migration notes (from former design/DESIGN.md)
 
-The root-level `design/DESIGN.md` has been deleted as of v3.3. Three reasons:
+The root-level `design/DESIGN.md` has been deleted as of v0.3.0. Three reasons:
 
 1. **Asymmetry**: it lived alone outside `agents/`, while every other planner-input file is under `agents/specialists/`.
 2. **Scope drift**: it only covered the §1 envelope (Phaser stack). The new file unifies envelope + video evidence schema + synth format — one file the verifier reads end-to-end.
-3. **Researcher promotion**: when `researcher` became its own actor (v3.3), the video-evidence schema needed a single source of truth all 4 actors (researcher + planner + builder + verifier) could inline-read. Putting it under `agents/specialists/` matches the existing pattern (`concept-designer.md`, `visual-designer.md`).
+3. **Researcher promotion**: when `researcher` became its own actor (v0.3.0), the video-evidence schema needed a single source of truth all 4 actors (researcher + planner + builder + verifier) could inline-read. Putting it under `agents/specialists/` matches the existing pattern (`concept-designer.md`, `visual-designer.md`).
 
 ## See also
 
 - [[bagelcode-mobile-game-tech-2026]] — Phaser stack rationale, 13 sources
 - [[bagelcode-stack-and-genre-2026]] — casual mobile market context
-- [[bagelcode-system-architecture-v3]] §3.2 — specialist inline-read pattern
+- [[bagelcode-system-architecture-v0.1]] §3.2 — specialist inline-read pattern
 - `agents/researcher.md` — primary consumer of §3 video evidence schema
 - `agents/planner-lead.md` step.design — primary consumer of §5 synth format
 - `agents/builder.md` — primary consumer of §1 envelope

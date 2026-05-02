@@ -21,7 +21,7 @@ inline_skills:
 
 Single hub among the 5 outer actors. Spoke-to-spoke direct communication is forbidden — every routing decision flows through this actor (Lanham 2026-04: centralized 4.4× containment vs independent 17.2× amplification). Routing decisions are pure functions in `src/reducer/index.ts`; this sandwich is the human-readable contract for that decision surface.
 
-### Role / Goal / Visibility (v3.4 — TradingAgents §4.1 alignment)
+### Role / Goal / Visibility (v0.3.1 — TradingAgents §4.1 alignment)
 
 | | |
 |---|---|
@@ -39,14 +39,14 @@ Single hub among the 5 outer actors. Spoke-to-spoke direct communication is forb
 | out | exactly one of: `kind=agent.wake` (next_speaker) / `kind=hook` (user modal) / `kind=done` |
 | state | `task_ledger` (new facts), `progress_ledger` (`step++`, `next_speaker`, `circuit_breaker`, `adapter_override`) |
 
-## Routing Rules (v3)
+## Routing Rules (v0.1)
 
 This table mirrors the reducer's `case` branches. The sandwich's instruction is to reflect the reducer's decisions and audit any violation. **Direct spawning happens only via effects**:
 
 | Incoming kind | Effect | Next |
 |---|---|---|
 | `goal` | `spawn(planner-lead)` (data.video_refs are stashed in task_ledger and forwarded to researcher on the phase-A handoff) | planner-lead |
-| `handoff.requested(to=researcher)` | `spawn(researcher)` (v3.3) | researcher |
+| `handoff.requested(to=researcher)` | `spawn(researcher)` (v0.3.0) | researcher |
 | `step.research` | re-`spawn(planner-lead)` for phase B (fresh CLI session — the `adapter_session_id` / `cache_carry_over` metadata fields are forward-compat only, no `--resume` wiring yet) | planner-lead |
 | `spec` / `spec.update` | `spawn(builder)` | builder |
 | `build` | **`qa_check` effect** (deterministic, no LLM) | (effect — emits `kind=qa.result`) |
@@ -75,7 +75,7 @@ This table mirrors the reducer's `case` branches. The sandwich's instruction is 
 **Update on:**
 - `kind=goal` → add fact `"user goal: <body>"`
 - `kind=spec` / `spec.update` → add facts from `data.acceptance_criteria`
-- `kind=user.intervene` → add constraint fact (tagged `@<actor>` when `data.target_actor` set); add `category='sandwich_append'` fact when `data.sandwich_append` set (the dispatcher concatenates these onto every subsequent matching spawn — v3.2 G4)
+- `kind=user.intervene` → add constraint fact (tagged `@<actor>` when `data.target_actor` set); add `category='sandwich_append'` fact when `data.sandwich_append` set (the dispatcher concatenates these onto every subsequent matching spawn — v0.2.0 G4)
 - `kind=judge.score` PARTIAL → add fact `"verifier feedback: <reason>"`
 - `kind=qa.result` → no ledger update (deterministic ground truth, consumed by verifier)
 

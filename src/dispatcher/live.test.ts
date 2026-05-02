@@ -1,12 +1,12 @@
 /**
  * Dispatcher tests — two coupled focuses:
  *
- *   1. v3.2 G4 sandwich override pipeline. Verifies the spawn case assembles
+ *   1. v0.2.0 G4 sandwich override pipeline. Verifies the spawn case assembles
  *      base + agents/<actor>.local.md + effect.sandwich_appends into
  *      sessions/<id>/agent-workspace/<actor>/sandwich.assembled.md and passes
  *      that path (not the base path) to the adapter.
  *
- *   2. v3.2 per_spawn_timeout guardrail. Stub adapters cover (a) fast adapter
+ *   2. v0.2.0 per_spawn_timeout guardrail. Stub adapters cover (a) fast adapter
  *      under budget, (b) hanging adapter ignoring abort (timeout fires but
  *      adapter still returns; dispatcher records timeout in transcript), and
  *      (c) cooperative hanging adapter exiting 124 on signal (matches live
@@ -166,7 +166,7 @@ const spawnEffect: Effect = {
   adapter: '',
 };
 
-describe('dispatcher — v3.2 G4 sandwich override', () => {
+describe('dispatcher — v0.2.0 G4 sandwich override', () => {
   it('passes base sandwich path unchanged when no local + no appends', async () => {
     const { deps, capture, repoRoot } = await makeSandwichDeps();
     const basePath = resolve(repoRoot, 'agents/builder.md');
@@ -483,7 +483,7 @@ describe('parseInlineRefs', () => {
   });
 });
 
-describe('dispatcher — inline-read assembler (v3.4)', () => {
+describe('dispatcher — inline-read assembler (v0.3.1)', () => {
   it('embeds files declared in inline_skills + inline_specialists', async () => {
     const { deps, capture, repoRoot } = await makeSandwichDeps();
     await mkdir(resolve(repoRoot, 'agents/specialists'), { recursive: true });
@@ -565,7 +565,7 @@ describe('dispatcher — inline-read assembler (v3.4)', () => {
   });
 });
 
-describe('dispatcher idle-timeout (v3.4)', () => {
+describe('dispatcher idle-timeout (v0.3.1)', () => {
   class SilentHangAdapter implements Adapter {
     readonly id = 'silent-hang';
     async health(): Promise<{ ok: boolean }> {

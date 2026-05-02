@@ -47,4 +47,4 @@ Defaults (when `.crumb/config.toml` is missing):
 
 Explicit slash form: `/crumb-model <instruction>` or `/crumb-model` (show).
 
-Reference: `src/config/model-config.ts`, `src/tui/model-edit.ts`, v3 §5.1 (resolve order).
+Reference: `src/config/model-config.ts`, `src/tui/model-edit.ts`, v0.1 §5.1 (resolve order).

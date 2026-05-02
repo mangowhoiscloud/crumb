@@ -1,5 +1,5 @@
 /**
- * Crumb storage layout (v3.3+) — single source for all on-disk paths.
+ * Crumb storage layout (v0.3.0+) — single source for all on-disk paths.
  *
  * ```
  * ~/.crumb/                                    user-global
@@ -23,7 +23,7 @@
  *  1. If `<cwd>/.crumb/project.toml` exists → use its `id` (ULID set by `crumb init --pin`).
  *  2. Else → `sha256(canonical(cwd))[:16]`.
  *
- * Backward-compat (v3.2 and older `<cwd>/sessions/<id>/`):
+ * Backward-compat (v0.2.0 and older `<cwd>/sessions/<id>/`):
  *  `resolveSessionDir()` checks the new global location first, then falls back to the
  *  legacy cwd-local path so old sessions keep working until `crumb migrate` (Phase 3).
  *
@@ -105,7 +105,7 @@ export async function getArtifactsDir(cwd: string, sessionId: string): Promise<s
  * Resolve a session reference (CLI positional arg) to its on-disk dir.
  *  - If `ref` contains `/` or starts with `.`, treat as a path → resolve as-is.
  *  - Bare ULID: try the new global location first.
- *  - Fallback: legacy `<cwd>/sessions/<ref>/` (v3.2 and older).
+ *  - Fallback: legacy `<cwd>/sessions/<ref>/` (v0.2.0 and older).
  *  - If neither exists, default to the new path (write target for new sessions).
  */
 export async function resolveSessionDir(ref: string, cwd: string): Promise<string> {

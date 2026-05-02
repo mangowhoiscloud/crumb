@@ -21,4 +21,4 @@ If all clear, the report says `✅ No faults detected.` Otherwise table of detec
 
 Explicit slash form: `/crumb-debug <session-id>`.
 
-Reference: `src/helpers/debug.ts`, v3 §8.2 (F1-F7 fault matrix), `wiki/concepts/bagelcode-fault-tolerance-design.md`.
+Reference: `src/helpers/debug.ts`, v0.1 §8.2 (F1-F7 fault matrix), `wiki/concepts/bagelcode-fault-tolerance-design.md`.

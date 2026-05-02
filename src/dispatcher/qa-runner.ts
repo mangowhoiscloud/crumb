@@ -2,7 +2,7 @@
  * qa-runner — dispatcher handler for QaCheckEffect.
  *
  * Reads artifact, runs deterministic qa-check, appends kind=qa.result with metadata.deterministic=true.
- * Source-of-truth for D2 (exec) and D6 (portability) per [[bagelcode-system-architecture-v3]] §7.
+ * Source-of-truth for D2 (exec) and D6 (portability) per [[bagelcode-system-architecture-v0.1]] §7.
  */
 
 import { resolve as resolvePath } from 'node:path';

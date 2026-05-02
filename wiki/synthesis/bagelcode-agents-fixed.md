@@ -13,7 +13,7 @@ updated: 2026-05-02
 
 # 에이전트 고정 + Verifier evolution
 
-> ⚠️ **2026-05-02 supersession**: 이 페이지는 v1-v2 결정 (Verifier = 외부 Gemini cross-provider) 의 evolution context 를 보존. v3 부터 **Verifier = Engineering Lead 내부 CourtEval** (Grader/Critic/Defender/Re-grader, ACL 2025) 로 흡수됨. 외부 Gemini 폐기 사유 = subscription-only budget ("나 돈이 없어"). **최종 lock 은 [[bagelcode-final-design-2026]]**.
+> ⚠️ **2026-05-02 supersession**: 이 페이지는 v1-v2 결정 (Verifier = 외부 Gemini cross-provider) 의 evolution context 를 보존. v0.1 부터 **Verifier = Engineering Lead 내부 CourtEval** (Grader/Critic/Defender/Re-grader, ACL 2025) 로 흡수됨. 외부 Gemini 폐기 사유 = subscription-only budget ("나 돈이 없어"). **최종 lock 은 [[bagelcode-final-design-2026]]**.
 
 > **사용자 결정 (확정 — 현 상태)**: 사용 에이전트는 **Claude Code + Codex** 2종 고정 (subprocess via subscription). 검증은 **Engineering Lead 내부 CourtEval** (4 sub-roles, Claude Sonnet 4.6 vision). 외부 cross-provider Verifier 는 폐기 (cost 제약). 이 페이지의 §"후보 Verifier provider 비교" 는 historical evolution 으로 보존.
 

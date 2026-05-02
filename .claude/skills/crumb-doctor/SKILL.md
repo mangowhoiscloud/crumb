@@ -21,4 +21,4 @@ Output table: `| Host | Status | Detail |` for Claude Code / Codex CLI / Gemini 
 
 Explicit slash form: `/crumb-doctor`.
 
-Reference: `src/helpers/doctor.ts`, v3 §3 (auth-manager spec).
+Reference: `src/helpers/doctor.ts`, v0.1 §3 (auth-manager spec).

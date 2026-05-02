@@ -1,5 +1,5 @@
 /**
- * Migrate legacy `<cwd>/sessions/<id>/` directories into the v3.3 layout
+ * Migrate legacy `<cwd>/sessions/<id>/` directories into the v0.3.0 layout
  * `~/.crumb/projects/<id>/sessions/<id>/`.
  *
  * Idempotent: if a session already exists at the new location, skip and report.

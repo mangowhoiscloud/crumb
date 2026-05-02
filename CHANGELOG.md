@@ -4,9 +4,37 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-03
+
+### Changed — Version mapping v3.x → v0.x + bump to 0.4.0 (PR-Z) (2026-05-03)
+
+User directive: "이전 버전 x0.1로 일괄 수정해서 주입 + Lint 맞춰. 이번에 업데이트하면 0.4.0으로 버전업". The repo had been calling its architecture milestones `v3.0` through `v3.5`, but `package.json` had always been `0.1.0` — a mismatch. This PR aligns every `*.md` / `*.ts` / `*.toml` / `*.json` reference to a SemVer-compliant `v0.x.y` shape and bumps the actual `package.json` to `0.4.0` to mark the release.
+
+Mapping applied (longest-match-first sed via `perl -i -pe`):
+
+| Old | New | Rationale |
+|---|---|---|
+| `v3.0` | `v0.1.0` | initial multi-host harness pivot |
+| `v3.1` | `v0.1.1` | identity decomposition (CLAUDE.md / GEMINI.md split) |
+| `v3.2` | `v0.2.0` | budget guardrails + autoresearch ratchet |
+| `v3.3` | `v0.3.0` | researcher-as-actor + video evidence |
+| `v3.4` | `v0.3.1` | multi-file PWA envelope widening |
+| `v3.5` | `v0.3.5` | deterministic AC predicate runner |
+| (this) | `v0.4.0` | multi-file-only + postgres §1.2 + KO→EN sandwiches + serve-game skill |
+| bare `v3` | `v0.1` | major version tag → 0.x major |
+
+Files renamed (wiki):
+- `wiki/concepts/bagelcode-system-architecture-v3.md` → `bagelcode-system-architecture-v0.1.md`
+- `wiki/concepts/bagelcode-system-architecture-v3.5.md` → `bagelcode-system-architecture-v0.3.5.md`
+- `wiki/concepts/bagelcode-system-diagrams-v3.5.md` → `bagelcode-system-diagrams-v0.3.5.md`
+
+All wikilinks remapped via in-place perl. 311+ inline mentions of `v3.x` across 67 files converted; 0 `\bv3\.[0-5]\b` and 0 `\bv3\b` patterns remain (verified via grep). Phaser `3.80` and Gemini `3.1` mentions are unaffected (regex used `\bv` prefix).
+
+`package.json` + `packages/dashboard/package.json` `version` bumped `0.1.0` → `0.4.0`. CHANGELOG `[Unreleased]` capped with `[0.4.0] - 2026-05-03` release header.
+
 ### Changed — Sandwich KO → EN translation pass (PR-C-1) (2026-05-03)
 
-User directive: convert all `*.md` to English. Sandwiches first because they are runtime LLM context (read on every spawn). The audit identified 8 sandwich files under `agents/` totalling ~600 KO chars — far less than expected because most prose is already EN since the v3.4 multi-host pivot.
+User directive: convert all `*.md` to English. Sandwiches first because they are runtime LLM context (read on every spawn). The audit identified 8 sandwich files under `agents/` totalling ~600 KO chars — far less than expected because most prose is already EN since the v0.3.1 multi-host pivot.
 
 Translated:
 - `agents/specialists/game-design.md` §2 forbidden table — `"README대로 실행"` → `"run as the README says"`.
@@ -40,12 +68,12 @@ The MCP server registered 8 read-only `crumb_<verb>` tools (status / suggest / d
 
 ### Changed — Multi-file PWA is now the only profile + `§1.2 postgres-anon-leaderboard` opt-in spec (PR-B) (2026-05-03)
 
-User directive: **multi-file is the new default; remove single-file prompts**. Multi-file was already the v3.4 default in `agents/specialists/game-design.md` §1.1, but every actor sandwich and most top-level docs still carried the single-file fallback as a co-equal option. This PR retires it entirely from the prompt surface. Code paths in `src/effects/qa-check.ts` (the 60KB cap) stay backward-compat for the legacy `game.html` test fixtures and will be cleaned up in a follow-up PR-D once Playwright server changes land.
+User directive: **multi-file is the new default; remove single-file prompts**. Multi-file was already the v0.3.1 default in `agents/specialists/game-design.md` §1.1, but every actor sandwich and most top-level docs still carried the single-file fallback as a co-equal option. This PR retires it entirely from the prompt surface. Code paths in `src/effects/qa-check.ts` (the 60KB cap) stay backward-compat for the legacy `game.html` test fixtures and will be cleaned up in a follow-up PR-D once Playwright server changes land.
 
 In parallel, the long-deferred postgres persistence dimension lands as `§1.2` (opt-in, never default). Researched against `~/workspace/kiki-appmaker/output/pin-57/match-3-next/` (MariaDB+Prisma+NextAuth match-3 reference — extracted schema patterns, dropped Next.js server-side route requirement) + 2025-2026 Supabase frontier (anonymous-auth GA + RLS for game leaderboards + pg_cron leaderboard MV refresh). Decision matrix scored Supabase 4/4 vs Neon 2/4 vs Cloudflare D1 0/4 for Crumb's 60s ephemeral domain — only Supabase satisfies the §1.1 static-PWA envelope (Phaser browser → SDK direct, no Node.js worker tier).
 
 **Sandwich changes** (multi-file purge):
-- `agents/specialists/game-design.md` — §1.2 single-file fallback removed; new §1.2 is the postgres profile. Preamble updated to "v3.4 retired the v3.0 single-file fallback — multi-file is the only profile."
+- `agents/specialists/game-design.md` — §1.2 single-file fallback removed; new §1.2 is the postgres profile. Preamble updated to "v0.3.1 retired the v0.1.0 single-file fallback — multi-file is the only profile."
 - `agents/builder.md` — frontmatter description, position summary, contract table, steps §1, tools, Don'ts, Reminders all rewritten for multi-file-only. New "Postgres persistence profile (§1.2, opt-in)" sub-section in step §1 documents the migrations + PersistenceManager + env reads.
 - `agents/builder-fallback.md` — same purge pattern; `artifacts/game/**` is now the only writable scope.
 - `agents/verifier.md` — `artifacts/game.html` references → `artifacts/game/index.html` + walk `src/`. D1 instructions updated. Length-bias firewall context source list rewritten.
@@ -194,7 +222,7 @@ Six interactive-quality fixes to `packages/dashboard/`:
 - **Click-outside-to-close detail pane.** Right-side detail aside dismisses on any `mousedown` outside its bounds, with two opt-outs: clicks on `[data-evt-id]` swimlane rows (which re-open detail with a new event) and clicks on the pane's own resize handle.
 - **Resume button.** New CTA in the view-tabs row. Surfaces only when the last actor event was an `error` or a timeout-tagged `agent.stop` (regex `timed out|exit=[1-9]`) and no healthy follow-up event landed since. On click, posts `/redo @<actor> resume after timeout/error` to the inbox endpoint — the existing inbox parser turns that into a `kind=user.intervene data.action="redo" target_actor=<actor>` event, which the reducer routes back into the dispatcher's normal spawn loop.
 - **Transcript viewer tab.** New `Transcript` tab next to Pipeline / Logs / Output. Pretty-printed JSONL with substring filter, copy-all button, live event count. Re-renders on `append` SSE events while the tab is active.
-- **Coordinator visibility (root-cause + fix).** The user reported the coordinator pane appears silent during normal routing. Investigation: `src/dispatcher/live.ts` only emits `from=coordinator` events on `rollback` / `stop` / `done` effects (lines 320 / 332 / 341 / 347) — by design, since the coordinator is host-inline (v3 invariant 9, depth=1) and doesn't run as a subprocess that emits `agent.wake` / `agent.stop`. Routing decisions surface as `from=system kind=note body="dispatch.spawn → ..."`. The dashboard fix attributes those system spawn-notes to the coordinator lane in the live execution feed (`→ route: spawn(<actor>) via <adapter> [host-inline routing]`), so the lane no longer reads as silent. The underlying invariant is preserved.
+- **Coordinator visibility (root-cause + fix).** The user reported the coordinator pane appears silent during normal routing. Investigation: `src/dispatcher/live.ts` only emits `from=coordinator` events on `rollback` / `stop` / `done` effects (lines 320 / 332 / 341 / 347) — by design, since the coordinator is host-inline (v0.1 invariant 9, depth=1) and doesn't run as a subprocess that emits `agent.wake` / `agent.stop`. Routing decisions surface as `from=system kind=note body="dispatch.spawn → ..."`. The dashboard fix attributes those system spawn-notes to the coordinator lane in the live execution feed (`→ route: spawn(<actor>) via <adapter> [host-inline routing]`), so the lane no longer reads as silent. The underlying invariant is preserved.
 - **Resume button + transcript viewer wired into the existing SSE handlers** so they self-update on every appended event.
 
 Test plan: lint clean (0 errors, 26 informational sonarjs warnings), typecheck clean, format clean, **342/342 tests passing**, build inlined the new client (78991 bytes) into `dashboard-html.generated.ts`. No code changes outside `packages/dashboard/src/client/{dashboard.html, dashboard.css, dashboard.js}`. The dashboard pretest hook re-inlines automatically; CI ratchet preserved.
@@ -227,9 +255,9 @@ The dashboard could only watch a single Crumb home (default `~/.crumb`), so test
 - **Tests**: 27/27 dashboard specs pass (no test additions; existing watcher specs cover both single-glob and array-glob paths via chokidar's union behavior).
 - Verified end-to-end: `crumb-dashboard --home ~/.crumb --home /tmp/crumb-real-home` returns 2 sessions with distinct `crumb_home` fields ("고양이 퍼즐 게임" 13 events from `~/.crumb`; "30초 색깔 매칭 게임" 32 events from `/tmp/crumb-real-home`).
 
-### Fixed — Real subprocess RCA cluster: researcher EISDIR + chain drain + repo auto-detect (v3.4) (2026-05-02)
+### Fixed — Real subprocess RCA cluster: researcher EISDIR + chain drain + repo auto-detect (v0.3.1) (2026-05-02)
 
-Five issues from end-to-end smoke testing v3.4 researcher refactor with `--preset solo` real Claude subprocess. Each fix landed against a specific stack-trace or transcript observability finding.
+Five issues from end-to-end smoke testing v0.3.1 researcher refactor with `--preset solo` real Claude subprocess. Each fix landed against a specific stack-trace or transcript observability finding.
 
 - **`src/dispatcher/live.ts`** — researcher missing from `ACTOR_TO_SANDWICH`. Without an entry, `baseSandwichPath` fell back to `''` → `resolve(repoRoot, '')` = repoRoot (a directory) → `readFile` EISDIR. Stack from session 01KQMGNW: `assembleSandwich → readFileHandle EISDIR`. Added `researcher: 'agents/researcher.md'`.
 - **`src/dispatcher/live.ts`** — `PER_SPAWN_TIMEOUT_MS` bumped 5min → 10min. Claude wake alone takes ~3:30 for the 15KB sandwich (researcher.md + injected `_event-protocol.md` + skills); 5min was too tight to clear Phase A's 4 steps.
@@ -304,9 +332,9 @@ Reducer single-file design preserved with inline justification: per LongCodeBenc
 
 CLAUDE.md verify gate updated to include the three new lint stages, with citations to the underlying papers so the rationale is durable.
 
-### Changed — researcher actor: real text research replaces v3.3 stub (v3.4) (2026-05-02)
+### Changed — researcher actor: real text research replaces v0.3.0 stub (v0.3.1) (2026-05-02)
 
-The v3.3 researcher had two paths: video → real Gemini SDK, no-video → **empty stub** (`reference_games: []`, `design_lessons: []`). Verifier saw the stub but downstream planner-lead phase B got nothing. Now the no-video path runs a real LLM-driven text research turn.
+The v0.3.0 researcher had two paths: video → real Gemini SDK, no-video → **empty stub** (`reference_games: []`, `design_lessons: []`). Verifier saw the stub but downstream planner-lead phase B got nothing. Now the no-video path runs a real LLM-driven text research turn.
 
 - **`src/state/types.ts`** — new `goal_has_video_refs: boolean` field on CrumbState. Set in the goal reducer case from `event.data.video_refs` array; consumed by `pickAdapter('researcher')`.
 - **`src/reducer/index.ts` `pickAdapter('researcher')`** — branches on `state.goal_has_video_refs`:
@@ -353,7 +381,7 @@ Pin down the OpenHands #5500 invariant ("stuck-detector must exclude user messag
 
 ### Added — NL Intervention 12-system frontier survey (2026-05-02)
 
-New reference page `wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md` extends the existing `wiki/synthesis/bagelcode-user-intervention-frontier-2026-05-02.md` matrix from 5 systems to 12, with a fresh dimension: NL classification mechanism. Survey result: 9/12 frontier systems use **implicit LLM judgment** (LangGraph, Cursor, Cline, OpenHands, Devin, Manus, Claude Code skill matcher, Codex CLI, AutoGen UserProxy), 2/12 use **protocol gates only** (Inspect AI, Aider), and 1/12 (bkit) uses an **explicit regex enum classifier** with documented FP-precision bug history (ENH-226 patch). Crumb's PR-A/PR-B path (raw NL → `kind=user.intervene body` + `collectSandwichAppends` → next actor LLM judges in context) matches the majority pattern; the page records the avoid-decision against introducing an `intent.schema.json` enum classifier as bkit-style regression. Cross-references: OpenHands #5500 stuck-detector exclusion (verify our circuit_breaker), Cursor 2.0 worktree isolation (matches our v3 invariant 8), AutoGen GroupChatManager known-broken (matches our v3 Must 5 STOP-after-handoff), LangGraph `Command` tagged-union (matches our `data.{goto, swap, target_actor, sandwich_append, reset_circuit}` 6-field shape from PR-B).
+New reference page `wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md` extends the existing `wiki/synthesis/bagelcode-user-intervention-frontier-2026-05-02.md` matrix from 5 systems to 12, with a fresh dimension: NL classification mechanism. Survey result: 9/12 frontier systems use **implicit LLM judgment** (LangGraph, Cursor, Cline, OpenHands, Devin, Manus, Claude Code skill matcher, Codex CLI, AutoGen UserProxy), 2/12 use **protocol gates only** (Inspect AI, Aider), and 1/12 (bkit) uses an **explicit regex enum classifier** with documented FP-precision bug history (ENH-226 patch). Crumb's PR-A/PR-B path (raw NL → `kind=user.intervene body` + `collectSandwichAppends` → next actor LLM judges in context) matches the majority pattern; the page records the avoid-decision against introducing an `intent.schema.json` enum classifier as bkit-style regression. Cross-references: OpenHands #5500 stuck-detector exclusion (verify our circuit_breaker), Cursor 2.0 worktree isolation (matches our v0.1 invariant 8), AutoGen GroupChatManager known-broken (matches our v0.1 Must 5 STOP-after-handoff), LangGraph `Command` tagged-union (matches our `data.{goto, swap, target_actor, sandwich_append, reset_circuit}` 6-field shape from PR-B).
 
 ### Added — codex-local adapter `--model` + reasoning_effort plumbing (2026-05-02)
 
@@ -374,7 +402,7 @@ Followup to PR #36 RCA. After fixing the goal-prompt and observability, real sub
 
 Root cause: `agents/_event-protocol.md` (the canonical doc on how to emit events through `crumb event <<EOF ... EOF`) was zero-mentioned in `planner-lead.md` / `builder.md` / `builder-fallback.md` / `researcher.md`. Only `verifier.md` (1) and `coordinator.md` (1) had stub mentions. The protocol's frontmatter says "each Lead sandwich appends a copy of this protocol so the agent doesn't have to read external files" — but the appending was never wired up.
 
-- **`src/dispatcher/live.ts` `assembleSandwich()`** — for any actor in `EMITTING_ACTORS = { planner-lead, builder, verifier, builder-fallback, researcher }`, inline `agents/_event-protocol.md` into the assembled sandwich. The early-return fast-path is updated to also fire when no event protocol injection is needed (preserving v3.1 behavior for sessions that don't exercise the override surface).
+- **`src/dispatcher/live.ts` `assembleSandwich()`** — for any actor in `EMITTING_ACTORS = { planner-lead, builder, verifier, builder-fallback, researcher }`, inline `agents/_event-protocol.md` into the assembled sandwich. The early-return fast-path is updated to also fire when no event protocol injection is needed (preserving v0.1.1 behavior for sessions that don't exercise the override surface).
 - This unblocks Claude/Codex from the JSON-print failure mode discovered in run 01KQMCSC (planner exit 0 in 41s, 2047b stdout, zero transcript events).
 
 ### Changed — Rule 4 self-bias enforcement: PASS → PARTIAL when builder.provider == verifier.provider (2026-05-02)
@@ -389,7 +417,7 @@ Backing: **Stureborg et al. EMNLP 2024** measured PASS-rate inflation of **+14-2
 
 ### Fixed — Real subprocess RCA: planner-lead "awaiting input" stall + observability + 3 minor (2026-05-02)
 
-Closing a 4-issue cluster found while smoke-testing v3.3 against `--preset solo` real subprocess. Root-cause-oriented fixes after dispatcher observability made the silent failures visible.
+Closing a 4-issue cluster found while smoke-testing v0.3.0 against `--preset solo` real subprocess. Root-cause-oriented fixes after dispatcher observability made the silent failures visible.
 
 - **Observability — pre-spawn + post-spawn `kind=note` events** (`src/dispatcher/live.ts`). Two new diagnostic events around every adapter spawn: (1) `dispatch.spawn → actor=X adapter=Y sandwich=...` BEFORE invoking the adapter, with `data.{actor,adapter,sandwich_path,has_prompt}`; (2) `adapter X streams (exit=N, Tms)` AFTER, with `data.{adapter,stdout_truncated,stderr_truncated,stdout_full_length,stderr_full_length}`. Both visibility=private + deterministic + tool=`dispatch-pre-spawn@v1` / `<adapter>-stream@v1` so anti-deception/verifier ignore them but `crumb debug` can read them. Without these, an exit-0-but-silent spawn was indistinguishable from a successful run.
 - **Planner-lead "awaiting input" stall** (`src/reducer/index.ts` goal case). Symptom: real run exited in 12s with 0 transcript events from the planner. Pre-spawn note showed dispatcher reached claude-local successfully; post-spawn note captured stdout=`Planner-lead spawn ready. Awaiting kind=goal (or spec.update) input with the design target before starting step 1 (socratic round).` — Claude responded to the generic kickoff `'Continue your role per the system prompt.'` with a status check instead of acting on the transcript. Fix: the `goal` case in the reducer now passes a structured prompt `User goal: <body> + Begin your turn now per the system prompt — read $CRUMB_TRANSCRIPT_PATH for full context and execute step 1 (Socratic round).` Reducer test updated to assert the new prompt shape.
@@ -433,7 +461,7 @@ Changes:
 - **`agents/verifier.md`** — sandwich instructions ("Do NOT pre-blend"), source matrix table refreshed.
 - **`AGENTS.md`** + **`.claude/skills/crumb/SKILL.md`** — invariant #4 wording + skill router source-list synced (this PR).
 
-**Breaking**: legacy transcripts that emitted `source='hybrid'` will fail validation under the new enum. Intentional — anyone replaying a v0.x session needs to migrate. v3.3 is the first submission cycle so real impact is minimal.
+**Breaking**: legacy transcripts that emitted `source='hybrid'` will fail validation under the new enum. Intentional — anyone replaying a v0.x session needs to migrate. v0.3.0 is the first submission cycle so real impact is minimal.
 
 PR: #27 (refactor) + this PR (docs sync).
 
@@ -458,11 +486,11 @@ Implements P0-2 of the scoring+ratchet frontier survey (`wiki/synthesis/bagelcod
 
 Implements P0-1 of the scoring+ratchet frontier survey (`wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md` §7). Two coupled gaps fixed:
 
-- **Schema drift**: the committed `.crumb/config.toml` used the v2 layout (`[agents.coordinator]`, `[agents.engineering-lead]`, `thinking_effort`) while `loadConfig()` since the model-config UI ship has expected v3 (`[actors."<name>"]`, `[providers."<id>"]`, `effort`). Result: `loadConfig()` was silently falling through to `defaultConfig()` at runtime. The TUI / `crumb_model` MCP tool saved correctly in v3, but the seed file shipped with the repo was unparseable as overrides — a fresh checkout's first run got nothing user-tunable from the seed.
-- **Verifier extended thinking default**: rewrote the seed in v3 layout with explicit `effort = "high"` on every actor, with comments citing **Snell et al. ICLR 2025** ("Scaling LLM Test-Time Compute Optimally" — test-time compute 4× ≈ 14× pretrain) and **CourtEval ACL 2025** (multi-role +12.4%). Verifier is the highest-leverage actor — Critic / Defender steps benefit most from extended thinking budget.
+- **Schema drift**: the committed `.crumb/config.toml` used the v2 layout (`[agents.coordinator]`, `[agents.engineering-lead]`, `thinking_effort`) while `loadConfig()` since the model-config UI ship has expected v0.1 (`[actors."<name>"]`, `[providers."<id>"]`, `effort`). Result: `loadConfig()` was silently falling through to `defaultConfig()` at runtime. The TUI / `crumb_model` MCP tool saved correctly in v0.1, but the seed file shipped with the repo was unparseable as overrides — a fresh checkout's first run got nothing user-tunable from the seed.
+- **Verifier extended thinking default**: rewrote the seed in v0.1 layout with explicit `effort = "high"` on every actor, with comments citing **Snell et al. ICLR 2025** ("Scaling LLM Test-Time Compute Optimally" — test-time compute 4× ≈ 14× pretrain) and **CourtEval ACL 2025** (multi-role +12.4%). Verifier is the highest-leverage actor — Critic / Defender steps benefit most from extended thinking budget.
 
 Changes:
-- **`.crumb/config.toml`** — full rewrite to v3 layout. 5 actors, 3 providers, `effort = "high"` on all. Header documents resolve order + effort mapping + frontier backing.
+- **`.crumb/config.toml`** — full rewrite to v0.1 layout. 5 actors, 3 providers, `effort = "high"` on all. Header documents resolve order + effort mapping + frontier backing.
 - **`src/config/model-config.test.ts`** — +3 regression specs locking the committed config: (a) verifier effort=high + harness=gemini-cli + model=gemini-2.5-pro, (b) all 5 actors carry effort=high (no silent low/med drift), (c) all 3 local providers enabled. Suite total 236/236 (was 233).
 
 **Limitation acknowledged**: this PR is signaling-only at the dispatcher → adapter boundary. The adapters (`claude-local`, `codex-local`, `gemini-local`) do not yet pass `effort` to the underlying CLI flags (`--reasoning-effort` exists for codex; Anthropic / Gemini extended thinking is API-only and not exposed by `claude -p` / `gemini -p`). Adapter-level effort plumbing is queued as the next ratchet step (codex-local first; Anthropic/Gemini wait for SDK adapter ships).
@@ -485,7 +513,7 @@ Followup to PR #23. Real subprocess demo with `--preset solo` (model-config over
 
 ### Fixed — Adapter empty-prompt crash blocks every real subprocess run (2026-05-02)
 
-Discovered while smoke-testing v3.3 against `--preset solo`: every real subprocess spawn died on the first actor with `error: Input must be provided either through stdin or as a prompt argument when using --print` (claude-local exit 1 in 3.7s). Root cause: most reducer spawn effects (goal → planner-lead, spec → builder, qa.result → verifier, fallback → builder-fallback) intentionally omit `prompt` because the actor's job is fully described by the sandwich — but the adapters then forwarded `req.prompt ?? ''` to the host CLI, and `claude -p ""` / `gemini -p ""` reject empty input. Codex's `exec --prompt <text>` was conditionally appended, so codex sat waiting on stdin instead of crashing.
+Discovered while smoke-testing v0.3.0 against `--preset solo`: every real subprocess spawn died on the first actor with `error: Input must be provided either through stdin or as a prompt argument when using --print` (claude-local exit 1 in 3.7s). Root cause: most reducer spawn effects (goal → planner-lead, spec → builder, qa.result → verifier, fallback → builder-fallback) intentionally omit `prompt` because the actor's job is fully described by the sandwich — but the adapters then forwarded `req.prompt ?? ''` to the host CLI, and `claude -p ""` / `gemini -p ""` reject empty input. Codex's `exec --prompt <text>` was conditionally appended, so codex sat waiting on stdin instead of crashing.
 
 - **`src/adapters/claude-local.ts`** + **`gemini-local.ts`** + **`codex-local.ts`** — when `req.prompt` is missing or whitespace-only, fall back to `'Continue your role per the system prompt.'` Codex now always receives `--prompt <text>` (no more conditional append).
 - Why a single generic kickoff is right: the sandwich (`agents/<actor>.md`) is the canonical role spec; the prompt is just the wake-up signal. Each actor's first turn is supposed to read the sandwich + `task_ledger` (via `agent-workspace`) and act. A generic kickoff doesn't bias the actor toward any particular branch.
@@ -493,13 +521,13 @@ Discovered while smoke-testing v3.3 against `--preset solo`: every real subproce
 
 
 
-Closes the v3.3 storage refactor by giving v3.2-and-older users a one-shot move into the new `~/.crumb/projects/<id>/sessions/` layout.
+Closes the v0.3.0 storage refactor by giving v0.2.0-and-older users a one-shot move into the new `~/.crumb/projects/<id>/sessions/` layout.
 
 - **`src/session/migrate.ts`** (~110 LOC, 7/7 vitest specs) — `migrateLegacySessions({ cwd, dryRun })` scans `<cwd>/sessions/` and `fs.rename`s each session dir into `~/.crumb/projects/<sha256(canonical(cwd))[:16]>/sessions/`. Atomic per session (single syscall on most filesystems). Idempotent — destination collisions are reported as `already-migrated` and the source is left intact (no data loss). Empty legacy dir is `rmdir`'d after a clean sweep.
 - **`crumb migrate [--dry-run]`** — wires the helper. Per-session report with action ∈ `moved | already-migrated | collision | skipped`. `--dry-run` previews the plan without touching disk.
 - **Test**: 224/224 (was 217; +7 migrate specs). Mock e2e: 2 legacy sessions → dry-run → real migrate → both at new location → empty legacy dir removed → 2nd run reports `nothing to migrate`.
 
-### Added — `crumb copy-artifacts` — v3.3 Phase 2c (2026-05-02)
+### Added — `crumb copy-artifacts` — v0.3.0 Phase 2c (2026-05-02)
 
 Closes the Bagelcode submission UX loop. Reviewers expect `cd crumb && open demo/game.html` to just work; with sessions now under `~/.crumb/projects/<id>/`, the user needs an explicit copy step.
 
@@ -507,17 +535,17 @@ Closes the Bagelcode submission UX loop. Reviewers expect `cd crumb && open demo
 - **Submission story**: `crumb run "..." --label "bagelcode-final"` → `crumb release <ulid> --as v1 --label "bagelcode"` → `crumb copy-artifacts v1 --to ./demo/` → `git add demo/`. Three commands, no symlinks, single-direction copy.
 - **Test**: 217/217 (no test additions — covered by mock e2e). Verified copying from both session ULID and version name resolves the same artifact set.
 
-### Added — Version graph: `crumb release` + `crumb versions` — v3.3 Phase 2b (2026-05-02)
+### Added — Version graph: `crumb release` + `crumb versions` — v0.3.0 Phase 2b (2026-05-02)
 
 Sessions become *promotable* — `crumb release <session-ulid>` snapshots a WIP session into an immutable milestone under `~/.crumb/projects/<id>/versions/<vN>[-<label>]/` with a TOML manifest, sha256-keyed frozen artifacts, and a `kind=version.released` event appended to the source transcript so replay re-derives the milestone. Realizes the v0.dev (Project → Chat → Version) + Lovable (favorited milestone vs auto-history) hybrid that Phase 1 reserved space for.
 
 - **`src/session/version.ts`** (~150 LOC, 20/20 vitest specs) — VersionManifest schema v1: `{ name (e.g. v2), label?, released_at, source_session, source_event_id?, parent_version?, goal?, scorecard {D1-D6 + aggregate + verdict}, artifacts_sha256 }`. Helpers: `versionDirName(name,label)` (slugifies label → `v2-combo-bonus`), `nextSequentialVersion(dir)` (scans `^v(\d+)` to find next), `readAllManifests` / `readManifest` / `writeManifest` (TOML via @iarna/toml), `deriveScorecard(events)` (last `judge.score`), `deriveSourceEventId(events)` (`done` → last `judge.score` → last event), `snapshotArtifacts(sessionDir,versionDir)` (real `copyFile` per file with sha256, no links).
-- **`crumb release <session-ulid> [--as vN] [--label "<name>"] [--no-parent]`** — auto-numbers `v<N>` by default; `--as v3` overrides; `--label` slugifies into the dir name; `parent_version` is auto-detected as the latest existing manifest unless `--no-parent`. Refuses to overwrite an existing version dir. Appends `kind=version.released` (system, deterministic, tool=`crumb-release@v1`) with `data: { version, label, parent_version, source_event_id, manifest_relpath }` — `manifest_relpath` is project-relative (`versions/<dir>/manifest.toml`) so transcripts replay portably across machines.
+- **`crumb release <session-ulid> [--as vN] [--label "<name>"] [--no-parent]`** — auto-numbers `v<N>` by default; `--as v0.1` overrides; `--label` slugifies into the dir name; `parent_version` is auto-detected as the latest existing manifest unless `--no-parent`. Refuses to overwrite an existing version dir. Appends `kind=version.released` (system, deterministic, tool=`crumb-release@v1`) with `data: { version, label, parent_version, source_event_id, manifest_relpath }` — `manifest_relpath` is project-relative (`versions/<dir>/manifest.toml`) so transcripts replay portably across machines.
 - **`crumb versions`** — lists all manifests sorted by `released_at` ascending with `← parent` chain notation, label tag, verdict, aggregate. `[latest]` footer surfaces the head.
 - **Test**: 217/217 (was 197; +20 version specs). Mock e2e: `init --pin` → `run` → `release v1 --label first-pass` → `release v2 --label second-pass` → `versions` shows v1 + v2 (parent ← v1) + transcript carries 2 `kind=version.released` events.
-- **Frontier basis**: v0.dev's structural rigor (Project → Chat → Version DAG with Fork API), Lovable's favorited-stable-version UX (descriptive labels), Replit's checkpoint metadata richness (scorecard + source pointer). Sequential `v<N>` chosen over pure-descriptive (Replit/Lovable) for `ls versions/` sortability and over opaque ID (v0/Cursor/Cline) for human "the v3 feels too easy" mental model — research recommendation realized.
+- **Frontier basis**: v0.dev's structural rigor (Project → Chat → Version DAG with Fork API), Lovable's favorited-stable-version UX (descriptive labels), Replit's checkpoint metadata richness (scorecard + source pointer). Sequential `v<N>` chosen over pure-descriptive (Replit/Lovable) for `ls versions/` sortability and over opaque ID (v0/Cursor/Cline) for human "the v0.1 feels too easy" mental model — research recommendation realized.
 
-### Added — Session lifecycle (meta.json) + project pin (`crumb init --pin`) — v3.3 Phase 2a (2026-05-02)
+### Added — Session lifecycle (meta.json) + project pin (`crumb init --pin`) — v0.3.0 Phase 2a (2026-05-02)
 
 Session lifecycle becomes O(1) inspectable without scanning the transcript head, and projects can survive cwd renames. Builds on Phase 1's `~/.crumb/projects/<id>/` storage hierarchy.
 
@@ -528,7 +556,7 @@ Session lifecycle becomes O(1) inspectable without scanning the transcript head,
 - **`crumb run --label "<name>"`** new flag — passes through to `meta.json.label` for human-readable session labeling.
 - **Test**: 197/197 (was 189; +8 meta specs). Mock e2e verified — `crumb init --pin` writes a TOML pin file, `crumb run` from that cwd resolves to the pinned ULID's project dir, meta.json lifecycle full (started_at + ended_at + status=done), `crumb ls` shows status tag.
 
-### Added — Session storage hierarchy v3.3: `~/.crumb/projects/<id>/{sessions,versions}/` (2026-05-02)
+### Added — Session storage hierarchy v0.3.0: `~/.crumb/projects/<id>/{sessions,versions}/` (2026-05-02)
 
 Sessions move out of `<cwd>/sessions/` into a per-user, per-project global store. Project-first hierarchy modeled on **v0.dev (Project → Chat → Version)** + **Cline (`tasks/` vs `checkpoints/` filesystem split)**, with project-id derived from `sha256(canonical(cwd))[:16]` (Cursor's `workspaceStorage` pattern, avoiding Claude Code's lossy dash-encoding). Schema additions are additive — existing transcripts replay unchanged; legacy `<cwd>/sessions/` still resolves via fallback until `crumb migrate` (Phase 3).
 
@@ -563,11 +591,11 @@ Audit after PR #14 found the TUI was a second-class intervention surface: `handl
 
 ### Added — G4 sandwich override pipeline (2026-05-02)
 
-Closes the v3.2 G4 gap from the user-intervention frontier matrix: a user mid-session can persistently augment any actor's system prompt without restarting (LangGraph `Command(update={...})` pattern, 53/60 frontier score; Codex `APPEND_SYSTEM.md` 38/60 inspires the file-based local override surface).
+Closes the v0.2.0 G4 gap from the user-intervention frontier matrix: a user mid-session can persistently augment any actor's system prompt without restarting (LangGraph `Command(update={...})` pattern, 53/60 frontier score; Codex `APPEND_SYSTEM.md` 38/60 inspires the file-based local override surface).
 
 - **`kind=user.intervene` with `data.sandwich_append`** records a fact of category `'sandwich_append'`. Optional `data.target_actor` scopes the append to a single actor; absent target broadcasts to every spawn. Stored as a fact, so replay reconstructs identical assemblies.
 - **`SpawnEffect.sandwich_appends: { source_id; text }[]`** — every spawn carries the matching append list collected by the reducer's new `collectSandwichAppends()` helper. 7 emit sites updated (goal, spec, qa.result, verify FAIL → fallback, user.veto, user.intervene goto, user.resume queued).
-- **Dispatcher `assembleSandwich()`** — concatenates base `agents/<actor>.md` + per-machine `agents/<actor>.local.md` (when present) + runtime appends into `sessions/<id>/agent-workspace/<actor>/sandwich.assembled.md` and points the adapter at that path. When there are no local files and no appends, returns the base path unchanged (no FS write — preserves v3.1 behavior for sessions that don't exercise the override surface).
+- **Dispatcher `assembleSandwich()`** — concatenates base `agents/<actor>.md` + per-machine `agents/<actor>.local.md` (when present) + runtime appends into `sessions/<id>/agent-workspace/<actor>/sandwich.assembled.md` and points the adapter at that path. When there are no local files and no appends, returns the base path unchanged (no FS write — preserves v0.1.1 behavior for sessions that don't exercise the override surface).
 - **`agents/*.local.md` gitignored** — per-machine, never committed. Pattern adapted from Codex CLI `APPEND_SYSTEM.md`.
 - **Tests**: 5 reducer specs (fact creation, target scoping, scope isolation, untargeted broadcast, append accumulation) + 4 dispatcher specs (passthrough, base+appends assembly, local file inclusion, base→local→append ordering). Suite total 163/163 (was 144).
 - **Mail requirement #2 (사용자가 협업 과정에 개입)** coverage rises from G3-only routing (`target_actor` / `goto`) to full runtime sandwich rewriting. PR #14.
@@ -588,7 +616,7 @@ Per-actor model + effort tuning, per-provider activation toggle, and `/model` na
 ### Fixed — Schema drift (2026-05-02)
 
 - `protocol/schemas/message.schema.json`: `kind` description "39 kinds" → "40 kinds (4 system + 11 workflow + 5 dialogue + 5 step + 5 user + 3 handoff + 7 meta)". Top-level description also updated to clarify "11 fields" refers to identification/routing/classification only.
-- `wiki/concepts/bagelcode-system-architecture-v3.md`: §3.3 header "39 kind 어휘" → "40 kind 어휘"; "artifact / meta (6)" → "(7)" (counts 7 entries: artifact.created/ack/error/audit/tool.call/tool.result/hook); architecture diagram "39 kind × 11 field" → "40 kind × 11 field"; §10.2 Kiki dashboard mapping similarly updated.
+- `wiki/concepts/bagelcode-system-architecture-v0.1.md`: §3.3 header "39 kind 어휘" → "40 kind 어휘"; "artifact / meta (6)" → "(7)" (counts 7 entries: artifact.created/ack/error/audit/tool.call/tool.result/hook); architecture diagram "39 kind × 11 field" → "40 kind × 11 field"; §10.2 Kiki dashboard mapping similarly updated.
 - `src/helpers/explain.ts` jsdoc "39 kinds × 11 fields" → "40 kinds × 11 identification fields". `KIND_REGISTRY` already had 40 entries from prior session — only doc string was stale.
 
 ### Fixed — Coordinator race conditions (2026-05-02)
@@ -602,7 +630,7 @@ Three concurrency defects surfaced by an end-to-end audit of `src/loop/coordinat
 
 102 tests pass (was 93). All four fixes are determinism-preserving — no clock or randomness introduced; replay over the same transcript still yields identical state.
 
-### Added — v3.2 Budget guardrails + autoresearch ratchet (2026-05-02)
+### Added — v0.2.0 Budget guardrails + autoresearch ratchet (2026-05-02)
 
 Five P0 hard caps and one autoresearch-style keep/revert ratchet — closes the "what stops the loop" gap surfaced by `wiki/concepts/bagelcode-budget-guardrails.md`. All caps are determinism-preserving (replay over the same transcript yields identical state).
 
@@ -619,41 +647,41 @@ State extensions (`src/state/types.ts ProgressLedger`): `respec_count`, `verify_
 
 `RunOptions` adds `wallClockHookMs / wallClockHardMs / watchdogTickMs / perSpawnTimeoutMs / extraAdapters?` for tests and ops overrides; defaults match the wiki budget table.
 
-### Added — v3.1 Multi-host harness pivot (2026-05-02)
+### Added — v0.1.1 Multi-host harness pivot (2026-05-02)
 
-Universal identity layer + sandwich Markdown unification + multi-host entry verifier. Closes the "host-aware control harness" loop opened by v3.
+Universal identity layer + sandwich Markdown unification + multi-host entry verifier. Closes the "host-aware control harness" loop opened by v0.1.
 
 - **`CRUMB.md`** (repo root, 174 lines) — Crumb runtime identity, host-agnostic. Sibling of `AGENTS.md` (Linux Foundation Agentic AI Foundation contributor identity); the two have separate responsibilities — `AGENTS.md` tells contributors how to work on this repo, `CRUMB.md` tells the host harness what Crumb is. 11 architecture invariants, 5 actor + 3 specialist + 5 skill flow, 39 kind schema, multi-host entry table, preset philosophy, universal Don't / Must.
 - **`wiki/references/bagelcode-multi-host-harness-research-2026.md`** (~700 lines, 9 part) — research basis for the pivot. Part 1: 7 frontier cases verbatim (bkit-claude-code / claude-flow / contains-studio/agents / openclaw skills/coding-agent / hermes-agent / Linux Foundation AGENTS.md / gamestudio-subagents). Part 2: 7×6 dim matrix. Part 3: 5 핵심 발견 (host 위 universal control = D + F 둘 뿐). Part 4: Crumb 3-tier identity 청사진. Part 5: 차용/회피/신설 매트릭스. Part 6: 1차 5 결정. Part 7: context hierarchy 추가 4 사례 (Claude Code memory `@path` import / Cursor rules / Spec-kit `.specify/` / Gemini CLI extensions). Part 8: `.crumb/` 재정렬 3 옵션 비교 (절충안 권장). Part 9: 추가 5 결정.
 - **Host entries import CRUMB.md + AGENTS.md as universal identity prelude**: `.codex/agents/crumb.toml` (developer_instructions §0), `.gemini/extensions/crumb/GEMINI.md` (header banner), `.gemini/extensions/crumb/commands/crumb.toml` (prompt §0). Pattern source: Spec-kit `.specify/memory/constitution.md` referenced by every host integration.
 - **`crumb init` command** (`src/helpers/init.ts` + `src/cli.ts`) — multi-host entry verifier, distinct from `crumb doctor`. Verifies `CRUMB.md` / `AGENTS.md` + per-host entries (`.claude/skills/crumb`, `.codex/agents`, `.gemini/extensions/crumb`). Subcommands: `crumb init` (default = check all), `--host claude|codex|gemini`, `--format human|json` (human is default; json for scripts/CI). Exits non-zero on missing files. 7 vitest specs.
 
-### Changed — v3.1
+### Changed — v0.1.1
 
-- **5 sandwiches converted from XML-in-Markdown wrapper to claude-code style pure Markdown** (per Part 7 contains-studio/agents + Linux Foundation AGENTS.md + multi-host research): `agents/coordinator.md` (routing-rules v3 — `build → qa_check → verifier`), `agents/planner-lead.md` (handoff target = `builder`, v2 `engineering-lead` retired), `agents/builder.md`, `agents/verifier.md`, `agents/builder-fallback.md` (builder substitute, v2 engineering-lead substitute retired). Tokenizer-friendly imperatives preserved: heading-as-command (`## Don't`, `## Must`, `## Reminders`), imperative bullets (❌ / STOP / Don't try), blockquote emphasis. All Korean narrative removed for English consistency. Ref: `wiki/references/bagelcode-multi-host-harness-research-2026.md` §Part 5.
-- **`AGENTS.md`** updated to Linux Foundation Agentic AI Foundation v3 standard — 11 invariants (added v3: actor split / 3-tuple binding / user-controlled preset), file map updated for v3 (builder/verifier split, qa-runner.ts, preset-loader.ts, helpers/, multi-host entries), forbidden + must lists v3-aligned.
+- **5 sandwiches converted from XML-in-Markdown wrapper to claude-code style pure Markdown** (per Part 7 contains-studio/agents + Linux Foundation AGENTS.md + multi-host research): `agents/coordinator.md` (routing-rules v0.1 — `build → qa_check → verifier`), `agents/planner-lead.md` (handoff target = `builder`, v2 `engineering-lead` retired), `agents/builder.md`, `agents/verifier.md`, `agents/builder-fallback.md` (builder substitute, v2 engineering-lead substitute retired). Tokenizer-friendly imperatives preserved: heading-as-command (`## Don't`, `## Must`, `## Reminders`), imperative bullets (❌ / STOP / Don't try), blockquote emphasis. All Korean narrative removed for English consistency. Ref: `wiki/references/bagelcode-multi-host-harness-research-2026.md` §Part 5.
+- **`AGENTS.md`** updated to Linux Foundation Agentic AI Foundation v0.1 standard — 11 invariants (added v0.1: actor split / 3-tuple binding / user-controlled preset), file map updated for v0.1 (builder/verifier split, qa-runner.ts, preset-loader.ts, helpers/, multi-host entries), forbidden + must lists v0.1-aligned.
 - **`.claude/skills/crumb/SKILL.md`** References section now imports `CRUMB.md` + `AGENTS.md` as the first two reference targets — the host loads them before any actor sandwich.
 
-### Added — v3 Multi-host × (harness × provider × model) tuple (in progress)
+### Added — v0.1 Multi-host × (harness × provider × model) tuple (in progress)
 
-- **System architecture v3 lock** (`wiki/concepts/bagelcode-system-architecture-v3.md`) — Multi-host 4 entry (Claude Code + Codex CLI + Gemini CLI + headless), (harness × provider × model) 3-tuple actor binding with ambient fallback, 5 actor (coordinator / planner-lead / **builder** / **verifier** / builder-fallback) + 3 specialist + 5 skill, 3-layer scoring (reducer auto + qa_check effect + verifier CourtEval), MCP server (Provider) for cross-host self-hosted exposure, auth-manager (`/crumb doctor`) for environment readiness, persistence boost (`crumb resume <session-id>` + adapter session-id metadata + flock). Replaces v2 `bagelcode-system-architecture.md` §1-§2 topology; v2 §3-§9 absorbed.
+- **System architecture v0.1 lock** (`wiki/concepts/bagelcode-system-architecture-v0.1.md`) — Multi-host 4 entry (Claude Code + Codex CLI + Gemini CLI + headless), (harness × provider × model) 3-tuple actor binding with ambient fallback, 5 actor (coordinator / planner-lead / **builder** / **verifier** / builder-fallback) + 3 specialist + 5 skill, 3-layer scoring (reducer auto + qa_check effect + verifier CourtEval), MCP server (Provider) for cross-host self-hosted exposure, auth-manager (`/crumb doctor`) for environment readiness, persistence boost (`crumb resume <session-id>` + adapter session-id metadata + flock). Replaces v2 `bagelcode-system-architecture.md` §1-§2 topology; v2 §3-§9 absorbed.
 - `wiki/references/bagelcode-frontier-cli-convergence-2026.md` — 2026-04 Claude Code / Codex / Gemini / OpenCode 4 CLI convergence on 7 common primitives (subagents / plan / ask-user / parallel / sandbox / memory / MCP). Source for unified entry design.
 - `wiki/references/bagelcode-llm-judge-frontier-2026.md` — CourtEval ACL 2025 / G-Eval / Position bias IJCNLP 2025 / Self-bias NeurIPS 2024 / Multi-judge consensus 97-98% F1. Academic backbone for 3-layer scoring.
 - `wiki/references/bagelcode-gamestudio-subagents-2026.md` — pamirtuna/gamestudio-subagents (193⭐) detailed analysis. Market validation of host harness pattern.
 - `wiki/concepts/bagelcode-budget-guardrails.md` — analysis of post-verify ratchet runaway across three axes (max iteration / wall-clock / token cost). Documents the 5 guardrails currently enforced in `src/reducer/index.ts` and `src/loop/coordinator.ts`, the 8 gaps still open, sprint-demo thresholds, and a P0 implementation plan (4 guardrails, ~1.5h: `respec_count<=3`, `session_wall_clock<=30min`, `per_spawn_timeout<=5min` SIGTERM, `tokens_total<=50K`). Synced from mango-wiki ingest 2026-05-02T21:00:00Z.
 
-### Changed — v3 (in progress)
+### Changed — v0.1 (in progress)
 
 - `protocol/schemas/message.schema.json`:
   - `from` enum: `engineering-lead` → split into `builder` + `verifier` (8 actors total, was 7).
   - `kind` enum: +`qa.result` (39 kinds, was 38). First-class deterministic ground truth event emitted by dispatcher (no LLM).
   - `scores`: replaced 6-dim legacy vocabulary (`goal_completion` / `collaboration` / `groundedness` / `actionability` / `cost_efficiency` / `intervention_response`) with D1-D6 source-of-truth matrix (`D1 spec_fit` / `D2 exec` / `D3 observability` / `D4 convergence` / `D5 intervention` / `D6 portability`); each dimension carries `score` + `source` (verifier-llm / qa-check-effect / reducer-auto / hybrid) + optional `lookup` / `evidence` / `auto` / `semantic` / `quality`. CourtEval msg-id refs (`grader_msg_id` / `critic_msg_id` / `defender_msg_id` / `regrader_msg_id`) added under `scores.courteval`.
-  - `metadata`: +`harness` / `provider` / `adapter_session_id` / `cache_carry_over` / `deterministic` / `cross_provider` (for self-bias detection and adapter cache continuity per [[bagelcode-system-architecture-v3]] §3.6 + §5.2.2).
+  - `metadata`: +`harness` / `provider` / `adapter_session_id` / `cache_carry_over` / `deterministic` / `cross_provider` (for self-bias detection and adapter cache continuity per [[bagelcode-system-architecture-v0.1]] §3.6 + §5.2.2).
 - `agents/`: `engineering-lead.md` removed; split into `agents/builder.md` (Builder + QA inline) + `agents/verifier.md` (CourtEval 4 sub-step inline + reviewer persona, superpowers code-reviewer pattern). Reason: cross-provider true split — builder=Codex / verifier=Gemini (or claude-code) requires actor-level provider boundary, not sandwich-internal step boundary.
 
 ### Added — Observability P0 (Option B, 2026-05-02)
 
-Implements the v3 §10 4-surface lock (minus `crumb diagram` — explicitly de-scoped) with Crumb Design System (CDS) v1 tokens and RESTful `/sessions/{id}/...` URL-as-file-path layout.
+Implements the v0.1 §10 4-surface lock (minus `crumb diagram` — explicitly de-scoped) with Crumb Design System (CDS) v1 tokens and RESTful `/sessions/{id}/...` URL-as-file-path layout.
 
 - **summary.html generator** (`src/summary/render.ts` + `src/summary/cds.ts`, ~700 LOC) — pure function (transcript, state) → single-file HTML. 6 sections (Artifacts iframe + spec/DESIGN refs, D1-D6 Scorecard with SourceBadge + radar, per-actor Cost stacked bar + cache hit, CourtEval 4 sub-step traces, filterable virtualized Timeline, F1-F7 Fault diagnosis). Inline CSS + inline JS + chart.js@4 CDN; ≤ 60KB own code mirrors DESIGN.md "single-file artifact" budget. 15 vitest specs.
 - **TUI** (`src/tui/app.ts` + `src/tui/format.ts`, ~330 LOC) — blessed-based live observer. 4 panes (header / scrollable Timeline / agents+adapters / status / command input). Slash commands (`/approve /veto /redo /note /pause /resume /q`) write `user.*` events back through `TranscriptWriter` — same path as dispatcher, indistinguishable downstream. 10 vitest specs on the pure formatter; live screen tested via end-to-end mock run.
@@ -662,7 +690,7 @@ Implements the v3 §10 4-surface lock (minus `crumb diagram` — explicitly de-s
 - **Crumb Design System v1** (`src/summary/cds.ts`) — 8 token classes (color / typography / spacing / radius / shadow / breakpoint), 10 component vocab (ActorBadge / KindChip / DeterministicStar / CrossProviderBadge / VerdictPill / ScoreCell / SourceBadge / CostBar / MiniSpark / TimelineRow / AuditChip). TUI symbols ↔ HTML hex 1:1 — viewer cognitive load 0 across surfaces.
 - **CLI subcommands**: `crumb tui <session-id|dir>`, `crumb export <session-id|dir> [--format otel-jsonl|anthropic-trace|chrome-trace]`.
 
-### Added — v3 §12 5-helper completion + 3-host MCP registry (cross-host NL trigger)
+### Added — v0.1 §12 5-helper completion + 3-host MCP registry (cross-host NL trigger)
 
 Goal: user can speak natural Korean / English on any of the 3 hosts (Claude Code / Codex CLI / Gemini CLI) and have Crumb route the request to the right helper.
 

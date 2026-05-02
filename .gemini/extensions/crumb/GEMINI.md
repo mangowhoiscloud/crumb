@@ -3,12 +3,12 @@
 > Universal identity (read first): [`../../AGENTS.md`](../../AGENTS.md) — Linux Foundation Agentic AI Foundation standard, universal Crumb identity. Auto-loaded by Gemini CLI via `.gemini/settings.json` `contextFileName: ["AGENTS.md", "GEMINI.md"]`. This file is the **extension-scoped** Gemini glue on top of that universal identity (root [`../../GEMINI.md`](../../GEMINI.md) is the **session-scoped** Gemini augmentation).
 >
 > 베이글코드 신작팀 멀티 에이전트 협업 도구. Gemini CLI 가 host harness 일 때 사용.
-> See: wiki/concepts/bagelcode-system-architecture-v3.md
+> See: wiki/concepts/bagelcode-system-architecture-v0.1.md
 
 ## 시스템 정체성
 
 Crumb 은 6 actor (coordinator + planner-lead + researcher + builder + verifier + builder-fallback) 가
-transcript JSONL (40 kind × 11 field) 위에서 협업하는 multi-agent harness. v3.3 부터 researcher 가
+transcript JSONL (40 kind × 11 field) 위에서 협업하는 multi-agent harness. v0.3.0 부터 researcher 가
 별도 actor — gameplay 비디오 ground truth (Gemini 3.1 Pro native YouTube URL @ 10fps) 를 위한
 gemini-sdk 바인딩.
 

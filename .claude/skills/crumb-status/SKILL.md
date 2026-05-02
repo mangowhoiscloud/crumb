@@ -22,4 +22,4 @@ Output sections: `## Recent N events`, `## Latest judge.score` (with D1-D6 sourc
 
 Explicit slash form: `/crumb-status <session-id>`.
 
-Reference: `src/helpers/status.ts`, v3 §4.2 (per-turn flow).
+Reference: `src/helpers/status.ts`, v0.1 §4.2 (per-turn flow).

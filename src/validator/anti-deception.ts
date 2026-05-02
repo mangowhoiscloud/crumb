@@ -15,14 +15,14 @@
  * src/state/scorer.ts merges the two in code — no merged number for an LLM to
  * inflate.
  *
- * Rule 5 (v3.3) — researcher_video_evidence_missing — fires when the
+ * Rule 5 (v0.3.0) — researcher_video_evidence_missing — fires when the
  * researcher actor produced video evidence (≥1 kind=step.research.video event
  * exists for this session) but the verifier's D5 quality score is high (≥ 4)
  * with an empty evidence array. Same firewall pattern as Rule 1
  * (verify_pass_without_exec_zero) for D2 — high score requires citing the
  * deterministic ground truth.
  *
- * See [[bagelcode-system-architecture-v3]] §7.3 + [[bagelcode-llm-judge-frontier-2026]] R3-R5
+ * See [[bagelcode-system-architecture-v0.1]] §7.3 + [[bagelcode-llm-judge-frontier-2026]] R3-R5
  *  + agents/specialists/game-design.md §3 (video evidence schema) + §4 (synth schema).
  */
 
@@ -54,7 +54,7 @@ export interface QaResultLike {
   exec_exit_code: number;
   cross_browser_smoke?: 'ok' | 'fail' | 'skipped';
   /**
-   * v3.5 — per-AC predicate results from the deterministic AC layer (see
+   * v0.3.5 — per-AC predicate results from the deterministic AC layer (see
    * `src/effects/qa-interactive.ts` and `agents/specialists/game-design.md`
    * §AC-Predicate-Compile). Empty / undefined when the spec emitted no
    * predicates. Rule 7 reads `status === 'FAIL'` entries as ground truth
@@ -80,7 +80,7 @@ export interface AntiDeceptionInput {
   autoScores?: AutoScores;
   builderProvider?: string | null; // metadata.provider on the build event
   /**
-   * v3.3 — IDs of `kind=step.research.video` events that the researcher actor
+   * v0.3.0 — IDs of `kind=step.research.video` events that the researcher actor
    * emitted earlier in this session. When non-empty, Rule 5 enforces that
    * D5.evidence cites at least one of these IDs (otherwise the verifier is
    * claiming high quality without citing the deterministic ground truth).
@@ -128,7 +128,7 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
   }
 
   // ── Rule 4 — self_bias_risk_same_provider + numerical D1/D5 discount ──────
-  // [[bagelcode-same-provider-discount-2026-05-03]] (replaces the v3.3 binary
+  // [[bagelcode-same-provider-discount-2026-05-03]] (replaces the v0.3.0 binary
   // verdict downgrade). Stureborg EMNLP 2024 §4.2 measured +14-22% PASS-rate
   // inflation when builder and verifier share the provider. The previous
   // binary PASS → PARTIAL gate collapsed dynamic range and treated a
@@ -181,7 +181,7 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
     }
   }
 
-  // ── Rule 5 (v3.3) — researcher_video_evidence_missing ──────────────────────
+  // ── Rule 5 (v0.3.0) — researcher_video_evidence_missing ──────────────────────
   // If the researcher emitted ≥1 step.research.video events but the verifier's
   // D5 (intervention/quality) is ≥ 4 with no D5.evidence citing those events,
   // force D5=0 + violation. Mirrors Rule 1's pattern for D2: high score
@@ -196,7 +196,7 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
     }
   }
 
-  // ── Rule 7 (v3.5) — verify_pass_with_ac_failure ─────────────────────────────
+  // ── Rule 7 (v0.3.5) — verify_pass_with_ac_failure ─────────────────────────────
   // The deterministic AC layer (qa-interactive.ts) replays planner-compiled
   // predicates against the running game. When the verifier emits PASS but the
   // ground-truth AC results show ≥1 FAIL, the verifier is contradicting a
@@ -234,8 +234,8 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
     : sumDimsAsIs(scores);
   if (scores.verdict === 'PASS' && (scores.aggregate ?? 0) < 24) scores.verdict = 'PARTIAL';
 
-  // Note: the v3.3 binary `if (sameProvider && verdict === 'PASS') verdict =
-  // 'PARTIAL'` was removed in v3.4 — Rule 4's numerical D1/D5 discount above
+  // Note: the v0.3.0 binary `if (sameProvider && verdict === 'PASS') verdict =
+  // 'PARTIAL'` was removed in v0.3.1 — Rule 4's numerical D1/D5 discount above
   // already lowered the aggregate; the standard threshold check (line above)
   // now demotes to PARTIAL or FAIL naturally when warranted.
 

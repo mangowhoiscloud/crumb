@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mangowhoiscloud/crumb/protocol/schemas/message.schema.json",
   "title": "Crumb Transcript Message",
-  "description": "Single transcript.jsonl line. v3.3: 44 kinds (4 system + 11 workflow + 5 dialogue + 6 step + 5 user + 3 handoff + 7 meta + 3 version/fork) × 11 identification/routing/classification fields × 9 from × 13 step. OTel GenAI alias-able via metadata.gen_ai. 5-layer hierarchy (project → session → run → turn → step → event) with run_id/turn_id in metadata.crumb. researcher actor + step.research.video added in v3.3 for the multimodal video-evidence path (gemini-sdk binding). See wiki/concepts/bagelcode-system-architecture-v3.md §3.",
+  "description": "Single transcript.jsonl line. v0.3.0: 44 kinds (4 system + 11 workflow + 5 dialogue + 6 step + 5 user + 3 handoff + 7 meta + 3 version/fork) × 11 identification/routing/classification fields × 9 from × 13 step. OTel GenAI alias-able via metadata.gen_ai. 5-layer hierarchy (project → session → run → turn → step → event) with run_id/turn_id in metadata.crumb. researcher actor + step.research.video added in v0.3.0 for the multimodal video-evidence path (gemini-sdk binding). See wiki/concepts/bagelcode-system-architecture-v0.1.md §3.",
   "type": "object",
   "required": ["id", "ts", "session_id", "from", "kind"],
   "properties": {
@@ -20,7 +20,7 @@
     "task_id": { "type": "string" },
     "from": {
       "type": "string",
-      "description": "v3.3: 9 actors. engineering-lead split into builder + verifier (v3, cross-provider boundary). researcher promoted from inline-read specialist to standalone actor (v3.3, multimodal video understanding via gemini-sdk).",
+      "description": "v0.3.0: 9 actors. engineering-lead split into builder + verifier (v0.1, cross-provider boundary). researcher promoted from inline-read specialist to standalone actor (v0.3.0, multimodal video understanding via gemini-sdk).",
       "enum": [
         "user",
         "coordinator",
@@ -43,7 +43,7 @@
     },
     "kind": {
       "type": "string",
-      "description": "v3.3: 44 kinds (4 system + 11 workflow + 5 dialogue + 6 step + 5 user + 3 handoff + 7 meta + 3 version/fork). +qa.result (deterministic ground truth event emitted by dispatcher, no LLM). +session.forked / version.released / version.refinement (v3.3 milestone hierarchy). +step.research.video (per-clip video-evidence event emitted by researcher actor via gemini-sdk).",
+      "description": "v0.3.0: 44 kinds (4 system + 11 workflow + 5 dialogue + 6 step + 5 user + 3 handoff + 7 meta + 3 version/fork). +qa.result (deterministic ground truth event emitted by dispatcher, no LLM). +session.forked / version.released / version.refinement (v0.3.0 milestone hierarchy). +step.research.video (per-clip video-evidence event emitted by researcher actor via gemini-sdk).",
       "enum": [
         "session.start",
         "session.end",
@@ -134,7 +134,7 @@
     },
     "scores": {
       "type": "object",
-      "description": "v3: D1-D6 source-of-truth matrix. Each dimension carries score + source (verifier-llm | qa-check-effect | reducer-auto) — every dimension reports a single origin. D3/D5 are split: the verifier emits its LLM-judged value with source='verifier-llm' (the `score` is the LLM component only, 0-5); the reducer-auto component is computed separately by computeAutoScores() and combined deterministically at aggregate time via combineDimScore() in src/state/scorer.ts. The combine rule lives in code, not in the verifier — no LLM can inflate a merged number. Legacy 6-dim fields kept as deprecated aliases for v0.1.x transcript replay.",
+      "description": "v0.1: D1-D6 source-of-truth matrix. Each dimension carries score + source (verifier-llm | qa-check-effect | reducer-auto) — every dimension reports a single origin. D3/D5 are split: the verifier emits its LLM-judged value with source='verifier-llm' (the `score` is the LLM component only, 0-5); the reducer-auto component is computed separately by computeAutoScores() and combined deterministically at aggregate time via combineDimScore() in src/state/scorer.ts. The combine rule lives in code, not in the verifier — no LLM can inflate a merged number. Legacy 6-dim fields kept as deprecated aliases for v0.1.x transcript replay.",
       "properties": {
         "D1": { "$ref": "#/$defs/scoreDimension", "description": "spec_fit (LLM, AC ✓/✗)" },
         "D2": {
@@ -193,7 +193,7 @@
         "visibility": { "type": "string", "enum": ["public", "private"], "default": "public" },
         "harness": {
           "type": "string",
-          "description": "v3.3: which CLI/SDK harness produced this event. Used for cross-provider self-bias detection. gemini-sdk added in v3.3 for the researcher actor's video understanding path (gemini-cli has 4 closed/p1-unresolved video bugs, so the SDK is the deterministic route).",
+          "description": "v0.3.0: which CLI/SDK harness produced this event. Used for cross-provider self-bias detection. gemini-sdk added in v0.3.0 for the researcher actor's video understanding path (gemini-cli has 4 closed/p1-unresolved video bugs, so the SDK is the deterministic route).",
           "enum": [
             "claude-code",
             "codex",
@@ -208,43 +208,43 @@
         },
         "provider": {
           "type": "string",
-          "description": "v3: vendor LLM provider. 'none' for deterministic effects.",
+          "description": "v0.1: vendor LLM provider. 'none' for deterministic effects.",
           "enum": ["anthropic", "openai", "google", "none"]
         },
         "model": { "type": "string" },
         "adapter_session_id": {
           "type": "string",
-          "description": "v3: native session id from host harness (Claude Code uuid / Codex thread_id / Gemini context_id) for cache carry-over. See [[bagelcode-system-architecture-v3]] §5.2.2."
+          "description": "v0.1: native session id from host harness (Claude Code uuid / Codex thread_id / Gemini context_id) for cache carry-over. See [[bagelcode-system-architecture-v0.1]] §5.2.2."
         },
         "cache_carry_over": {
           "type": "boolean",
-          "description": "v3: signals that next spawn may use --resume <adapter_session_id> for cache hit."
+          "description": "v0.1: signals that next spawn may use --resume <adapter_session_id> for cache hit."
         },
         "cross_provider": {
           "type": "boolean",
-          "description": "v3: true when verifier provider differs from builder provider (self-bias risk mitigation, NeurIPS 2024). Set on judge.score events."
+          "description": "v0.1: true when verifier provider differs from builder provider (self-bias risk mitigation, NeurIPS 2024). Set on judge.score events."
         },
         "deterministic": {
           "type": "boolean",
-          "description": "v3: true for events emitted by dispatcher effects (qa_check, validator, reducer audit). Cannot be forged by LLM actors."
+          "description": "v0.1: true for events emitted by dispatcher effects (qa_check, validator, reducer audit). Cannot be forged by LLM actors."
         },
         "tool": {
           "type": "string",
-          "description": "v3: tool/effect identifier for deterministic events (e.g., 'qa-check-effect@v1')."
+          "description": "v0.1: tool/effect identifier for deterministic events (e.g., 'qa-check-effect@v1')."
         },
         "evidence_kind": {
           "type": "string",
           "enum": ["video", "screenshot", "text"],
-          "description": "v3.3: classifies the source of researcher / verifier evidence for D5 anti-deception checks. researcher's step.research.video sets 'video'; planner-internal text-only research path uses 'text'."
+          "description": "v0.3.0: classifies the source of researcher / verifier evidence for D5 anti-deception checks. researcher's step.research.video sets 'video'; planner-internal text-only research path uses 'text'."
         },
         "cache_key": {
           "type": "string",
-          "description": "v3.3: sha256 of (video_ref + model + prompt_version) for the gemini-sdk adapter's replay cache. The SDK call itself is non-deterministic (model output varies); replay reads the existing transcript event verbatim instead of re-calling the network."
+          "description": "v0.3.0: sha256 of (video_ref + model + prompt_version) for the gemini-sdk adapter's replay cache. The SDK call itself is non-deterministic (model output varies); replay reads the existing transcript event verbatim instead of re-calling the network."
         },
         "verifier_provider": {
           "type": "string",
           "deprecated": true,
-          "description": "v3: use metadata.provider on judge.score events instead."
+          "description": "v0.1: use metadata.provider on judge.score events instead."
         },
         "builder_provider": { "type": "string", "deprecated": true },
         "turn": { "type": "number" },
@@ -258,7 +258,7 @@
         "audit_violations": { "type": "array", "items": { "type": "string" } },
         "crumb": {
           "type": "object",
-          "description": "v3.3: 5-layer hierarchy markers (project → session → run → turn → step → event). project lives on the filesystem; session_id and step are top-level fields; run_id/turn_id are reducer-derived and live here. parent_session_id/fork_event_id appear only on the first event of a forked session.",
+          "description": "v0.3.0: 5-layer hierarchy markers (project → session → run → turn → step → event). project lives on the filesystem; session_id and step are top-level fields; run_id/turn_id are reducer-derived and live here. parent_session_id/fork_event_id appear only on the first event of a forked session.",
           "properties": {
             "run_id": {
               "type": "string",
@@ -283,7 +283,7 @@
         },
         "gen_ai": {
           "type": "object",
-          "description": "v3.3: OpenTelemetry GenAI Semantic Conventions aliases. Allows the OTel exporter to emit standards-compliant attributes without re-deriving them. conversation_id aliases session_id; agent_id aliases from; workflow_name is constant per harness (e.g., 'crumb.coordinator').",
+          "description": "v0.3.0: OpenTelemetry GenAI Semantic Conventions aliases. Allows the OTel exporter to emit standards-compliant attributes without re-deriving them. conversation_id aliases session_id; agent_id aliases from; workflow_name is constant per harness (e.g., 'crumb.coordinator').",
           "properties": {
             "conversation_id": {
               "type": "string",

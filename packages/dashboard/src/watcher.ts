@@ -34,10 +34,10 @@ interface PerSession {
 }
 
 export interface WatcherOptions {
-  /** Single transcript glob — legacy single-home form. Use `globs` for v3.4 multi-home. */
+  /** Single transcript glob — legacy single-home form. Use `globs` for v0.3.1 multi-home. */
   glob?: string;
   /**
-   * v3.4: chokidar accepts an array of globs. Set when watching multiple
+   * v0.3.1: chokidar accepts an array of globs. Set when watching multiple
    * Crumb homes simultaneously (e.g. `~/.crumb` + `/tmp/test-home`). When
    * neither `glob` nor `globs` is set, falls back to `defaultTranscriptGlobs()`
    * which walks every entry from `CRUMB_HOMES` / `CRUMB_HOME`.

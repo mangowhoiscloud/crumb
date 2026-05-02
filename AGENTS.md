@@ -45,7 +45,7 @@ These are non-negotiable across every host harness:
 6. **ULID for message IDs.** Never use sequential or random UUIDs. ULIDs preserve sort order = transcript chronology.
 7. **Append-only transcript.** Use `O_APPEND` (and `flock` once landed). Never modify existing lines.
 8. **Sandbox cwd per actor.** Each actor's working dir is `sessions/<id>/agent-workspace/<actor>/`. Use `--add-dir` for read scope.
-9. **Actor split (v3 + v3.3).** `engineering-lead` was split into `builder` + `verifier` (v3) so the cross-provider boundary runs at the actor level. `researcher` was promoted from a planner inline-read specialist into its own actor (v3.3) so the multimodal video-LLM 2026 frontier (Gemini 3.1 Pro) can be bound to a dedicated SDK adapter without forcing the rest of planner-lead onto the same provider. The 9 actors are: `user / coordinator / planner-lead / researcher / builder / verifier / builder-fallback / validator / system`.
+9. **Actor split (v0.1 + v0.3.0).** `engineering-lead` was split into `builder` + `verifier` (v0.1) so the cross-provider boundary runs at the actor level. `researcher` was promoted from a planner inline-read specialist into its own actor (v0.3.0) so the multimodal video-LLM 2026 frontier (Gemini 3.1 Pro) can be bound to a dedicated SDK adapter without forcing the rest of planner-lead onto the same provider. The 9 actors are: `user / coordinator / planner-lead / researcher / builder / verifier / builder-fallback / validator / system`.
 10. **Multi-host × 3-tuple actor binding.** Each actor binds to `(harness × provider × model)` via the active preset. No actor is hard-coded to a specific harness — even the user's preferred verifier provider must come from preset config or ambient fallback.
 11. **`provider × harness × model` is user-controlled.** Crumb suggests via `crumb doctor` but never forces a default. If a preset omits an actor, it follows ambient (the entry host).
 
@@ -55,9 +55,9 @@ These are non-negotiable across every host harness:
 |---|---|---|
 | `coordinator` | `agents/coordinator.md` | Host-inline routing (Hub-Ledger-Spoke). Decides next_speaker per transcript event. |
 | `planner-lead` | `agents/planner-lead.md` | Spec authoring. Two-phase spawn (Socratic + Concept → handoff to researcher → resume for Design + Synth). 2 specialists inline-read + game-design.md contract. |
-| `researcher` | `agents/researcher.md` | Video-evidence extractor (v3.3). Ingests gameplay clips via gemini-sdk (Gemini 3.1 Pro, native YouTube URL, 10fps frame sampling) → emits `step.research.video` × N + `step.research` synthesis. Bound to gemini-sdk adapter when video_refs present; ambient text-only fallback otherwise. |
+| `researcher` | `agents/researcher.md` | Video-evidence extractor (v0.3.0). Ingests gameplay clips via gemini-sdk (Gemini 3.1 Pro, native YouTube URL, 10fps frame sampling) → emits `step.research.video` × N + `step.research` synthesis. Bound to gemini-sdk adapter when video_refs present; ambient text-only fallback otherwise. |
 | `builder` | `agents/builder.md` | Phaser 3.80 multi-file PWA implementer (`artifacts/game/{index.html, src/, sw.js, manifest.webmanifest}`). Emits `kind=build`; QA is OUT of reach. |
-| `verifier` | `agents/verifier.md` | CourtEval (Grader → Critic → Defender → Re-grader, ACL 2025) inline 4 sub-step. Reads `qa.result` for D2/D6 + `step.research` evidence_refs for D5 (v3.3 anti-deception). |
+| `verifier` | `agents/verifier.md` | CourtEval (Grader → Critic → Defender → Re-grader, ACL 2025) inline 4 sub-step. Reads `qa.result` for D2/D6 + `step.research` evidence_refs for D5 (v0.3.0 anti-deception). |
 | `builder-fallback` | `agents/builder-fallback.md` | Builder substitute. Activates when `circuit_breaker.builder.state === 'OPEN'`. |
 
 Plus 2 specialists (planner-internal inline, no separate Task spawn) + 1 contract spec (read by 4+ actors):
@@ -79,7 +79,7 @@ Source: `protocol/schemas/message.schema.json`.
 ```
 39 kinds × 11 fields × 12 specialist steps × 8 actors
   + scores D1–D6 source-of-truth matrix (verifier-llm / qa-check-effect / reducer-auto — single origin per dim; D3/D5 LLM and auto components are combined deterministically by combineDimScore)
-  + metadata 14 fields (incl. v3: harness / provider / adapter_session_id / cache_carry_over /
+  + metadata 14 fields (incl. v0.1: harness / provider / adapter_session_id / cache_carry_over /
     deterministic / cross_provider)
 ```
 
@@ -247,10 +247,10 @@ tail -f ~/.crumb/projects/<project-id>/sessions/<session-id>/transcript.jsonl | 
 
 Every architecture decision in this repo is grounded in `wiki/`. Before changing core structure, read in this order:
 
-- `wiki/concepts/bagelcode-system-architecture-v3.md` — ★ canonical v3 system architecture (multi-host × 3-tuple, 5 actor split, 3-layer scoring, MCP Provider, persistence)
+- `wiki/concepts/bagelcode-system-architecture-v0.1.md` — ★ canonical v0.1 system architecture (multi-host × 3-tuple, 5 actor split, 3-layer scoring, MCP Provider, persistence)
 - `wiki/synthesis/bagelcode-host-harness-decision.md` — Hybrid (Skill + headless CLI) lock
 - `wiki/concepts/bagelcode-verifier-isolation-matrix.md` — 20-source × 4-dimension matrix backing actor-level cross-provider opt-in
-- `wiki/concepts/bagelcode-final-design-2026.md` — §3-§9 (envelope / cache / OTel) still valid in v3
+- `wiki/concepts/bagelcode-final-design-2026.md` — §3-§9 (envelope / cache / OTel) still valid in v0.1
 - `wiki/concepts/bagelcode-orchestration-topology.md` — Hub-Ledger-Spoke
 - `wiki/concepts/bagelcode-transcripts-schema.md` — schema 1차 spec (38→39 kind evolution)
 - `wiki/concepts/bagelcode-fault-tolerance-design.md` — F1-F5
@@ -298,7 +298,7 @@ Every architecture decision in this repo is grounded in `wiki/`. Before changing
 - `.crumb/config.local.toml` (gitignored) — user-personal binding override
 
 ### Design rationale (wiki/, mango-wiki subset)
-- [`wiki/concepts/bagelcode-system-architecture-v3.md`](./wiki/concepts/bagelcode-system-architecture-v3.md) — ★ canonical v3 architecture
+- [`wiki/concepts/bagelcode-system-architecture-v0.1.md`](./wiki/concepts/bagelcode-system-architecture-v0.1.md) — ★ canonical v0.1 architecture
 - [`wiki/synthesis/bagelcode-host-harness-decision.md`](./wiki/synthesis/bagelcode-host-harness-decision.md) — Hybrid (Skill + headless CLI) lock
 - [`wiki/concepts/bagelcode-verifier-isolation-matrix.md`](./wiki/concepts/bagelcode-verifier-isolation-matrix.md) — actor-level cross-provider matrix
 - [`wiki/references/bagelcode-frontier-cli-convergence-2026.md`](./wiki/references/bagelcode-frontier-cli-convergence-2026.md) — 4 CLI × 7 primitive convergence

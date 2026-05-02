@@ -27,4 +27,4 @@ Show the output verbatim — `recommended` line + `reason` + alternatives table.
 
 Explicit slash form: type `/crumb-config <intent>` to invoke directly.
 
-Reference: `src/helpers/config.ts`, `wiki/concepts/bagelcode-system-architecture-v3.md` §6 (4 preset).
+Reference: `src/helpers/config.ts`, `wiki/concepts/bagelcode-system-architecture-v0.1.md` §6 (4 preset).

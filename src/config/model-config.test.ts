@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 describe('defaultConfig', () => {
-  it('v3.4 — coordinator is quick-think (haiku/low); deep-think actors stay opus/high', () => {
+  it('v0.3.1 — coordinator is quick-think (haiku/low); deep-think actors stay opus/high', () => {
     const c = defaultConfig();
     expect(c.defaults.effort).toBe('high');
     // Coordinator routes — TradingAgents §4.3 quick-think split.
@@ -144,11 +144,11 @@ describe('formatConfig', () => {
 });
 
 // Committed-config integrity guard — the live `.crumb/config.toml` must parse
-// into the v3 schema and resolve verifier (the highest-leverage actor for
+// into the v0.1 schema and resolve verifier (the highest-leverage actor for
 // extended thinking per Snell ICLR 2025) to effort=high. Backing: wiki/synthesis/
 // bagelcode-scoring-ratchet-frontier-2026-05-02.md §7 P0-1.
 describe('committed .crumb/config.toml', () => {
-  it('v3.4 — coordinator is quick-think (low); deep-think actors are high', () => {
+  it('v0.3.1 — coordinator is quick-think (low); deep-think actors are high', () => {
     const repoRoot = join(import.meta.dirname, '..', '..');
     const live = loadConfig(repoRoot);
     expect(live.defaults.effort).toBe('high');
@@ -163,7 +163,7 @@ describe('committed .crumb/config.toml', () => {
   it('deep-think actors carry effort=high (no silent low/med drift); coordinator opt-out is intentional', () => {
     const repoRoot = join(import.meta.dirname, '..', '..');
     const live = loadConfig(repoRoot);
-    // Coordinator's `low` is the v3.4 quick-think router decision (see test
+    // Coordinator's `low` is the v0.3.1 quick-think router decision (see test
     // above); guarding the rest prevents accidental drift.
     for (const name of ['planner-lead', 'builder', 'verifier', 'builder-fallback'] as const) {
       expect(live.actors[name]?.effort).toBe('high');

@@ -7,7 +7,7 @@
  *   GET  /api/sessions/:id/sandwich/:actor → assembled sandwich text (read-only)
  *   GET  /api/stream?session=<id|*>     → SSE stream of LiveEvents
  *
- * v3.4 console mode — bidirectional write endpoint:
+ * v0.3.1 console mode — bidirectional write endpoint:
  *   POST /api/sessions/:id/inbox        body=`{ line: "<inbox-grammar-line>" }`
  *                                       → appends one line to <session>/inbox.txt
  *                                       → existing inbox watcher converts to transcript event
@@ -56,7 +56,7 @@ export interface DashboardServerOptions {
   port?: number;
   bind?: string; // '127.0.0.1' (default) or '0.0.0.0'
   glob?: string; // legacy single-home glob (test fixture)
-  /** v3.4: multi-home transcript globs. Takes precedence over `glob`. */
+  /** v0.3.1: multi-home transcript globs. Takes precedence over `glob`. */
   globs?: string[];
   pollInterval?: number;
   /**
@@ -203,7 +203,7 @@ async function serveSessions(
         preset,
         metrics,
         actors: [...actorsSeen],
-        // v3.5: state + last_activity_at for sidebar dot color + sort.
+        // v0.3.5: state + last_activity_at for sidebar dot color + sort.
         state: classification?.state ?? null,
         last_activity_at: classification?.last_activity_at ?? null,
         done_reason: classification?.done_reason ?? null,
@@ -589,7 +589,7 @@ function serveStream(
   req.on('error', cleanup);
 }
 
-// ─── v3.5 console — artifact iframe + crumb run / close ────────────────────
+// ─── v0.3.5 console — artifact iframe + crumb run / close ────────────────────
 
 /**
  * Serve any file under <session>/artifacts/ for the dashboard's Output tab.
@@ -726,7 +726,7 @@ function serveSessionClose(
 }
 
 /**
- * v3.5 — disk listing fallback for the Output tab. Walks <session>/artifacts/
+ * v0.3.5 — disk listing fallback for the Output tab. Walks <session>/artifacts/
  * recursively and returns relative paths + sizes. Used when builder skipped
  * emitting kind=artifact.created (LLMs sometimes do; the artifact still exists
  * on disk because the file was actually written).

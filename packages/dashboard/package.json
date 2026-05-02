@@ -1,6 +1,6 @@
 {
   "name": "@crumb/dashboard",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Live observability dashboard for Crumb sessions — file-tail SSE server + browser UI.",
   "type": "module",

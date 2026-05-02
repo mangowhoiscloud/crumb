@@ -3,7 +3,7 @@
  *
  * Read-only. Reads transcript + reduced state.
  *
- * See [[bagelcode-system-architecture-v3]] §12 (자연어 보조 장치 5종).
+ * See [[bagelcode-system-architecture-v0.1]] §12 (자연어 보조 장치 5종).
  */
 
 import type { Message } from '../protocol/types.js';

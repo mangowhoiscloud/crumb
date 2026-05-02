@@ -2,7 +2,7 @@
  * runSession tests — three coupled focuses:
  *   1. P0 race fix: fromOffset = byte size before replay (no double-reduce);
  *      session.start/goal idempotency guard (no double-spawn on resume).
- *   2. v3.2 session_wall_clock guardrail (24min hook, 30min hard cap).
+ *   2. v0.2.0 session_wall_clock guardrail (24min hook, 30min hard cap).
  *   3. Fresh-session kickoff (synthetic session.start + goal append).
  */
 
