@@ -811,3 +811,48 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
 .feed-line.kind-log .feed-body { color: var(--ink-muted); opacity: 0.85; }
 .feed-line.kind-log.stderr .feed-body { color: var(--audit-fg); opacity: 0.95; }
 .feed-line.kind-system .feed-body { color: var(--ink-tertiary); font-style: italic; }
+
+/* Claude-Code-style stream-json rendering above per-session chat input.
+   Mirrors the ⏺ assistant text + ⎿ tool-result convention from `claude` CLI
+   so the same narrative the user sees inside Claude Code is visible in the
+   dashboard live execution feed. */
+.feed-line.kind-assistant-text .feed-body {
+  color: var(--ink, #e8e8e8);
+  font-weight: 500;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
+.feed-line.kind-tool-call .feed-body {
+  color: var(--accent-warm, #FFB627);
+  opacity: 0.92;
+  font-family: ui-monospace, monospace;
+}
+.feed-line.kind-tool-result .feed-body {
+  color: var(--ink-muted, #a0a0a0);
+  opacity: 0.78;
+  padding-left: 16px;
+  font-size: 10.5px;
+}
+.feed-line.kind-tool-error .feed-body {
+  color: var(--audit-fg, #E04848);
+  padding-left: 16px;
+  font-size: 10.5px;
+  font-weight: 500;
+}
+.feed-line.kind-turn-complete .feed-body {
+  color: var(--accent-warm, #FFB627);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.feed-line.kind-turn-complete {
+  border-top: 1px dashed var(--hairline);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+.feed-line.kind-thinking .feed-body {
+  color: var(--ink-tertiary, #707070);
+  opacity: 0.55;
+  font-style: italic;
+  font-size: 10px;
+}

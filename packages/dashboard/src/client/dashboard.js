@@ -741,7 +741,7 @@ selectSession = function(id) {
 // ── (1) Live execution feed — terminal-like console above the input bar ──
 
 let feedPaused = false;
-const FEED_MAX_LINES = 800;
+const FEED_MAX_LINES = 2000; // bumped from 800 — stream-json rendering produces 3-5× line density
 
 function appendFeedLine(meta) {
   const root = $('console-feed-body');
@@ -873,6 +873,21 @@ function attachFeedLogStream(actor) {
       if (/^--- stdout ---$/.test(line)) { inStderr = false; continue; }
       if (/^=== adapter /.test(line)) {
         appendFeedLine({ ts: new Date().toISOString(), actor: actor, body: line, kindClass: 'system' });
+        continue;
+      }
+      // Try stream-json (Claude Code shape) first — render Claude-Code-style
+      // ⏺/⎿/✓ narrative bubbles above the per-session chat input.
+      const bubbles = renderStreamJsonLine(line);
+      if (bubbles) {
+        for (const b of bubbles) {
+          appendFeedLine({
+            ts: new Date().toISOString(),
+            actor: actor,
+            body: b.glyph + ' ' + b.body,
+            kindClass: b.kindClass,
+            stderr: b.stderr || false,
+          });
+        }
         continue;
       }
       appendFeedLine({
@@ -1271,3 +1286,160 @@ selectSession = function(id) {
   refreshResumeButton();
   if (activeView === 'transcript') renderTranscriptView();
 };
+
+// ─── v3.5 Stream-JSON renderer — Claude-Code-style narrative bubbles ────────
+
+// The Claude CLI emits per-line stream-json: each line is a JSON object
+// describing one assistant turn step (text / tool_use / tool_result / system /
+// result). Codex and Gemini emit similar shapes for their tool-call narratives.
+// This parser turns each line into one or more rendered "bubbles" using the
+// same ⏺ / ⎿ / ✓ glyphs the user sees inside Claude Code so the dashboard
+// live exec feed reads as a faithful mirror of what the agent is doing.
+//
+// Convention:
+//   ⏺ <text>             — assistant text content block
+//   ⏺ ToolName(summary)  — tool call (Bash / Read / Edit / Grep / Monitor / …)
+//   ⎿ <preview>          — tool result (collapsed; tool_result content)
+//   ⎿ Async X completed  — system task notification
+//   ✓ turn complete · …  — result event with cost + tokens
+
+function _summarizeToolInput(name, input) {
+  if (!input || typeof input !== 'object') return '';
+  if (name === 'Bash') return (input.command || '').replace(/\s+/g, ' ').slice(0, 90);
+  if (name === 'Read') return input.file_path || '';
+  if (name === 'Write') return input.file_path || '';
+  if (name === 'Edit') return input.file_path || '';
+  if (name === 'Grep') return (input.pattern || '') + (input.path ? ' in ' + input.path : '');
+  if (name === 'Glob') return input.pattern || '';
+  if (name === 'Monitor') return JSON.stringify(input).slice(0, 90);
+  if (name === 'Task' || name === 'Agent') {
+    return (input.description || '') + (input.subagent_type ? ' [' + input.subagent_type + ']' : '');
+  }
+  if (name === 'TodoWrite') {
+    const todos = input.todos || [];
+    const inProgress = todos.filter(t => t.status === 'in_progress').map(t => t.content);
+    return inProgress.length ? '▶ ' + inProgress[0] : todos.length + ' todos';
+  }
+  if (name === 'WebSearch') return input.query || '';
+  if (name === 'WebFetch') return input.url || '';
+  // Generic fallback: short JSON preview
+  try {
+    const j = JSON.stringify(input);
+    return j.length > 90 ? j.slice(0, 87) + '…' : j;
+  } catch {
+    return '';
+  }
+}
+
+function _summarizeToolResult(content, isError) {
+  let body = content;
+  if (Array.isArray(body)) {
+    body = body.map(b => {
+      if (typeof b === 'string') return b;
+      if (b.text) return b.text;
+      if (b.content) return typeof b.content === 'string' ? b.content : JSON.stringify(b.content);
+      return JSON.stringify(b);
+    }).join(' ');
+  } else if (typeof body === 'object' && body !== null) {
+    body = JSON.stringify(body);
+  }
+  body = String(body ?? '');
+  // Compact: collapse newlines and tabs, then truncate.
+  body = body.replace(/\s+/g, ' ').trim();
+  const max = isError ? 240 : 180;
+  return body.length > max ? body.slice(0, max - 1) + '…' : body;
+}
+
+function renderStreamJsonLine(raw) {
+  // Cheap pre-check: stream-json lines start with '{'. Anything else is plain
+  // log output and should fall through to the raw renderer.
+  if (!raw || raw.charCodeAt(0) !== 123) return null;
+  let obj;
+  try { obj = JSON.parse(raw); } catch { return null; }
+  if (!obj || typeof obj !== 'object' || !obj.type) return null;
+
+  if (obj.type === 'assistant') {
+    const content = obj.message?.content || [];
+    const out = [];
+    for (const block of content) {
+      if (block.type === 'text' && block.text && block.text.trim()) {
+        out.push({ glyph: '⏺', body: block.text.trim(), kindClass: 'assistant-text' });
+      } else if (block.type === 'tool_use') {
+        const name = block.name || 'tool';
+        const summary = _summarizeToolInput(name, block.input);
+        out.push({ glyph: '⏺', body: name + (summary ? '(' + summary + ')' : '()'), kindClass: 'tool-call' });
+      } else if (block.type === 'thinking' && block.thinking && block.thinking.length > 4) {
+        // Render extended thinking as dim italic — usually empty signature
+        // payloads, so this branch fires only when actual reasoning leaked.
+        out.push({ glyph: '·', body: '(thinking)', kindClass: 'thinking' });
+      }
+    }
+    return out.length ? out : null;
+  }
+
+  if (obj.type === 'user') {
+    const content = obj.message?.content || [];
+    const out = [];
+    for (const block of content) {
+      if (block.type === 'tool_result') {
+        const isError = block.is_error === true;
+        const summary = _summarizeToolResult(block.content, isError);
+        out.push({
+          glyph: '⎿',
+          body: summary || (isError ? '(error)' : '(no output)'),
+          kindClass: isError ? 'tool-error' : 'tool-result',
+          stderr: isError,
+        });
+      }
+    }
+    return out.length ? out : null;
+  }
+
+  if (obj.type === 'system') {
+    const sub = obj.subtype;
+    if (sub === 'task_started') {
+      return [{
+        glyph: '⎿',
+        body: 'Async ' + (obj.description || obj.task_type || 'task') + ' started',
+        kindClass: 'tool-result',
+      }];
+    }
+    if (sub === 'task_notification') {
+      const status = obj.status || 'updated';
+      const desc = obj.description || obj.summary || obj.task_type || 'task';
+      return [{
+        glyph: '⎿',
+        body: 'Async ' + desc + ' ' + status,
+        kindClass: status === 'completed' ? 'tool-result' : (status === 'killed' ? 'tool-error' : 'tool-result'),
+      }];
+    }
+    if (sub === 'hook_started' || sub === 'hook_response') {
+      const outcome = obj.outcome || (sub === 'hook_started' ? 'started' : 'ok');
+      return [{ glyph: '·', body: 'hook ' + (obj.hook_name || '?') + ' ' + outcome, kindClass: 'system' }];
+    }
+    if (sub === 'init') {
+      const tools = (obj.tools || []).length;
+      const skills = (obj.skills || []).length;
+      const tail = obj.session_id ? obj.session_id.slice(-8) : '';
+      return [{
+        glyph: '·',
+        body: 'init session ' + tail + ' (model=' + (obj.model || '?') + ', tools=' + tools + ', skills=' + skills + ')',
+        kindClass: 'system',
+      }];
+    }
+    return null; // other system subtypes — silent
+  }
+
+  if (obj.type === 'result') {
+    const cost = typeof obj.total_cost_usd === 'number' ? '$' + obj.total_cost_usd.toFixed(4) : '$?';
+    const out = obj.usage?.output_tokens ?? '?';
+    const cacheRead = obj.usage?.cache_read_input_tokens;
+    const dur = obj.duration_ms ? Math.round(obj.duration_ms / 1000) + 's' : '?';
+    let body = 'turn complete · ' + out + ' out · ' + cost + ' · ' + dur;
+    if (cacheRead) body += ' · cache ' + (cacheRead >= 1000 ? (cacheRead / 1000).toFixed(1) + 'k' : cacheRead);
+    return [{ glyph: '✓', body, kindClass: 'turn-complete' }];
+  }
+
+  if (obj.type === 'rate_limit_event') return null; // silent
+  return null;
+}

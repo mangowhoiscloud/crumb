@@ -4,6 +4,32 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — Dashboard live exec feed: Claude-Code-style stream-json narrative (2026-05-03)
+
+The per-session live execution feed (above the chat input) was dumping spawn-log stream-json as raw text. User feedback: "이건 세션 내 채팅 입력창 위에 붙어있어야 해" — the user wants the same `⏺` / `⎿` / `✓` narrative bubbles they see inside Claude Code, faithfully mirrored in the dashboard so they can watch what the agent is doing without context-switching to the terminal.
+
+- **`renderStreamJsonLine()` parser** in `dashboard.js` — turns each spawn-log line (Claude CLI stream-json shape: `{type: 'assistant'|'user'|'system'|'result', ...}`) into one or more rendered bubbles:
+  - `type=assistant` content blocks → `⏺ <text>` (assistant text), `⏺ ToolName(summary)` (tool_use), `· (thinking)` (extended thinking)
+  - `type=user` tool_result → `⎿ <preview>` (collapsed) with `is_error` upgrading to `tool-error` style
+  - `type=system subtype=task_started|task_notification` → `⎿ Async <desc> started|completed|killed`
+  - `type=system subtype=hook_started|hook_response` → `· hook <name> <outcome>`
+  - `type=system subtype=init` → `· init session <id-tail> (model=…, tools=N, skills=N)`
+  - `type=result` → `✓ turn complete · <out> out · $<cost> · <dur> · cache <N>`
+  - `type=rate_limit_event` → silent (noise)
+- **Tool-call summarizers** — domain-specific input summary per tool: `Bash` shows the command first 90 chars, `Read/Write/Edit` shows file_path, `Grep/Glob` shows pattern (+ optional path), `Task/Agent` shows description + subagent_type, `TodoWrite` shows the in-progress todo or count, `WebSearch/WebFetch` shows query/url. Generic JSON-truncated fallback for unknown tools.
+- **Tool-result summarizer** — flattens array/object content to a single line, collapses whitespace, truncates to 180 chars (240 for errors so context isn't lost on failures).
+- **CSS for the new kindClasses** in `dashboard.css`:
+  - `kind-assistant-text` — full ink color, weight 500, white-space: pre-wrap (assistant text often spans multiple paragraphs)
+  - `kind-tool-call` — accent-warm color, monospace, slight transparency (so it visually stands as "agent action")
+  - `kind-tool-result` — muted ink, 16 px left padding, smaller font (78% opacity, indented under its call)
+  - `kind-tool-error` — audit-fg color, weight 500, indented (errors stand out in red)
+  - `kind-turn-complete` — accent-warm bold + dashed top border (visual anchor between turns)
+  - `kind-thinking` — tertiary color, 55% opacity, italic (deemphasized — usually just signature payloads)
+- **`FEED_MAX_LINES` bumped 800 → 2000** because stream-json rendering produces 3-5× line density vs raw transcript events. With 2000 lines × ~40 chars/line the DOM stays under ~80 KB which is well within smooth-scroll budget.
+- **Pre-check optimization** — `renderStreamJsonLine` returns null fast for non-JSON lines (charCode 123 check) so the chunk handler falls through to raw rendering without paying JSON.parse cost on plain log output.
+
+The same convention now powers both the Claude Code terminal view and the dashboard exec feed — when the agent is running, the user can watch the same `⏺ Bash(npm test)` / `⎿ 342 passed` / `✓ turn complete · 4280 out · $0.42 · 18s` narrative whether they look at the terminal or the browser. No code changes outside `packages/dashboard/src/client/`. 342/342 tests passing, lint clean, build clean.
+
 ### Added — Dashboard hardening: resizable panes / click-outside / Resume / Transcript viewer / coordinator visibility (2026-05-03)
 
 Six interactive-quality fixes to `packages/dashboard/`:
