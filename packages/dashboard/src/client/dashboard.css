@@ -49,7 +49,65 @@ html, body {
   height: 100%;
 }
 
-body { display: grid; grid-template-columns: 240px 1fr; height: 100vh; }
+body { display: grid; grid-template-columns: var(--sessions-w, 240px) 4px 1fr; height: 100vh; }
+
+/* Draggable resize handles — Mac/Windows native-feel split bars. */
+.resize-handle {
+  cursor: col-resize;
+  user-select: none;
+  background: transparent;
+  transition: background 120ms ease;
+  z-index: 10;
+}
+.resize-handle:hover,
+.resize-handle.dragging {
+  background: var(--primary, #4a90e2);
+}
+.resize-handle-sessions {
+  width: 4px;
+  height: 100vh;
+}
+.resize-handle-detail {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+}
+
+/* Resume CTA */
+.resume-btn {
+  background: var(--primary, #4a90e2);
+  color: white;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  margin-right: 8px;
+}
+.resume-btn:hover { filter: brightness(1.1); }
+.resume-btn:disabled { opacity: 0.6; cursor: wait; }
+
+/* Transcript viewer */
+.transcript-view { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.transcript-toolbar {
+  display: flex; gap: 8px; align-items: center;
+  padding: 8px 12px; border-bottom: 1px solid var(--hairline);
+  font-size: 12px;
+}
+.transcript-toolbar input {
+  flex: 1; background: var(--canvas); color: var(--ink);
+  border: 1px solid var(--hairline); border-radius: var(--r-sm);
+  padding: 4px 8px; font-family: ui-monospace, monospace; font-size: 11px;
+}
+.transcript-content {
+  flex: 1; overflow: auto; padding: 8px 12px; margin: 0;
+  font-family: ui-monospace, monospace; font-size: 11px; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-all; background: var(--canvas);
+}
 
 aside.sessions {
   background: var(--canvas);
@@ -437,7 +495,7 @@ section.swimlane {
 }
 
 aside.detail {
-  position: fixed; right: 0; top: 0; bottom: 0; width: 420px;
+  position: fixed; right: 0; top: 0; bottom: 0; width: var(--detail-w, 420px);
   background: var(--surface-1);
   border-left: 1px solid var(--hairline);
   padding: 20px;

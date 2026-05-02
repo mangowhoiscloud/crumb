@@ -1096,3 +1096,178 @@ setActiveView = function(view) {
   _origSetActiveView(view);
   if (view === 'output') refreshOutputTab();
 };
+
+// ─── v3.5 Dashboard hardening: resize, dismiss, resume, transcript ───────
+
+// (1) Draggable pane resize. Persists widths in localStorage so a refresh
+// keeps the user's chosen layout.
+function makeResizable(handleId, onDelta, persistKey, getInitial) {
+  const handle = $(handleId);
+  if (!handle) return;
+  let startX = 0;
+  let startVal = 0;
+  let dragging = false;
+  const persisted = persistKey ? Number(localStorage.getItem(persistKey)) : NaN;
+  if (persisted && persisted > 0) onDelta(persisted, /*absolute*/true);
+  const onMove = (e) => {
+    if (!dragging) return;
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    const dx = x - startX;
+    onDelta(startVal, false, dx);
+    e.preventDefault();
+  };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener('touchend', onUp);
+  };
+  const onDown = (e) => {
+    dragging = true;
+    handle.classList.add('dragging');
+    startX = e.touches ? e.touches[0].clientX : e.clientX;
+    startVal = getInitial();
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchend', onUp);
+    e.preventDefault();
+  };
+  handle.addEventListener('mousedown', onDown);
+  handle.addEventListener('touchstart', onDown, { passive: false });
+}
+
+makeResizable(
+  'sessions-resize',
+  (start, abs, dx) => {
+    const w = abs ? start : Math.max(160, Math.min(560, start + (dx ?? 0)));
+    document.body.style.setProperty('--sessions-w', w + 'px');
+    if (!abs) localStorage.setItem('crumb.sessions-w', String(w));
+  },
+  'crumb.sessions-w',
+  () => parseInt(getComputedStyle(document.body).getPropertyValue('--sessions-w'), 10) || 240,
+);
+makeResizable(
+  'detail-resize',
+  (start, abs, dx) => {
+    const w = abs ? start : Math.max(280, Math.min(800, start - (dx ?? 0)));
+    document.body.style.setProperty('--detail-w', w + 'px');
+    if (!abs) localStorage.setItem('crumb.detail-w', String(w));
+  },
+  'crumb.detail-w',
+  () => parseInt(getComputedStyle(document.body).getPropertyValue('--detail-w'), 10) || 420,
+);
+
+// (2) Click-outside-to-close detail pane. Avoids closing on its own resize handle.
+document.addEventListener('mousedown', (e) => {
+  const detail = $('detail');
+  if (!detail.classList.contains('open')) return;
+  if (detail.contains(e.target)) return;
+  // Don't close when click originates on a swimlane row that re-opens detail.
+  if (e.target.closest && e.target.closest('[data-evt-id]')) return;
+  detail.classList.remove('open');
+});
+
+// (3) Resume button — re-spawn last interrupted actor via inbox /redo.
+function lastActorErrorEvent() {
+  const arr = eventCache.get(activeSession) || [];
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const e = arr[i];
+    if (e.kind === 'error' || (e.kind === 'agent.stop' && /timed out|exit=[1-9]/.test(e.body || ''))) {
+      return e;
+    }
+    if (e.kind === 'agent.wake' || e.kind === 'build' || e.kind === 'spec' || e.kind === 'judge.score') {
+      return null; // a healthy event after the failure → no resume needed
+    }
+  }
+  return null;
+}
+function refreshResumeButton() {
+  const btn = $('resume-btn');
+  if (!btn) return;
+  if (!activeSession) { btn.style.display = 'none'; return; }
+  const evt = lastActorErrorEvent();
+  if (!evt) { btn.style.display = 'none'; return; }
+  const actor = evt.from && evt.from !== 'system' ? evt.from : 'last actor';
+  btn.style.display = '';
+  btn.textContent = '▶ Resume ' + actor;
+  btn.disabled = false;
+  btn.dataset.actor = evt.from || '';
+}
+$('resume-btn')?.addEventListener('click', async () => {
+  const btn = $('resume-btn');
+  const actor = btn.dataset.actor;
+  btn.disabled = true;
+  btn.textContent = 'spawning…';
+  // Inbox parser already handles `/redo` and `/resume` lines.
+  const line = actor ? `/redo @${actor} resume after timeout/error` : '/resume';
+  await sendInboxLine(activeSession, line, $('console-feedback'));
+  setTimeout(refreshResumeButton, 1000);
+});
+es.addEventListener('append', () => refreshResumeButton());
+
+// (4) Transcript viewer — pretty-printed jsonl, filterable, copyable.
+function renderTranscriptView() {
+  const root = $('transcript-content');
+  if (!root) return;
+  if (!activeSession) { root.textContent = '(no session selected)'; return; }
+  const arr = eventCache.get(activeSession) || [];
+  const filter = ($('transcript-filter')?.value || '').toLowerCase();
+  const pretty = $('transcript-pretty')?.checked ?? true;
+  const lines = arr
+    .filter(e => {
+      if (!filter) return true;
+      return JSON.stringify(e).toLowerCase().includes(filter);
+    })
+    .map(e => pretty ? JSON.stringify(e, null, 2) : JSON.stringify(e));
+  root.textContent = lines.join('\n\n');
+  $('transcript-status').textContent = `${arr.length} events · showing ${lines.length}`;
+}
+$('transcript-filter')?.addEventListener('input', renderTranscriptView);
+$('transcript-pretty')?.addEventListener('change', renderTranscriptView);
+$('transcript-copy')?.addEventListener('click', () => {
+  navigator.clipboard?.writeText($('transcript-content').textContent || '');
+});
+const _origSetActiveView2 = setActiveView;
+setActiveView = function(view) {
+  _origSetActiveView2(view);
+  if (view === 'transcript') renderTranscriptView();
+};
+es.addEventListener('append', e => {
+  if (activeView === 'transcript') {
+    const d = JSON.parse(e.data);
+    if (d.session_id === activeSession) renderTranscriptView();
+  }
+});
+
+// (5) Coordinator visibility: surface system "dispatch.spawn" notes as
+// coordinator routing decisions in the live exec feed. Coordinator is
+// host-inline (v3 invariant) so it doesn't emit `agent.wake`/`agent.stop`
+// during normal routing — only on rollback/stop/done. Without this attribution
+// the coordinator lane appears silent even though routing is happening.
+const _origAppendFeedLine = appendFeedLine;
+es.addEventListener('append', e => {
+  const d = JSON.parse(e.data);
+  if (activeSession && d.session_id !== activeSession) return;
+  const m = d.msg;
+  if (m && m.from === 'system' && m.kind === 'note' && /dispatch\.spawn/.test(m.body || '')) {
+    const target = m.data?.actor || '?';
+    _origAppendFeedLine({
+      ts: m.ts,
+      actor: 'coordinator',
+      body: `→ route: spawn(${target}) via ${m.data?.adapter || '?'} [host-inline routing]`,
+      kindClass: 'system',
+    });
+  }
+});
+
+// Init: refresh resume button on session select.
+const _origSelectSessionFinal = selectSession;
+selectSession = function(id) {
+  _origSelectSessionFinal(id);
+  refreshResumeButton();
+  if (activeView === 'transcript') renderTranscriptView();
+};

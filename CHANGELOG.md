@@ -4,6 +4,19 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — Dashboard hardening: resizable panes / click-outside / Resume / Transcript viewer / coordinator visibility (2026-05-03)
+
+Six interactive-quality fixes to `packages/dashboard/`:
+
+- **Resizable session + detail panes.** Both side panes now have draggable split bars (Mac/Windows-feel `col-resize` cursor). Width is persisted in `localStorage` (`crumb.sessions-w` / `crumb.detail-w`) so a refresh keeps the user's layout. Bounds clamped (sessions 160–560 px, detail 280–800 px). The grid-template uses CSS variables (`--sessions-w`, `--detail-w`) and the body grid gains a 4 px handle column. Touch (passive: false on `touchmove`) and mouse both wired.
+- **Click-outside-to-close detail pane.** Right-side detail aside dismisses on any `mousedown` outside its bounds, with two opt-outs: clicks on `[data-evt-id]` swimlane rows (which re-open detail with a new event) and clicks on the pane's own resize handle.
+- **Resume button.** New CTA in the view-tabs row. Surfaces only when the last actor event was an `error` or a timeout-tagged `agent.stop` (regex `timed out|exit=[1-9]`) and no healthy follow-up event landed since. On click, posts `/redo @<actor> resume after timeout/error` to the inbox endpoint — the existing inbox parser turns that into a `kind=user.intervene data.action="redo" target_actor=<actor>` event, which the reducer routes back into the dispatcher's normal spawn loop.
+- **Transcript viewer tab.** New `Transcript` tab next to Pipeline / Logs / Output. Pretty-printed JSONL with substring filter, copy-all button, live event count. Re-renders on `append` SSE events while the tab is active.
+- **Coordinator visibility (root-cause + fix).** The user reported the coordinator pane appears silent during normal routing. Investigation: `src/dispatcher/live.ts` only emits `from=coordinator` events on `rollback` / `stop` / `done` effects (lines 320 / 332 / 341 / 347) — by design, since the coordinator is host-inline (v3 invariant 9, depth=1) and doesn't run as a subprocess that emits `agent.wake` / `agent.stop`. Routing decisions surface as `from=system kind=note body="dispatch.spawn → ..."`. The dashboard fix attributes those system spawn-notes to the coordinator lane in the live execution feed (`→ route: spawn(<actor>) via <adapter> [host-inline routing]`), so the lane no longer reads as silent. The underlying invariant is preserved.
+- **Resume button + transcript viewer wired into the existing SSE handlers** so they self-update on every appended event.
+
+Test plan: lint clean (0 errors, 26 informational sonarjs warnings), typecheck clean, format clean, **342/342 tests passing**, build inlined the new client (78991 bytes) into `dashboard-html.generated.ts`. No code changes outside `packages/dashboard/src/client/{dashboard.html, dashboard.css, dashboard.js}`. The dashboard pretest hook re-inlines automatically; CI ratchet preserved.
+
 ### Added — Dashboard multi-home support (`--home <path>` repeatable + `CRUMB_HOMES` env) (2026-05-02)
 
 The dashboard could only watch a single Crumb home (default `~/.crumb`), so test sessions under `/tmp/crumb-test-home/` and production sessions under `~/.crumb/` couldn't appear together. Now one dashboard instance aggregates from any number of homes.
