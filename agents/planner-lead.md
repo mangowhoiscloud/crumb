@@ -100,7 +100,20 @@ Emit `kind=handoff.requested(to=researcher)` with `payload={video_refs?, concept
 
 Phase B starts in a fresh planner-lead spawn (cache_carry_over via `adapter_session_id` so the system-prompt prefix is cached). The new transcript context now contains `kind=step.research.video` × N + `kind=step.research` (synthesis) from the researcher actor.
 
-Inline-read `agents/specialists/visual-designer.md` AND `agents/specialists/game-design.md`. Produce palette (3–5 colors, contrast ≥ 4.5:1), tile design, motion timings, HUD layout — all realizable inside the §1 envelope (Phaser 3.80, ≤60KB). When `step.research.video` events are present, ground motion timings in observed evidence (cite `evidence_refs`). When the research path was text-only, palette + motion follow visual-designer defaults.
+Inline-read `agents/specialists/visual-designer.md` AND
+`agents/specialists/game-design.md`. **v3.4 — also inline-read any
+user-supplied DESIGN.md** at `<session>/inbox/design.md` or
+`<session>/artifacts/DESIGN.brand.md` (VoltAgent `awesome-design-md`
+9-section format — see game-design.md §2.5). When present, the user
+DESIGN.md's Color Palette + Typography + Component Stylings are binding
+— your palette / tile design / motion timings inherit those tokens.
+When absent, fall back to `visual-designer.md` defaults.
+
+Produce palette (3–5 colors, contrast ≥ 4.5:1), tile design, motion
+timings, HUD layout — all realizable inside the §1 envelope (multi-file
+default per game-design.md §1.1; single-file fallback per §1.2). When
+`step.research.video` events are present, ground motion timings in
+observed evidence (cite `evidence_refs`).
 
 Append: `kind=step.design` with `body=<palette + motion summary>` + `data={palette, tile_design, motion, hud_layout, evidence_refs?}`.
 

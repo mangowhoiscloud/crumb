@@ -128,15 +128,25 @@ export function mapEffort(effort: Effort): EffortMapping {
   };
 }
 
-/** Default config — all high-end models, all 3 providers enabled, effort=high. */
+/**
+ * v3.4 default config — every actor uses the user's local entry host
+ * (`claude-code` for Claude Code sessions). Cross-provider runs remain
+ * available but are now opt-in via `crumb run --preset bagelcode-cross-3way`,
+ * which overrides builder → codex + verifier → gemini-cli at session-start
+ * time. The single-host default keeps a fresh checkout single-auth.
+ *
+ * All 3 local providers stay enabled so the dispatcher can fall back / swap
+ * at runtime via `crumb_model` MCP tool or TUI; only the actor seed bindings
+ * changed.
+ */
 export function defaultConfig(): ModelConfig {
   return {
     defaults: { effort: 'high' },
     actors: {
       coordinator: { harness: 'claude-code', model: 'claude-opus-4-7', effort: 'high' },
       'planner-lead': { harness: 'claude-code', model: 'claude-opus-4-7', effort: 'high' },
-      builder: { harness: 'codex', model: 'gpt-5.5-codex', effort: 'high' },
-      verifier: { harness: 'gemini-cli', model: 'gemini-3-1-pro', effort: 'high' },
+      builder: { harness: 'claude-code', model: 'claude-opus-4-7', effort: 'high' },
+      verifier: { harness: 'claude-code', model: 'claude-opus-4-7', effort: 'high' },
       'builder-fallback': { harness: 'claude-code', model: 'claude-sonnet-4-6', effort: 'high' },
     },
     providers: {

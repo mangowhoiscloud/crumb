@@ -32,6 +32,13 @@ enabled = true
 [providers."gemini-cli-local"]
 enabled = true
 
+# v3.4 default — every actor uses the user's local entry host (claude-code in
+# Claude Code sessions). This keeps a fresh checkout single-auth: the user only
+# needs the host they already have, no codex / gemini login required to demo.
+# Cross-provider runs remain available via `crumb run --preset bagelcode-cross-3way`,
+# which overrides builder → codex + verifier → gemini-cli at session-start time.
+# This file is the user-overridable seed; per-session presets win when chosen.
+
 [actors."coordinator"]
 harness = "claude-code"
 model = "claude-opus-4-7"
@@ -43,16 +50,17 @@ model = "claude-opus-4-7"
 effort = "high"
 
 [actors."builder"]
-harness = "codex"
-model = "gpt-5.5-codex"
+harness = "claude-code"
+model = "claude-opus-4-7"
 effort = "high"
 
 # Verifier extended thinking — highest leverage actor per Snell ICLR 2025.
-# Cross-3way preset binds this to gemini-cli + gemini-3-1-pro (top of MODEL_CATALOG);
-# effort flows through preset-loader.applyConfigOverride() to the dispatcher binding.
+# Defaults to ambient claude-code so a single-auth checkout works; switch via
+# `crumb model "verifier 모델을 gemini-3-1-pro 로"` or `--preset bagelcode-cross-3way`
+# when cross-provider self-bias mitigation is desired.
 [actors."verifier"]
-harness = "gemini-cli"
-model = "gemini-3-1-pro"
+harness = "claude-code"
+model = "claude-opus-4-7"
 effort = "high"
 
 [actors."builder-fallback"]

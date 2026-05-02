@@ -6,32 +6,113 @@
 
 ## §1 Hard envelope (every artifact MUST conform)
 
-The non-negotiable technical floor under which every Crumb game artifact runs. Verifier reads these as D6.portability ground truth via the `qa_check` effect (`src/dispatcher/qa-runner.ts`).
+The non-negotiable technical floor under which every Crumb game artifact runs.
+Verifier reads these as D6.portability ground truth via the `qa_check` effect
+(`src/dispatcher/qa-runner.ts`).
 
-- **Output**: single-file `game.html` (HTML + inline CSS + inline JS, no external bundle, no asset directory)
+**v3.4 widening — multi-file modular envelope.** Frontier convergence (4 sources
+in `wiki/references/bagelcode-mobile-multifile-frontier-2026-05-02.md`:
+`Yakoub-ai/phaser4-gamedev`, `OpusGameLabs/game-creator`, Phaser-official Claude
+Code tutorial 2026-02, Troy Scott "2D shooter in one evening") shows every
+production-quality LLM-generated Phaser game in 2026 ships as a multi-file
+modular project. The previous `single-file game.html ≤60KB` envelope was a
+v3.0 simplifier; v3.4 keeps it as a **fallback profile** but the default
+target is now the multi-file profile that matches frontier practice.
+
+### §1.1 Default profile — `multi-file` (target for new sessions)
+
+```
+artifacts/game/
+  index.html                  # entry; viewport + manifest link + safe-area inset
+  manifest.webmanifest        # PWA install descriptor (name / icons / start_url / theme_color)
+  sw.js                       # cache-first service worker (offline guarantee)
+  icon-192.png                # base64-emitted PNG, Canvas-rendered (or sharp 64×64 SVG re-rasterized)
+  icon-512.png
+  src/
+    main.js                   # Phaser config + scene registration
+    config/
+      gameConfig.js           # canvas size, scale mode (Phaser.Scale.FIT), physics
+      tuning.json             # balance numbers (mirrors artifacts/tuning.json)
+    scenes/
+      BootScene.js            # asset preload (procedural sprite + atlas generation)
+      MenuScene.js
+      GameScene.js
+      GameOverScene.js
+    entities/
+      <one-file-per-entity>.js
+    systems/
+      AudioManager.js         # Web Audio synth — BGM 1 lead + 4 SFX, no <audio> src
+      ScoreManager.js
+      InputManager.js         # pointer events + drag + touch-action: none
+  assets/
+    sprites.png               # OPTIONAL — texture atlas if procedural rendering insufficient
+    sprites.json              # OPTIONAL — atlas frame map
+```
+
+- **Output**: directory under `artifacts/game/` (≤ 5 MB total, ≤ 25 files).
+  Procedural sprite generation (Canvas API in `BootScene`) is preferred over
+  binary asset files — `OpusGameLabs/game-creator` pattern.
+- **No build step**: ES modules + `<script type="module">` + import map in
+  `index.html`. Phaser stays on CDN. Vite / webpack / esbuild forbidden — the
+  project must run via `npx http-server artifacts/game` or by opening
+  `index.html` in a static-file-aware browser. This keeps the LLM's emit
+  surface in plain text and avoids a build dependency the evaluator must
+  install.
 - **Framework**: Phaser 3.80+ via CDN
   ```html
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
   ```
-- **Renderer**: Canvas 2D (default — WebGL acceptable but Canvas is the portability target)
-- **Bundle**: ≤ 60KB own code (CDN external doesn't count)
-- **Performance**: 60fps on iPhone Safari 16+ / Android Chrome 100+
-- **Touch**: pointer events, ≥44×44 hit zones (WCAG 2.5.5 AAA)
-- **Viewport**: 320–428 portrait, safe-area aware
-- **Audio**: WebAudio inline (no `<audio>` src), data URLs only
-- **Network**: zero runtime requests after CDN load — game must run offline
+- **Mobile-first**: viewport meta + `touch-action: none` + safe-area inset
+  + portrait fit (Phaser `Scale.FIT` between 320–428 portrait).
+- **PWA**: `manifest.webmanifest` + `sw.js` (single-file cache shell). Result:
+  evaluator can scan a QR code + install on their phone.
+- **Audio**: Web Audio synth in `systems/AudioManager.js` (procedural — 1 BGM
+  lead + 4 SFX). No external `.mp3` / `.ogg`.
+- **Performance**: 60fps on iPhone Safari 16+ / Android Chrome 100+.
+- **Touch**: pointer events, ≥44×44 hit zones (WCAG 2.5.5 AAA).
+- **Network**: zero runtime requests after CDN load + SW first-fetch — game
+  must run offline.
+
+### §1.2 Fallback profile — `single-file` (legacy / constrained envelopes)
+
+When the user explicitly opts in via `--profile single-file` or when the goal
+contains "single file" / "단일 파일" markers, builder reverts to the v3.0
+shape:
+
+- **Output**: single `artifacts/game.html` (HTML + inline CSS + inline JS).
+- **Bundle**: ≤ 60 KB own code.
+- Same Phaser-CDN / Canvas / Mobile-first / Audio / Network rules as §1.1.
 
 ## §2 Forbidden
 
 | Forbidden | Reason |
 |---|---|
-| ❌ npm bundlers (webpack / vite / parcel) | produces multi-file output; breaks single-file invariant |
-| ❌ native engine output (Unity / Godot / Unreal binaries) | not portable, not single-file |
+| ❌ npm bundlers (webpack / vite / parcel / esbuild) | produces output that needs `npm install` to evaluate; defeats "README대로 실행" |
+| ❌ native engine output (Unity / Godot / Unreal binaries) | not portable, not LLM-emit-able in plain text |
 | ❌ Three.js / Babylon | outside the casual mobile envelope |
-| ❌ external asset URLs except embedded `data:` URIs | breaks offline run |
+| ❌ external asset URLs except embedded `data:` URIs and the Phaser CDN | breaks offline run |
 | ❌ Phaser 2 syntax | use 3.80+ (Scene class, ArcadePhysics, etc.) |
 | ❌ network requests at runtime | game must run offline after CDN load |
 | ❌ proprietary game references (IAP, ads, live ops) | P0 scope |
+
+## §2.5 Visual identity input — DESIGN.md (VoltAgent format)
+
+When the user drops a DESIGN.md (Google Stitch / VoltAgent
+`awesome-design-md` format) into `<session>/inbox/design.md` or
+`<session>/artifacts/DESIGN.brand.md`, the planner-lead **inline-reads it
+during step.design** and treats the colors / typography / component stylings
+/ spacing / motion sections as binding constraints for the Phaser game's
+palette + UI vocabulary. The 71 reference files at
+`https://github.com/VoltAgent/awesome-design-md/tree/main/design-md` (Stripe /
+Vercel / Linear / Sentry / Notion / etc.) are the canonical source of valid
+DESIGN.md shape; any user-supplied DESIGN.md MUST follow that 9-section
+structure (visual theme / color palette + roles / typography / component
+stylings / layout / depth / do's-and-don'ts / responsive / agent prompt
+guide).
+
+When NO DESIGN.md is supplied, planner-lead falls back to its own visual
+designer specialist (`agents/specialists/visual-designer.md`) for palette
++ motion choices — same code path as before.
 
 ## §3 Video evidence schema (v3.3 — researcher actor)
 
@@ -174,6 +255,36 @@ Planner-lead's final synth combines step.research + step.design into `artifacts/
 | `builder` | §1 envelope + §2 forbidden (binding constraint while writing game.html) + §5 (reads `artifacts/DESIGN.md` per format) | Sandwich §"Inputs" |
 | `builder-fallback` | Same as builder | Fallback substitute |
 | `verifier` | §1 + §2 (D6.portability via qa.result lookup) + §3.3/§4 evidence schema (D5 anti-deception rule) | CourtEval D5/D6 input |
+
+## §6.5 LLM playthrough — verifier responsibility (v3.4)
+
+The deterministic `qa_check` effect (htmlhint + Playwright headless smoke
+served via `npx http-server artifacts/game/`) gives D2 / D6 ground truth and
+is **never replaced** — that's the anti-deception floor. v3.4 layers an
+**LLM playthrough** on top:
+
+- The verifier's CourtEval Grader sub-step uses **Playwright MCP** (Anthropic's
+  Model Context Protocol — `wiki/references/bagelcode-llm-qa-playthrough-2026-05-03.md`)
+  to drive a real headless Chromium against the running game and execute a
+  short scenario derived from `spec.md` acceptance criteria (e.g. "tap start →
+  drag a tile → verify combo counter increments"). This is what
+  `microsoft/playwright-mcp` v1.56+ ("planner / generator / healer" agent
+  trio, GA in 2025-10) was designed for.
+- Each AC item becomes one **playthrough scenario step**; the verifier emits
+  `kind=step.judge` (step=`grader`) with `data.scenario_steps` listing
+  `{ac_id, action, observation, pass|fail}`.
+- D1 (spec_fit) score now requires `evidence` to cite scenario-step msg ids —
+  empty evidence → D1 ≤ 2.
+- Critic / Defender sub-steps re-read the scenario log; Re-grader closes.
+- Vision-driven verification is OPT-IN (Computer Use API): the verifier MAY
+  request a screenshot at scenario end and grade visual fidelity vs DESIGN.md
+  palette / motion timings. Frontier 2026 evidence (Anthropic
+  *Demystifying Evals* + Adnan Masood Apr 2026) recommends rubric-based
+  pointwise grading for UX dims; we follow that pattern.
+
+The LLM playthrough is **additive evidence**, never overrides the
+deterministic D2 / D6 ground truth from `qa.result`. Anti-deception Rules 1-2
+still force-correct any verifier attempt to claim D2 ≠ qa.result.
 
 ## §7 Migration notes (from former design/DESIGN.md)
 
