@@ -59,6 +59,14 @@ export interface SpawnRequest {
    * judge.score. Anti-deception Rule 4 input.
    */
   builderProvider?: string;
+  /**
+   * Optional harness id for the actor's preset binding ('claude-code',
+   * 'codex', 'gemini-cli', 'gemini-sdk', 'mock', etc). Forwarded as
+   * CRUMB_HARNESS so `crumb event` can stamp `metadata.harness`.
+   * AGENTS.md §135 invariant ("Every emitted message sets metadata.harness +
+   * provider + model per the active preset binding").
+   */
+  harness?: string;
 }
 
 export interface SpawnResult {

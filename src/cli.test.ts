@@ -75,4 +75,49 @@ describe('stampEnvMetadata', () => {
     // for the dominant case where actors set their own metadata).
     expect(out).toBe(draft);
   });
+
+  it('stamps harness + model from CRUMB_HARNESS / CRUMB_MODEL', () => {
+    const out = stampEnvMetadata(baseDraft({ kind: 'build' }), {
+      CRUMB_HARNESS: 'codex',
+      CRUMB_PROVIDER: 'openai',
+      CRUMB_MODEL: 'gpt-5.5-codex',
+    });
+    expect(out.metadata?.harness).toBe('codex');
+    expect(out.metadata?.provider).toBe('openai');
+    expect(out.metadata?.model).toBe('gpt-5.5-codex');
+  });
+
+  it('rejects unknown harness id (validates against the closed enum)', () => {
+    const out = stampEnvMetadata(baseDraft({ kind: 'note' }), {
+      CRUMB_HARNESS: 'rogue-harness',
+    });
+    expect(out.metadata?.harness).toBeUndefined();
+  });
+
+  it('does NOT overwrite actor-supplied harness / model', () => {
+    const out = stampEnvMetadata(
+      baseDraft({
+        kind: 'note',
+        metadata: { harness: 'gemini-cli', model: 'custom-model' },
+      }),
+      { CRUMB_HARNESS: 'codex', CRUMB_MODEL: 'gpt-5.5' },
+    );
+    expect(out.metadata?.harness).toBe('gemini-cli');
+    expect(out.metadata?.model).toBe('custom-model');
+  });
+
+  it('stamps full triple harness/provider/model alongside cross_provider on judge.score', () => {
+    const out = stampEnvMetadata(baseDraft(), {
+      CRUMB_HARNESS: 'gemini-cli',
+      CRUMB_PROVIDER: 'google',
+      CRUMB_MODEL: 'gemini-3-1-pro',
+      CRUMB_BUILDER_PROVIDER: 'openai',
+    });
+    expect(out.metadata).toMatchObject({
+      harness: 'gemini-cli',
+      provider: 'google',
+      model: 'gemini-3-1-pro',
+      cross_provider: true,
+    });
+  });
 });

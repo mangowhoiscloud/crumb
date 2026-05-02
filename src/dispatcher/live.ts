@@ -204,6 +204,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
           effort: binding?.effort,
           signal: controller.signal,
           provider: binding?.provider,
+          harness: binding?.harness,
           ...(builderProvider ? { builderProvider } : {}),
         });
       } finally {
