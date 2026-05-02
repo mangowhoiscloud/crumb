@@ -36,11 +36,13 @@ export class CodexLocalAdapter implements Adapter {
     const sandwich = await readFile(req.sandwichPath, 'utf8');
 
     // Codex CLI flags differ from claude — using `exec` mode for non-interactive run.
-    // The sandwich is piped via stdin; the prompt is the user task.
+    // The sandwich is piped via stdin; the prompt is a POSITIONAL argument
+    // (`codex exec [OPTIONS] [PROMPT]`). The `--prompt` flag is rejected with
+    // "unexpected argument '--prompt' found" — verified against codex-cli 0.123.0.
     //
     // Most reducer spawn effects omit `prompt` because the actor's job is fully
     // described by the sandwich. Fall back to a generic kickoff so codex always
-    // receives `--prompt <text>` and doesn't sit waiting on stdin for instructions.
+    // receives a positional prompt and doesn't sit waiting on stdin.
     const promptText =
       req.prompt && req.prompt.trim().length > 0
         ? req.prompt
@@ -50,8 +52,7 @@ export class CodexLocalAdapter implements Adapter {
       '--cd',
       req.sessionDir,
       '--full-auto', // skip confirmation prompts
-      '--prompt',
-      promptText,
+      promptText, // positional, always last
     ];
 
     const env: NodeJS.ProcessEnv = {
