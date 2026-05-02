@@ -122,16 +122,58 @@ async function checkGemini(): Promise<HostStatus> {
 }
 
 async function checkPlaywright(): Promise<HostStatus> {
-  if (process.env.PLAYWRIGHT_AVAILABLE !== '1') {
+  // v3.5 — playwright is now an optionalDependency with auto-postinstall.
+  // Detect via npm package presence (not env var) so the doctor reflects
+  // ground truth: did `npm install` actually pull the package down?
+  // Legacy `PLAYWRIGHT_AVAILABLE=1` still honored as an opt-in override.
+  if (process.env.PLAYWRIGHT_AVAILABLE === '1') {
+    return { host: 'playwright', status: 'OK', detail: 'PLAYWRIGHT_AVAILABLE=1 (env override)' };
+  }
+  try {
+    const req = (await import('node:module')).createRequire(import.meta.url);
+    req.resolve('playwright/package.json');
+    return { host: 'playwright', status: 'OK', detail: 'npm package resolvable' };
+  } catch {
     return {
       host: 'playwright',
       status: 'MISSING',
-      detail: 'PLAYWRIGHT_AVAILABLE=1 not set (optional)',
+      detail: 'npm package not installed (D6 portability skipped)',
       action_required:
-        'npm i -D playwright && npx playwright install chromium && export PLAYWRIGHT_AVAILABLE=1 (D6 portability 점수 활성화)',
+        '`npm install` 다시 — playwright 가 optionalDependencies 에 있어 자동 설치됨. 명시적 설치는 `npm i -D playwright`.',
     };
   }
-  return { host: 'playwright', status: 'OK', detail: 'PLAYWRIGHT_AVAILABLE=1' };
+}
+
+async function checkChromiumBinary(): Promise<HostStatus> {
+  // qa-check-playwright launches chromium headless. Detect cached binary at
+  // the standard playwright cache locations across platforms.
+  const { existsSync, readdirSync } = await import('node:fs');
+  const { homedir, platform } = await import('node:os');
+  const { join } = await import('node:path');
+  const macCache = join(homedir(), 'Library', 'Caches', 'ms-playwright');
+  const linuxCache = join(homedir(), '.cache', 'ms-playwright');
+  const winCache = join(process.env.LOCALAPPDATA ?? homedir(), 'ms-playwright');
+  const envCache = process.env.PLAYWRIGHT_BROWSERS_PATH;
+  const candidates = [envCache, macCache, linuxCache, winCache].filter((p): p is string => !!p);
+  for (const root of candidates) {
+    if (!existsSync(root)) continue;
+    let entries: string[] = [];
+    try {
+      entries = readdirSync(root);
+    } catch {
+      continue;
+    }
+    if (entries.some((e) => /^chromium(_headless_shell)?(-\d+)?$/.test(e))) {
+      return { host: 'chromium binary', status: 'OK', detail: `cached at ${root}` };
+    }
+  }
+  return {
+    host: 'chromium binary',
+    status: 'MISSING',
+    detail: `not found in playwright cache (${platform()})`,
+    action_required:
+      '`npx playwright install chromium` 또는 `npm install` (postinstall 훅이 자동 설치 시도)',
+  };
 }
 
 async function checkHtmlhint(): Promise<HostStatus> {
@@ -145,6 +187,7 @@ export async function runDoctor(): Promise<DoctorReport> {
     checkCodex(),
     checkGemini(),
     checkPlaywright(),
+    checkChromiumBinary(),
     checkHtmlhint(),
   ]);
   const claudeOk = hosts[0].status === 'OK';
