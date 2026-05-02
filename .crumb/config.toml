@@ -39,10 +39,16 @@ enabled = true
 # which overrides builder → codex + verifier → gemini-cli at session-start time.
 # This file is the user-overridable seed; per-session presets win when chosen.
 
+# Coordinator is a quick-thinking router (TradingAgents §4.3 split: routing
+# = quick-think model, deep reasoning = deep-think model). Hub-Ledger-Spoke
+# routing decisions are 1–2 turn lookups against the transcript head — they
+# don't benefit from extended thinking. Haiku ≈10× cheaper + 3–5× faster
+# than Opus, and the routing quality difference is empirically negligible
+# for our 43-kind decision tree. Per-actor `crumb model` override still works.
 [actors."coordinator"]
 harness = "claude-code"
-model = "claude-opus-4-7"
-effort = "high"
+model = "claude-haiku-4-5"
+effort = "low"
 
 [actors."planner-lead"]
 harness = "claude-code"

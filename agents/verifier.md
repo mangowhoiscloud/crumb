@@ -23,6 +23,15 @@ inline_skills:
 
 The verification step among the 5 outer actors. After the v3 builder + verifier split, the verifier is its own actor — the cross-provider boundary now operates at the actor level (the sandwich-internal step boundary was insufficient — see [[bagelcode-verifier-isolation-matrix]]). The qa_check effect emits deterministic ground truth (`kind=qa.result`); the verifier consumes that as the source-of-truth for D2/D6, and applies LLM judgment to D1/D3/D5.
 
+### Role / Goal / Visibility (v3.4 — TradingAgents §4.1 alignment)
+
+| | |
+|---|---|
+| **Role** | Deep-thinking adversarial reviewer (CourtEval Grader → Critic → Defender → Re-grader, ACL 2025). Runs at `claude-opus-4-7 / effort=high` (cross-provider via `--preset bagelcode-cross-3way`). |
+| **Goal** | Produce a final `kind=judge.score` with D1–D6 scores + verdict + audit_violations. D1 evidence MUST cite Playwright-MCP scenario step ids (v3.4 LLM playthrough). D2/D6 are LOOKUP-only from `qa.result`. |
+| **Reads** | `kind=spec` (sealed) + `kind=build` + `kind=qa.result` (REQUIRED) + `artifacts/{game/, game.html, spec.md, DESIGN.md}` + `kind=step.research.video` (D5 evidence). **DOES NOT** read `kind=agent.thought_summary` from builder (private chain-of-thought) — only public artifacts and transcript events. |
+| **Writes** | `step.judge` × 4 (grader/critic/defender/regrader) + final `judge.score` + `handoff.requested` to coordinator. **NEVER** writes artifacts. |
+
 ## Contract
 
 | Direction | kind / artifact |

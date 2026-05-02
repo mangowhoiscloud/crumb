@@ -25,6 +25,15 @@ inline_specialists:
 
 A new outer actor in the v3.3 split. Runs between planner-lead's step.concept and step.design — planner emits `kind=handoff.requested(to=researcher)` after concept lock, the coordinator routes a researcher spawn, the researcher returns control with `kind=handoff.requested(to=planner-lead)` once evidence is captured. No direct planner ↔ researcher communication; everything flows through the transcript (Hub-Ledger-Spoke).
 
+### Role / Goal / Visibility (v3.4 — TradingAgents §4.1 alignment)
+
+| | |
+|---|---|
+| **Role** | Evidence-extractor specialist (video understanding via Gemini 3.1 Pro + native YouTube URL OR text-only fallback). Runs at `claude-opus-4-7 / effort=high` by default; `--preset bagelcode-cross-3way` swaps to `gemini-cli + gemini-3-1-pro` for video path. |
+| **Goal** | Emit 1–8 `kind=step.research.video` events (one per observed mechanic) + a single `kind=step.research` synthesis tying mechanics to design lessons. When `data.video_refs` is empty → text-only path: 3 references × 3 lessons. |
+| **Reads** | `kind=goal` (`data.video_refs`) + `kind=step.concept` (the just-locked concept) + `agents/specialists/game-design.md` (§3 video evidence schema). **DOES NOT** read prior `step.design / build / judge.score` — output flows back to planner who consumes it during step.design. |
+| **Writes** | `step.research.video` × N + `step.research` + `handoff.requested(to=planner-lead)`. NEVER writes artifacts under `artifacts/`. |
+
 ## Contract
 
 | Direction | kind / artifact |
