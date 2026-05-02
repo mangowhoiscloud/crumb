@@ -47,11 +47,12 @@ const ACTOR_TO_SANDWICH: Partial<Record<Actor, string>> = {
   coordinator: 'agents/coordinator.md',
 };
 
-/** Harness → adapter id mapping for preset bindings. SDK harnesses fall back to local CLI for now. */
+/** Harness → adapter id mapping for preset bindings. v3.3 added gemini-sdk for the researcher actor (Gemini 3.1 Pro native YouTube URL + 10fps frame sampling — gemini-cli has p1-unresolved video bugs). */
 const HARNESS_TO_ADAPTER: Record<Harness, string> = {
   'claude-code': 'claude-local',
   codex: 'codex-local',
   'gemini-cli': 'gemini-local',
+  'gemini-sdk': 'gemini-sdk',
   'anthropic-sdk': 'claude-local',
   'openai-sdk': 'codex-local',
   'google-sdk': 'gemini-local',

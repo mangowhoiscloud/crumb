@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mangowhoiscloud/crumb/protocol/schemas/message.schema.json",
   "title": "Crumb Transcript Message",
-  "description": "Single transcript.jsonl line. v3.3: 43 kinds (4 system + 11 workflow + 5 dialogue + 5 step + 5 user + 3 handoff + 7 meta + 3 version/fork) × 11 identification/routing/classification fields × 8 from × 12 step. OTel GenAI alias-able via metadata.gen_ai. 5-layer hierarchy (project → session → run → turn → step → event) with run_id/turn_id in metadata.crumb. See wiki/concepts/bagelcode-system-architecture-v3.md §3.",
+  "description": "Single transcript.jsonl line. v3.3: 44 kinds (4 system + 11 workflow + 5 dialogue + 6 step + 5 user + 3 handoff + 7 meta + 3 version/fork) × 11 identification/routing/classification fields × 9 from × 13 step. OTel GenAI alias-able via metadata.gen_ai. 5-layer hierarchy (project → session → run → turn → step → event) with run_id/turn_id in metadata.crumb. researcher actor + step.research.video added in v3.3 for the multimodal video-evidence path (gemini-sdk binding). See wiki/concepts/bagelcode-system-architecture-v3.md §3.",
   "type": "object",
   "required": ["id", "ts", "session_id", "from", "kind"],
   "properties": {
@@ -20,11 +20,12 @@
     "task_id": { "type": "string" },
     "from": {
       "type": "string",
-      "description": "v3: 8 actors. engineering-lead split into builder + verifier (cross-provider boundary).",
+      "description": "v3.3: 9 actors. engineering-lead split into builder + verifier (v3, cross-provider boundary). researcher promoted from inline-read specialist to standalone actor (v3.3, multimodal video understanding via gemini-sdk).",
       "enum": [
         "user",
         "coordinator",
         "planner-lead",
+        "researcher",
         "builder",
         "verifier",
         "builder-fallback",
@@ -42,7 +43,7 @@
     },
     "kind": {
       "type": "string",
-      "description": "v3.3: 43 kinds (4 system + 11 workflow + 5 dialogue + 5 step + 5 user + 3 handoff + 7 meta + 3 version/fork). +qa.result (deterministic ground truth event emitted by dispatcher, no LLM). +session.forked / version.released / version.refinement (v3.3 milestone hierarchy — see wiki/concepts/bagelcode-transcripts-schema.md §v4).",
+      "description": "v3.3: 44 kinds (4 system + 11 workflow + 5 dialogue + 6 step + 5 user + 3 handoff + 7 meta + 3 version/fork). +qa.result (deterministic ground truth event emitted by dispatcher, no LLM). +session.forked / version.released / version.refinement (v3.3 milestone hierarchy). +step.research.video (per-clip video-evidence event emitted by researcher actor via gemini-sdk).",
       "enum": [
         "session.start",
         "session.end",
@@ -68,6 +69,7 @@
         "step.socratic",
         "step.concept",
         "step.research",
+        "step.research.video",
         "step.design",
         "step.judge",
         "user.intervene",
@@ -96,6 +98,7 @@
         "socratic",
         "concept",
         "research",
+        "research.video",
         "design",
         "builder",
         "qa",
@@ -190,11 +193,12 @@
         "visibility": { "type": "string", "enum": ["public", "private"], "default": "public" },
         "harness": {
           "type": "string",
-          "description": "v3: which CLI/SDK harness produced this event. Used for cross-provider self-bias detection.",
+          "description": "v3.3: which CLI/SDK harness produced this event. Used for cross-provider self-bias detection. gemini-sdk added in v3.3 for the researcher actor's video understanding path (gemini-cli has 4 closed/p1-unresolved video bugs, so the SDK is the deterministic route).",
           "enum": [
             "claude-code",
             "codex",
             "gemini-cli",
+            "gemini-sdk",
             "anthropic-sdk",
             "openai-sdk",
             "google-sdk",
@@ -227,6 +231,15 @@
         "tool": {
           "type": "string",
           "description": "v3: tool/effect identifier for deterministic events (e.g., 'qa-check-effect@v1')."
+        },
+        "evidence_kind": {
+          "type": "string",
+          "enum": ["video", "screenshot", "text"],
+          "description": "v3.3: classifies the source of researcher / verifier evidence for D5 anti-deception checks. researcher's step.research.video sets 'video'; planner-internal text-only research path uses 'text'."
+        },
+        "cache_key": {
+          "type": "string",
+          "description": "v3.3: sha256 of (video_ref + model + prompt_version) for the gemini-sdk adapter's replay cache. The SDK call itself is non-deterministic (model output varies); replay reads the existing transcript event verbatim instead of re-calling the network."
         },
         "verifier_provider": {
           "type": "string",

@@ -59,7 +59,13 @@ export interface ModelConfig {
 export const MODEL_CATALOG: Record<Provider, string[]> = {
   anthropic: ['claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
   openai: ['gpt-5.5-codex', 'gpt-5.5', 'gpt-4o', 'gpt-4o-mini'],
-  google: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash'],
+  google: [
+    'gemini-3-1-pro',
+    'gemini-3-pro',
+    'gemini-2.5-pro',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+  ],
   none: ['fixture-v1'],
 };
 
@@ -68,6 +74,7 @@ export const HARNESS_PROVIDER: Record<Harness, Provider> = {
   'claude-code': 'anthropic',
   codex: 'openai',
   'gemini-cli': 'google',
+  'gemini-sdk': 'google',
   'anthropic-sdk': 'anthropic',
   'openai-sdk': 'openai',
   'google-sdk': 'google',

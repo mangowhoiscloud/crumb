@@ -596,4 +596,71 @@ describe('reducer', () => {
     const { state } = reduce(s0, build);
     expect(state.progress_ledger.circuit_breaker['builder']).toBeUndefined();
   });
+
+  // v3.3 — researcher actor routing
+
+  it('v3.3: handoff.requested(to=researcher) from planner-lead → spawn(researcher, gemini-sdk)', () => {
+    const s0 = initialState('sess-test');
+    const handoff = fixed({
+      from: 'planner-lead',
+      kind: 'handoff.requested',
+      to: 'researcher',
+      data: { phase: 'A', concept_id: '01H0000000000000000000CONC' },
+    });
+    const { state, effects } = reduce(s0, handoff);
+
+    expect(state.progress_ledger.next_speaker).toBe('researcher');
+    expect(effects).toHaveLength(1);
+    expect(effects[0]).toMatchObject({
+      type: 'spawn',
+      actor: 'researcher',
+      adapter: 'gemini-sdk',
+    });
+  });
+
+  it('v3.3: handoff.requested(to=other) from non-planner is a no-op', () => {
+    const s0 = initialState('sess-test');
+    const handoff = fixed({
+      from: 'builder',
+      kind: 'handoff.requested',
+      to: 'coordinator',
+    });
+    const { state, effects } = reduce(s0, handoff);
+
+    expect(state.progress_ledger.next_speaker).toBe(null);
+    expect(effects).toHaveLength(0);
+  });
+
+  it('v3.3: step.research from researcher → resume planner-lead for phase B', () => {
+    const s0 = initialState('sess-test');
+    const research = fixed({
+      from: 'researcher',
+      kind: 'step.research',
+      body: 'synthesis from 2 video evidence events',
+      data: { evidence_kind: 'video' },
+    });
+    const { state, effects } = reduce(s0, research);
+
+    expect(state.progress_ledger.next_speaker).toBe('planner-lead');
+    expect(effects).toHaveLength(1);
+    expect(effects[0]).toMatchObject({
+      type: 'spawn',
+      actor: 'planner-lead',
+    });
+  });
+
+  it('v3.3: step.research from planner-lead (legacy inline) is a no-op', () => {
+    const s0 = initialState('sess-test');
+    const research = fixed({
+      from: 'planner-lead',
+      kind: 'step.research',
+      body: 'pre-v3.3 inline-read marker',
+    });
+    const { state, effects } = reduce(s0, research);
+
+    // Backwards-compat: pre-v3.3 transcripts where planner-lead emitted
+    // step.research as an inline marker must NOT trigger a phase-B spawn.
+    expect(state.progress_ledger.next_speaker).toBe(null);
+    expect(effects).toHaveLength(0);
+  });
 });
