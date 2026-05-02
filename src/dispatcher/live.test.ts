@@ -1,9 +1,16 @@
 /**
- * Dispatcher tests — focus on v3.2 G4 sandwich override pipeline.
+ * Dispatcher tests — two coupled focuses:
  *
- * Verifies that the spawn case assembles base + agents/<actor>.local.md +
- * effect.sandwich_appends into sessions/<id>/agent-workspace/<actor>/sandwich.assembled.md
- * and passes that path (not the base path) to the adapter.
+ *   1. v3.2 G4 sandwich override pipeline. Verifies the spawn case assembles
+ *      base + agents/<actor>.local.md + effect.sandwich_appends into
+ *      sessions/<id>/agent-workspace/<actor>/sandwich.assembled.md and passes
+ *      that path (not the base path) to the adapter.
+ *
+ *   2. v3.2 per_spawn_timeout guardrail. Stub adapters cover (a) fast adapter
+ *      under budget, (b) hanging adapter ignoring abort (timeout fires but
+ *      adapter still returns; dispatcher records timeout in transcript), and
+ *      (c) cooperative hanging adapter exiting 124 on signal (matches live
+ *      adapters wired to child.kill('SIGTERM')).
  */
 
 import { describe, expect, it } from 'vitest';
@@ -21,6 +28,7 @@ import {
   type SpawnResult,
 } from '../adapters/types.js';
 import type { Effect } from '../effects/types.js';
+import type { Message } from '../protocol/types.js';
 
 class CaptureAdapter implements Adapter {
   readonly id = 'capture';
@@ -34,7 +42,7 @@ class CaptureAdapter implements Adapter {
   }
 }
 
-async function makeDeps(): Promise<{
+async function makeSandwichDeps(): Promise<{
   deps: DispatcherDeps;
   capture: CaptureAdapter;
   repoRoot: string;
@@ -63,9 +71,98 @@ async function makeDeps(): Promise<{
   return { deps, capture, repoRoot, sessionDir };
 }
 
+class FastAdapter implements Adapter {
+  readonly id = 'stub-fast';
+  spawnCount = 0;
+  async health(): Promise<{ ok: boolean }> {
+    return { ok: true };
+  }
+  async spawn(): Promise<SpawnResult> {
+    this.spawnCount += 1;
+    return { exitCode: 0, stdout: 'fast', stderr: '', durationMs: 1 };
+  }
+}
+
+class HangingIgnoresSignal implements Adapter {
+  readonly id = 'stub-hang-ignore';
+  async health(): Promise<{ ok: boolean }> {
+    return { ok: true };
+  }
+  async spawn(_req: SpawnRequest): Promise<SpawnResult> {
+    const start = Date.now();
+    await new Promise((r) => setTimeout(r, 200));
+    return { exitCode: 0, stdout: '', stderr: '', durationMs: Date.now() - start };
+  }
+}
+
+class HangingCooperative implements Adapter {
+  readonly id = 'stub-hang-coop';
+  async health(): Promise<{ ok: boolean }> {
+    return { ok: true };
+  }
+  async spawn(req: SpawnRequest): Promise<SpawnResult> {
+    return new Promise<SpawnResult>((resolveResult) => {
+      const start = Date.now();
+      const finish = (exitCode: number, stderr: string): void => {
+        resolveResult({ exitCode, stdout: '', stderr, durationMs: Date.now() - start });
+      };
+      const timer = setTimeout(() => finish(0, ''), 5000);
+      timer.unref?.();
+      req.signal?.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(timer);
+          finish(124, 'aborted by signal');
+        },
+        { once: true },
+      );
+    });
+  }
+}
+
+async function readEvents(path: string): Promise<Message[]> {
+  const raw = await readFile(path, 'utf8');
+  return raw
+    .split('\n')
+    .filter((l) => l.trim().length > 0)
+    .map((l) => JSON.parse(l) as Message);
+}
+
+async function makeTimeoutDeps(
+  adapter: Adapter,
+  perSpawnTimeoutMs: number,
+): Promise<DispatcherDeps> {
+  const dir = await mkdtemp(resolve(tmpdir(), 'crumb-dispatch-test-'));
+  const sessionDir = resolve(dir, 'session');
+  await mkdir(sessionDir, { recursive: true });
+  const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
+  await writeFile(transcriptPath, '');
+  const writer = new TranscriptWriter({ path: transcriptPath, sessionId: 'sess-test' });
+  const registry = new AdapterRegistry();
+  registry.register(adapter);
+  const repoRoot = resolve(dir, 'repo');
+  await mkdir(resolve(repoRoot, 'agents'), { recursive: true });
+  await writeFile(resolve(repoRoot, 'agents', 'builder.md'), '# stub builder sandwich\n');
+  return {
+    writer,
+    registry,
+    sessionId: 'sess-test',
+    sessionDir,
+    transcriptPath,
+    repoRoot,
+    perSpawnTimeoutMs,
+  };
+}
+
+const spawnEffect: Effect = {
+  type: 'spawn',
+  actor: 'builder',
+  adapter: '',
+};
+
 describe('dispatcher — v3.2 G4 sandwich override', () => {
   it('passes base sandwich path unchanged when no local + no appends', async () => {
-    const { deps, capture, repoRoot } = await makeDeps();
+    const { deps, capture, repoRoot } = await makeSandwichDeps();
     const basePath = resolve(repoRoot, 'agents/builder.md');
     await writeFile(basePath, '# base builder sandwich\n');
     const eff: Effect = {
@@ -79,7 +176,7 @@ describe('dispatcher — v3.2 G4 sandwich override', () => {
   });
 
   it('assembles base + appends into sessions/<id>/agent-workspace/<actor>/sandwich.assembled.md', async () => {
-    const { deps, capture, repoRoot, sessionDir } = await makeDeps();
+    const { deps, capture, repoRoot, sessionDir } = await makeSandwichDeps();
     const basePath = resolve(repoRoot, 'agents/builder.md');
     await writeFile(basePath, '# base builder sandwich\n');
     const eff: Effect = {
@@ -102,7 +199,7 @@ describe('dispatcher — v3.2 G4 sandwich override', () => {
   });
 
   it('includes agents/<actor>.local.md when present', async () => {
-    const { deps, capture, repoRoot, sessionDir } = await makeDeps();
+    const { deps, capture, repoRoot, sessionDir } = await makeSandwichDeps();
     const basePath = resolve(repoRoot, 'agents/builder.md');
     const localPath = resolve(repoRoot, 'agents/builder.local.md');
     await writeFile(basePath, '# base builder sandwich\n');
@@ -123,7 +220,7 @@ describe('dispatcher — v3.2 G4 sandwich override', () => {
   });
 
   it('orders parts: base → local → appends', async () => {
-    const { deps, capture, repoRoot } = await makeDeps();
+    const { deps, capture, repoRoot } = await makeSandwichDeps();
     const basePath = resolve(repoRoot, 'agents/builder.md');
     const localPath = resolve(repoRoot, 'agents/builder.local.md');
     await writeFile(basePath, 'BASE_MARKER');
@@ -145,4 +242,52 @@ describe('dispatcher — v3.2 G4 sandwich override', () => {
     expect(basename(capture.lastRequest!.sandwichPath)).toBe('sandwich.assembled.md');
     expect(existsSync(capture.lastRequest!.sandwichPath)).toBe(true);
   });
+});
+
+describe('dispatcher per_spawn_timeout', () => {
+  it('fast spawn completes without recording an error', async () => {
+    const adapter = new FastAdapter();
+    const deps = await makeTimeoutDeps(adapter, 1000);
+    await dispatch({ ...spawnEffect, adapter: adapter.id }, deps);
+
+    const events = await readEvents(deps.transcriptPath);
+    expect(adapter.spawnCount).toBe(1);
+    expect(events.some((e) => e.kind === 'error')).toBe(false);
+    const stop = events.find((e) => e.kind === 'agent.stop');
+    expect(stop).toBeDefined();
+    expect(stop?.body).not.toMatch(/timed out/);
+  }, 5_000);
+
+  it('records per_spawn_timeout error when adapter ignores the abort signal', async () => {
+    const adapter = new HangingIgnoresSignal();
+    const deps = await makeTimeoutDeps(adapter, 50);
+    await dispatch({ ...spawnEffect, adapter: adapter.id }, deps);
+
+    const events = await readEvents(deps.transcriptPath);
+    const err = events.find((e) => e.kind === 'error');
+    expect(err).toBeDefined();
+    expect(err?.body).toMatch(/per_spawn_timeout/);
+    expect(err?.data).toMatchObject({ reason: 'per_spawn_timeout', timeout_ms: 50 });
+    const stop = events.find((e) => e.kind === 'agent.stop');
+    expect(stop?.body).toMatch(/timed out/);
+  }, 5_000);
+
+  it('cooperative adapter exits early on abort and dispatcher records timeout', async () => {
+    const adapter = new HangingCooperative();
+    const deps = await makeTimeoutDeps(adapter, 50);
+    const t0 = Date.now();
+    await dispatch({ ...spawnEffect, adapter: adapter.id }, deps);
+    const elapsed = Date.now() - t0;
+    expect(elapsed).toBeLessThan(2000);
+
+    const events = await readEvents(deps.transcriptPath);
+    const err = events.find((e) => e.kind === 'error');
+    expect(err).toBeDefined();
+    expect(err?.body).toMatch(/per_spawn_timeout/);
+    expect(err?.data).toMatchObject({
+      reason: 'per_spawn_timeout',
+      timeout_ms: 50,
+      exit_code: 124,
+    });
+  }, 5_000);
 });

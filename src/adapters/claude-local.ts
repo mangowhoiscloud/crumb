@@ -82,7 +82,18 @@ export class ClaudeLocalAdapter implements Adapter {
       child.stdout.on('data', (b) => (stdout += b.toString()));
       child.stderr.on('data', (b) => (stderr += b.toString()));
       child.on('error', reject);
+      // Per-spawn timeout (autoresearch P3): the dispatcher passes an
+      // AbortSignal that fires when the spawn exceeds its budget. SIGTERM
+      // gives the CLI a chance to flush stdout before exit.
+      const onAbort = (): void => {
+        if (!child.killed) child.kill('SIGTERM');
+      };
+      if (req.signal) {
+        if (req.signal.aborted) onAbort();
+        else req.signal.addEventListener('abort', onAbort, { once: true });
+      }
       child.on('close', (code) => {
+        if (req.signal) req.signal.removeEventListener('abort', onAbort);
         resolve({
           exitCode: code ?? -1,
           stdout,

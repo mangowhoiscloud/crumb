@@ -15,6 +15,15 @@ import type { AdapterRegistry } from '../adapters/types.js';
 import { runQaCheckEffect } from './qa-runner.js';
 import type { Harness, PresetSpec } from './preset-loader.js';
 
+/**
+ * v3.2 budget guardrail (autoresearch P3): an individual spawn cannot run
+ * longer than this. The dispatcher AbortController fires SIGTERM via the
+ * adapter's signal handler and the spawn is recorded as kind=error so the
+ * reducer's circuit_breaker trips. Wiki: bagelcode-budget-guardrails.md
+ * §"per_spawn_timeout".
+ */
+const PER_SPAWN_TIMEOUT_MS = 5 * 60 * 1000; // 5 min
+
 export interface DispatcherDeps {
   writer: TranscriptWriter;
   registry: AdapterRegistry;
@@ -37,6 +46,12 @@ export interface DispatcherDeps {
   providersEnabled?: Record<string, boolean>;
   /** Bridge: hook effects surface as user prompts (TUI/CLI). */
   onHook?: (kind: string, body: string, data?: Record<string, unknown>) => Promise<void>;
+  /**
+   * Per-spawn timeout override (ms). Defaults to PER_SPAWN_TIMEOUT_MS (5 min).
+   * Tests pass small values (e.g. 50ms) to exercise the abort path without
+   * waiting for the production budget.
+   */
+  perSpawnTimeoutMs?: number;
 }
 
 const ACTOR_TO_SANDWICH: Partial<Record<Actor, string>> = {
@@ -101,22 +116,53 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         actor: effect.actor,
       });
       const adapter = deps.registry.get(adapterId);
-      const result = await adapter.spawn({
-        actor: effect.actor,
-        sessionId: deps.sessionId,
-        sessionDir: deps.sessionDir,
-        sandwichPath,
-        transcriptPath: deps.transcriptPath,
-        prompt: effect.prompt,
-      });
+
+      // v3.2 per_spawn_timeout: AbortController fires SIGTERM via the adapter's
+      // signal handler. The Promise.race pattern is unnecessary here — the
+      // adapter's own close handler resolves once SIGTERM lands, and we read
+      // controller.signal.aborted to distinguish a timed-out spawn from a
+      // genuine adapter error.
+      const controller = new AbortController();
+      const timeoutMs = deps.perSpawnTimeoutMs ?? PER_SPAWN_TIMEOUT_MS;
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      // Don't keep the event loop alive on the timer alone.
+      timer.unref?.();
+
+      let result;
+      try {
+        result = await adapter.spawn({
+          actor: effect.actor,
+          sessionId: deps.sessionId,
+          sessionDir: deps.sessionDir,
+          sandwichPath,
+          transcriptPath: deps.transcriptPath,
+          prompt: effect.prompt,
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+
+      const timedOut = controller.signal.aborted;
       // Surface non-zero exit as kind=error so the reducer can trip the breaker.
-      if (result.exitCode !== 0) {
+      // Timeout is a special case: clearer body + structured data so observers
+      // and the verifier can distinguish stalled spawn from genuine CLI failure.
+      if (result.exitCode !== 0 || timedOut) {
         await deps.writer.append({
           session_id: deps.sessionId,
           from: effect.actor,
           kind: 'error',
-          body: `adapter ${adapterId} exited ${result.exitCode}`,
-          data: { stderr: result.stderr.slice(0, 2000) },
+          body: timedOut
+            ? `per_spawn_timeout: adapter ${adapterId} exceeded ${timeoutMs}ms (SIGTERM sent)`
+            : `adapter ${adapterId} exited ${result.exitCode}`,
+          data: timedOut
+            ? {
+                reason: 'per_spawn_timeout',
+                timeout_ms: timeoutMs,
+                exit_code: result.exitCode,
+                stderr: result.stderr.slice(0, 2000),
+              }
+            : { stderr: result.stderr.slice(0, 2000) },
         });
       }
       // Always append agent.stop so observers know the turn ended.
@@ -124,7 +170,9 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         session_id: deps.sessionId,
         from: effect.actor,
         kind: 'agent.stop',
-        body: `${effect.actor} stopped (exit=${result.exitCode}, ${result.durationMs}ms)`,
+        body: `${effect.actor} stopped (exit=${result.exitCode}, ${result.durationMs}ms${
+          timedOut ? ', timed out' : ''
+        })`,
         metadata: { latency_ms: result.durationMs },
       });
       break;

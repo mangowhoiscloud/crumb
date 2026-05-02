@@ -15,6 +15,16 @@ export interface SpawnRequest {
   /** Where the agent should append transcript events (passed via env). */
   transcriptPath: string;
   sessionId: string;
+  /**
+   * Optional cancellation signal. The dispatcher sets a per-spawn timeout
+   * (autoresearch P3 budget guardrail; default 5min, see
+   * wiki/concepts/bagelcode-budget-guardrails.md §"per_spawn_timeout"). On
+   * abort, the adapter MUST send SIGTERM to the underlying CLI subprocess so
+   * the per-spawn budget is enforced even when the agent stalls. Adapters
+   * should treat an aborted spawn as a hard exit (non-zero exit code) so the
+   * reducer's error branch trips the circuit breaker.
+   */
+  signal?: AbortSignal;
 }
 
 export interface SpawnResult {
