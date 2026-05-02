@@ -3,15 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { reduce } from './index.js';
 import { initialState } from '../state/types.js';
 import type { Message } from '../protocol/types.js';
+import { fixedMessage } from '../test-helpers/fixtures.js';
 
-const fixed = (overrides: Partial<Message>): Message => ({
-  id: '01H0000000000000000000000A',
-  ts: '2026-05-01T00:00:00.000Z',
-  session_id: 'sess-test',
-  from: 'user',
-  kind: 'goal',
-  ...overrides,
-});
+const fixed = (overrides: Partial<Message>): Message => fixedMessage(overrides, 'goal');
 
 describe('reducer', () => {
   it('routes goal → spawn(planner-lead, claude-local)', () => {
