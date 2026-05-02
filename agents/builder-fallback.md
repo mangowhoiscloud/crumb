@@ -62,7 +62,7 @@ Same as builder.md:
 
 | tool | scope |
 |---|---|
-| Read | `artifacts/`, `design/`, `wiki/`, `skills/tdd-iron-law.md` |
+| Read | `artifacts/`, `agents/specialists/`, `wiki/`, `skills/tdd-iron-law.md` |
 | Write | `artifacts/game.html` (the only writable target) |
 | Edit | `artifacts/game.html` only |
 | Bash | **forbidden** — qa-check effect handles exec deterministically |

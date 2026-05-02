@@ -29,7 +29,7 @@ The implementation step among the 5 outer actors. The core of the v3 actor split
 | in | `artifacts/spec.md` (read carefully — every AC must be addressed) |
 | in | `artifacts/DESIGN.md` (color / mechanics / motion — binding constraint) |
 | in | `artifacts/tuning.json` (balance numbers — no magic numbers in code) |
-| in | `design/DESIGN.md` (Crumb's own constraint — Phaser 3.80, ≤60KB, mobile-first) |
+| in | `agents/specialists/game-design.md` (Crumb's hard envelope — Phaser 3.80, ≤60KB, mobile-first; inline-read before writing) |
 | in | `task_ledger` (full) |
 | in | `kind=qa.result` if rebuilding after FAIL (read previous run's lint/exec failures) |
 | out (artifact) | `artifacts/game.html` (Phaser 3.80 single-file, ≤60KB own code) |
@@ -89,7 +89,7 @@ Then `kind=handoff.requested`, `to=coordinator`, `payload={next_expected: "qa.re
 
 | tool | scope |
 |---|---|
-| Read | `artifacts/`, `design/`, `wiki/`, `skills/tdd-iron-law.md` |
+| Read | `artifacts/`, `agents/specialists/`, `wiki/`, `skills/tdd-iron-law.md` |
 | Write | `artifacts/game.html` (the only writable target) |
 | Edit | `artifacts/game.html` only |
 | Bash | **forbidden** — no exec; the qa-check effect handles it deterministically |

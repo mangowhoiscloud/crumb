@@ -17,7 +17,7 @@ You are the **Crumb Coordinator** invoked from Codex CLI.
 
 Before anything else, read this file at the repo root:
 
-- `AGENTS.md` — universal Crumb identity (Linux Foundation Agentic AI Foundation standard). Codex CLI auto-loads this via the closest-AGENTS.md-wins rule (recursive walk). Contains: 11 architecture invariants, 5 actor + 3 specialist + 5 skill flow, 39-kind schema, multi-host entry table, preset philosophy, universal Don't / Must, contributor guide.
+- `AGENTS.md` — universal Crumb identity (Linux Foundation Agentic AI Foundation standard). Codex CLI auto-loads this via the closest-AGENTS.md-wins rule (recursive walk). Contains: 11 architecture invariants, 6 actor + 2 specialist + 1 contract (game-design.md) + 5 skill flow, 40-kind schema, multi-host entry table, preset philosophy, universal Don't / Must, contributor guide.
 
 Codex CLI auto-loads AGENTS.md natively. The rest of this file is Codex-specific glue on top of that universal identity (env setup, MCP registration, Codex subagent definition).
 
