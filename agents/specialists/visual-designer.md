@@ -2,7 +2,7 @@
 
 > Inline-read by `agents/planner-lead.md` during step.design. NOT a separate spawn.
 > Maps from gamestudio-subagents (193⭐) `sr_game_artist.md` + `ui_ux_agent.md` (compressed).
-> See: [[bagelcode-system-architecture-v3]] §3.2.
+> See: [[bagelcode-system-architecture-v0.1]] §3.2.
 
 ## Persona
 
@@ -114,8 +114,8 @@ planner-lead synth then writes `artifacts/DESIGN.md` and updates `artifacts/tuni
 
 ## See also
 
-- `agents/specialists/game-design.md` — Crumb's hard envelope (Phaser 3.80 multi-file PWA) + video evidence schema (v3.3)
+- `agents/specialists/game-design.md` — Crumb's hard envelope (Phaser 3.80 multi-file PWA) + video evidence schema (v0.3.0)
 - [[bagelcode-mobile-game-tech-2026]] — mobile design references
 - [[bagelcode-gamestudio-subagents-2026]] §10 — sr_game_artist + ui_ux_agent mapping
-- `agents/specialists/concept-designer.md` (preceding inline-read step) + `agents/researcher.md` (preceding actor turn — v3.3)
+- `agents/specialists/concept-designer.md` (preceding inline-read step) + `agents/researcher.md` (preceding actor turn — v0.3.0)
 - `agents/builder.md` — uses DESIGN.md as binding constraint

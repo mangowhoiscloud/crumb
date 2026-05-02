@@ -77,7 +77,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 }
 
 /**
- * v3.4: locate the repo root by walking up from THIS module's location until a
+ * v0.3.1: locate the repo root by walking up from THIS module's location until a
  * marker (`AGENTS.md` + `agents/` dir) is found. Resolves both `npm link`
  * symlinks and `npm i -g` global installs to the actual repo, so `crumb run`
  * works from any cwd without `--root` (Bagelcode reviewer expectation:
@@ -109,7 +109,7 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
   if (!goal) throw new Error('--goal required');
   const sessionId = args.flags.get('session') ?? ulid();
   const cwd = process.cwd();
-  // v3.4: auto-detect repo root from the running script so `crumb` works from
+  // v0.3.1: auto-detect repo root from the running script so `crumb` works from
   // any cwd without `--root` (Bagelcode reviewer expectation: clone → npm
   // install → crumb run, no host-specific paths). Fallback chain:
   //   1. --root flag (explicit)
@@ -118,7 +118,7 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
   //      until a CRUMB.md or AGENTS.md is found
   //   4. cwd (legacy fallback)
   const repoRoot = args.flags.get('root') ?? process.env.CRUMB_REPO_ROOT ?? inferRepoRoot() ?? cwd;
-  // v3.3: sessions live under ~/.crumb/projects/<id>/sessions/<ulid>/.
+  // v0.3.0: sessions live under ~/.crumb/projects/<id>/sessions/<ulid>/.
   // The cwd determines project id (sha256 ambient or pinned via .crumb/project.toml).
   await ensureCrumbHome();
   await ensureProjectDir(cwd);
@@ -127,7 +127,7 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
   const presetName = args.flags.get('preset');
   const label = args.flags.get('label');
   const idleTimeoutMs = Number(args.flags.get('idle-timeout') ?? 60_000);
-  // v3.4: per-spawn timeout flag (override 10-min default for slow Claude wakes
+  // v0.3.1: per-spawn timeout flag (override 10-min default for slow Claude wakes
   // or fast mock runs). Default `undefined` → dispatcher's PER_SPAWN_TIMEOUT_MS.
   const perSpawnTimeoutFlag = args.flags.get('per-spawn-timeout');
   const perSpawnTimeoutMs = perSpawnTimeoutFlag ? Number(perSpawnTimeoutFlag) : undefined;
@@ -141,7 +141,7 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
   // eslint-disable-next-line no-console
   console.log(`[crumb] adapter=${adapterOverride ?? '(preset or ambient)'} repo=${repoRoot}`);
 
-  // v3.3: write meta.json on start. If --session refers to an existing meta we
+  // v0.3.0: write meta.json on start. If --session refers to an existing meta we
   // patch its status; otherwise create a fresh one. This makes resume + ls O(1).
   const existingMeta = await readMeta(sessionDir);
   if (existingMeta) {
@@ -437,12 +437,12 @@ async function cmdReplay(args: ParsedArgs): Promise<void> {
 }
 
 /**
- * v3 S15 — resume: re-derive state from a transcript and report what's next.
+ * v0.1 S15 — resume: re-derive state from a transcript and report what's next.
  *
  * P0: surfaces last state + next_speaker so the user can decide how to continue.
  * P1: live re-entry into the coordinator loop (spawns next actor automatically).
  *
- * See [[bagelcode-system-architecture-v3]] §"S15 persistence boost".
+ * See [[bagelcode-system-architecture-v0.1]] §"S15 persistence boost".
  */
 async function cmdResume(args: ParsedArgs): Promise<void> {
   const target = args.positional[0];
@@ -499,7 +499,7 @@ async function cmdResume(args: ParsedArgs): Promise<void> {
 }
 
 async function cmdDoctor(): Promise<void> {
-  // v3 S12: full environment check (3 host OAuth + playwright + htmlhint).
+  // v0.1 S12: full environment check (3 host OAuth + playwright + htmlhint).
   const { runDoctor, formatReport } = await import('./helpers/doctor.js');
   const report = await runDoctor();
   // eslint-disable-next-line no-console
@@ -518,7 +518,7 @@ async function cmdDoctor(): Promise<void> {
 }
 
 async function cmdConfig(args: ParsedArgs): Promise<void> {
-  // v3 S12: /crumb config <자연어> — preset 추천.
+  // v0.1 S12: /crumb config <자연어> — preset 추천.
   const naturalLanguage = args.positional.join(' ') || args.flags.get('query') || '';
   if (!naturalLanguage) {
     throw new Error(
@@ -532,7 +532,7 @@ async function cmdConfig(args: ParsedArgs): Promise<void> {
 }
 
 async function cmdDebug(args: ParsedArgs): Promise<void> {
-  // v3 S12: /crumb debug — F1-F7 routing 장애 진단.
+  // v0.1 S12: /crumb debug — F1-F7 routing 장애 진단.
   const target = args.positional[0];
   if (!target) throw new Error('debug requires a session id or session-dir');
   const cwd = process.cwd();
@@ -621,7 +621,7 @@ async function cmdExport(args: ParsedArgs): Promise<void> {
  *   crumb init --host <name>         scope to one of: claude | codex | gemini
  *   crumb init --format json         JSON output (default: human-readable)
  *
- * Project pin mode (v3.3): pin the cwd to a stable ULID so renames/moves
+ * Project pin mode (v0.3.0): pin the cwd to a stable ULID so renames/moves
  * preserve project identity. Writes <cwd>/.crumb/project.toml with a fresh
  * ULID; subsequent `crumb run` resolves via the pin instead of sha256(cwd).
  *
@@ -677,7 +677,7 @@ async function writeProjectPin(cwd: string, label?: string): Promise<void> {
   await mkdir(pinDir, { recursive: true });
   const id = ulid();
   const lines = [
-    '# Crumb project pin (v3.3+).',
+    '# Crumb project pin (v0.3.0+).',
     '# This file pins the project id for ~/.crumb/projects/<id>/ so that renaming',
     '# or moving the cwd preserves project identity. Without this file the project',
     '# id is derived from sha256(canonical(cwd))[:16] (ambient mode).',
@@ -729,7 +729,7 @@ async function cmdModel(args: ParsedArgs): Promise<void> {
 
 async function cmdLs(_args: ParsedArgs): Promise<void> {
   const cwd = process.cwd();
-  // v3.3: list sessions in this project (~/.crumb/projects/<id>/sessions/).
+  // v0.3.0: list sessions in this project (~/.crumb/projects/<id>/sessions/).
   // Legacy <cwd>/sessions/ is also surfaced with a marker until `crumb migrate`.
   const dir = await getSessionsDir(cwd);
   const entries: SessionListing[] = [];
@@ -795,7 +795,7 @@ function truncate(s: string, n: number): string {
 
 /**
  * `crumb migrate [--dry-run]` — relocate legacy `<cwd>/sessions/<id>/` directories
- * (v3.2 and older) into `~/.crumb/projects/<id>/sessions/<id>/`. Idempotent —
+ * (v0.2.0 and older) into `~/.crumb/projects/<id>/sessions/<id>/`. Idempotent —
  * existing destination dirs are left intact and the source remains so the operator
  * can resolve manually.
  */

@@ -122,7 +122,7 @@ AXIS 3: Cost-budget
 
 ## 구현 우선순위
 
-### P0 — 제출 전 반드시 (≈ 1.5h) — **shipped 2026-05-02 (feat/v3.2-budget-ratchet)**
+### P0 — 제출 전 반드시 (≈ 1.5h) — **shipped 2026-05-02 (feat/v0.2.0-budget-ratchet)**
 
 폭주 case 자체를 schema 수준에서 차단:
 

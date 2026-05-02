@@ -14,7 +14,7 @@
  * TranscriptWriter — same path the dispatcher uses, so user.* events are
  * indistinguishable from any other source.
  *
- * See [[bagelcode-system-architecture-v3]] §10.1 (TUI = P0 surface).
+ * See [[bagelcode-system-architecture-v0.1]] §10.1 (TUI = P0 surface).
  */
 
 import { resolve } from 'node:path';

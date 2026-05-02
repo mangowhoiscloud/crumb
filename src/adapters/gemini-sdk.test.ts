@@ -60,8 +60,8 @@ describe('GeminiSdkAdapter', () => {
     expect(h.reason).toContain('GOOGLE_API_KEY');
   });
 
-  it('v3.4: no video_refs in goal → emits kind=error (stub branch removed)', async () => {
-    // v3.4: the text-only stub branch was removed because it emitted empty
+  it('v0.3.1: no video_refs in goal → emits kind=error (stub branch removed)', async () => {
+    // v0.3.1: the text-only stub branch was removed because it emitted empty
     // reference_games[] / design_lessons[] regardless of input — pretending
     // to research while doing nothing. The reducer's pickAdapter('researcher')
     // now routes text-only sessions to claude-local; gemini-sdk only
@@ -123,7 +123,7 @@ describe('GeminiSdkAdapter', () => {
     // Cache key formula must match adapter's: sha256(uri::model::PROMPT_VERSION).
     const { createHash } = await import('node:crypto');
     const cacheKey = createHash('sha256')
-      .update(`${videoRef}::gemini-3-1-pro::v3.3-researcher@v1`)
+      .update(`${videoRef}::gemini-3-1-pro::v0.3.0-researcher@v1`)
       .digest('hex');
     const cachedEvidence: Message = {
       id: '01H0000000000000000000001V',

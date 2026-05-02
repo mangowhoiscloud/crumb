@@ -23,7 +23,7 @@ describe('reducer', () => {
       adapter: 'claude-local',
       sandwich_appends: [],
     });
-    // v3.3: planner-lead spawn carries the goal as kickoff prompt to avoid
+    // v0.3.0: planner-lead spawn carries the goal as kickoff prompt to avoid
     // ambiguous "awaiting input" stalls (run 01KQMCCR6M observability finding).
     expect((effects[0] as { prompt?: string }).prompt).toContain('match-3 game');
     expect((effects[0] as { prompt?: string }).prompt).toContain('Begin your turn');
@@ -45,7 +45,7 @@ describe('reducer', () => {
     ]);
   });
 
-  it('v3: routes build → qa_check effect (deterministic, no LLM spawn)', () => {
+  it('v0.1: routes build → qa_check effect (deterministic, no LLM spawn)', () => {
     const s0 = initialState('sess-test');
     const build = fixed({
       id: '01H0000000000000000000000B',
@@ -64,7 +64,7 @@ describe('reducer', () => {
     });
   });
 
-  it('v3: routes qa.result → spawn(verifier)', () => {
+  it('v0.1: routes qa.result → spawn(verifier)', () => {
     const s0 = initialState('sess-test');
     const qaResult = fixed({
       id: '01H0000000000000000000000C',
@@ -238,7 +238,7 @@ describe('reducer', () => {
   });
 
   it('routes verify.result FAIL with builder circuit OPEN → audit + builder-fallback spawn', () => {
-    // v3.4: agents/builder-fallback.md §"in" promises kind=audit
+    // v0.3.1: agents/builder-fallback.md §"in" promises kind=audit
     // event=fallback_activated as an input the actor reads. Without this
     // emission the sandwich's documented input never arrives.
     //
@@ -370,9 +370,9 @@ describe('reducer', () => {
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 
-  // v3.2 G1 — 5 user.* event reducer completeness (LangGraph interrupt+Command pattern)
+  // v0.2.0 G1 — 5 user.* event reducer completeness (LangGraph interrupt+Command pattern)
 
-  it('v3.2 G1: user.pause sets progress_ledger.paused=true and emits hook', () => {
+  it('v0.2.0 G1: user.pause sets progress_ledger.paused=true and emits hook', () => {
     const s0 = initialState('sess-test');
     const pause = fixed({ from: 'user', kind: 'user.pause', body: 'lunch break' });
     const { state, effects } = reduce(s0, pause);
@@ -382,7 +382,7 @@ describe('reducer', () => {
     expect(effects[0]).toMatchObject({ type: 'hook', kind: 'confirm' });
   });
 
-  it('v3.2 G1: while paused, spawn effects are demoted to hook (LangGraph interrupt)', () => {
+  it('v0.2.0 G1: while paused, spawn effects are demoted to hook (LangGraph interrupt)', () => {
     const s0 = initialState('sess-test');
     s0.progress_ledger.paused = true;
     const spec = fixed({
@@ -400,7 +400,7 @@ describe('reducer', () => {
     });
   });
 
-  it('v3.2 G1: user.resume clears paused and re-spawns the queued next_speaker', () => {
+  it('v0.2.0 G1: user.resume clears paused and re-spawns the queued next_speaker', () => {
     const s0 = initialState('sess-test');
     s0.progress_ledger.paused = true;
     s0.progress_ledger.next_speaker = 'builder';
@@ -414,7 +414,7 @@ describe('reducer', () => {
     });
   });
 
-  it('v3.2 G1: user.approve promotes most recent PARTIAL verdict to done', () => {
+  it('v0.2.0 G1: user.approve promotes most recent PARTIAL verdict to done', () => {
     const s0 = initialState('sess-test');
     s0.progress_ledger.score_history.push({
       msg_id: '01H0000000000000000000PART',
@@ -430,9 +430,9 @@ describe('reducer', () => {
     expect((effects[0] as { reason: string }).reason).toContain('user_approve_partial');
   });
 
-  // v3.2 G3 — actor-targeted intervention (AutoGen UserProxyAgent + GroupChatManager pattern)
+  // v0.2.0 G3 — actor-targeted intervention (AutoGen UserProxyAgent + GroupChatManager pattern)
 
-  it('v3.2 G3: user.intervene with target_actor tags the fact with @<actor>', () => {
+  it('v0.2.0 G3: user.intervene with target_actor tags the fact with @<actor>', () => {
     const s0 = initialState('sess-test');
     const ev = fixed({
       from: 'user',
@@ -446,9 +446,9 @@ describe('reducer', () => {
     expect(state.task_ledger.facts[0].text).toContain('콤보 보너스 좀 더 짧게');
   });
 
-  // v3.2 G6 — LangGraph Command(goto/update) pattern
+  // v0.2.0 G6 — LangGraph Command(goto/update) pattern
 
-  it('v3.2 G6: user.intervene with goto forces next_speaker and spawns', () => {
+  it('v0.2.0 G6: user.intervene with goto forces next_speaker and spawns', () => {
     const s0 = initialState('sess-test');
     const ev = fixed({
       from: 'user',
@@ -465,7 +465,7 @@ describe('reducer', () => {
     });
   });
 
-  it('v3.2 G6: user.intervene with swap updates adapter_override (Paperclip swap pattern)', () => {
+  it('v0.2.0 G6: user.intervene with swap updates adapter_override (Paperclip swap pattern)', () => {
     const s0 = initialState('sess-test');
     const ev = fixed({
       from: 'user',
@@ -476,7 +476,7 @@ describe('reducer', () => {
     expect(state.progress_ledger.adapter_override.builder).toBe('mock');
   });
 
-  it('v3.2 G6: user.intervene with reset_circuit clears the named breaker', () => {
+  it('v0.2.0 G6: user.intervene with reset_circuit clears the named breaker', () => {
     const s0 = initialState('sess-test');
     s0.progress_ledger.circuit_breaker.builder = {
       state: 'OPEN',
@@ -491,9 +491,9 @@ describe('reducer', () => {
     expect(state.progress_ledger.circuit_breaker.builder).toBeUndefined();
   });
 
-  // v3.2 G5 — per-actor pause (Paperclip "pause any agent" pattern)
+  // v0.2.0 G5 — per-actor pause (Paperclip "pause any agent" pattern)
 
-  it('v3.2 G5: user.pause with data.actor adds to paused_actors only', () => {
+  it('v0.2.0 G5: user.pause with data.actor adds to paused_actors only', () => {
     const s0 = initialState('sess-test');
     const ev = fixed({
       from: 'user',
@@ -505,7 +505,7 @@ describe('reducer', () => {
     expect(state.progress_ledger.paused_actors).toContain('builder');
   });
 
-  it("v3.2 G5: per-actor pause demotes only that actor's spawn (others continue)", () => {
+  it("v0.2.0 G5: per-actor pause demotes only that actor's spawn (others continue)", () => {
     const s0 = initialState('sess-test');
     s0.progress_ledger.paused_actors = ['builder'];
     // spec event would normally spawn builder
@@ -522,7 +522,7 @@ describe('reducer', () => {
     expect(hook?.data?.scope).toBe('actor');
   });
 
-  it('v3.2 G5: per-actor pause does NOT block a different actor', () => {
+  it('v0.2.0 G5: per-actor pause does NOT block a different actor', () => {
     const s0 = initialState('sess-test');
     s0.progress_ledger.paused_actors = ['builder']; // builder is paused...
     // ...but goal would spawn planner-lead, not builder
@@ -534,7 +534,7 @@ describe('reducer', () => {
     });
   });
 
-  it('v3.2 G5: user.resume with data.actor removes only that actor from paused_actors', () => {
+  it('v0.2.0 G5: user.resume with data.actor removes only that actor from paused_actors', () => {
     const s0 = initialState('sess-test');
     s0.progress_ledger.paused_actors = ['builder', 'verifier'];
     const ev = fixed({
@@ -546,7 +546,7 @@ describe('reducer', () => {
     expect(state.progress_ledger.paused_actors).toEqual(['verifier']);
   });
 
-  it('v3.2 G5: user.resume without data clears global AND all per-actor pauses', () => {
+  it('v0.2.0 G5: user.resume without data clears global AND all per-actor pauses', () => {
     const s0 = initialState('sess-test');
     s0.progress_ledger.paused = true;
     s0.progress_ledger.paused_actors = ['builder', 'verifier'];
@@ -561,9 +561,9 @@ describe('reducer', () => {
     });
   });
 
-  // v3.2 G4 — sandwich override (user.intervene with data.sandwich_append)
+  // v0.2.0 G4 — sandwich override (user.intervene with data.sandwich_append)
 
-  it('v3.2 G4: user.intervene with sandwich_append records a sandwich_append fact', () => {
+  it('v0.2.0 G4: user.intervene with sandwich_append records a sandwich_append fact', () => {
     const s0 = initialState('sess-test');
     const ev = fixed({
       from: 'user',
@@ -578,7 +578,7 @@ describe('reducer', () => {
     expect(appends[0].target_actor).toBeUndefined();
   });
 
-  it('v3.2 G4: sandwich_append with target_actor scopes to that actor only', () => {
+  it('v0.2.0 G4: sandwich_append with target_actor scopes to that actor only', () => {
     const s0 = initialState('sess-test');
     // Append scoped to builder
     const ev1 = fixed({
@@ -606,7 +606,7 @@ describe('reducer', () => {
     expect(spawn?.sandwich_appends?.[0].text).toBe('Use Phaser 3.80 only.');
   });
 
-  it('v3.2 G4: sandwich_append targeted to builder is NOT included in verifier spawn', () => {
+  it('v0.2.0 G4: sandwich_append targeted to builder is NOT included in verifier spawn', () => {
     const s0 = initialState('sess-test');
     const ev1 = fixed({
       from: 'user',
@@ -633,7 +633,7 @@ describe('reducer', () => {
     expect(spawn?.sandwich_appends).toEqual([]);
   });
 
-  it('v3.2 G4: untargeted sandwich_append applies to every actor spawn', () => {
+  it('v0.2.0 G4: untargeted sandwich_append applies to every actor spawn', () => {
     const s0 = initialState('sess-test');
     const ev = fixed({
       from: 'user',
@@ -670,7 +670,7 @@ describe('reducer', () => {
     expect(verifierSpawn?.sandwich_appends?.[0].text).toBe('global rule applies everywhere');
   });
 
-  it('v3.2 G4: multiple sandwich_appends accumulate in order', () => {
+  it('v0.2.0 G4: multiple sandwich_appends accumulate in order', () => {
     const s0 = initialState('sess-test');
     const ev1 = fixed({
       id: '01H0000000000000000000001A',
@@ -701,7 +701,7 @@ describe('reducer', () => {
     expect(spawn?.sandwich_appends?.[1].text).toBe('second');
   });
 
-  it('v3.2 G1: user.approve is no-op when last verdict was PASS or absent', () => {
+  it('v0.2.0 G1: user.approve is no-op when last verdict was PASS or absent', () => {
     const s0 = initialState('sess-test');
     // No score_history
     const approve1 = fixed({ from: 'user', kind: 'user.approve' });
@@ -798,14 +798,14 @@ describe('reducer', () => {
     expect(s.progress_ledger.stuck_count).toBe(0);
   });
 
-  // v3.3 → v3.4 — researcher actor routing.
-  // v3.4 split: pickAdapter('researcher') routes by goal.data.video_refs presence
+  // v0.3.0 → v0.3.1 — researcher actor routing.
+  // v0.3.1 split: pickAdapter('researcher') routes by goal.data.video_refs presence
   // (set in the goal reducer case → state.goal_has_video_refs):
   //   - has video → 'gemini-sdk' (programmatic SDK, frame sampling)
   //   - no video  → 'claude-local' (LLM-driven text research, real wiki refs)
-  // Replaces v3.3 stub which always returned 'gemini-sdk' even for empty videos.
+  // Replaces v0.3.0 stub which always returned 'gemini-sdk' even for empty videos.
 
-  it('v3.4: handoff.requested(to=researcher) with no video_refs → spawn(researcher, claude-local)', () => {
+  it('v0.3.1: handoff.requested(to=researcher) with no video_refs → spawn(researcher, claude-local)', () => {
     const s0 = initialState('sess-test');
     // No prior goal → goal_has_video_refs stays false (initial state default).
     const handoff = fixed({
@@ -825,7 +825,7 @@ describe('reducer', () => {
     });
   });
 
-  it('v3.4: handoff.requested(to=researcher) with video_refs → spawn(researcher, gemini-sdk)', () => {
+  it('v0.3.1: handoff.requested(to=researcher) with video_refs → spawn(researcher, gemini-sdk)', () => {
     let s = initialState('sess-test');
     // Prime state via a goal event that carries video_refs.
     const goal = fixed({
@@ -849,7 +849,7 @@ describe('reducer', () => {
     });
   });
 
-  it('v3.3: handoff.requested(to=other) from non-planner is a no-op', () => {
+  it('v0.3.0: handoff.requested(to=other) from non-planner is a no-op', () => {
     const s0 = initialState('sess-test');
     const handoff = fixed({
       from: 'builder',
@@ -862,7 +862,7 @@ describe('reducer', () => {
     expect(effects).toHaveLength(0);
   });
 
-  it('v3.3: step.research from researcher → resume planner-lead for phase B', () => {
+  it('v0.3.0: step.research from researcher → resume planner-lead for phase B', () => {
     const s0 = initialState('sess-test');
     const research = fixed({
       from: 'researcher',
@@ -880,16 +880,16 @@ describe('reducer', () => {
     });
   });
 
-  it('v3.3: step.research from planner-lead (legacy inline) is a no-op', () => {
+  it('v0.3.0: step.research from planner-lead (legacy inline) is a no-op', () => {
     const s0 = initialState('sess-test');
     const research = fixed({
       from: 'planner-lead',
       kind: 'step.research',
-      body: 'pre-v3.3 inline-read marker',
+      body: 'pre-v0.3.0 inline-read marker',
     });
     const { state, effects } = reduce(s0, research);
 
-    // Backwards-compat: pre-v3.3 transcripts where planner-lead emitted
+    // Backwards-compat: pre-v0.3.0 transcripts where planner-lead emitted
     // step.research as an inline marker must NOT trigger a phase-B spawn.
     expect(state.progress_ledger.next_speaker).toBe(null);
     expect(effects).toHaveLength(0);

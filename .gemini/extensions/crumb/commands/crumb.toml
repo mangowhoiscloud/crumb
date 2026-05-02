@@ -74,7 +74,7 @@ For each routing decision:
   goto            next_speaker 강제 + 즉시 spawn (LangGraph Command)
   swap {from,to}  adapter_override[from] = to (Paperclip BYO swap)
   reset_circuit   circuit_breaker 클리어 (actor 명 또는 true)
-  sandwich_append dispatcher 가 다음 spawn 부터 system prompt 에 concat (v3.2 G4)
+  sandwich_append dispatcher 가 다음 spawn 부터 system prompt 에 concat (v0.2.0 G4)
   actor           pause/resume 한정 — 글로벌 대신 해당 actor 만
 
 → Frontier: LangGraph Command(goto/update={...}) 53/60, Paperclip 38/60, Codex APPEND_SYSTEM.md 38/60.
@@ -84,7 +84,7 @@ For each routing decision:
 kind=done → show artifacts + summary.html.
 
 # References
-- wiki/concepts/bagelcode-system-architecture-v3.md
+- wiki/concepts/bagelcode-system-architecture-v0.1.md
 - agents/coordinator.md
 - skills/{tdd-iron-law,verification-before-completion}.md
 """

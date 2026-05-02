@@ -1,6 +1,6 @@
-# Crumb runtime configuration — v3 schema (model-config.ts loader format).
+# Crumb runtime configuration — v0.1 schema (model-config.ts loader format).
 #
-# Override layer on top of preset binding. Resolve order ([[bagelcode-system-architecture-v3]] §5.1, extended):
+# Override layer on top of preset binding. Resolve order ([[bagelcode-system-architecture-v0.1]] §5.1, extended):
 #   1. .crumb/config.toml (this file)        ← user override
 #   2. preset.actors.<name>.{harness, provider, model}
 #   3. preset.[defaults]
@@ -32,7 +32,7 @@ enabled = true
 [providers."gemini-cli-local"]
 enabled = true
 
-# v3.4 default — every actor uses the user's local entry host (claude-code in
+# v0.3.1 default — every actor uses the user's local entry host (claude-code in
 # Claude Code sessions). This keeps a fresh checkout single-auth: the user only
 # needs the host they already have, no codex / gemini login required to demo.
 # Cross-provider runs remain available via `crumb run --preset bagelcode-cross-3way`,

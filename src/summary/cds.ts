@@ -2,7 +2,7 @@
  * Crumb Design System v1 — color / typography / spacing tokens emitted as raw CSS.
  *
  * Shared by summary.html / timeline.html / scorecard.html / cost.html (RESTful URLs)
- * and TUI color mapping (1:1 hex). See [[bagelcode-system-architecture-v3]] §10 (4 surface).
+ * and TUI color mapping (1:1 hex). See [[bagelcode-system-architecture-v0.1]] §10 (4 surface).
  */
 
 import type { Actor } from '../protocol/types.js';
@@ -11,7 +11,7 @@ export const ACTOR_COLOR: Record<Actor, string> = {
   user: '#2A2520', // 👤 charcoal
   coordinator: '#2E8B57', // 🟢 emerald
   'planner-lead': '#3B6FB6', // 🔵 blue
-  researcher: '#0F8A8A', // 🔍 teal (v3.3 — visually distinct from planner blue)
+  researcher: '#0F8A8A', // 🔍 teal (v0.3.0 — visually distinct from planner blue)
   builder: '#7A4FB8', // 🟣 purple
   verifier: '#D2691E', // 🟠 orange
   'builder-fallback': '#B8456E', // 🌹 rose

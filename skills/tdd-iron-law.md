@@ -5,7 +5,7 @@ description: |
   Read inline by `agents/builder.md` to enforce evidence-over-claims discipline.
 when_to_use: builder spawn 안에서 game.html 작성 전 inline read
 source: https://github.com/obra/superpowers/blob/main/skills/test-driven-development/SKILL.md
-adapted_for: Crumb v3 builder (Phaser HTML5 single-file, no literal pytest)
+adapted_for: Crumb v0.1 builder (Phaser HTML5 single-file, no literal pytest)
 ---
 
 # TDD Iron Law (Crumb adaptation)
@@ -67,6 +67,6 @@ Before emitting `kind=handoff.requested`:
 
 ## See also
 
-- [[bagelcode-system-architecture-v3]] §7 — 3-layer scoring (qa_check effect = ground truth)
+- [[bagelcode-system-architecture-v0.1]] §7 — 3-layer scoring (qa_check effect = ground truth)
 - `agents/builder.md` — uses this skill inline
 - `skills/verification-before-completion.md` — sister skill for verifier

@@ -1,9 +1,9 @@
 ---
-title: Crumb 시스템 구조 v3.5 — AC predicates + judge-input isolation + numerical self-bias discount
+title: Crumb 시스템 구조 v0.3.5 — AC predicates + judge-input isolation + numerical self-bias discount
 category: concepts
-tags: [bagelcode, crumb, system-architecture, v3.5, ac-predicates, judge-input-isolation, anti-deception-rule-7, numerical-discount, fallback-audit, frontier-2026]
+tags: [bagelcode, crumb, system-architecture, v0.3.5, ac-predicates, judge-input-isolation, anti-deception-rule-7, numerical-discount, fallback-audit, frontier-2026]
 sources:
-  - "[[bagelcode-system-architecture-v3]] (v3 baseline, still authoritative for §1-§12)"
+  - "[[bagelcode-system-architecture-v0.1]] (v0.1 baseline, still authoritative for §1-§12)"
   - "[[bagelcode-verifier-context-isolation-2026-05-03]] ★ judge-input bundle"
   - "[[bagelcode-same-provider-discount-2026-05-03]] ★ numerical D1/D3/D5 discount"
   - "[[bagelcode-scoring-ratchet-frontier-2026-05-02]]"
@@ -15,32 +15,32 @@ sources:
   - "Preference Leakage ICLR 2026 (arXiv 2502.01534)"
   - "ArtifactsBench (2024) — AC-driven game evaluation"
 summary: >-
-  Crumb v3.5 incremental layer over v3. v3 의 9 architecture invariants 는 그대로 유지되고
+  Crumb v0.3.5 incremental layer over v0.1. v0.1 의 9 architecture invariants 는 그대로 유지되고
   여기에 **3 axis** 의 신규 격상이 적용됨: (1) Anti-deception 1-6 → 1-7 + Rule 4 binary→numerical
   discount, (2) AC predicate 결정론 ground truth (qa-runner sandbox 실행 → ac_results) +
   Rule 7 verify_pass_with_ac_failure firewall, (3) verifier judge-input bundle hard isolation
   (CRUMB_JUDGE_INPUT_PATH env, dispatcher 가 transcript projection 을 file-level 로 격리).
-  9 invariants 추가 — 8: fallback audit trail, 9: judge isolation. v3.5 는 v3 의 schema /
+  9 invariants 추가 — 8: fallback audit trail, 9: judge isolation. v0.3.5 는 v0.1 의 schema /
   reducer / dispatcher / preset 구조를 깨지 않고 frontier 2025-2026 evidence (Stureborg /
   Anthropic Hybrid / ComplexEval Bench / Preference Leakage / ArtifactsBench) 정렬을 강화.
 ---
 
-# Crumb 시스템 구조 v3.5 — AC predicates + judge-input isolation + numerical discount
+# Crumb 시스템 구조 v0.3.5 — AC predicates + judge-input isolation + numerical discount
 
-> **읽는 순서**: [[bagelcode-system-architecture-v3]] 가 baseline. 이 페이지는 v3 → v3.5 의 차이만 다룸.
-> 다이어그램은 [[bagelcode-system-diagrams-v3.5]] 에 분리.
+> **읽는 순서**: [[bagelcode-system-architecture-v0.1]] 가 baseline. 이 페이지는 v0.1 → v0.3.5 의 차이만 다룸.
+> 다이어그램은 [[bagelcode-system-diagrams-v0.3.5]] 에 분리.
 
 ---
 
 ## 0. 한 줄 정체성
 
-> v3.5 는 v3 의 multi-host × 3-tuple actor binding 위에 **anti-deception (R1→R7 + numerical Rule 4)**, **AC predicate 결정론 ground truth**, **judge-input hard isolation** 3 축을 얹은 incremental release. v3 의 9 invariants 위에 2 invariants 추가 (총 11).
+> v0.3.5 는 v0.1 의 multi-host × 3-tuple actor binding 위에 **anti-deception (R1→R7 + numerical Rule 4)**, **AC predicate 결정론 ground truth**, **judge-input hard isolation** 3 축을 얹은 incremental release. v0.1 의 9 invariants 위에 2 invariants 추가 (총 11).
 
 ---
 
-## 1. v3 → v3.5 변경 요약 (한 표)
+## 1. v0.1 → v0.3.5 변경 요약 (한 표)
 
-| 영역 | v3 | v3.5 | 근거 |
+| 영역 | v0.1 | v0.3.5 | 근거 |
 |---|---|---|---|
 | Anti-deception rules | 6개 (R1~R6) | **7개** (+ R7 verify_pass_with_ac_failure) | ArtifactsBench 2024 — AC-driven binary gate |
 | Rule 4 (same-provider) | binary verdict gate (PASS→PARTIAL) | **numerical 0.15 discount** on D1/D3/D5 | Stureborg EMNLP 2024 §4.2 (+14-22% inflation), Anthropic Hybrid Norm 2026 (50% prompt cover residual) |
@@ -58,13 +58,13 @@ summary: >-
 
 ---
 
-## 2. 신규 architecture invariants (v3 9개 위에 2개 추가)
+## 2. 신규 architecture invariants (v0.1 9개 위에 2개 추가)
 
 ### Invariant #10 — Fallback audit trail
 
 > **builder-fallback spawn 이전에 reducer 가 `kind=audit event=fallback_activated` 를 transcript 에 emit 한다. payload 는 `{reason='builder_circuit_open', consecutive_failures, last_failure_id, substituting_adapter}`.**
 
-builder-fallback sandwich 의 §in column 이 약속한 input 이 실제로 transcript 에 도달하도록 보장. v3 까지는 sandwich 텍스트만 기재하고 emit 은 누락된 상태였음.
+builder-fallback sandwich 의 §in column 이 약속한 input 이 실제로 transcript 에 도달하도록 보장. v0.1 까지는 sandwich 텍스트만 기재하고 emit 은 누락된 상태였음.
 
 ### Invariant #11 — Judge isolation (file-level)
 
@@ -81,16 +81,16 @@ frontier evidence:
 
 ---
 
-## 3. Schema 확장 (v3 의 11 field 위에)
+## 3. Schema 확장 (v0.1 의 11 field 위에)
 
 ### 3.1 `qa.result.data` — 결정론 ground truth 확장
 
 ```yaml
 qa.result.data:
-  exec_exit_code: 0 | non-zero          # v3
-  cross_browser_smoke: 'ok' | 'fail' | 'skipped'   # v3
-  url?: string                          # v3.5 — Playwright server URL (verifier가 LLM playthrough에서 reuse)
-  ac_results?: [                        # v3.5 ★
+  exec_exit_code: 0 | non-zero          # v0.1
+  cross_browser_smoke: 'ok' | 'fail' | 'skipped'   # v0.1
+  url?: string                          # v0.3.5 — Playwright server URL (verifier가 LLM playthrough에서 reuse)
+  ac_results?: [                        # v0.3.5 ★
     { ac_id: string, status: 'PASS' | 'FAIL' | 'SKIP', evidence?: string }
   ]
 ```
@@ -119,9 +119,9 @@ planner-lead 가 spec-seal 시점에 컴파일. state.task_ledger.ac_predicates 
 
 ### 3.3 metadata 신규 필드 없음 (기존 필드의 *enforcement* 강화)
 
-v3 의 metadata 14 필드는 그대로. 다만 다음 필드의 *enforcement* 가 v3.5 에서 격상:
+v0.1 의 metadata 14 필드는 그대로. 다만 다음 필드의 *enforcement* 가 v0.3.5 에서 격상:
 
-| 필드 | v3 상태 | v3.5 상태 |
+| 필드 | v0.1 상태 | v0.3.5 상태 |
 |---|---|---|
 | `metadata.harness` | `agents/_event-protocol.md` 약속만 | dispatcher → CRUMB_HARNESS env → `crumb event` 가 자동 stamp |
 | `metadata.provider` | 같음 | 같음 (CRUMB_PROVIDER) |
@@ -172,22 +172,22 @@ CRUMB_TOKEN_BUDGET_HARD     # default 50_000
 
 ---
 
-## 5. Anti-deception 7 rules (v3 6 → v3.5 7)
+## 5. Anti-deception 7 rules (v0.1 6 → v0.3.5 7)
 
 | Rule | Trigger | Action | Violation tag | 출처 |
 |---|---|---|---|---|
-| **R1** | verdict=PASS but `qa.result.exec_exit_code !== 0` | force D2=0, downgrade verdict→FAIL | `verify_pass_without_exec_zero` | v3 |
-| **R2** | D2.score ≠ expected (qa.result 기준) | force D2 to ground truth | `verifier_overrode_d2_ground_truth` | v3 |
-| **R3** | D4.score ≠ autoScores.D4 (±0.01) | force D4 to reducer-auto | `verifier_overrode_d4_ground_truth` | v3 |
+| **R1** | verdict=PASS but `qa.result.exec_exit_code !== 0` | force D2=0, downgrade verdict→FAIL | `verify_pass_without_exec_zero` | v0.1 |
+| **R2** | D2.score ≠ expected (qa.result 기준) | force D2 to ground truth | `verifier_overrode_d2_ground_truth` | v0.1 |
+| **R3** | D4.score ≠ autoScores.D4 (±0.01) | force D4 to reducer-auto | `verifier_overrode_d4_ground_truth` | v0.1 |
 | **R4** | verifier.provider === builder.provider | **0.15 discount** on D1/D3/D5 (numerical, was binary) | `self_bias_risk_same_provider` + `self_bias_score_discounted` | Stureborg EMNLP 2024 §4.2 |
-| **R5** | ≥1 step.research.video exists, D5≥4, no evidence citation | force D5=0 | `researcher_video_evidence_missing` | v3.3 |
-| **R6** | verdict=PASS but D1<3 AND D5<3 | downgrade→PARTIAL | `composite_gaming_d1_d5_below_minimum` | v3.4 |
-| **R7** | verdict=PASS but ac_results contains FAIL | **cap D1≤2, downgrade→PARTIAL** | `verify_pass_with_ac_failure` | **v3.5 신규** (ArtifactsBench 2024) |
+| **R5** | ≥1 step.research.video exists, D5≥4, no evidence citation | force D5=0 | `researcher_video_evidence_missing` | v0.3.0 |
+| **R6** | verdict=PASS but D1<3 AND D5<3 | downgrade→PARTIAL | `composite_gaming_d1_d5_below_minimum` | v0.3.1 |
+| **R7** | verdict=PASS but ac_results contains FAIL | **cap D1≤2, downgrade→PARTIAL** | `verify_pass_with_ac_failure` | **v0.3.5 신규** (ArtifactsBench 2024) |
 
 R4 의 시간 변천:
-- v3.0-v3.3: violation tag 만 push, action 없음
-- v3.4: binary `if PASS → PARTIAL`
-- **v3.5**: numerical D1+D3+D5 ×0.85 (D2/D6 deterministic 면역, D4 reducer-auto 면역). `combineAggregate` 가 LLM 절반만 깎이도록 자동 처리. wiki: [[bagelcode-same-provider-discount-2026-05-03]].
+- v0.1.0-v0.3.0: violation tag 만 push, action 없음
+- v0.3.1: binary `if PASS → PARTIAL`
+- **v0.3.5**: numerical D1+D3+D5 ×0.85 (D2/D6 deterministic 면역, D4 reducer-auto 면역). `combineAggregate` 가 LLM 절반만 깎이도록 자동 처리. wiki: [[bagelcode-same-provider-discount-2026-05-03]].
 
 ---
 
@@ -266,12 +266,12 @@ draft from builder-fallback + qa.result   → fallback_self_assessment_attempt
 ```ts
 {
   ...process.env,
-  CRUMB_TRANSCRIPT_PATH, CRUMB_SESSION_ID, CRUMB_SESSION_DIR, CRUMB_ACTOR,    // v3
-  ...(req.harness ? { CRUMB_HARNESS } : {}),                                  // v3.5
+  CRUMB_TRANSCRIPT_PATH, CRUMB_SESSION_ID, CRUMB_SESSION_DIR, CRUMB_ACTOR,    // v0.1
+  ...(req.harness ? { CRUMB_HARNESS } : {}),                                  // v0.3.5
   ...(req.provider ? { CRUMB_PROVIDER } : {}),
   ...(req.model ? { CRUMB_MODEL } : {}),
   ...(req.builderProvider ? { CRUMB_BUILDER_PROVIDER } : {}),
-  ...(req.judgeInputPath ? { CRUMB_JUDGE_INPUT_PATH } : {}),                  // v3.5 verifier-only
+  ...(req.judgeInputPath ? { CRUMB_JUDGE_INPUT_PATH } : {}),                  // v0.3.5 verifier-only
 }
 ```
 
@@ -279,7 +279,7 @@ draft from builder-fallback + qa.result   → fallback_self_assessment_attempt
 
 ---
 
-## 9. v3.5 의 frontier alignment
+## 9. v0.3.5 의 frontier alignment
 
 | 결정 | Frontier evidence |
 |---|---|
@@ -294,11 +294,11 @@ draft from builder-fallback + qa.result   → fallback_self_assessment_attempt
 
 ## 10. 호환성 / 마이그레이션
 
-| 항목 | v3 → v3.5 |
+| 항목 | v0.1 → v0.3.5 |
 |---|---|
-| transcript schema | additive 만 (qa.result 에 ac_results 추가, 신규 kind 없음). v3 transcript 그대로 replay 가능 |
-| reducer | additive (Rule 7, fallback_activated emit). v3 transcript replay 시 R7 / fallback emit 은 발화하지 않음 (입력 신호 없음) |
-| validator | R7 추가, R4 binary→numerical. v3 transcript 의 score 재계산 시 R4 가 verdict 를 다르게 결정할 수 있음 (의도된 정직성) |
+| transcript schema | additive 만 (qa.result 에 ac_results 추가, 신규 kind 없음). v0.1 transcript 그대로 replay 가능 |
+| reducer | additive (Rule 7, fallback_activated emit). v0.1 transcript replay 시 R7 / fallback emit 은 발화하지 않음 (입력 신호 없음) |
+| validator | R7 추가, R4 binary→numerical. v0.1 transcript 의 score 재계산 시 R4 가 verdict 를 다르게 결정할 수 있음 (의도된 정직성) |
 | dispatcher | env wiring 추가만. judgeInputPath 는 optional, verifier 외 actor 영향 없음 |
 | sandwich files | builder.md / builder-fallback.md / verifier.md 의 inline-read frontmatter 추가, Reads column 강화. 기존 actor 행동 보존 |
 | presets | 변화 없음 — `bagelcode-cross-3way` / `solo` / `sdk-enterprise` / `mock` / `bagelcode-video-research` 5개 그대로 |
@@ -307,7 +307,7 @@ draft from builder-fallback + qa.result   → fallback_self_assessment_attempt
 
 ## 11. 다이어그램
 
-[[bagelcode-system-diagrams-v3.5]] 참조 — Mermaid 6 종:
+[[bagelcode-system-diagrams-v0.3.5]] 참조 — Mermaid 6 종:
 1. Spawn lifecycle (sandwich assemble → adapter → timer race → output capture)
 2. Score path (D1-D6 source matrix + 3-layer combine)
 3. Anti-deception waterfall (R1 → R7 + verdict adjust + audit emit)
@@ -319,8 +319,8 @@ draft from builder-fallback + qa.result   → fallback_self_assessment_attempt
 
 ## 12. See also
 
-- [[bagelcode-system-architecture-v3]] — v3 baseline (§1-§14, 그대로 유효)
-- [[bagelcode-system-diagrams-v3.5]] — Mermaid 6 종
+- [[bagelcode-system-architecture-v0.1]] — v0.1 baseline (§1-§14, 그대로 유효)
+- [[bagelcode-system-diagrams-v0.3.5]] — Mermaid 6 종
 - [[bagelcode-same-provider-discount-2026-05-03]] — Rule 4 numerical 의 frontier rationale
 - [[bagelcode-verifier-context-isolation-2026-05-03]] — judge-input bundle 결정 논리
 - [[bagelcode-scoring-ratchet-frontier-2026-05-02]] — scoring ratchet 의 효력 (deterministic gate 위에서만)

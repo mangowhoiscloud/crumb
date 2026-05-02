@@ -52,7 +52,7 @@ describe('runQaCheck — mock fixture vs missing artifact', () => {
   });
 
   it('FAILs hard when a real-path artifact is missing (builder crashed)', async () => {
-    // v3.4 anti-deception split — a missing artifact at a non-fixture path
+    // v0.3.1 anti-deception split — a missing artifact at a non-fixture path
     // means the builder spawn failed before writing the game; we must NOT
     // reward that with a phantom PASS. D2 ground truth must collapse to 0.
     const r = await runQaCheck('/nonexistent/path/game.html');
@@ -65,7 +65,7 @@ describe('runQaCheck — mock fixture vs missing artifact', () => {
 });
 
 /**
- * v3.5 — `playwright` is now a real devDependency (so the AC-interactive
+ * v0.3.5 — `playwright` is now a real devDependency (so the AC-interactive
  * runner has it installed in CI), but the detection-contract tests still need
  * to simulate the "playwright not installed" case. Mock the smoke import so
  * runQaCheck observes a `Cannot find module 'playwright'` error path —

@@ -14,7 +14,7 @@ export interface TaskFact {
   text: string; // human-readable
   category: 'goal' | 'spec' | 'constraint' | 'feedback' | 'note' | 'sandwich_append';
   /**
-   * v3.2 G4 — when category is 'sandwich_append', optional actor scoping.
+   * v0.2.0 G4 — when category is 'sandwich_append', optional actor scoping.
    * If set, the override applies only to spawns of that actor; otherwise the
    * append applies to every spawned actor in the session.
    */
@@ -40,7 +40,7 @@ export interface TaskLedger {
   goal: string | null;
   acceptance_criteria: string[];
   /**
-   * v3.5 — deterministic AC predicates compiled by planner-lead at spec-seal.
+   * v0.3.5 — deterministic AC predicates compiled by planner-lead at spec-seal.
    * The dispatcher's `qa-runner` passes these to `runQaCheck` so the AC layer
    * runs alongside the static smoke. Empty when planner emits no predicates.
    */
@@ -71,14 +71,14 @@ export interface ProgressLedger {
   adapter_override: Partial<Record<Actor, string>>;
   circuit_breaker: Partial<Record<Actor, CircuitInfo>>;
   /**
-   * v3.2 — global pause state. When true, the reducer emits `kind: 'hook'` instead of
+   * v0.2.0 — global pause state. When true, the reducer emits `kind: 'hook'` instead of
    * `kind: 'spawn'` so dispatched effects can surface the pause without losing the
    * routing decision. `kind=user.resume` clears it. Mirrors LangGraph's interrupt-then-
    * resume pattern (interrupt() + Command(resume=...)).
    */
   paused: boolean;
   /**
-   * v3.2 G5 — per-actor pause set (Paperclip "pause any agent" pattern). When non-empty,
+   * v0.2.0 G5 — per-actor pause set (Paperclip "pause any agent" pattern). When non-empty,
    * spawn effects targeting any actor in this set are demoted to hooks even if the global
    * `paused` is false. `kind=user.pause` with `data.actor=<name>` adds an entry;
    * `kind=user.resume` with `data.actor=<name>` removes one; `kind=user.resume` without
@@ -86,7 +86,7 @@ export interface ProgressLedger {
    */
   paused_actors: Actor[];
 
-  // v3.2 budget guardrails (autoresearch P3 wall-clock + spec budget-guardrails P0).
+  // v0.2.0 budget guardrails (autoresearch P3 wall-clock + spec budget-guardrails P0).
   // Reducer increments/aggregates these from event metadata; loop + dispatcher enforce
   // the corresponding hard caps (wall-clock / per-spawn timeout). See
   // wiki/concepts/bagelcode-budget-guardrails.md and .skills/karpathy-patterns/SKILL.md P3.
@@ -96,7 +96,7 @@ export interface ProgressLedger {
   session_started_at: string; // ISO-8601, set on first session.start event
   per_spawn_started_at: string | null; // current spawn ts (loop watchdog SIGTERMs after 5min)
 
-  // v3.2 ratchet (autoresearch P4 keep/revert). Tracks the best aggregate score so
+  // v0.2.0 ratchet (autoresearch P4 keep/revert). Tracks the best aggregate score so
   // far; if a later judge.score regresses by RATCHET_THRESHOLD points, the session
   // is auto-terminated with reason='ratchet_revert' to prevent unbounded loops.
   max_aggregate_so_far: number;

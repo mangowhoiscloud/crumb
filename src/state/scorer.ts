@@ -5,7 +5,7 @@
  * Pure functions of (transcript, …) → numbers. No LLM, no I/O.
  * Verifier reads these as ground truth for D4 and as the auto component for D3/D5.
  *
- * See [[bagelcode-system-architecture-v3]] §7 (3-layer scoring), §7.2 (source matrix).
+ * See [[bagelcode-system-architecture-v0.1]] §7 (3-layer scoring), §7.2 (source matrix).
  */
 
 import type { Message, Kind, Scores } from '../protocol/types.js';

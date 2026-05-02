@@ -31,7 +31,7 @@ summary: >-
   (activation / NL classification mechanism / replay / CRUDvia NL / steal-or-avoid) 비교. 11/12 가
   LLM 판단 (implicit) 또는 protocol gate (per-tool approve/reject) 사용. 명시적 enum 분류기는 bkit
   단 1 개 — regex 8 언어 + scalar confidence (FP precision bug 2회 패치) 패턴이 anti-pattern 으로
-  관찰됨. Crumb v3.2 의 "raw NL → kind=user.intervene body + collectSandwichAppends → next actor
+  관찰됨. Crumb v0.2.0 의 "raw NL → kind=user.intervene body + collectSandwichAppends → next actor
   context-aware judgment" 경로가 frontier consensus 와 정합. PR-A/PR-B (이미 머지) 가 schema
   side 를 커버하므로 추가 enum 분류기 도입은 후퇴.
 provenance:
@@ -59,8 +59,8 @@ updated: 2026-05-02
 | 1 | **bkit** (popup-studio-ai/bkit-claude-code, 525★) | Claude Code plugin via `hooks/hooks.json`; 19 hook events | **regex 8 언어** (`AGENT_TRIGGER_PATTERNS` etc.) + `triggers.confidenceThreshold + 0.1` (ENH-226 patched FP bug) | 없음 (workflow-state-machine, no transcript) | C/R only via slash; no U/D | ❌ **avoid** — regex enum brittle |
 | 2 | **LangGraph** (`interrupt()` + `Command(resume=...)`) | Library — `interrupt()` from any node; `Checkpointer` (Postgres/InMemory) | None built-in — host app classifies; lib transports | "Replay-on-resume": pre-interrupt side effects rerun (footgun) | Read/U via `Command(resume / goto / update)` discriminated union | ✅ **steal envelope** — tagged-union, but Crumb's idempotent reducer fold beats node-rerun |
 | 3 | **Cursor 2.0** (Composer / Agent, 2025-10-29) | Always-on chat; per-prompt up to 8 parallel agents on git worktrees | Implicit interrupt-vs-queue heuristic (host LLM) | Per-agent worktree = filesystem audit; `git checkout` revert | Implicit — mid-run msg is steering or interrupt | ⚠ **steal worktree isolation, avoid implicit heuristic** (forum bugs #140944 / #130337) |
-| 4 | **Cline** (cline/cline, v3.35+) | Cancel button + chat; auto-approve mode | None — new msg = hard interrupt + reassess | Chat history only; PR #5500 fixed lockout when stuck | None — new msg = new task | ❌ **avoid** — "reassess from scratch" loses state |
-| 5 | **Aider** | Always-on REPL; `/code` `/architect` `/ask` `/help` `/undo` `/diff` | Lexical (`startswith("/")`) — bare text = NL to active mode | `/undo` reverts last commit (git-backed); per-turn 1 commit | Slash-explicit: `/undo` (D), `/clear` (D), `/architect` (U mode) | ⚠ **steal per-turn git commit**, avoid slash-only rigidity for v3 multi-actor |
+| 4 | **Cline** (cline/cline, v0.1.35+) | Cancel button + chat; auto-approve mode | None — new msg = hard interrupt + reassess | Chat history only; PR #5500 fixed lockout when stuck | None — new msg = new task | ❌ **avoid** — "reassess from scratch" loses state |
+| 5 | **Aider** | Always-on REPL; `/code` `/architect` `/ask` `/help` `/undo` `/diff` | Lexical (`startswith("/")`) — bare text = NL to active mode | `/undo` reverts last commit (git-backed); per-turn 1 commit | Slash-explicit: `/undo` (D), `/clear` (D), `/architect` (U mode) | ⚠ **steal per-turn git commit**, avoid slash-only rigidity for v0.1 multi-actor |
 | 6 | **AutoGen 0.4** (Microsoft) | `UserProxyAgent.human_input_mode="ALWAYS"\|"TERMINATE"\|"NEVER"`; `UserInputRequestedEvent` from `run_stream` | None — UserProxy passes raw text to next selector | None native | None; **GroupChatManager known-broken** (Discussion #5022) → workaround: `HandoffTermination` | ❌ **avoid centralized GroupChat** — Microsoft itself recommends handoff-back-to-app, which is exactly Crumb's `kind=handoff.requested` STOP-gate |
 | 7 | **OpenHands** (formerly OpenDevin) | Always-on chat | None — message appended to context, agent decides | Event-stream architecture (`software-agent-sdk`); replay possible | Mid-run msg ignored by stuck-detector pre-#5500 → fixed | ✅ **steal stuck-detector exclusion** — circuit_breaker should NOT count user.intervene as actor activity |
 | 8 | **Devin** (Cognition) | Slack `@Devin` mid-run; web UI msg | Internal LLM-based (mechanism opaque) | "Session Insights" = meta-analysis, not deterministic replay | C: Knowledge / Playbooks; U: mid-run Slack steering; no public D | ⚠ **steal Playbooks** (named instruction templates ↔ presets at finer grain), but Devin is API-billed (skip direct integration) |
@@ -79,7 +79,7 @@ updated: 2026-05-02
 | **Protocol gate** (NL 분류 없이 explicit verb 만, approve/reject) | 2/12: Inspect AI, Aider | safe, rigid |
 | **Explicit enum classifier** (regex / schema-forced action enum) | 1/12: bkit | **anti-pattern** — FP precision bug, 8 언어 사전 폭발 |
 
-→ Crumb v3.2 의 현행 경로 (raw NL → `kind=user.intervene body=<text>` + `collectSandwichAppends(next, actor)` → 다음 actor LLM 이 컨텍스트에서 판단) 는 **9/12 majority pattern + protocol gate 2/12 (slash commands) hybrid**. 명시적 enum 분류기 도입은 후퇴.
+→ Crumb v0.2.0 의 현행 경로 (raw NL → `kind=user.intervene body=<text>` + `collectSandwichAppends(next, actor)` → 다음 actor LLM 이 컨텍스트에서 판단) 는 **9/12 majority pattern + protocol gate 2/12 (slash commands) hybrid**. 명시적 enum 분류기 도입은 후퇴.
 
 ---
 
@@ -124,7 +124,7 @@ bkit (popup-studio-ai/bkit-claude-code, 525★, last commit 2026-05-02) 은 한�
 | **Stuck-detector excludes user.intervene** | OpenHands #5500 | ✅ **verified** — `src/reducer/index.ts:49` (recovery branch excludes `user/coordinator/system`), `:477` (failure branch same exclusion), `:489` (`stuck_count` only on `kind=error`). User can also force-clear via `user.intervene data.reset_circuit` (line 369). Regression specs in `src/reducer/index.test.ts`: "OpenHands #5500: user.intervene does not reset an OPEN circuit breaker" + "OpenHands #5500: user.* events never increment stuck_count". |
 | **`additionalContext` from UserPromptSubmit** | Claude Code native + bkit + umputun gist | `.claude/skills/crumb/SKILL.md` 가 동일 surface 사용 (이미 작동) |
 | **Per-tool approval comment field** | Inspect AI | `kind=judge.score` body 에 자유 텍스트 코멘트 (이미 작동) |
-| **Worktree-per-actor isolation** | Cursor 2.0 | `sessions/<id>/agent-workspace/<actor>/` cwd (v3 invariant 8, 이미 작동) |
+| **Worktree-per-actor isolation** | Cursor 2.0 | `sessions/<id>/agent-workspace/<actor>/` cwd (v0.1 invariant 8, 이미 작동) |
 
 ### 4.2 회피 결정
 
@@ -132,7 +132,7 @@ bkit (popup-studio-ai/bkit-claude-code, 525★, last commit 2026-05-02) 은 한�
 |---|---|---|
 | **Regex enum classifier** | bkit | `intent.schema.json` 도입 안 함 — raw NL 그대로 흘림 |
 | **Implicit interrupt-vs-queue heuristic** | Cursor (#140944, #130337) | 명시적 marker 1-bit 게이트 (lock 모드는 향후 옵션, 핵심 경로는 SKILL.md auto-attach) |
-| **GroupChatManager 중앙화** | AutoGen #5022 | host-inline coordinator (이미 작동, v3 Must 5번 — STOP after handoff) |
+| **GroupChatManager 중앙화** | AutoGen #5022 | host-inline coordinator (이미 작동, v0.1 Must 5번 — STOP after handoff) |
 | **"Reassess from scratch" 인터럽트** | Cline | reducer fold + transcript replay (이미 작동) |
 | **Slash-only rigidity** | Aider | NL = primary, slash = power-user shortcut |
 | **proprietary identity 파일** | bkit `.claude-plugin/` | Linux Foundation AGENTS.md 표준 |
@@ -171,7 +171,7 @@ bkit (popup-studio-ai/bkit-claude-code, 525★, last commit 2026-05-02) 은 한�
 - [[bagelcode-user-intervention-frontier-2026-05-02]] — 5-system 매트릭스 + PR 매핑 sister 합성 (이 페이지의 dimension 확장 대상)
 - [[bagelcode-multi-host-harness-research-2026]] — bkit / claude-flow / openclaw 등 7-system multi-host 조사 (NL classification 차원 추가가 이 survey)
 - [[bagelcode-recruitment-task]] — 메일 verbatim 요구사항 #2
-- [[bagelcode-system-architecture-v3]] — canonical v3 architecture
+- [[bagelcode-system-architecture-v0.1]] — canonical v0.1 architecture
 - [[bagelcode-paperclip-vs-alternatives]] — framework 비채택 + 패턴 차용 결정
 - `src/reducer/index.ts` — 5 user.* event 처리 + 6 data field (PR-A + PR-B 머지)
 - `src/inbox/parser.ts` + `src/inbox/watcher.ts` — G2 inbox watcher (이미 wiring 완료, `src/loop/coordinator.ts:339`)

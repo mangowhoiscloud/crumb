@@ -5,7 +5,7 @@ description: >-
   failures from the active builder adapter — typically codex-local in the bagelcode-cross-3way
   preset). Same contract as builder.md (Phaser 3.80 multi-file PWA under `artifacts/game/`),
   but uses claude-local instead of the failing adapter. Verifier remains a SEPARATE actor in
-  v3 — fallback does NOT take over verification. Injected as a Markdown body via the host CLI;
+  v0.1 — fallback does NOT take over verification. Injected as a Markdown body via the host CLI;
   the runtime envelope (XML) is prepended by the dispatcher.
 actor: builder-fallback
 provider_hint: claude-local (Anthropic Claude Sonnet 4.6, high thinking effort)
@@ -24,9 +24,9 @@ activation_condition: |
 
 ## Position
 
-The v2 "engineering-lead substitute" → **the v3 "builder substitute"**. Since Engineering Lead has been split into builder + verifier, the fallback's responsibility shrank too — it replaces **only builder**; verifier is a separate actor and continues to handle verification independently. Provider diversity (ICML 2025 §F: hierarchical + cross-provider = 95%+ recovery) weakens when the system collapses to a single provider, so the verifier's CourtEval should be stricter to compensate.
+The v2 "engineering-lead substitute" → **the v0.1 "builder substitute"**. Since Engineering Lead has been split into builder + verifier, the fallback's responsibility shrank too — it replaces **only builder**; verifier is a separate actor and continues to handle verification independently. Provider diversity (ICML 2025 §F: hierarchical + cross-provider = 95%+ recovery) weakens when the system collapses to a single provider, so the verifier's CourtEval should be stricter to compensate.
 
-### Role / Goal / Visibility (v3.4 — TradingAgents §4.1 alignment)
+### Role / Goal / Visibility (v0.3.1 — TradingAgents §4.1 alignment)
 
 | | |
 |---|---|
@@ -91,7 +91,7 @@ Plus: `WebFetch` is allowed (limited to verifying the Phaser CDN once).
 Every item from builder.md, plus:
 
 - ❌ Activate without `circuit_breaker.builder.state === 'OPEN'` or `adapter_override.builder === 'claude-local'`
-- ❌ Take over the verifier's role (the v3 actor split keeps verifier independent)
+- ❌ Take over the verifier's role (the v0.1 actor split keeps verifier independent)
 - ❌ Use external network access beyond `WebFetch` for the one Phaser CDN check
 - ❌ Try novel Phaser features — only proven match-3 / swipe / canvas patterns
 

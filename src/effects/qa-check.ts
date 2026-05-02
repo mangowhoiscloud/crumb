@@ -10,7 +10,7 @@
  *
  * Output: QaResult — fed back to transcript as kind=qa.result with metadata.deterministic=true.
  *
- * Pattern: AutoGen Executor (57.6k⭐). See [[bagelcode-system-architecture-v3]] §7.
+ * Pattern: AutoGen Executor (57.6k⭐). See [[bagelcode-system-architecture-v0.1]] §7.
  * Sister: skills/verification-before-completion.md (verifier reads qa.result as D2 ground truth).
  *
  * Frontier backing (P0-2 of `wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md`):
@@ -61,7 +61,7 @@ export interface QaResult {
   /** Phaser scene reached SYS.RUNNING(5) on first load. Informational. */
   phaser_scene_running?: boolean;
   /**
-   * v3.5 — per-AC deterministic results from `qa-interactive.ts`. Empty
+   * v0.3.5 — per-AC deterministic results from `qa-interactive.ts`. Empty
    * array = caller passed no `ac_predicates` (legacy spec or all-subjective);
    * non-empty = each entry's status is the single-origin ground truth for
    * that AC, anti-deception Rule 1-extended (LLM may not forge AC pass/fail).
@@ -108,7 +108,7 @@ const MAX_OWN_CODE_BYTES = 60_000;
  *
  * Mock fixtures (path ending in `.mock.html`) return deterministic PASS.
  *
- * **Missing artifact is NOT a fixture — it's a builder failure.** v3.4 splits
+ * **Missing artifact is NOT a fixture — it's a builder failure.** v0.3.1 splits
  * the two cases that used to share a fall-through: a real builder spawn that
  * crashed before writing any file must NOT be rewarded with a fake PASS,
  * because the verifier reads `qa.result.exec_exit_code` as D2 ground truth
@@ -223,7 +223,7 @@ export async function runQaCheck(
     }
   }
 
-  // v3.5 — AC predicate runner (deterministic, no LLM). Skipped silently
+  // v0.3.5 — AC predicate runner (deterministic, no LLM). Skipped silently
   // when planner-lead emitted no `ac_predicates` (legacy spec) OR when
   // playwright is unavailable (the inner runner SKIPs every item).
   let acResults: ACResult[] = [];

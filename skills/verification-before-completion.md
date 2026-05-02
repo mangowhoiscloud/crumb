@@ -5,7 +5,7 @@ description: |
   Read inline by `agents/verifier.md` before emitting kind=judge.score.
 when_to_use: verifier spawn 안에서 grader/critic/defender/regrader 진입 전 + judge.score emit 직전 final check
 source: https://github.com/obra/superpowers (verification-before-completion skill family)
-adapted_for: Crumb v3 verifier (CourtEval + 3-layer scoring + anti-deception)
+adapted_for: Crumb v0.1 verifier (CourtEval + 3-layer scoring + anti-deception)
 ---
 
 # Verification Before Completion (Crumb adaptation)
@@ -30,7 +30,7 @@ Before final Re-grader step emits `kind=judge.score` with verdict PASS, verify A
 
 ## Ground-truth lookups (NOT computed by verifier)
 
-Per [[bagelcode-system-architecture-v3]] §7.2 source-of-truth matrix:
+Per [[bagelcode-system-architecture-v0.1]] §7.2 source-of-truth matrix:
 
 | Dim | Lookup | Forbidden recompute |
 |---|---|---|
@@ -66,7 +66,7 @@ If `progress_ledger.score_history` shows variance < 1.0 over the last 2 verify r
 
 ## See also
 
-- [[bagelcode-system-architecture-v3]] §7 + §3.6 (judge.score schema)
+- [[bagelcode-system-architecture-v0.1]] §7 + §3.6 (judge.score schema)
 - [[bagelcode-llm-judge-frontier-2026]] — academic backbone (CourtEval / G-Eval / bias)
 - `agents/verifier.md` — uses this skill inline
 - `skills/code-review-protocol.md` — reviewer persona handoff

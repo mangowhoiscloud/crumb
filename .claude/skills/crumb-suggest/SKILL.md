@@ -22,4 +22,4 @@ Output: `▶ <primary>` (single line) + rationale + command. Up to 3 alternative
 
 Explicit slash form: `/crumb-suggest <session-id>`.
 
-Reference: `src/helpers/suggest.ts`, v3 §11 (5 user event), §8.1 (PARTIAL → hook).
+Reference: `src/helpers/suggest.ts`, v0.1 §11 (5 user event), §8.1 (PARTIAL → hook).

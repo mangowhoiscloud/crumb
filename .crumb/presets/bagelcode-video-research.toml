@@ -1,4 +1,4 @@
-# bagelcode-video-research (v3.3 — researcher single-provider override)
+# bagelcode-video-research (v0.3.0 — researcher single-provider override)
 #
 # Use case: video evidence is the dominant input for THIS session's research,
 # but the user does not want a 3-way provider split for build/verify (e.g. they
@@ -10,7 +10,7 @@
 #   - bagelcode-cross-3way   : 3 providers (Claude + Codex + Gemini) — Bagelcode mail's verbatim ask
 #   - bagelcode-video-research: 1-provider ambient + Gemini SDK ONLY for researcher
 #
-# Resolve order (per [[bagelcode-system-architecture-v3]] §5.1):
+# Resolve order (per [[bagelcode-system-architecture-v0.1]] §5.1):
 #   1. preset.actors.<name>.{harness, model} 명시 사용
 #   2. preset.[defaults] block (없음)
 #   3. ambient (entry host 따라감)
@@ -20,7 +20,7 @@
 name = "bagelcode-video-research"
 description = "researcher 만 gemini-sdk (Gemini 3.1 Pro 비디오) 로 묶고, 나머지는 entry host ambient. Codex 없는 환경에서 멀티모달 evidence 만 별도 provider 쓰는 minimum-friction preset."
 recommended = false
-schema = "crumb/v3"
+schema = "crumb/v0.1"
 
 # coordinator: 명시 없음 → ambient
 [actors.coordinator]
@@ -64,7 +64,7 @@ code_review_protocol          = "skills/code-review-protocol.md"
 parallel_dispatch             = "skills/parallel-dispatch.md"
 subagent_spawn                = "skills/subagent-spawn.md"
 
-# Specialists (planner-lead 내부 step inline; v3.3: research 는 별도 actor)
+# Specialists (planner-lead 내부 step inline; v0.3.0: research 는 별도 actor)
 [specialists.planner-lead]
 concept  = "agents/specialists/concept-designer.md"
 design   = "agents/specialists/visual-designer.md"

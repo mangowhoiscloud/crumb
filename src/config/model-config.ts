@@ -5,7 +5,7 @@
  *   - per-actor (harness, model, effort)
  *   - per-provider (enabled flag)
  *
- * Resolve order ([[bagelcode-system-architecture-v3]] §5.1, extended):
+ * Resolve order ([[bagelcode-system-architecture-v0.1]] §5.1, extended):
  *   1. .crumb/config.toml override (★ NEW — this module)
  *   2. preset.actors.<name>.{harness, provider, model}
  *   3. preset.[defaults]
@@ -129,7 +129,7 @@ export function mapEffort(effort: Effort): EffortMapping {
 }
 
 /**
- * v3.4 default config — every actor uses the user's local entry host
+ * v0.3.1 default config — every actor uses the user's local entry host
  * (`claude-code` for Claude Code sessions). Cross-provider runs remain
  * available but are now opt-in via `crumb run --preset bagelcode-cross-3way`,
  * which overrides builder → codex + verifier → gemini-cli at session-start
@@ -143,7 +143,7 @@ export function defaultConfig(): ModelConfig {
   return {
     defaults: { effort: 'high' },
     actors: {
-      // v3.4 — coordinator is a quick-thinking router (TradingAgents §4.3
+      // v0.3.1 — coordinator is a quick-thinking router (TradingAgents §4.3
       // split: routing = quick model, deep reasoning = deep model). Hub-
       // Ledger-Spoke decisions are 1–2 turn transcript-head lookups;
       // extended thinking adds latency without raising routing quality.

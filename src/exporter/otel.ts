@@ -7,7 +7,7 @@
  * Also emits Anthropic Console-compatible trace (loose JSON, parent_event_id chain) and
  * Chrome Trace Event Format (chrome://tracing) — Crumb actor maps to per-thread lane.
  *
- * See [[bagelcode-system-architecture-v3]] §10.3 (alias matrix),
+ * See [[bagelcode-system-architecture-v0.1]] §10.3 (alias matrix),
  *     [[bagelcode-observability-frontier-2026]] §3 (verbatim attribute list),
  *     https://opentelemetry.io/docs/specs/semconv/gen-ai/
  */

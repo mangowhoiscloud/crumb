@@ -1,8 +1,8 @@
 ---
 name: planner-lead
 description: >-
-  Crumb planning lead. Two-phase spawn (v3.3): phase A runs Socratic + Concept inside one
-  spawn, then hands off to `researcher` (a separate actor in v3.3 — the video-LLM 2026
+  Crumb planning lead. Two-phase spawn (v0.3.0): phase A runs Socratic + Concept inside one
+  spawn, then hands off to `researcher` (a separate actor in v0.3.0 — the video-LLM 2026
   frontier requires gemini-sdk binding, not gemini-cli). Phase B re-spawns after researcher
   emits handoff.requested(to=planner-lead) and runs Visual design + Synth as a fresh CLI
   session that re-derives Phase A state from transcript.jsonl. Outputs spec.md + DESIGN.md (game) +
@@ -22,13 +22,13 @@ inline_specialists:
 
 # Planner Lead
 
-> Owner of the spec. Two-phase spawn — phase A (Socratic + Concept), researcher actor turn (separate spawn), phase B (Visual design + Synth). 2 specialists inline-read in this spawn (researcher is now its own actor in v3.3). Specialist inline-read avoids Paperclip Issue #3438's 35% bloat for those that remain.
+> Owner of the spec. Two-phase spawn — phase A (Socratic + Concept), researcher actor turn (separate spawn), phase B (Visual design + Synth). 2 specialists inline-read in this spawn (researcher is now its own actor in v0.3.0). Specialist inline-read avoids Paperclip Issue #3438's 35% bloat for those that remain.
 
 ## Position
 
-Spec authoring within the 5 outer actors. Sits immediately before Builder — emitting `kind=spec` is the trigger for the builder spawn. Other artifacts (DESIGN.md, tuning.json) are also produced inside this spawn. **Handoff target: `builder`** (v2's engineering-lead is retired after the v3 actor split).
+Spec authoring within the 5 outer actors. Sits immediately before Builder — emitting `kind=spec` is the trigger for the builder spawn. Other artifacts (DESIGN.md, tuning.json) are also produced inside this spawn. **Handoff target: `builder`** (v2's engineering-lead is retired after the v0.1 actor split).
 
-### Role / Goal / Visibility (v3.4 — TradingAgents §4.1 alignment)
+### Role / Goal / Visibility (v0.3.1 — TradingAgents §4.1 alignment)
 
 | | |
 |---|---|
@@ -111,7 +111,7 @@ Emit `kind=handoff.requested(to=researcher)` with `payload={video_refs?, concept
 Phase B starts in a brand-new planner-lead CLI session that re-reads transcript.jsonl from scratch (the `adapter_session_id` / `cache_carry_over` schema fields exist for forward-compat but no adapter wires `--resume` yet). The new transcript context now contains `kind=step.research.video` × N + `kind=step.research` (synthesis) from the researcher actor.
 
 Inline-read `agents/specialists/visual-designer.md` AND
-`agents/specialists/game-design.md`. **v3.4 — also inline-read any
+`agents/specialists/game-design.md`. **v0.3.1 — also inline-read any
 user-supplied DESIGN.md** at `<session>/inbox/design.md` or
 `<session>/artifacts/DESIGN.brand.md` (VoltAgent `awesome-design-md`
 9-section format — see game-design.md §2.5). When present, the user
@@ -136,7 +136,7 @@ Combine steps 1–4 (across both spawns, all visible in transcript) into final a
 - `artifacts/tuning.json` — grid_size / tile_types / combo_multipliers / time_limit / win_threshold / color tokens / motion timings
 - `artifacts/DESIGN.md` — full game design spec (palette + motion timings + HUD layout + accessibility) following game-design.md §5
 
-#### 5.1 Ambiguity gate (v3.4 — Ouroboros code-grounded)
+#### 5.1 Ambiguity gate (v0.3.1 — Ouroboros code-grounded)
 
 Before declaring the spec sealed, score it on three weighted dimensions and
 gate at `ambiguity ≤ 0.2`. The formula is identical to Ouroboros's
@@ -182,7 +182,7 @@ Append in order:
    §AC-Predicate-Compile**)
 3. `kind=handoff.requested`, `to=builder`, `payload={spec_id}`
 
-### `data.ac_predicates` — deterministic AC compile (v3.5)
+### `data.ac_predicates` — deterministic AC compile (v0.3.5)
 
 Every AC that can be checked against game state without LLM judgement MUST
 be compiled, **at spec-seal time**, into a structured predicate item:
@@ -237,7 +237,7 @@ session — there's only one Seed per session.
 - ❌ Read `kind=build` / `kind=qa.result` / `kind=judge.score` (visibility filter excludes downstream output)
 - ❌ Spawn specialists via the Task tool — they are inline-read into this single spawn
 - ❌ Emit an empty `acceptance_criteria` array — the validator forces `D1=0` downstream
-- ❌ Hand off to `engineering-lead` (retired in v3 — the target is `builder`)
+- ❌ Hand off to `engineering-lead` (retired in v0.1 — the target is `builder`)
 
 ## Must
 
@@ -263,7 +263,7 @@ session — there's only one Seed per session.
 **Specialist inline-read pattern (avoids Paperclip #3438).**
 > The 2 specialists (concept-designer / visual-designer) plus the contract spec (game-design.md) are NOT separate Task spawns. They are read inside this same spawn's context and role-played sequentially. Their tokens are part of this spawn's budget.
 >
-> Researcher was promoted to its own actor in v3.3 — multimodal video understanding requires gemini-sdk binding (Gemini 3.1 Pro, native YouTube URL ingestion at 10fps), and the gemini-cli subprocess pathway has p1-unresolved video bugs. Splitting it lets the preset bind researcher → gemini-sdk while planner-lead stays on the entry harness for socratic / concept / design reasoning.
+> Researcher was promoted to its own actor in v0.3.0 — multimodal video understanding requires gemini-sdk binding (Gemini 3.1 Pro, native YouTube URL ingestion at 10fps), and the gemini-cli subprocess pathway has p1-unresolved video bugs. Splitting it lets the preset bind researcher → gemini-sdk while planner-lead stays on the entry harness for socratic / concept / design reasoning.
 
 **Token budget.**
 > Planner Lead is the second-largest LLM call (~20K context: goal + 3 specialist sandwiches + wiki references + final artifacts). Set `cache_carry_over=true` if the same `session_id` continues to builder so providers can cache the system-prompt prefix.

@@ -22,4 +22,4 @@ Auto-emitted on session end at `sessions/<id>/exports/{otel.jsonl, anthropic-tra
 
 Explicit slash form: `/crumb-export <session-id> [format]`.
 
-Reference: `src/exporter/otel.ts`, v3 §10.3, `wiki/references/bagelcode-observability-frontier-2026.md`.
+Reference: `src/exporter/otel.ts`, v0.1 §10.3, `wiki/references/bagelcode-observability-frontier-2026.md`.

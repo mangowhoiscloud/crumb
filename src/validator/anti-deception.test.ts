@@ -72,7 +72,7 @@ describe('anti-deception validator', () => {
   it('Rule 4: same-provider verifier discounts D1 + D3 + D5 by 0.15 + records both violation tags', () => {
     // [[bagelcode-same-provider-discount-2026-05-03]] — Stureborg EMNLP 2024
     // §4.2 measured +14-22% PASS inflation when verifier shares provider with
-    // builder. We replace v3.3's binary verdict downgrade with a numerical
+    // builder. We replace v0.3.0's binary verdict downgrade with a numerical
     // discount on D1 (spec_fit), D3 (schema/observability LLM half), and D5
     // (quality) — the LLM-judged dims where the bias concentrates per
     // Rubric-Anchored Judging (NeurIPS 2025). For D3/D5 the discount is on
@@ -102,7 +102,7 @@ describe('anti-deception validator', () => {
     // Edge-of-PASS case: raw 24/30 PASS · same-provider. After 0.15 discount
     // on D1+D5, combineAggregate splits D3/D5 at (LLM+auto)/2 — recomputed
     // aggregate falls below 24 threshold, demoting to PARTIAL via the
-    // standard floor (line 142). The v3.3 explicit PASS → PARTIAL gate is
+    // standard floor (line 142). The v0.3.0 explicit PASS → PARTIAL gate is
     // gone; the discount + threshold combo replaces it.
     const result = checkAntiDeception({
       judgeScore: judgeScore({
@@ -221,7 +221,7 @@ describe('anti-deception validator', () => {
     expect(result.scores.verdict).toBe('PASS');
   });
 
-  // ── Rule 5 (v3.3) — researcher_video_evidence_missing ──────────────────────
+  // ── Rule 5 (v0.3.0) — researcher_video_evidence_missing ──────────────────────
 
   it('Rule 5: D5 ≥ 4 with video evidence available but no D5.evidence cited → force D5=0', () => {
     const result = checkAntiDeception({

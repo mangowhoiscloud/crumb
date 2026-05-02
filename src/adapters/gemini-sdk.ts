@@ -1,5 +1,5 @@
 /**
- * gemini-sdk adapter — in-process Google Gen AI SDK call for the v3.3 researcher actor.
+ * gemini-sdk adapter — in-process Google Gen AI SDK call for the v0.3.0 researcher actor.
  *
  * Why this exists (NOT a duplicate of gemini-local):
  *   - gemini-cli subprocess has 4 closed/p1-unresolved video bugs as of 2026-05
@@ -60,7 +60,7 @@ import { readAll } from '../transcript/reader.js';
 import type { Message } from '../protocol/types.js';
 
 const DEFAULT_MODEL = 'gemini-3-1-pro';
-const PROMPT_VERSION = 'v3.3-researcher@v1';
+const PROMPT_VERSION = 'v0.3.0-researcher@v1';
 
 interface SdkClient {
   files: {
@@ -213,7 +213,7 @@ export class GeminiSdkAdapter implements Adapter {
     const transcript = await readAll(req.transcriptPath);
     const videoRefs = parseVideoRefs(transcript);
 
-    // v3.4: text-only stub branch removed. The previous behavior emitted empty
+    // v0.3.1: text-only stub branch removed. The previous behavior emitted empty
     // reference_games[] + design_lessons[] regardless of input — pretending to
     // research while doing nothing. Now the reducer's pickAdapter('researcher')
     // routes text-only sessions to `claude-local` (LLM-driven, runs the

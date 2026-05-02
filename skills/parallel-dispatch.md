@@ -5,7 +5,7 @@ description: |
   Ported from obra/superpowers (176k⭐) skills/dispatching-parallel-agents.
 when_to_use: coordinator inline read when preset has parallel actor declarations OR --parallel-builders flag
 source: https://github.com/obra/superpowers (dispatching-parallel-agents skill)
-adapted_for: Crumb v3 multi-actor parallel + multi-judge consensus (NeurIPS 2024 97-98% F1)
+adapted_for: Crumb v0.1 multi-actor parallel + multi-judge consensus (NeurIPS 2024 97-98% F1)
 ---
 
 # Parallel Dispatch (Crumb adaptation)
@@ -81,7 +81,7 @@ Parallel = N× LLM cost. Builder parallel ~2× total. Multi-judge ~3× verifier 
 
 ## See also
 
-- [[bagelcode-system-architecture-v3]] §6 (presets) + §8 (routing)
+- [[bagelcode-system-architecture-v0.1]] §6 (presets) + §8 (routing)
 - [[bagelcode-llm-judge-frontier-2026]] R6 (multi-judge 97-98% F1)
 - [[bagelcode-budget-guardrails]] — token cap rules
 - `skills/subagent-spawn.md` — sequential single-spawn (default path)

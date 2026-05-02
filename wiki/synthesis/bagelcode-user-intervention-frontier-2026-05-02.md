@@ -1,5 +1,5 @@
 ---
-title: User Intervention Frontier Synthesis — LangGraph + AutoGen + Codex 합성 패턴 (v3.2)
+title: User Intervention Frontier Synthesis — LangGraph + AutoGen + Codex 합성 패턴 (v0.2.0)
 category: synthesis
 tags: [bagelcode, user-intervention, langgraph, autogen, codex, paperclip, devin, frontier-synthesis, mail-requirement-2, 2026]
 sources:
@@ -11,7 +11,7 @@ sources:
   - "https://github.com/paperclipai/paperclip (Paperclip pause/swap)"
   - "https://cognition.ai/blog/devin-annual-performance-review-2025 (Devin user-steering anti-pattern)"
   - "[[bagelcode-recruitment-task]] 메일 verbatim 요구사항 #2"
-  - "[[bagelcode-system-architecture-v3]]"
+  - "[[bagelcode-system-architecture-v0.1]]"
 summary: >-
   메일 요구사항 #2 ("사용자가 협업 과정에 개입하거나 관찰") 충족 위한 user intervention 시스템 고도화.
   Frontier 5 사례 × 10 차원 매트릭스 결과 LangGraph interrupt+Command 가 53/60 (88%) 1위. Crumb 의
@@ -26,7 +26,7 @@ created: 2026-05-02
 updated: 2026-05-02
 ---
 
-# User Intervention Frontier Synthesis — LangGraph + AutoGen + Codex 합성 (v3.2)
+# User Intervention Frontier Synthesis — LangGraph + AutoGen + Codex 합성 (v0.2.0)
 
 > 메일 요구사항 #2 ("**사용자가 이 협업 과정에 개입하거나 관찰할 수 있어야 합니다**") 충족 위한 user intervention 고도화. **Frontier 5 사례 × 10 차원 매트릭스** 결과 + Crumb 합성 패턴 + 2 PR 구현 결과 보존.
 
@@ -71,7 +71,7 @@ updated: 2026-05-02
 ## 3. Crumb 합성 패턴 (3 frontier 결합)
 
 ```
-Crumb User Intervention v3.2
+Crumb User Intervention v0.2.0
    │
    ├─ Layer 1 (LangGraph 53/60): G1 + G6
    │   → mid-session state edit + goto/resume frontier 표준
@@ -154,7 +154,7 @@ Crumb User Intervention v3.2
 
 평가자가 ctrl-F 할 키워드 매핑 (메일 #2 정조준):
 
-| 메일 키워드 | Crumb v3.2 충족 |
+| 메일 키워드 | Crumb v0.2.0 충족 |
 |---|---|
 | "사용자가 ... **개입**" | 5 user.* events × 6 data fields (target_actor / goto / swap / reset_circuit / actor / sandwich_append) |
 | "**관찰**" | transcript JSONL (39 kind) + TUI live + summary.html + replay deterministic + OTel exporter + (S13 dashboards) |
@@ -176,7 +176,7 @@ Crumb User Intervention v3.2
 ## See also
 
 - [[bagelcode-recruitment-task]] — 메일 verbatim 요구사항 (특히 #2)
-- [[bagelcode-system-architecture-v3]] — canonical v3 architecture
+- [[bagelcode-system-architecture-v0.1]] — canonical v0.1 architecture
 - [[bagelcode-frontier-orchestration-2026]] — multi-agent frontier 사례
 - [[bagelcode-paperclip-vs-alternatives]] — framework 비채택 + 패턴 차용 결정
 - [[bagelcode-llm-judge-frontier-2026]] — verifier 영역의 frontier (sister)

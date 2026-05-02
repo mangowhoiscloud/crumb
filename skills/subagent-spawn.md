@@ -5,7 +5,7 @@ description: |
   Ported from obra/superpowers (176k⭐) skills/subagent-driven-development.
 when_to_use: planner-lead, builder, verifier 모두 inline read. specialist 호출 룰 + envelope assemble.
 source: https://github.com/obra/superpowers (subagent-driven-development skill)
-adapted_for: Crumb v3 multi-host subagent spawning across 3 CLI harnesses
+adapted_for: Crumb v0.1 multi-host subagent spawning across 3 CLI harnesses
 ---
 
 # Subagent Spawn (Crumb adaptation)
@@ -95,7 +95,7 @@ If `--preset bagelcode-cross-3way` and Codex CLI unavailable (S15 doctor check F
 
 ## See also
 
-- [[bagelcode-system-architecture-v3]] §4 (envelope) + §5 (actor binding) + §8 (routing)
+- [[bagelcode-system-architecture-v0.1]] §4 (envelope) + §5 (actor binding) + §8 (routing)
 - [[bagelcode-frontier-cli-convergence-2026]] §2 (4 CLI primitive: subagents)
 - `skills/parallel-dispatch.md` — sister for parallel mode
 - `agents/coordinator.md` — main consumer of these rules

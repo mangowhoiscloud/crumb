@@ -15,13 +15,13 @@ const STUCK_THRESHOLD = 5;
 const ADAPTIVE_STOP_VARIANCE = 1.0;
 const CIRCUIT_OPEN_AT = 3;
 
-// v3.2 budget guardrails — hard caps. Wiki: bagelcode-budget-guardrails.md §"P0".
+// v0.2.0 budget guardrails — hard caps. Wiki: bagelcode-budget-guardrails.md §"P0".
 const RESPEC_MAX = 3; // max # of spec.update events before done(too_many_respec)
 const VERIFY_MAX = 5; // max # of judge.score events before done(too_many_verify)
 const TOKEN_BUDGET_HOOK = Number(process.env.CRUMB_TOKEN_BUDGET_HOOK) || 40_000;
 const TOKEN_BUDGET_HARD = Number(process.env.CRUMB_TOKEN_BUDGET_HARD) || 50_000;
 
-// v3.2 ratchet (autoresearch P4 keep/revert) — score regression beyond this many
+// v0.2.0 ratchet (autoresearch P4 keep/revert) — score regression beyond this many
 // aggregate points triggers done(ratchet_revert) to stop unbounded loops.
 const RATCHET_REGRESSION_THRESHOLD = 2;
 
@@ -90,7 +90,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         text: `user goal: ${event.body ?? ''}`,
         category: 'goal',
       });
-      // v3.4: stash whether the goal carried video_refs so pickAdapter('researcher')
+      // v0.3.1: stash whether the goal carried video_refs so pickAdapter('researcher')
       // can route. true → gemini-sdk (programmatic video evidence), false →
       // claude-local / ambient (LLM-driven text research). Replaces the previous
       // gemini-sdk text-only stub which emitted empty reference_games[] regardless.
@@ -124,7 +124,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           category: 'spec',
         });
       }
-      // v3.5 — capture deterministic AC predicates if planner-lead compiled any.
+      // v0.3.5 — capture deterministic AC predicates if planner-lead compiled any.
       // See agents/specialists/game-design.md §AC-Predicate-Compile.
       const predicates = event.data?.ac_predicates;
       if (Array.isArray(predicates)) {
@@ -153,7 +153,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
             ...(typeof p.timeout_ms === 'number' ? { timeout_ms: p.timeout_ms } : {}),
           }));
       }
-      // v3.2 budget cap: respec_count > RESPEC_MAX → done(too_many_respec).
+      // v0.2.0 budget cap: respec_count > RESPEC_MAX → done(too_many_respec).
       // Only spec.update counts as a respec (initial spec is the first try).
       if (event.kind === 'spec.update') {
         next.progress_ledger.respec_count += 1;
@@ -175,8 +175,8 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
     }
 
     case 'build': {
-      // v3: build → deterministic qa-check effect (no LLM). qa.result event flows back.
-      // See [[bagelcode-system-architecture-v3]] §4.2 (per-turn flow), §7 (3-layer scoring).
+      // v0.1: build → deterministic qa-check effect (no LLM). qa.result event flows back.
+      // See [[bagelcode-system-architecture-v0.1]] §4.2 (per-turn flow), §7 (3-layer scoring).
       const artifacts = event.artifacts ?? next.task_ledger.artifacts;
       const lastArtifact = artifacts[artifacts.length - 1];
       const artifactPath = lastArtifact?.path ?? 'artifacts/game.html';
@@ -197,7 +197,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
     }
 
     case 'qa.result': {
-      // v3: qa.result → spawn verifier (CourtEval inline 4 sub-step).
+      // v0.1: qa.result → spawn verifier (CourtEval inline 4 sub-step).
       // Verifier reads qa.result as D2 + D6 ground truth lookup.
       // Stash exec_exit_code so the reducer can run anti-deception Rules 1, 2
       // when the next judge.score arrives (architecture invariant #5).
@@ -223,7 +223,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
     }
 
     case 'step.research.video': {
-      // v3.3: track every video evidence event id so anti-deception Rule 5
+      // v0.3.0: track every video evidence event id so anti-deception Rule 5
       // (researcher_video_evidence_missing) can verify the verifier cited at
       // least one of these in scores.D5.evidence at judge.score time.
       next.research_video_evidence_ids = [...next.research_video_evidence_ids, event.id];
@@ -236,7 +236,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
       // + researcher video evidence). Rule 3 (D4 override) needs autoScores which
       // requires the full transcript, so it's skipped here; summary.ts re-runs
       // with autoScores populated for the canonical verdict math.
-      // See [[bagelcode-system-architecture-v3]] §7.3.
+      // See [[bagelcode-system-architecture-v0.1]] §7.3.
       const audit = checkAntiDeception({
         judgeScore: event,
         qaResult: next.last_qa_result,
@@ -285,7 +285,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           verdict,
         });
       }
-      // v3.2 budget cap: verify_count > VERIFY_MAX → done(too_many_verify).
+      // v0.2.0 budget cap: verify_count > VERIFY_MAX → done(too_many_verify).
       // Count judge.score only — verify.result is its legacy alias and the
       // verifier emits BOTH for backwards compat (see agents/verifier.md
       // §4 Re-grader). Counting both would halve the effective cap.
@@ -297,7 +297,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           break;
         }
       }
-      // v3.2 ratchet (autoresearch P4 keep/revert): track best aggregate so far;
+      // v0.2.0 ratchet (autoresearch P4 keep/revert): track best aggregate so far;
       // RATCHET_REGRESSION_THRESHOLD-point drop triggers auto-terminate to prevent
       // unbounded score-oscillation loops.
       if (verdict && aggregate > 0) {
@@ -332,7 +332,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         const eng = next.progress_ledger.circuit_breaker['builder'];
         if (eng?.state === 'OPEN') {
           next.progress_ledger.next_speaker = 'builder-fallback';
-          // v3.4 — emit kind=audit event=fallback_activated BEFORE the spawn so
+          // v0.3.1 — emit kind=audit event=fallback_activated BEFORE the spawn so
           // builder-fallback's sandwich (agents/builder-fallback.md §"in")
           // actually finds the input event it claims to read. Previously this
           // event was promised in the sandwich text but never produced.
@@ -387,7 +387,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
     }
 
     case 'user.intervene': {
-      // v3.2 G3+G6 — actor-targeted intervention + LangGraph Command(goto/update) pattern.
+      // v0.2.0 G3+G6 — actor-targeted intervention + LangGraph Command(goto/update) pattern.
       //
       // data.target_actor: route the user message to a specific actor's task_ledger
       //   (AutoGen UserProxyAgent + GroupChatManager dynamic-speaker pattern).
@@ -467,7 +467,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
     }
 
     case 'user.pause': {
-      // v3.2 G1+G5 — global OR per-actor pause (Paperclip "pause any agent" pattern).
+      // v0.2.0 G1+G5 — global OR per-actor pause (Paperclip "pause any agent" pattern).
       // data.actor=<name> → only that actor is paused; others continue.
       // No data.actor → global pause (G1 default).
       const pauseActor = (event.data as { actor?: Actor } | undefined)?.actor;
@@ -494,7 +494,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
     }
 
     case 'user.resume': {
-      // v3.2 G1+G5 — clears pause (global OR per-actor). LangGraph Command(resume=value).
+      // v0.2.0 G1+G5 — clears pause (global OR per-actor). LangGraph Command(resume=value).
       // data.actor=<name> → only that actor is resumed.
       // No data.actor → clear global pause AND all per-actor pauses; re-spawn queued.
       const resumeActor = (event.data as { actor?: Actor } | undefined)?.actor;
@@ -525,7 +525,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
     }
 
     case 'user.approve': {
-      // v3.2 G1 — explicit user approval. Promotes the most recent PARTIAL verdict
+      // v0.2.0 G1 — explicit user approval. Promotes the most recent PARTIAL verdict
       // to done; harmless if the last verdict was PASS (already done) or absent.
       const lastEntry =
         next.progress_ledger.score_history[next.progress_ledger.score_history.length - 1];
@@ -575,7 +575,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
     case 'handoff.requested': {
       // Most handoffs are acknowledged here as no-ops — the actual spawn happens
       // via routing on the *content* event (spec / verify.result). Researcher is
-      // the exception (v3.3): planner-lead emits handoff.requested(to=researcher)
+      // the exception (v0.3.0): planner-lead emits handoff.requested(to=researcher)
       // after step.concept, and there is no separate "concept-locked" content
       // event we can route on, so we spawn the researcher directly here.
       if (event.to === 'researcher' && event.from === 'planner-lead') {
@@ -592,7 +592,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
     }
 
     case 'step.research': {
-      // v3.3: researcher synthesis arrived. Re-spawn planner-lead for phase B
+      // v0.3.0: researcher synthesis arrived. Re-spawn planner-lead for phase B
       // (Design + Synth). The new spawn re-derives Phase A state from
       // transcript.jsonl — there is no `--resume` wiring yet, so the underlying
       // CLI session_id is fresh and the Anthropic prompt cache misses across
@@ -617,7 +617,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
       break;
   }
 
-  // v3.2 token budget (PR #12) — accumulate across every event regardless of kind.
+  // v0.2.0 token budget (PR #12) — accumulate across every event regardless of kind.
   // Hook fires once at the 40K crossing (transition guard via prev/next compare),
   // hard cap at 50K terminates the session. Determinism: event.metadata only.
   const tokensThisEvent = (event.metadata?.tokens_in ?? 0) + (event.metadata?.tokens_out ?? 0);
@@ -638,7 +638,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
     }
   }
 
-  // v3.2 G1+G5 pause filter — demote spawn to hook so dispatcher doesn't burn an LLM
+  // v0.2.0 G1+G5 pause filter — demote spawn to hook so dispatcher doesn't burn an LLM
   // call. Routing survives in next_speaker for `user.resume` to re-fire later. Runs
   // AFTER token budget so budget hooks / done effects are not filtered.
   if (event.kind !== 'user.resume') {
@@ -672,7 +672,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
 }
 
 /**
- * v3.2 G4 — collect sandwich_append facts that apply to a given actor.
+ * v0.2.0 G4 — collect sandwich_append facts that apply to a given actor.
  * Returns the list of {source_id, text} pairs the dispatcher should concat
  * onto the actor's sandwich (after the file-based local override, if any).
  */
@@ -704,13 +704,13 @@ function pickAdapter(
     return 'claude-local';
   }
   if (actor === 'researcher') {
-    // v3.4: branch on goal.data.video_refs presence (set by goal reducer case).
+    // v0.3.1: branch on goal.data.video_refs presence (set by goal reducer case).
     //  - has video → gemini-sdk (programmatic Gemini 3.1 Pro frame sampling, replay
     //    via cache_key dedup; gemini-cli has p1-unresolved video bugs so SDK is the
     //    deterministic path).
     //  - no video → claude-local (LLM-driven text research per
     //    agents/researcher.md step 1+3 fallback: read wiki references, identify
-    //    3-5 reference games, distill design lessons). Replaces v3.3's text-only
+    //    3-5 reference games, distill design lessons). Replaces v0.3.0's text-only
     //    stub which emitted empty reference_games[] / design_lessons[] regardless.
     // Preset binding (e.g. bagelcode-cross-3way → gemini-sdk) overrides this
     // default via the dispatcher's HARNESS_TO_ADAPTER mapping.

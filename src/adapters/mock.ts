@@ -112,9 +112,9 @@ async function writePlannerSequence(
 }
 
 /**
- * v3: Builder emits build-only. qa-check effect (deterministic, dispatcher-side)
+ * v0.1: Builder emits build-only. qa-check effect (deterministic, dispatcher-side)
  * produces qa.result. Verifier (separate spawn) produces judge.score.
- * See [[bagelcode-system-architecture-v3]] §4.2 (per-turn flow).
+ * See [[bagelcode-system-architecture-v0.1]] §4.2 (per-turn flow).
  */
 async function writeBuilderSequence(
   writer: TranscriptWriter,
@@ -171,7 +171,7 @@ async function writeBuilderSequence(
 }
 
 /**
- * v3: Verifier reads qa.result (D2/D6 ground truth) + spec.md (D1) + reducer auto (D3/D4/D5).
+ * v0.1: Verifier reads qa.result (D2/D6 ground truth) + spec.md (D1) + reducer auto (D3/D4/D5).
  * CourtEval 4 sub-step inline → judge.score with D1-D6 source matrix.
  */
 async function writeVerifierSequence(

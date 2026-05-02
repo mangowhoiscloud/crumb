@@ -147,7 +147,7 @@ function percentile(sorted: number[], q: number): number {
   return sorted[idx] ?? 0;
 }
 
-/** v3.3 actor lane order — consumed by the swimlane renderer. */
+/** v0.3.0 actor lane order — consumed by the swimlane renderer. */
 export const ACTOR_LANE_ORDER: string[] = [
   'user',
   'coordinator',

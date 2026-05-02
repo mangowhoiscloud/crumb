@@ -8,7 +8,7 @@ sources:
   - "https://github.com/contains-studio/agents"
   - "[[bagelcode-frontier-cli-convergence-2026]]"
   - "[[bagelcode-host-harness-decision]]"
-  - "[[bagelcode-system-architecture-v3]]"
+  - "[[bagelcode-system-architecture-v0.1]]"
   - "~/workspace/openclaw/skills/coding-agent/SKILL.md"
   - "~/workspace/openclaw/AGENTS.md"
   - "~/workspace/hermes-agent/AGENTS.md"
@@ -27,7 +27,7 @@ updated: 2026-05-02
 
 # Multi-Host Harness 오픈소스 사례 + Crumb 최종안
 
-> **목적**: Crumb 가 Claude Code / Codex / Gemini CLI 위에서 동작하는 control harness 로 진화 (v3 [[bagelcode-host-harness-decision]] + [[bagelcode-system-architecture-v3]]) 한 후, **CRUMB.md universal identity + multi-host inject** 패턴 결정 위해 frontier 7 사례 매트릭스 + 차용/회피 결정.
+> **목적**: Crumb 가 Claude Code / Codex / Gemini CLI 위에서 동작하는 control harness 로 진화 (v0.1 [[bagelcode-host-harness-decision]] + [[bagelcode-system-architecture-v0.1]]) 한 후, **CRUMB.md universal identity + multi-host inject** 패턴 결정 위해 frontier 7 사례 매트릭스 + 차용/회피 결정.
 >
 > 사용자 명시 (2026-05-02): "기존 .crumb 의 컨텍스트 계층 구조를 수정해야 해. 이전처럼 runtime-native 로 설계하면 문제가 많아. Identity MD (CRUMB.md) 도 구성한다음 서로 다른 플랫폼 하네스에서 주입을 받을 수 있도록 구성하고."
 
@@ -77,7 +77,7 @@ URL: https://github.com/ruvnet/claude-flow
 | Identity 파일 | AgentDB (vector DB, HNSW indexed) + behavioral trust score |
 | Inject 메커니즘 | **27 hooks + 12 auto-triggered workers** ("init 후 자동 routing") |
 | Format | JS + agents/*.md |
-| 디렉토리 | `.agents/`, `.claude/`, `.claude-plugin/`, `agents/`, `bin/`, `docs/`, `plugin/`, `plugins/`, `ruflo/`, `scripts/`, `tests/`, `v2/`, `v3/` |
+| 디렉토리 | `.agents/`, `.claude/`, `.claude-plugin/`, `agents/`, `bin/`, `docs/`, `plugin/`, `plugins/`, `ruflo/`, `scripts/`, `tests/`, `v2/`, `v0.1/` |
 
 **verbatim 핵심**:
 > "Router → Swarm → Agents pipeline"
@@ -199,7 +199,7 @@ URL: https://agents.md (Linux Foundation Agentic AI Foundation)
 > 권장 헤딩: Architecture / Style / Forbidden / Required / How to run / Commit & PR Guidelines
 
 **차용/회피**:
-- ✅ ✅ ✅ 차용: **표준 자체** — Crumb 의 AGENTS.md 가 이미 이 패턴 (v3 align 함, 이전 turn). CRUMB.md 도 sibling 으로 같은 패턴
+- ✅ ✅ ✅ 차용: **표준 자체** — Crumb 의 AGENTS.md 가 이미 이 패턴 (v0.1 align 함, 이전 turn). CRUMB.md 도 sibling 으로 같은 패턴
 - ✅ 차용: pure Markdown body + 헤딩 위계 + imperative 명령 어조
 
 ### G. gamestudio-subagents (pamirtuna, 193⭐)
@@ -257,7 +257,7 @@ URL: https://agents.md (Linux Foundation Agentic AI Foundation)
 - **B / E**: config 파일 (yaml/db)
 - **C / G**: agent file 자체가 self-identifying (frontmatter)
 
-→ **AGENTS.md 가 사실상 표준**. Crumb 는 이미 v3 AGENTS.md 가짐.
+→ **AGENTS.md 가 사실상 표준**. Crumb 는 이미 v0.1 AGENTS.md 가짐.
 
 → **CRUMB.md 는 AGENTS.md 의 "Crumb-internal identity" 자매 파일**:
 - AGENTS.md = contributor identity (이 repo 에서 작업할 때 룰)
@@ -292,7 +292,7 @@ claude-flow 의 "After init, just use Claude Code normally — hooks 가 자동 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │ Tier 1 — Linux Foundation universal standard                       │
-│   AGENTS.md (root, 이미 v3 align 됨)                                 │
+│   AGENTS.md (root, 이미 v0.1 align 됨)                                 │
 │     contributor identity — 이 repo 에서 작업할 때의 룰              │
 │     architecture invariants / build / forbidden / required          │
 │     모든 host 자동 인식 (Codex / Cursor / Claude Code / OpenCode)   │
@@ -323,7 +323,7 @@ description: >-
   .gemini/extensions/crumb/) so each host injects the same Crumb identity.
 type: agent-runtime
 universal: true
-schema_version: crumb/v3
+schema_version: crumb/v0.1
 ---
 
 # Crumb
@@ -356,7 +356,7 @@ schema_version: crumb/v3
 [meta]
 name = "crumb"
 description = "Multi-agent execution harness for casual game prototyping"
-schema = "crumb/v3"
+schema = "crumb/v0.1"
 
 [runtime]
 non_interactive = true
@@ -381,7 +381,7 @@ delegate_to = "crumb run --goal {{prompt}}"
   "name": "crumb",
   "version": "0.1.0",
   "description": "Multi-agent execution harness for casual game prototyping",
-  "schema": "crumb/v3",
+  "schema": "crumb/v0.1",
   "entry": {
     "type": "command",
     "trigger": "/crumb",
@@ -421,7 +421,7 @@ prompt = "Read CRUMB.md, then start: crumb run --goal '{{1}}'"
 ### ✅ 차용 (확정)
 | 패턴 | 출처 | Crumb 적용 |
 |---|---|---|
-| AGENTS.md universal identity 표준 | F (Linux Foundation) | 이미 v3 align (이전 turn) |
+| AGENTS.md universal identity 표준 | F (Linux Foundation) | 이미 v0.1 align (이전 turn) |
 | pure Markdown + YAML frontmatter sandwich | C (contains-studio) + F | P0+P1 sandwich 변환 (이전 turn) |
 | host 별 invocation 표 (`pty:true` 등) | D (openclaw) | CRUMB.md 의 multi-host section |
 | TOML agent definition (Codex) | D + frontier-cli-convergence | `.codex/agents/crumb.toml` |
@@ -567,7 +567,7 @@ URL: https://github.com/google-gemini/gemini-cli (docs 부분 ~~~)
 
 ## Part 8 — Crumb `.crumb/` 재정렬 옵션 비교
 
-### 현재 (v3 시점, runtime-native 가정)
+### 현재 (v0.1 시점, runtime-native 가정)
 
 ```
 .crumb/
@@ -675,7 +675,7 @@ CRUMB.md                       ★ root identity (universal, host inject)
 ## See also
 
 - [[bagelcode]] / [[bagelcode-host-harness-decision]] — Hybrid lock + multi-host 4 entry
-- [[bagelcode-system-architecture-v3]] — §2 multi-host × 3-tuple actor binding
+- [[bagelcode-system-architecture-v0.1]] — §2 multi-host × 3-tuple actor binding
 - [[bagelcode-frontier-cli-convergence-2026]] — 4 CLI 7 primitive (이 페이지의 입력)
 - [[bagelcode-gamestudio-subagents-2026]] — Case G 상세
 - [[bagelcode-paperclip-vs-alternatives]] — framework 비채택 결정 (Case A bkit 와 정합)

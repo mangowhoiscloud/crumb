@@ -58,7 +58,7 @@ The `.claude/skills/crumb/SKILL.md` skill hands the pitch to headless `crumb run
 crumb run --goal "60-second match-3 with combo bonus" --adapter mock --idle-timeout 5000
 ```
 
-Guaranteed to work with zero auth. Session ends with a **26-event v3 flow**: `session.start → goal → planner-lead (5 step + spec + handoff) → builder (artifact + build + handoff) → qa.result (system, deterministic ground truth) → verifier (4 step.judge inline + judge.score aggregate=28/30 PASS + handoff) → done → session.end`. Replay yields identical state.
+Guaranteed to work with zero auth. Session ends with a **26-event v0.1 flow**: `session.start → goal → planner-lead (5 step + spec + handoff) → builder (artifact + build + handoff) → qa.result (system, deterministic ground truth) → verifier (4 step.judge inline + judge.score aggregate=28/30 PASS + handoff) → done → session.end`. Replay yields identical state.
 
 ### C. Real agents via preset
 
@@ -139,7 +139,7 @@ Cross-platform env knobs:
 | `crumb ls` | List `sessions/` with event counts |
 | `npx crumb-dashboard [--port 7321] [--bind 127.0.0.1] [--no-open]` | Live observability dashboard (HTTP + SSE) — see "Live dashboard" section above |
 
-## Architecture (v3, high level)
+## Architecture (v0.1, high level)
 
 ```
 USER (자연어) ─ goal/intervene ───▶ COORDINATOR (host harness 자체)
@@ -147,7 +147,7 @@ USER (자연어) ─ goal/intervene ───▶ COORDINATOR (host harness 자�
               ┌──────────────────┬───────┴────────┬──────────────┬─────────────────┐
               ▼                  ▼                ▼              ▼                 ▼
         PLANNER LEAD       RESEARCHER ★       BUILDER ★      VERIFIER ★       BUILDER FALLBACK
-        (Socratic +        (v3.3:             (sandwich +    (CourtEval        (Codex 죽었을 때)
+        (Socratic +        (v0.3.0:             (sandwich +    (CourtEval        (Codex 죽었을 때)
          Concept;          gemini-sdk          5 skill —      inline 4 sub-
          then handoff      Gemini 3.1 Pro      tdd-iron-law,  step: grader/
          to researcher;    @ 10fps native      verification-  critic/
@@ -171,14 +171,14 @@ USER (자연어) ─ goal/intervene ───▶ COORDINATOR (host harness 자�
                               control plane (pure reducer + state)
 ```
 
-- **Outer 6 actors** (incl. researcher v3.3) + **2 specialist** (planner inline) + **1 contract** (game-design.md, 4+ actors inline-read) + **5 skill** (procedural workflow)
+- **Outer 6 actors** (incl. researcher v0.3.0) + **2 specialist** (planner inline) + **1 contract** (game-design.md, 4+ actors inline-read) + **5 skill** (procedural workflow)
 - **Multi-host 4 entry**: Claude Code skill / Codex CLI / Gemini CLI / headless `crumb run`
 - **Schema**: 40 kinds × 11 fields × 12 specialist steps × 8 actors × OTel GenAI alias
 - **3-layer scoring**: reducer-auto (D3/D4) + qa-check-effect (D2/D6, deterministic) + verifier-llm (D1, semantic)
 - **Cost**: $0/session via subscriptions (Claude Max + Codex Plus + Gemini Advanced) — or `--adapter mock` for free
 - **Configurability**: `(harness × provider × model)` 3-tuple per actor; user picks via preset; ambient fallback follows entry host
 
-For the full canonical spec, see [wiki/concepts/bagelcode-system-architecture-v3.md](./wiki/concepts/bagelcode-system-architecture-v3.md).
+For the full canonical spec, see [wiki/concepts/bagelcode-system-architecture-v0.1.md](./wiki/concepts/bagelcode-system-architecture-v0.1.md).
 
 ## Preset options
 
@@ -231,11 +231,11 @@ sessions/<session-id>/
 │   ├── spec.md                         # Acceptance criteria + rule book
 │   ├── DESIGN.md                       # Color / mechanics / motion spec
 │   └── tuning.json                     # Balance numbers (Unity ScriptableObject importable)
-├── exports/                            # ★ v3 — observability handoff
+├── exports/                            # ★ v0.1 — observability handoff
 │   ├── otel.jsonl                      # OpenTelemetry GenAI Semantic Conventions
 │   ├── anthropic-trace.json            # Anthropic Console import format
 │   └── chrome-trace.json               # chrome://tracing visualization
-└── index.html                          # ★ v3 — auto-generated post-session HTML summary
+└── index.html                          # ★ v0.1 — auto-generated post-session HTML summary
 ```
 
 These are the **input asset** for a downstream Unity team — Crumb is the *prototype-validation layer* before Bagelcode's production Unity workflow.
@@ -243,7 +243,7 @@ These are the **input asset** for a downstream Unity team — Crumb is the *prot
 ## Status
 
 ```
-✅ Schema v3 — 39 kind × 11 field × 12 step × 8 from + D1-D6 source-of-truth scoring
+✅ Schema v0.1 — 39 kind × 11 field × 12 step × 8 from + D1-D6 source-of-truth scoring
 ✅ Pure reducer — circuit breaker, adaptive stop, rollback, user.veto rebound (vitest)
 ✅ Adapters — claude-local / codex-local / gemini-local / mock
 ✅ Live dispatcher — spawn / append / hook / rollback / stop / done / qa_check
@@ -270,10 +270,10 @@ These are the **input asset** for a downstream Unity team — Crumb is the *prot
 - [.claude/skills/crumb/SKILL.md](./.claude/skills/crumb/SKILL.md) — Claude Code host harness entry
 - [.crumb/presets/](./.crumb/presets/) — `bagelcode-cross-3way` / `mock` / `sdk-enterprise` / `solo`
 - [wiki/](./wiki/) — Bagelcode design rationale (subset of mango-wiki, 35 pages)
-  - [bagelcode-system-architecture-v3.md](./wiki/concepts/bagelcode-system-architecture-v3.md) — ★ canonical v3 system architecture
+  - [bagelcode-system-architecture-v0.1.md](./wiki/concepts/bagelcode-system-architecture-v0.1.md) — ★ canonical v0.1 system architecture
   - [bagelcode-host-harness-decision.md](./wiki/synthesis/bagelcode-host-harness-decision.md) — Hybrid (Skill + headless CLI) lock
   - [bagelcode-verifier-isolation-matrix.md](./wiki/concepts/bagelcode-verifier-isolation-matrix.md) — 20-source matrix (cross-provider opt-in backing)
-  - [bagelcode-final-design-2026.md](./wiki/concepts/bagelcode-final-design-2026.md) — §3-§9 (envelope / cache / OTel) still valid in v3
+  - [bagelcode-final-design-2026.md](./wiki/concepts/bagelcode-final-design-2026.md) — §3-§9 (envelope / cache / OTel) still valid in v0.1
 
 ## License
 

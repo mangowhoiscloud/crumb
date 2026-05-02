@@ -5,7 +5,7 @@ type: synthesis
 tags: [scoring, anti-deception, self-bias, llm-judge, length-controlled, frontier-2026, cross-provider, stureborg-emnlp-2024]
 related:
   - bagelcode-scoring-ratchet-frontier-2026-05-02
-  - bagelcode-system-architecture-v3
+  - bagelcode-system-architecture-v0.1
   - bagelcode-verifier-isolation-matrix
   - bagelcode-llm-judge-frontier-2026
 ---
@@ -49,7 +49,7 @@ if (sameProvider && scores.verdict === 'PASS') {
 1. **Dynamic range collapse**. 27/30 PASS 와 19/30 PARTIAL 이 둘 다 PARTIAL 로 표시 → score_history 의 ratchet (max_aggregate_so_far) 이 과대 평가 (27 로 기록되지만 실은 inflation 보정 후 23 즈음).
 2. **Evidence 무시**. 측정된 inflation 은 +14~22% 의 **연속적 수치**. 이를 binary action (PASS↔PARTIAL) 으로 환원하면 측정의 정밀도가 절반 이상 손실.
 3. **D2/D6 도 같이 강등**. binary gate 는 verdict 단위. PASS 가 PARTIAL 이 되면 D2=5 / D6=5 (qa-check ground truth) 도 같이 표시상 절하 — deterministic 신호의 신뢰성 훼손.
-4. **PARTIAL hook 이 사용자 대기 비용 추가**. binary 강등은 hook(partial) 발화 → `runSession` 이 사용자 응답 대기 (architecture v3.2 G1). same-provider 한 가지 사실만으로 매 verdict 마다 사용자가 confirm/veto 클릭하는 cognitive load 가 frontier 표준에 비해 과함.
+4. **PARTIAL hook 이 사용자 대기 비용 추가**. binary 강등은 hook(partial) 발화 → `runSession` 이 사용자 응답 대기 (architecture v0.2.0 G1). same-provider 한 가지 사실만으로 매 verdict 마다 사용자가 confirm/veto 클릭하는 cognitive load 가 frontier 표준에 비해 과함.
 
 ---
 
@@ -208,8 +208,8 @@ anthropic/anthropic 과 google/google 의 inflation 이 다를 수 있음 (Sture
 
 ## 7. Cross-links
 
-- ★ **[[bagelcode-system-architecture-v3.5]]** §5 (R1-R7 표) — 본 페이지의 R4 가 v3.5 의 anti-deception 7 rules 중 하나
+- ★ **[[bagelcode-system-architecture-v0.3.5]]** §5 (R1-R7 표) — 본 페이지의 R4 가 v0.3.5 의 anti-deception 7 rules 중 하나
 - [[bagelcode-scoring-ratchet-frontier-2026-05-02]] §3 (Failure modes), §4 (Frontier 수렴), §7 (P0 권고)
-- [[bagelcode-system-architecture-v3]] §7.3 (anti-deception Rules)
+- [[bagelcode-system-architecture-v0.1]] §7.3 (anti-deception Rules)
 - [[bagelcode-verifier-isolation-matrix]] C2 (cross-provider standard), C5 (isolation cost)
 - [[bagelcode-llm-judge-frontier-2026]] R3-R5 (judge-side bias inventory)

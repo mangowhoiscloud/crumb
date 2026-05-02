@@ -2,7 +2,7 @@
  * /crumb config <자연어> — preset 추천 helper.
  *
  * Crumb 추천만 제시, 사용자 선택. 강제 X.
- * See [[bagelcode-system-architecture-v3]] §12 (자연어 보조 장치).
+ * See [[bagelcode-system-architecture-v0.1]] §12 (자연어 보조 장치).
  */
 
 import { listPresets } from '../dispatcher/preset-loader.js';

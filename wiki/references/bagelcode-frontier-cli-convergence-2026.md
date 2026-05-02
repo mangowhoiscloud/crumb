@@ -24,7 +24,7 @@ updated: 2026-05-02
 
 # 4 CLI Convergence (2026-04) — Claude Code / Codex / Gemini / OpenCode
 
-> 2026-04 시점, 4 major AI coding CLI 가 **공통 primitive 7종**으로 수렴. Crumb 의 Multi-host unified entry ([[bagelcode-system-architecture-v3]] §2) 결정의 frontier 합의 사료.
+> 2026-04 시점, 4 major AI coding CLI 가 **공통 primitive 7종**으로 수렴. Crumb 의 Multi-host unified entry ([[bagelcode-system-architecture-v0.1]] §2) 결정의 frontier 합의 사료.
 
 ---
 
@@ -110,7 +110,7 @@ OpenCode 는 [[bagelcode]] 에서 미정. P1 후보로만 인지.
 | **CC Switch** | 데스크톱 control plane (단일 switch) | 3+ | 단순 switch | 협업 X |
 | **VS Code 1.109 Agent Sessions** | IDE 통합 view (2026-02-05) | Claude/Codex/Copilot | view-only | IDE-native |
 
-→ 5 도구 모두 "multi-host orchestration" 기능은 잡았지만 **transcript single-source-of-truth + sandwich 페르소나 + (harness × provider × model) tuple binding** 셋 모두 갖춘 건 없음. [[bagelcode-system-architecture-v3]] §3 (4 CLI 합의 위 transcript JSONL 강제) 가 그 빈자리.
+→ 5 도구 모두 "multi-host orchestration" 기능은 잡았지만 **transcript single-source-of-truth + sandwich 페르소나 + (harness × provider × model) tuple binding** 셋 모두 갖춘 건 없음. [[bagelcode-system-architecture-v0.1]] §3 (4 CLI 합의 위 transcript JSONL 강제) 가 그 빈자리.
 
 ---
 
@@ -146,7 +146,7 @@ OpenCode 는 [[bagelcode]] 에서 미정. P1 후보로만 인지.
 ## See also
 
 - [[bagelcode]] / [[bagelcode-recruitment-task]] — 메일 verbatim "Claude Code, Codex, Gemini CLI 등 동시 사용"
-- [[bagelcode-system-architecture-v3]] — convergence 위에 Crumb 의 unified entry 디자인
+- [[bagelcode-system-architecture-v0.1]] — convergence 위에 Crumb 의 unified entry 디자인
 - [[bagelcode-host-harness-decision]] — Hybrid lock (Multi-host 결정의 출발점)
 - [[bagelcode-frontier-orchestration-2026]] — 학술/연구 frontier (sister)
 - [[bagelcode-production-cases-2026]] — 산업 production cases (sister)

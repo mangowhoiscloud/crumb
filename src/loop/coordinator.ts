@@ -48,7 +48,7 @@ export interface RunOptions {
   /** How long to wait after the last event before declaring stuck. ms. */
   idleTimeoutMs?: number;
   /**
-   * v3.2 wall-clock budget (autoresearch P3). Soft hook fires once when the
+   * v0.2.0 wall-clock budget (autoresearch P3). Soft hook fires once when the
    * session crosses `wallClockHookMs` of elapsed wall time; hard cap fires
    * `done(wall_clock_exhausted)` at `wallClockHardMs`. Both are measured from
    * the first session.start event's `ts` (deterministic) and compared against
@@ -201,7 +201,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
   };
 
   let processing: Promise<void> = Promise.resolve();
-  // v3.4: pendingItems counts onMessage chain handlers that have been queued
+  // v0.3.1: pendingItems counts onMessage chain handlers that have been queued
   // but not yet fully resolved (including their awaited dispatch effects).
   // The idle-timeout watchdog must not call finish() while pendingItems > 0,
   // otherwise a long-running dispatch (e.g. planner-spawn for 7min) would
@@ -284,7 +284,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
         .catch(fail);
     };
 
-    // Watchdog: idle timeout + v3.2 wall-clock budget guardrail.
+    // Watchdog: idle timeout + v0.2.0 wall-clock budget guardrail.
     // Wall-clock is measured from state.progress_ledger.session_started_at
     // (the deterministic ts of the first session.start event); the watchdog
     // checks against Date.now() so the timing is real wall-clock, not
@@ -341,7 +341,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
       }
 
       if (Date.now() - lastEventAt > idleMs && pendingItems === 0) {
-        // v3.4: only fire finish when the chain has truly drained AND no new
+        // v0.3.1: only fire finish when the chain has truly drained AND no new
         // events have arrived for idleMs. The previous `processing.finally()`
         // grabbed a snapshot of the chain tail at that instant; subsequent
         // chain extensions (e.g. handoff.requested(researcher) → dispatch
@@ -354,7 +354,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
       }
     }, opts.watchdogTickMs ?? 1000);
 
-    // v3.2 G2 — headless inbox.txt watcher. User can append slash-commands /
+    // v0.2.0 G2 — headless inbox.txt watcher. User can append slash-commands /
     // free text to sessions/<id>/inbox.txt without needing the TUI; lines are
     // parsed and appended to the transcript like any other user.* event.
     const inboxPath = resolve(opts.sessionDir, 'inbox.txt');

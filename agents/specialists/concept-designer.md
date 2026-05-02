@@ -2,7 +2,7 @@
 
 > Inline-read by `agents/planner-lead.md` during step.concept. NOT a separate spawn.
 > Maps from gamestudio-subagents (193⭐) `sr_game_designer.md` + `mid_game_designer.md` (compressed).
-> See: [[bagelcode-system-architecture-v3]] §3.2 (3 specialist), [[bagelcode-gamestudio-subagents-2026]] §10.
+> See: [[bagelcode-system-architecture-v0.1]] §3.2 (3 specialist), [[bagelcode-gamestudio-subagents-2026]] §10.
 
 ## Persona
 
@@ -92,7 +92,7 @@ data={core_mechanic, win_condition, lose_condition, combo_rule}
 
 - [[bagelcode-mobile-game-tech-2026]] — Phaser HTML5 reference patterns
 - [[bagelcode-gamestudio-subagents-2026]] §10 — gamestudio sr_game_designer mapping
-- `agents/researcher.md` — successor actor (v3.3 promoted from specialist; market reference + video evidence)
+- `agents/researcher.md` — successor actor (v0.3.0 promoted from specialist; market reference + video evidence)
 - `agents/specialists/visual-designer.md` — sister specialist (color/UX)
 - `agents/specialists/game-design.md` — binding envelope + DESIGN.md synth format
 - `agents/planner-lead.md` — parent spawn

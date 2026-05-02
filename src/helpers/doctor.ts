@@ -10,7 +10,7 @@
  *
  * Returns table + recommended preset based on what's available.
  *
- * See [[bagelcode-system-architecture-v3]] §3 (auth-manager spec).
+ * See [[bagelcode-system-architecture-v0.1]] §3 (auth-manager spec).
  */
 
 import { existsSync } from 'node:fs';
@@ -122,7 +122,7 @@ async function checkGemini(): Promise<HostStatus> {
 }
 
 async function checkPlaywright(): Promise<HostStatus> {
-  // v3.5 — playwright is now an optionalDependency with auto-postinstall.
+  // v0.3.5 — playwright is now an optionalDependency with auto-postinstall.
   // Detect via npm package presence (not env var) so the doctor reflects
   // ground truth: did `npm install` actually pull the package down?
   // Legacy `PLAYWRIGHT_AVAILABLE=1` still honored as an opt-in override.

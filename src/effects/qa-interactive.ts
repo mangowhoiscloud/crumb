@@ -1,5 +1,5 @@
 /**
- * qa-interactive — deterministic AC predicate runner (v3.5).
+ * qa-interactive — deterministic AC predicate runner (v0.3.5).
  *
  * Tier-2 of the two-tier QA model (see `agents/specialists/game-design.md`
  * §AC-Predicate-Compile). Tier-1 = static smoke (`qa-check-playwright.ts`,

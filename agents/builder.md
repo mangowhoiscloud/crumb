@@ -30,9 +30,9 @@ inline_specialists:
 
 ## Position
 
-The implementation step among the 5 outer actors. The core of the v3 actor split — after engineering-lead was retired, builder + verifier separate so the cross-provider boundary lives at the actor level. Within the spec → build → (qa_check effect) → verifier → done flow, this actor owns only `build`.
+The implementation step among the 5 outer actors. The core of the v0.1 actor split — after engineering-lead was retired, builder + verifier separate so the cross-provider boundary lives at the actor level. Within the spec → build → (qa_check effect) → verifier → done flow, this actor owns only `build`.
 
-### Role / Goal / Visibility (v3.4 — TradingAgents §4.1 alignment)
+### Role / Goal / Visibility (v0.3.1 — TradingAgents §4.1 alignment)
 
 | | |
 |---|---|
@@ -184,7 +184,7 @@ Then `kind=handoff.requested`, `to=coordinator`, `payload={next_expected: "qa.re
 **Anti-deception (validator-enforced).**
 > `kind=build` with empty `artifacts` → automatic `D2=0` downstream.
 > Any test/lint/exec claim from builder → `validator audit_violations += "builder_self_assessment_attempt"`.
-> **`kind=build` with `data.file_count` ≠ count of preceding `kind=artifact.created` events this spawn** → `validator audit_violations += "builder_artifact_emit_skipped"` (v3.5 Rule 8). The dashboard's transcript-first Output rendering depends on every file being announced; silent disk writes break observability.
+> **`kind=build` with `data.file_count` ≠ count of preceding `kind=artifact.created` events this spawn** → `validator audit_violations += "builder_artifact_emit_skipped"` (v0.3.5 Rule 8). The dashboard's transcript-first Output rendering depends on every file being announced; silent disk writes break observability.
 > QA is structurally OUT of your reach — the qa-check effect runs deterministically (htmlhint + playwright). **You can't fake it. Don't try.**
 
 **Cross-provider awareness.**

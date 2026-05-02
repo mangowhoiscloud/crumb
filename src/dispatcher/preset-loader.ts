@@ -1,13 +1,13 @@
 /**
  * Preset Loader — (harness × provider × model) 3-tuple resolve with ambient fallback.
  *
- * Resolve order ([[bagelcode-system-architecture-v3]] §5.1):
+ * Resolve order ([[bagelcode-system-architecture-v0.1]] §5.1):
  *   1. preset.actors.<name>.{harness, provider, model} 명시 사용
  *   2. preset.[defaults] block (선택)
  *   3. ambient (entry host 따라감)
  *   4. system fallback (claude-code + anthropic + claude-sonnet-4-6)
  *
- * Spec source: wiki/concepts/bagelcode-system-architecture-v3.md §5-§6
+ * Spec source: wiki/concepts/bagelcode-system-architecture-v0.1.md §5-§6
  */
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';

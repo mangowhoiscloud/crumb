@@ -24,7 +24,7 @@ import type { SpawnRequest } from './types.js';
  * the sandwich).
  *
  * Why this specific text: "Continue your role per the system prompt." (the
- * v3.3 first attempt) sometimes produced "awaiting input" stalls — Claude
+ * v0.3.0 first attempt) sometimes produced "awaiting input" stalls — Claude
  * treated it as a status check and emitted "Planner-lead spawn ready.
  * Awaiting kind=goal input..." instead of acting on the transcript. Naming
  * the transcript file + telling the actor to execute the next step removes
@@ -50,7 +50,7 @@ export function buildAdapterEnv(req: SpawnRequest): NodeJS.ProcessEnv {
     CRUMB_SESSION_ID: req.sessionId,
     CRUMB_SESSION_DIR: req.sessionDir,
     CRUMB_ACTOR: req.actor,
-    // v3.4: forward binding's harness/provider/model so `crumb event` can
+    // v0.3.1: forward binding's harness/provider/model so `crumb event` can
     // stamp metadata.harness/provider/model on actor-emitted events
     // (AGENTS.md §135 invariant). CRUMB_BUILDER_PROVIDER is set only when
     // spawning the verifier (dispatcher resolves it from the latest build
@@ -60,7 +60,7 @@ export function buildAdapterEnv(req: SpawnRequest): NodeJS.ProcessEnv {
     ...(req.provider ? { CRUMB_PROVIDER: req.provider } : {}),
     ...(req.model ? { CRUMB_MODEL: req.model } : {}),
     ...(req.builderProvider ? { CRUMB_BUILDER_PROVIDER: req.builderProvider } : {}),
-    // v3.4: verifier-only minimal-context bundle. Set by the dispatcher when
+    // v0.3.1: verifier-only minimal-context bundle. Set by the dispatcher when
     // spawning the verifier so the sandwich reads the bundle instead of the
     // full transcript. Hard isolation against framing / anchor / preference
     // leakage biases. See [[bagelcode-verifier-context-isolation-2026-05-03]].

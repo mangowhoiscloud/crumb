@@ -22,4 +22,4 @@ For partial matches (e.g., "user" → user.intervene / user.veto / ...), tool re
 
 Explicit slash form: `/crumb-explain <kind>`.
 
-Reference: `src/helpers/explain.ts` (KIND_REGISTRY), `protocol/schemas/message.schema.json`, v3 §3.3.
+Reference: `src/helpers/explain.ts` (KIND_REGISTRY), `protocol/schemas/message.schema.json`, v0.1 §3.3.

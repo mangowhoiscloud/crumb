@@ -176,8 +176,8 @@ bundle 은 transcript 의 결정론적 projection (kind whitelist + latest-K fil
 
 ## 6. Cross-links
 
-- ★ **[[bagelcode-system-architecture-v3.5]]** §6.1 — 본 페이지의 bundle 결정이 v3.5 dispatcher 에 file-level enforcement 로 격상됨
-- ★ **[[bagelcode-system-diagrams-v3.5]]** §4 — judge-input bundle projection Mermaid
+- ★ **[[bagelcode-system-architecture-v0.3.5]]** §6.1 — 본 페이지의 bundle 결정이 v0.3.5 dispatcher 에 file-level enforcement 로 격상됨
+- ★ **[[bagelcode-system-diagrams-v0.3.5]]** §4 — judge-input bundle projection Mermaid
 - [[bagelcode-same-provider-discount-2026-05-03]] §2.2 — Anthropic Hybrid 2-stage 의 다른 절반 (numerical correction) 과 짝
 - [[bagelcode-scoring-ratchet-frontier-2026-05-02]] §3 — failure modes
 - [[bagelcode-verifier-isolation-matrix]] row #2 — Anthropic "fresh context only" 매핑

@@ -15,7 +15,7 @@
  *   /swap <from>=<adapter>                   → kind=user.intervene, data.swap={from,to}
  *   /reset-circuit <actor|all>               → kind=user.intervene, data.reset_circuit=<actor>|true
  *   /append [@<actor>] <text>                → kind=user.intervene, data.sandwich_append=<text>
- *                                              (+ data.target_actor when @<actor> present)  — v3.2 G4
+ *                                              (+ data.target_actor when @<actor> present)  — v0.2.0 G4
  *   /note <text>                             → kind=note, body=<text>
  *   /redo [body]                             → kind=user.intervene, body=<body>  (alias for free-text)
  *   @<actor> <body>                          → kind=user.intervene, data.target_actor=<actor>, body=<body>
@@ -169,7 +169,7 @@ function parseSlash(line: string, sessionId: string): DraftMessage | null {
       return null;
     }
     case 'append': {
-      // v3.2 G4 — runtime sandwich append. Optional @<actor> prefix scopes the
+      // v0.2.0 G4 — runtime sandwich append. Optional @<actor> prefix scopes the
       // append to one actor; absent prefix broadcasts to every spawn.
       const at = rest.match(/^@([\w-]+)\s+(.+)$/);
       if (at && isActor(at[1])) {
