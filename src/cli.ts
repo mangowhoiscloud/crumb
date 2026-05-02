@@ -245,6 +245,51 @@ async function cmdDebug(args: ParsedArgs): Promise<void> {
   console.log(formatDiagnosis(detections));
 }
 
+async function cmdStatus(args: ParsedArgs): Promise<void> {
+  const target = args.positional[0];
+  if (!target) throw new Error('status requires a session id or session-dir');
+  const cwd = args.flags.get('root') ?? process.cwd();
+  const sessionDir = target.includes('/') ? resolve(target) : resolve(cwd, 'sessions', target);
+  const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
+  const events = await readAll(transcriptPath);
+  let state = initialState(events[0]?.session_id ?? 'unknown');
+  for (const e of events) state = reduce(state, e).state;
+  const { computeStatus, formatStatus } = await import('./helpers/status.js');
+  // eslint-disable-next-line no-console
+  console.log(formatStatus(computeStatus(events, state)));
+}
+
+async function cmdExplain(args: ParsedArgs): Promise<void> {
+  const query = args.positional.join(' ') || args.flags.get('kind') || '';
+  if (!query) throw new Error('explain requires a kind name (e.g.: crumb explain qa.result)');
+  const { explainKind, formatExplain } = await import('./helpers/explain.js');
+  // eslint-disable-next-line no-console
+  console.log(formatExplain(explainKind(query)));
+}
+
+async function cmdSuggest(args: ParsedArgs): Promise<void> {
+  const target = args.positional[0];
+  if (!target) throw new Error('suggest requires a session id or session-dir');
+  const cwd = args.flags.get('root') ?? process.cwd();
+  const sessionDir = target.includes('/') ? resolve(target) : resolve(cwd, 'sessions', target);
+  const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
+  const events = await readAll(transcriptPath);
+  let state = initialState(events[0]?.session_id ?? 'unknown');
+  for (const e of events) state = reduce(state, e).state;
+  const { suggestNext, formatSuggestion } = await import('./helpers/suggest.js');
+  // eslint-disable-next-line no-console
+  console.log(formatSuggestion(suggestNext(events, state)));
+}
+
+async function cmdTui(args: ParsedArgs): Promise<void> {
+  const target = args.positional[0];
+  if (!target) throw new Error('tui <session-id|dir> required');
+  const cwd = args.flags.get('root') ?? process.cwd();
+  const sessionDir = target.includes('/') ? resolve(target) : resolve(cwd, 'sessions', target);
+  const { runTui } = await import('./tui/app.js');
+  await runTui({ sessionDir });
+}
+
 async function cmdExport(args: ParsedArgs): Promise<void> {
   const target = args.positional[0];
   if (!target) throw new Error('export <session-id|dir> required');
@@ -306,6 +351,10 @@ Usage:
   crumb doctor                             # full environment check (3 host OAuth + adapter health)
   crumb config <자연어>                     # preset 추천 (Crumb 추천만, 사용자 선택)
   crumb debug <session-id|dir>             # F1-F7 routing 장애 진단
+  crumb status <session-id|dir>            # 진행 상황 + last 10 events + scores
+  crumb explain <kind>                     # 39 kind schema lookup
+  crumb suggest <session-id|dir>           # 다음 사용자 액션 추천
+  crumb tui <session-id|dir>               # blessed live observer (P0)
   crumb export <session-id|dir> [--format otel-jsonl|anthropic-trace|chrome-trace]
                                           # transcript → OTel GenAI / Anthropic / chrome://tracing
   crumb ls                                 # list sessions/
@@ -349,6 +398,18 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       break;
     case 'debug':
       await cmdDebug(args);
+      break;
+    case 'status':
+      await cmdStatus(args);
+      break;
+    case 'explain':
+      await cmdExplain(args);
+      break;
+    case 'suggest':
+      await cmdSuggest(args);
+      break;
+    case 'tui':
+      await cmdTui(args);
       break;
     case 'export':
       await cmdExport(args);
