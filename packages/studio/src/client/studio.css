@@ -101,11 +101,16 @@ body { display: grid; grid-template-columns: var(--sessions-w, 240px) 4px 1fr; h
   display: flex; gap: 8px; align-items: center;
   padding: 8px 12px; border-bottom: 1px solid var(--hairline);
   font-size: 12px;
+  flex-wrap: wrap;
 }
 .transcript-toolbar input {
-  flex: 1; background: var(--canvas); color: var(--ink);
+  flex: 1 1 160px;
+  min-width: 80px;
+  max-width: 320px;
+  background: var(--canvas); color: var(--ink);
   border: 1px solid var(--hairline); border-radius: var(--r-sm);
   padding: 4px 8px; font-family: ui-monospace, monospace; font-size: 11px;
+  text-overflow: ellipsis;
 }
 .transcript-content {
   flex: 1; overflow: auto; padding: 8px 12px; margin: 0;
@@ -450,9 +455,12 @@ section.logs {
   background: var(--surface-1);
   font-size: 11px;
   color: var(--ink-subtle);
+  flex-wrap: wrap;
 }
 .logs-toolbar input[type="text"] {
-  flex: 1;
+  flex: 1 1 160px;
+  min-width: 80px;
+  max-width: 320px;
   background: var(--canvas);
   color: var(--ink);
   border: 1px solid var(--hairline);
@@ -461,6 +469,7 @@ section.logs {
   font-family: ui-monospace, monospace;
   font-size: 11px;
   outline: none;
+  text-overflow: ellipsis;
 }
 .logs-toolbar input[type="text"]:focus { border-color: var(--primary); }
 .logs-toolbar label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
@@ -516,6 +525,7 @@ mark.grep-hit.active {
   font-family: ui-monospace, monospace;
   font-size: 10px;
   color: var(--ink-tertiary);
+  flex-shrink: 0; /* never collapse — keep ↑↓ + counter visible even when toolbar is narrow */
 }
 .grep-controls .grep-count {
   min-width: 50px;
@@ -886,9 +896,26 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   color: var(--ink-subtle);
   text-transform: uppercase;
   letter-spacing: 0.4px;
+  flex-wrap: wrap;
 }
 .console-feed-title { color: var(--ink-muted); flex: 0 0 auto; }
-.console-feed-status { color: var(--ink-tertiary); flex: 1; font-family: ui-monospace, monospace; text-transform: none; letter-spacing: 0; }
+.console-feed-status { color: var(--ink-tertiary); flex: 1 1 80px; min-width: 0; font-family: ui-monospace, monospace; text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed-grep-input {
+  flex: 0 1 140px;
+  min-width: 80px;
+  background: var(--canvas);
+  color: var(--ink);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 2px 8px;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+  outline: none;
+  text-overflow: ellipsis;
+}
+.feed-grep-input:focus { border-color: var(--primary); }
 .ghost-btn {
   background: var(--surface-2);
   color: var(--ink-muted);
