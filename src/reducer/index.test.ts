@@ -559,5 +559,40 @@ describe('reducer', () => {
     const approve2 = fixed({ from: 'user', kind: 'user.approve' });
     const r2 = reduce(s1, approve2);
     expect(r2.effects).toHaveLength(0);
+
+  it('resets circuit breaker on successful event from previously-failing actor', () => {
+    // Simulate the breaker having opened on builder after 3 consecutive errors.
+    const s0 = initialState('sess-test');
+    s0.progress_ledger.circuit_breaker['builder'] = {
+      state: 'OPEN',
+      consecutive_failures: 3,
+      last_failure_id: '01H0000000000000000000000F',
+    };
+    // A non-error event from builder (a successful build) should close the breaker.
+    const build = fixed({
+      id: '01H0000000000000000000000C',
+      from: 'builder',
+      kind: 'build',
+      artifacts: [{ path: 'artifacts/game.html', sha256: 'a'.repeat(64), role: 'src' }],
+    });
+    const { state } = reduce(s0, build);
+    const breaker = state.progress_ledger.circuit_breaker['builder'];
+    expect(breaker).toBeDefined();
+    expect(breaker?.state).toBe('CLOSED');
+    expect(breaker?.consecutive_failures).toBe(0);
+    // last_failure_id is preserved for audit / debugging.
+    expect(breaker?.last_failure_id).toBe('01H0000000000000000000000F');
+  });
+
+  it('does not touch the breaker if no prior failures recorded', () => {
+    const s0 = initialState('sess-test');
+    const build = fixed({
+      id: '01H0000000000000000000000D',
+      from: 'builder',
+      kind: 'build',
+      artifacts: [{ path: 'artifacts/game.html', sha256: 'a'.repeat(64), role: 'src' }],
+    });
+    const { state } = reduce(s0, build);
+    expect(state.progress_ledger.circuit_breaker['builder']).toBeUndefined();
   });
 });
