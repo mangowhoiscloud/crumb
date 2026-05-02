@@ -15,7 +15,13 @@ import chokidar, { type FSWatcher } from 'chokidar';
 
 import type { EventBus } from './event-bus.js';
 import { JsonlTail } from './jsonl-tail.js';
-import { defaultTranscriptGlob, projectIdFromPath, sessionIdFromPath } from './paths.js';
+import {
+  crumbHomeFromPath,
+  defaultTranscriptGlob,
+  defaultTranscriptGlobs,
+  projectIdFromPath,
+  sessionIdFromPath,
+} from './paths.js';
 import { shouldPoll } from './poll-detect.js';
 import type { DashboardMessage } from './types.js';
 import { computeMetrics } from './metrics.js';
@@ -27,7 +33,15 @@ interface PerSession {
 }
 
 export interface WatcherOptions {
+  /** Single transcript glob — legacy single-home form. Use `globs` for v3.4 multi-home. */
   glob?: string;
+  /**
+   * v3.4: chokidar accepts an array of globs. Set when watching multiple
+   * Crumb homes simultaneously (e.g. `~/.crumb` + `/tmp/test-home`). When
+   * neither `glob` nor `globs` is set, falls back to `defaultTranscriptGlobs()`
+   * which walks every entry from `CRUMB_HOMES` / `CRUMB_HOME`.
+   */
+  globs?: string[];
   pollInterval?: number;
 }
 
@@ -41,9 +55,15 @@ export class SessionWatcher {
   ) {}
 
   async start(): Promise<void> {
-    const glob = this.opts.glob ?? defaultTranscriptGlob();
+    // Precedence: explicit `globs` array → legacy single `glob` → multi-home
+    // default (one glob per active CRUMB_HOMES entry, falling back to
+    // CRUMB_HOME or $HOME/.crumb when CRUMB_HOMES is unset).
+    const watchTarget: string | string[] = this.opts.globs
+      ? this.opts.globs
+      : (this.opts.glob ??
+        (defaultTranscriptGlobs().length > 1 ? defaultTranscriptGlobs() : defaultTranscriptGlob()));
     const polling = shouldPoll();
-    this.watcher = chokidar.watch(glob, {
+    this.watcher = chokidar.watch(watchTarget, {
       usePolling: polling,
       interval: this.opts.pollInterval ?? 250,
       binaryInterval: 1000,
@@ -84,12 +104,14 @@ export class SessionWatcher {
   snapshot(): Array<{
     session_id: string;
     project_id: string;
+    crumb_home: string;
     transcript_path: string;
     history: DashboardMessage[];
   }> {
     return [...this.sessions.entries()].map(([path, s]) => ({
       session_id: sessionIdFromPath(path),
       project_id: projectIdFromPath(path),
+      crumb_home: crumbHomeFromPath(path),
       transcript_path: path,
       history: s.history,
     }));

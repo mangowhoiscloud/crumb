@@ -4,6 +4,17 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — Dashboard multi-home support (`--home <path>` repeatable + `CRUMB_HOMES` env) (2026-05-02)
+
+The dashboard could only watch a single Crumb home (default `~/.crumb`), so test sessions under `/tmp/crumb-test-home/` and production sessions under `~/.crumb/` couldn't appear together. Now one dashboard instance aggregates from any number of homes.
+
+- **`packages/dashboard/src/paths.ts`** — `getCrumbHomes()` reads `CRUMB_HOMES` (path-list separated, dedupes preserving order) → falls through to `CRUMB_HOME` → falls through to `$HOME/.crumb`. New `defaultTranscriptGlobs(): string[]` mirrors the single-home `defaultTranscriptGlob()` for chokidar's array-of-globs API. `crumbHomeFromPath(path)` is now pure path-string extraction (`lastIndexOf('/projects/')`) — no env lookup, so it works regardless of how the watcher was configured.
+- **`packages/dashboard/src/watcher.ts`** — `WatcherOptions.globs?: string[]` joins legacy `glob?: string`. Watcher precedence: explicit `globs` array → legacy single `glob` → multi-home default. Snapshot entries now include `crumb_home` so the API consumer can disambiguate cross-home project-id collisions.
+- **`packages/dashboard/src/cli.ts`** — `--home <path>` flag, repeatable. CLI passes through to `globs`. Help banner updated with examples; resolution order documented (`--home` > `CRUMB_HOMES` > `CRUMB_HOME` > default).
+- **`packages/dashboard/src/server.ts`** — `DashboardServerOptions.globs?: string[]` plumbed through. `/api/sessions` response includes `crumb_home` per session.
+- **Tests**: 27/27 dashboard specs pass (no test additions; existing watcher specs cover both single-glob and array-glob paths via chokidar's union behavior).
+- Verified end-to-end: `crumb-dashboard --home ~/.crumb --home /tmp/crumb-real-home` returns 2 sessions with distinct `crumb_home` fields ("고양이 퍼즐 게임" 13 events from `~/.crumb`; "30초 색깔 매칭 게임" 32 events from `/tmp/crumb-real-home`).
+
 ### Fixed — Real subprocess RCA cluster: researcher EISDIR + chain drain + repo auto-detect (v3.4) (2026-05-02)
 
 Five issues from end-to-end smoke testing v3.4 researcher refactor with `--preset solo` real Claude subprocess. Each fix landed against a specific stack-trace or transcript observability finding.

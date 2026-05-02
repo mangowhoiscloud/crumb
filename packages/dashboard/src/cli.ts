@@ -7,12 +7,21 @@
  *   crumb-dashboard --port 8080             # custom port
  *   crumb-dashboard --bind 0.0.0.0          # expose on LAN / SSH tunnel
  *   crumb-dashboard --no-open               # headless (CI / SSH)
+ *   crumb-dashboard --home ~/.crumb --home /tmp/crumb-test-home
+ *                                           # v3.4: watch multiple Crumb homes
+ *                                           #       in one server (sessions from
+ *                                           #       all roots show up together).
  *
  * Env:
- *   CRUMB_HOME=/path/to/.crumb              # alternate transcript root
+ *   CRUMB_HOMES=/a:/b                       # v3.4 multi-home (path-list separator)
+ *   CRUMB_HOME=/path/to/.crumb              # legacy single-home
  *   CRUMB_POLL=1                            # force chokidar polling
  *   CRUMB_NO_OPEN=1                         # headless without --no-open flag
+ *
+ * Resolution order: --home flags (repeatable) > CRUMB_HOMES > CRUMB_HOME > $HOME/.crumb.
  */
+
+import { posix, sep } from 'node:path';
 
 import { openBrowser } from './open-browser.js';
 import { startDashboardServer } from './server.js';
@@ -22,10 +31,12 @@ interface Args {
   bind: string;
   open: boolean;
   pollInterval?: number;
+  /** v3.4: repeatable --home flag. Empty array → fall through to env / default. */
+  homes: string[];
 }
 
 function parseArgs(argv: string[]): Args {
-  const a: Args = { port: 7321, bind: '127.0.0.1', open: true };
+  const a: Args = { port: 7321, bind: '127.0.0.1', open: true, homes: [] };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--port' && argv[i + 1]) {
@@ -36,12 +47,23 @@ function parseArgs(argv: string[]): Args {
       a.open = false;
     } else if (arg === '--poll-interval' && argv[i + 1]) {
       a.pollInterval = Number(argv[++i]);
+    } else if (arg === '--home' && argv[i + 1]) {
+      // Repeatable: each --home extends the watch set.
+      a.homes.push(argv[++i]!);
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
     }
   }
   return a;
+}
+
+/** Convert a list of crumb homes into chokidar-friendly transcript globs. */
+function homesToGlobs(homes: string[]): string[] {
+  return homes.map((home) => {
+    const norm = home.split(sep).join('/');
+    return posix.join(norm, 'projects', '*', 'sessions', '*', 'transcript.jsonl');
+  });
 }
 
 function printHelp(): void {
@@ -52,16 +74,24 @@ Usage:
   crumb-dashboard [options]
 
 Options:
+  --home <path>         Crumb home to watch. Repeatable — passes are merged.
+                        v3.4: replaces single-CRUMB_HOME limitation; sessions
+                        from every listed home appear together.
   --port <n>            HTTP port (default 7321)
   --bind <ip>           Bind address (default 127.0.0.1; use 0.0.0.0 for LAN)
   --no-open             Don't auto-launch a browser
   --poll-interval <ms>  Polling interval when chokidar polling is active (default 250)
   -h, --help            Show this help
 
-Env:
-  CRUMB_HOME            Alternate ~/.crumb root
+Env (precedence: --home > CRUMB_HOMES > CRUMB_HOME > $HOME/.crumb):
+  CRUMB_HOMES           v3.4 multi-home, path-list separated (':' POSIX, ';' Windows)
+  CRUMB_HOME            Legacy single-home
   CRUMB_POLL=1          Force chokidar polling (WSL / Docker / NFS)
   CRUMB_NO_OPEN=1       Headless mode without --no-open flag
+
+Examples:
+  crumb-dashboard --home ~/.crumb --home /tmp/crumb-test-home
+  CRUMB_HOMES=/Users/mango/.crumb:/tmp/crumb-real-home crumb-dashboard
 `);
 }
 
@@ -72,10 +102,25 @@ async function main(): Promise<void> {
     bind: args.bind,
   };
   if (args.pollInterval !== undefined) opts.pollInterval = args.pollInterval;
+  // v3.4 multi-home: --home flags take precedence over env (CRUMB_HOMES /
+  // CRUMB_HOME), which in turn fall through to $HOME/.crumb. The watcher
+  // sees an array of globs only when more than one home is active; otherwise
+  // we leave opts unset to preserve legacy single-glob behavior.
+  if (args.homes.length > 0) {
+    opts.globs = homesToGlobs(args.homes);
+  }
   const server = await startDashboardServer(opts);
 
   // eslint-disable-next-line no-console
   console.log(`crumb dashboard listening on ${server.url}`);
+  if (args.homes.length > 0) {
+    // eslint-disable-next-line no-console
+    console.log(`watching ${args.homes.length} home(s):`);
+    for (const h of args.homes) {
+      // eslint-disable-next-line no-console
+      console.log(`  - ${h}`);
+    }
+  }
   openBrowser(server.url, { autoOpen: args.open });
 
   const shutdown = async (): Promise<void> => {
