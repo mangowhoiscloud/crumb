@@ -196,6 +196,8 @@ subagent_spawn                 # host-native primitive 추상화
 
 ## References
 
+- `CRUMB.md` (repo root) — ★ Crumb runtime identity (universal, every host loads this); imported by every host entry. Read this before any actor sandwich.
+- `AGENTS.md` (repo root) — contributor identity (Linux Foundation Agentic AI Foundation standard); sibling of CRUMB.md.
 - `wiki/concepts/bagelcode-system-architecture-v3.md` — ★ canonical v3 시스템 구조 (multi-host + 3-tuple + 5 actor + 3-layer scoring + MCP Provider + persistence)
 - `wiki/synthesis/bagelcode-host-harness-decision.md` — Hybrid (Skill + headless CLI) lock 결정
 - `wiki/concepts/bagelcode-verifier-isolation-matrix.md` — actor-level split 의 backing
