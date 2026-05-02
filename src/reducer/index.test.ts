@@ -100,7 +100,10 @@ describe('reducer', () => {
   });
 
   it('routes verify.result PASS → done', () => {
+    // Invariant #5: PASS without a preceding qa.result with exec_exit_code=0 is
+    // anti-deception flagged. Stash a clean qa.result first to model the real flow.
     const s0 = initialState('sess-test');
+    s0.last_qa_result = { build_event_id: 'b1', exec_exit_code: 0 };
     const verify = fixed({
       from: 'builder',
       kind: 'verify.result',
@@ -111,6 +114,108 @@ describe('reducer', () => {
     expect(state.done).toBe(true);
     expect(state.progress_ledger.score_history).toHaveLength(1);
     expect(effects).toEqual([{ type: 'done', reason: 'verdict_pass' }]);
+  });
+
+  it('anti-deception: PASS without qa.result → audit emitted, verdict downgraded', () => {
+    // Architecture invariant #5: judge.score with verdict=PASS but no qa.result
+    // (or exec_exit_code !== 0) MUST be anti-deception flagged. The reducer
+    // appends a kind=audit event AND downgrades verdict to FAIL for routing.
+    const s0 = initialState('sess-test'); // no last_qa_result
+    const judge = fixed({
+      id: '01H0000000000000000000000J',
+      from: 'verifier',
+      kind: 'judge.score',
+      scores: {
+        D1: { score: 4, source: 'verifier-llm' },
+        D2: { score: 5, source: 'qa-check-effect' },
+        D3: { score: 4, source: 'verifier-llm' },
+        D4: { score: 5, source: 'reducer-auto' },
+        D5: { score: 4, source: 'verifier-llm' },
+        D6: { score: 4, source: 'qa-check-effect' },
+        aggregate: 26,
+        verdict: 'PASS',
+      },
+    });
+    const { state, effects } = reduce(s0, judge);
+
+    const auditEffect = effects.find((e) => e.type === 'append');
+    expect(auditEffect).toMatchObject({
+      type: 'append',
+      message: {
+        from: 'validator',
+        kind: 'audit',
+        parent_event_id: '01H0000000000000000000000J',
+        metadata: { deterministic: true, tool: 'anti-deception@v1' },
+      },
+    });
+    // PASS gets downgraded — not done, no done effect.
+    expect(state.done).toBe(false);
+    expect(effects.some((e) => e.type === 'done')).toBe(false);
+  });
+
+  it('anti-deception: PASS with exec_exit_code=1 → D2 forced to 0, FAIL', () => {
+    const s0 = initialState('sess-test');
+    s0.last_qa_result = { build_event_id: 'b1', exec_exit_code: 1 };
+    const judge = fixed({
+      id: '01H0000000000000000000000K',
+      from: 'verifier',
+      kind: 'judge.score',
+      scores: {
+        D1: { score: 4, source: 'verifier-llm' },
+        D2: { score: 5, source: 'qa-check-effect' }, // verifier lied
+        aggregate: 26,
+        verdict: 'PASS',
+      },
+    });
+    const { effects } = reduce(s0, judge);
+    const auditEffect = effects.find((e) => e.type === 'append');
+    expect(auditEffect).toBeDefined();
+    if (auditEffect && auditEffect.type === 'append') {
+      const violations = auditEffect.message.metadata?.audit_violations ?? [];
+      expect(violations).toContain('verify_pass_without_exec_zero');
+    }
+  });
+
+  it('anti-deception: clean qa.result before judge.score does NOT emit audit', () => {
+    const s0 = initialState('sess-test');
+    s0.last_qa_result = { build_event_id: 'b1', exec_exit_code: 0 };
+    const judge = fixed({
+      from: 'verifier',
+      kind: 'judge.score',
+      scores: {
+        D1: { score: 5, source: 'verifier-llm' },
+        D2: { score: 5, source: 'qa-check-effect' },
+        D3: { score: 4, source: 'verifier-llm' },
+        D4: { score: 5, source: 'reducer-auto' },
+        D5: { score: 4, source: 'verifier-llm' },
+        D6: { score: 4, source: 'qa-check-effect' },
+        aggregate: 27,
+        verdict: 'PASS',
+      },
+    });
+    const { effects } = reduce(s0, judge);
+    expect(effects.some((e) => e.type === 'append')).toBe(false);
+    expect(effects.some((e) => e.type === 'done')).toBe(true);
+  });
+
+  it('anti-deception: step.research.video event ids tracked in state', () => {
+    const s0 = initialState('sess-test');
+    const v1 = fixed({
+      id: '01H000000000000000000000V1',
+      from: 'researcher',
+      kind: 'step.research.video',
+    });
+    const v2 = fixed({
+      id: '01H000000000000000000000V2',
+      from: 'researcher',
+      kind: 'step.research.video',
+    });
+    const s1 = reduce(s0, v1).state;
+    const s2 = reduce(s1, v2).state;
+    expect(s2.research_video_evidence_ids).toEqual([
+      '01H000000000000000000000V1',
+      '01H000000000000000000000V2',
+    ]);
   });
 
   it('routes verify.result FAIL → rollback to planner-lead', () => {

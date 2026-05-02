@@ -83,12 +83,40 @@ export interface ProgressLedger {
   max_aggregate_msg_id: string | null;
 }
 
+/**
+ * Anti-deception inputs the reducer keeps stashed so it can run Rules 1, 2, 4, 5
+ * on every kind=judge.score / kind=verify.result without re-walking the full
+ * transcript. Stays in state because all state must be derivable from the
+ * transcript via reduce() (architecture invariant #1).
+ */
+export interface QaSnapshot {
+  build_event_id: string;
+  exec_exit_code: number;
+  cross_browser_smoke?: 'ok' | 'fail' | 'skipped';
+}
+
 export interface CrumbState {
   session_id: string;
   task_ledger: TaskLedger;
   progress_ledger: ProgressLedger;
   // Last message we have observed — useful for routing decisions in the reducer.
   last_message: Message | null;
+  /**
+   * Latest qa.result snapshot. Populated on kind=qa.result; consumed by the
+   * reducer's anti-deception pass on kind=judge.score / kind=verify.result.
+   */
+  last_qa_result: QaSnapshot | null;
+  /**
+   * Provider on the most recent kind=build event. Used to detect self-bias
+   * (Rule 4: same-provider builder/verifier) at judge.score time.
+   */
+  last_builder_provider: string | null;
+  /**
+   * IDs of kind=step.research.video events emitted in this session. Drives
+   * anti-deception Rule 5 (researcher_video_evidence_missing) at judge.score
+   * time without re-walking the transcript.
+   */
+  research_video_evidence_ids: string[];
   // Has the session reached a terminal state?
   done: boolean;
 }
@@ -120,5 +148,8 @@ export const initialState = (sessionId: string): CrumbState => ({
     max_aggregate_msg_id: null,
   },
   last_message: null,
+  last_qa_result: null,
+  last_builder_provider: null,
+  research_video_evidence_ids: [],
   done: false,
 });

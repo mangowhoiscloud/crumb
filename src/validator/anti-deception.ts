@@ -37,7 +37,15 @@ export interface QaResultLike {
 export interface AntiDeceptionInput {
   judgeScore: Message; // kind=judge.score event being validated
   qaResult: QaResultLike | null; // latest kind=qa.result event's data field (null if missing)
-  autoScores: AutoScores; // Layer 1 reducer auto
+  /**
+   * Layer 1 reducer auto. Optional so the live reducer (which doesn't carry the
+   * full transcript) can run Rules 1, 2, 4, 5 without computing auto scores.
+   * When undefined, Rule 3 (D4 ground-truth check, which compares the verifier's
+   * D4 against autoScores.D4) is skipped and the aggregate is summed as-is
+   * (D3/D5 contribute their LLM-only score). External callers like summary.ts
+   * pass a populated AutoScores to enforce all rules + the deterministic combine.
+   */
+  autoScores?: AutoScores;
   builderProvider?: string | null; // metadata.provider on the build event
   /**
    * v3.3 — IDs of `kind=step.research.video` events that the researcher actor
@@ -82,7 +90,7 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
   }
 
   // ── Rule 3 — verifier_overrode_d4_ground_truth ──────────────────────────────
-  if (scores.D4 && Math.abs(scores.D4.score - input.autoScores.D4) > 0.01) {
+  if (input.autoScores && scores.D4 && Math.abs(scores.D4.score - input.autoScores.D4) > 0.01) {
     violations.push('verifier_overrode_d4_ground_truth');
     scores.D4 = forceScore(scores.D4, input.autoScores.D4, 'reducer-auto');
   }
@@ -109,9 +117,14 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
     }
   }
 
-  // Recompute aggregate after force-corrections using the deterministic combine
-  // rule for D3/D5 (avg of verifier-llm component + reducer-auto component).
-  scores.aggregate = combineAggregate(scores, input.autoScores);
+  // Recompute aggregate after force-corrections. With autoScores present, use
+  // the deterministic combine (avg of verifier-llm + reducer-auto for D3/D5).
+  // Without autoScores (live reducer path), sum D1-D6 as-is — D3/D5 contribute
+  // only their LLM-emitted score; summary.ts re-runs with autoScores for the
+  // canonical verdict math.
+  scores.aggregate = input.autoScores
+    ? combineAggregate(scores, input.autoScores)
+    : sumDimsAsIs(scores);
   if (scores.verdict === 'PASS' && (scores.aggregate ?? 0) < 24) scores.verdict = 'PARTIAL';
 
   scores.audit_violations = violations;
@@ -124,4 +137,9 @@ function forceScore(
   source: ScoreDimension['source'],
 ): ScoreDimension {
   return { ...prev, score: newScore, source, lookup: prev.lookup ?? (null as never) };
+}
+
+function sumDimsAsIs(scores: Scores): number {
+  const dims = [scores.D1, scores.D2, scores.D3, scores.D4, scores.D5, scores.D6];
+  return dims.reduce<number>((sum, d) => sum + (d?.score ?? 0), 0);
 }

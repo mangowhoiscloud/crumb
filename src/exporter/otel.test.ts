@@ -54,11 +54,13 @@ describe('toOtelSpan', () => {
     expect(span.parent_span_id).toBe('01J9X3PARENT');
     expect(span.name).toBe('verifier/judge.score');
     expect(span.attributes['gen_ai.conversation.id']).toBe('sess-abc');
-    expect(span.attributes['gen_ai.task.id']).toBe('task_main');
+    expect(span.attributes['gen_ai.agent.id']).toBe('verifier');
     expect(span.attributes['gen_ai.agent.name']).toBe('verifier');
     expect(span.attributes['gen_ai.agent.target']).toBe('coordinator');
     expect(span.attributes['gen_ai.operation.name']).toBe('judge.score');
+    expect(span.attributes['gen_ai.workflow.name']).toBe('crumb.coordinator');
     expect(span.attributes['gen_ai.step']).toBe('regrader');
+    expect(span.attributes['gen_ai.task.id']).toBe('task_main');
     expect(span.attributes['gen_ai.request.model']).toBe('gemini-2.5-pro');
     expect(span.attributes['gen_ai.usage.input_tokens']).toBe(5000);
     expect(span.attributes['gen_ai.usage.output_tokens']).toBe(1500);
@@ -69,6 +71,78 @@ describe('toOtelSpan', () => {
     expect(span.attributes['crumb.cross_provider']).toBe(true);
     expect(span.attributes['crumb.score.aggregate']).toBe(24.5);
     expect(span.attributes['crumb.score.verdict']).toBe('PASS');
+  });
+
+  it('explicit metadata.gen_ai aliases override defaults', () => {
+    const msg: Message = {
+      ...judgeScore,
+      metadata: {
+        ...judgeScore.metadata!,
+        gen_ai: {
+          conversation_id: 'otel-conv-override',
+          agent_id: 'otel-agent-override',
+          workflow_name: 'crumb.cross_provider_demo',
+        },
+      },
+    };
+    const span = toOtelSpan(msg);
+    expect(span.attributes['gen_ai.conversation.id']).toBe('otel-conv-override');
+    expect(span.attributes['gen_ai.agent.id']).toBe('otel-agent-override');
+    expect(span.attributes['gen_ai.workflow.name']).toBe('crumb.cross_provider_demo');
+  });
+
+  it('tool.call surfaces gen_ai.tool.call.arguments + tool.name', () => {
+    const tc: Message = {
+      id: '01J9X4TC',
+      ts: '2026-05-02T12:02:45.000Z',
+      session_id: 'sess-abc',
+      from: 'builder',
+      kind: 'tool.call',
+      data: { tool_name: 'write_file', path: 'game.html', bytes: 12_000 },
+    };
+    const span = toOtelSpan(tc);
+    expect(span.attributes['gen_ai.tool.name']).toBe('write_file');
+    expect(span.attributes['gen_ai.tool.call.arguments']).toContain('"path":"game.html"');
+  });
+
+  it('tool.result surfaces gen_ai.tool.call.output', () => {
+    const tr: Message = {
+      id: '01J9X4TR',
+      ts: '2026-05-02T12:02:46.000Z',
+      session_id: 'sess-abc',
+      from: 'builder',
+      kind: 'tool.result',
+      data: { ok: true, sha256: 'a'.repeat(64) },
+    };
+    const span = toOtelSpan(tr);
+    expect(span.attributes['gen_ai.tool.call.output']).toContain('"ok":true');
+  });
+
+  it('kind=error sets error.type for dashboard error-rate metrics', () => {
+    const err: Message = {
+      id: '01J9X4ER',
+      ts: '2026-05-02T12:05:00.000Z',
+      session_id: 'sess-abc',
+      from: 'system',
+      kind: 'error',
+      body: 'adapter spawn failed',
+      data: { code: 'F1_ADAPTER_SPAWN_FAIL' },
+    };
+    const span = toOtelSpan(err);
+    expect(span.attributes['error.type']).toBe('F1_ADAPTER_SPAWN_FAIL');
+  });
+
+  it('kind=audit sets error.type=crumb.audit_violation', () => {
+    const aud: Message = {
+      id: '01J9X4AU',
+      ts: '2026-05-02T12:05:30.000Z',
+      session_id: 'sess-abc',
+      from: 'validator',
+      kind: 'audit',
+      body: 'verify_pass_without_exec_zero',
+    };
+    const span = toOtelSpan(aud);
+    expect(span.attributes['error.type']).toBe('crumb.audit_violation');
   });
 
   it('end_time_unix_nano = start + latency_ms', () => {

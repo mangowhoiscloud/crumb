@@ -292,37 +292,67 @@ function renderCostBreakdown(
 
 // ─── §4 CourtEval traces ───────────────────────────────────────────────────
 
+type CourtEvalRole = 'grader' | 'critic' | 'defender' | 'regrader';
+const COURTEVAL_ROLES: CourtEvalRole[] = ['grader', 'critic', 'defender', 'regrader'];
+
 function renderCourtEvalTraces(transcript: Message[], judge: Message | undefined): string {
   const refs = judge?.scores?.courteval ?? {};
-  const lookups: Array<['grader' | 'critic' | 'defender' | 'regrader', string | undefined]> = [
-    ['grader', refs.grader_msg_id],
-    ['critic', refs.critic_msg_id],
-    ['defender', refs.defender_msg_id],
-    ['regrader', refs.regrader_msg_id],
-  ];
-  const stepEvents = lookups.map(([role, id]) => {
-    const evt = id ? transcript.find((m) => m.id === id) : undefined;
-    return { role, evt };
+  // Resolve each sub-step from explicit courteval refs first; fall back to the
+  // most recent step.judge event whose `step` matches the role. The pane is
+  // useful even when the verifier skipped populating courteval refs.
+  const stepEvents = COURTEVAL_ROLES.map((role) => {
+    const refId = (refs as Record<string, string | undefined>)[`${role}_msg_id`];
+    if (refId) {
+      const evt = transcript.find((m) => m.id === refId);
+      if (evt) return { role, evt, source: 'ref' as const };
+    }
+    const evt = findLast(
+      transcript,
+      (m) => m.kind === 'step.judge' && (m.step as string | undefined) === role,
+    );
+    return { role, evt, source: evt ? ('fallback' as const) : ('missing' as const) };
   });
 
   if (stepEvents.every((s) => !s.evt)) {
     return `<section id="courteval" class="card">
 <h2><span class="anchor">§4</span> CourtEval (4 sub-step traces)</h2>
-<div style="color:var(--ink-faint);font-size:12px;">no judge.score.courteval refs in transcript</div>
+<div style="color:var(--ink-faint);font-size:12px;">no step.judge events in transcript</div>
 </section>`;
   }
 
-  const trace = stepEvents
-    .filter((s) => s.evt)
-    .map(({ role, evt }) => {
-      const summary = evt?.body ? truncate(evt.body, 200) : '(no body)';
-      return `<dt>${role}</dt><dd>${escape(summary)}</dd>`;
+  const t0 = transcript[0]?.ts ? Date.parse(transcript[0].ts) : 0;
+  const rows = stepEvents
+    .map(({ role, evt, source }) => {
+      if (!evt) {
+        return `<tr class="missing">
+        <td>${escape(role)}</td>
+        <td colspan="3" style="color:var(--ink-faint)">missing</td>
+      </tr>`;
+      }
+      const elapsed = formatElapsed(Date.parse(evt.ts) - t0);
+      const provider = evt.metadata?.provider;
+      const model = evt.metadata?.model;
+      const provLabel = provider ? `${escape(provider)}${model ? ` / ${escape(model)}` : ''}` : '—';
+      const sourceBadge =
+        source === 'ref'
+          ? '<span class="badge source source-llm" title="explicit courteval ref">ref</span>'
+          : '<span class="badge source source-reducer" title="step.judge fallback">fallback</span>';
+      const summary = evt.body ? truncate(evt.body, 240) : '(no body)';
+      return `<tr>
+      <td><strong>${escape(role)}</strong> ${sourceBadge}</td>
+      <td class="num" style="color:var(--ink-muted);font-family:var(--font-mono);font-size:11px;">${escape(elapsed)}</td>
+      <td>${provLabel}</td>
+      <td>${escape(summary)}</td>
+    </tr>`;
     })
     .join('');
 
   return `<section id="courteval" class="card">
 <h2><span class="anchor">§4</span> CourtEval (4 sub-step traces)</h2>
-<dl class="courteval-trace">${trace}</dl>
+<table class="courteval">
+<thead><tr><th>step</th><th>t</th><th>provider/model</th><th>summary</th></tr></thead>
+<tbody>${rows}</tbody>
+</table>
 </section>`;
 }
 
