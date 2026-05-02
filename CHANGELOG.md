@@ -4,6 +4,15 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Fixed — `_event-protocol.md` not inlined into emitting sandwiches (2026-05-02)
+
+Followup to PR #36 RCA. After fixing the goal-prompt and observability, real subprocess STILL didn't emit transcript events: the post-spawn note captured 2KB of well-formed `kind=question.socratic` JSON in stdout, but Claude printed it instead of invoking `crumb event` via the Bash tool.
+
+Root cause: `agents/_event-protocol.md` (the canonical doc on how to emit events through `crumb event <<EOF ... EOF`) was zero-mentioned in `planner-lead.md` / `builder.md` / `builder-fallback.md` / `researcher.md`. Only `verifier.md` (1) and `coordinator.md` (1) had stub mentions. The protocol's frontmatter says "each Lead sandwich appends a copy of this protocol so the agent doesn't have to read external files" — but the appending was never wired up.
+
+- **`src/dispatcher/live.ts` `assembleSandwich()`** — for any actor in `EMITTING_ACTORS = { planner-lead, builder, verifier, builder-fallback, researcher }`, inline `agents/_event-protocol.md` into the assembled sandwich. The early-return fast-path is updated to also fire when no event protocol injection is needed (preserving v3.1 behavior for sessions that don't exercise the override surface).
+- This unblocks Claude/Codex from the JSON-print failure mode discovered in run 01KQMCSC (planner exit 0 in 41s, 2047b stdout, zero transcript events).
+
 ### Fixed — Real subprocess RCA: planner-lead "awaiting input" stall + observability + 3 minor (2026-05-02)
 
 Closing a 4-issue cluster found while smoke-testing v3.3 against `--preset solo` real subprocess. Root-cause-oriented fixes after dispatcher observability made the silent failures visible.
