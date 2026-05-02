@@ -4,6 +4,30 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Studio grep toolbar overflow + game-design.md §1 input/asset policy (2026-05-03)
+
+Two small UX/contract fixes from live-session feedback.
+
+**Studio grep toolbar overflow** (`packages/studio/src/client/studio.{html,css}`)
+
+The grep input in the Logs / Transcript / Live-feed toolbars used `flex: 1` with no `min-width: 0` cap, so the long `placeholder` text ("grep… (substring, Enter=next, Shift+Enter=prev, Esc=clear)") forced the input to its full intrinsic width and pushed the `↑ ↓` nav buttons + `follow` checkbox + `clear/copy` buttons off the visible toolbar. Reproducible at any panel width below ~640px.
+
+- Inputs now use `flex: 1 1 160px; min-width: 80px; max-width: 320px;` + `text-overflow: ellipsis` so long values truncate visibly without growing the box.
+- `.grep-controls` got `flex-shrink: 0` so the counter + nav arrows never collapse.
+- Each toolbar got `flex-wrap: wrap` so on narrow widths the row breaks rather than overflowing.
+- Long placeholders shortened to `grep…` / `grep / filter…` with the full hint moved into the `title` tooltip — keeps the visible text minimal but discoverable on hover.
+- The Live-feed grep input that had its layout rules inlined as a `style="..."` attribute was extracted into a `.feed-grep-input` class for consistency with the other two.
+
+**`agents/specialists/game-design.md` §1 envelope expanded — input scheme + pixel + audio asset policy** (per user request: "캐릭터를 움직일 땐 방향키 혹은 wasd를 사용하라는 말은 어느 프롬프트에 넣는게 좋겠어" + "도트 이미지 만들 때 사용하기 좋은 툴이나 프롬프트 있나? 음악도 마찬가지야")
+
+The contract is read by 5+ actors (researcher / planner-lead / builder / builder-fallback / verifier) so adding it once propagates everywhere. Scope: §1 Hard envelope.
+
+- **Keyboard (REQUIRED for movement-based games)** — Arrow keys + WASD bound to the same direction handler; Space = action/jump; Esc = pause. Pure tap games (match-3 / clicker / tap-defender) explicitly exempt. Implementation guide for `systems/InputManager.js` (`addKeys('W,A,S,D,SPACE,ESC')` + `createCursorKeys()`). Rationale: qa-check Playwright presses keys deterministically — keyboard is the desktop testability surface AND keyboard-accessibility win.
+- **Pixel asset policy** — procedural-first via `CanvasRenderingContext2D.fillRect` 1-pixel discipline + locked palette from `lospec.com/palette-list` (PICO-8 16, NES 25, GameBoy DMG-04 etc) + `pixelArt: true` + `image-rendering: pixelated`. Atlas fallback ALLOWED only via Aseprite / Retro Diffusion / PixelLab.ai / Scenario.gg / Pyxel Edit. **Forbidden** for sprite output: MidJourney / DALL-E / Recraft (palette + grid drift, post-processing burden). Atlas ≤ 1 MB; source + license required in `CREDITS.md`.
+- **Audio policy** — procedural-first via `OscillatorNode` 3-channel chiptune + ADSR + lookahead clock (Chris Wilson "A Tale of Two Clocks") + `jsfxr` seeds for SFX. Asset fallback ALLOWED only via ElevenLabs Sound Effects / Suno v4 / Stable Audio 2.0 / MusicGen / ChipTone. Bundle ≤ 500 KB combined audio @ ≤ 96 kbps mono mp3; source + license + prompt seed required in `CREDITS.md` so verifier can audit D5 originality.
+
+Tools cited are 2026-05 active per dedicated research pass — not hallucinations.
+
 ### Fixed — Pipeline resilience bundle: builder-fallback + verifier circuit breaker dead-end termination + handoff observability (2026-05-03)
 
 Three reducer-level fixes from the post-immediate-wake pipeline audit. None individually large, but together they close the remaining "session burns wall-clock with no progress" failure modes.

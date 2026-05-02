@@ -65,10 +65,52 @@ artifacts/game/
   + portrait fit (Phaser `Scale.FIT` between 320–428 portrait).
 - **PWA**: `manifest.webmanifest` + `sw.js` (single-file cache shell). Result:
   evaluator can scan a QR code + install on their phone.
-- **Audio**: Web Audio synth in `systems/AudioManager.js` (procedural — 1 BGM
-  lead + 4 SFX). No external `.mp3` / `.ogg`.
+- **Audio (procedural-first)**: Web Audio synth in `systems/AudioManager.js`
+  — `OscillatorNode` 3-channel chiptune (square + triangle + noise = NES
+  family), 4-step ADSR via `gain.gain.linearRampToValueAtTime`, lookahead
+  clock from `AudioContext.currentTime` (Chris Wilson "A Tale of Two Clocks"
+  pattern — `setInterval` drift kills loops). Default: 1 BGM lead + 4 SFX
+  (jump / hit / coin / lose). Embed `jsfxr` seeds (4 ints) directly in
+  `AudioManager.js` for SFX — zero asset bytes.
+- **Audio (asset fallback, opt-in)**: When the goal explicitly demands
+  produced audio, use ONLY: ElevenLabs Sound Effects (text-to-SFX), Suno v4
+  (BGM ≤ 30s loop), Stable Audio 2.0 (CC-BY loop mode), MusicGen
+  (`huggingface.co/facebook/musicgen-small`, local infer), or ChipTone
+  (browser SFXR successor, free). Bundle ≤ 500 KB combined audio @ ≤ 96 kbps
+  mono mp3. Builder MUST record source tool + license + prompt seed in
+  `artifacts/game/CREDITS.md` so verifier can audit D5 originality.
 - **Performance**: 60fps on iPhone Safari 16+ / Android Chrome 100+.
-- **Touch**: pointer events, ≥44×44 hit zones (WCAG 2.5.5 AAA).
+- **Touch (mobile primary)**: pointer events, ≥44×44 hit zones (WCAG 2.5.5 AAA).
+- **Keyboard (desktop fallback, REQUIRED for movement-based games)**:
+  - Movement: Arrow keys (↑↓←→) AND WASD — both bound to the same direction
+    handler. Crumb's rule: any game with on-screen locomotion (action /
+    runner / dungeon / shooter / platformer) MUST register both. Pure tap
+    games (match-3, clicker, tap-defender) are exempt.
+  - Action / jump: Space (and W or ↑ as alias in movement games).
+  - Pause / menu: Esc.
+  - Implementation in `systems/InputManager.js`:
+    `this.input.keyboard.addKeys('W,A,S,D,SPACE,ESC')` + `createCursorKeys()`
+    pointing at the same direction-vector method (`onMoveLeft()` etc).
+  - Rationale: qa-check runs Playwright headless Chromium and presses keys
+    (`page.keyboard.press('w')`, `'ArrowLeft'`) to verify acceptance criteria
+    deterministically. Mobile target stays touch-first; keyboard is the
+    desktop testability surface AND a no-cost accessibility win for
+    keyboard-only players.
+- **Pixel asset policy (procedural-first)**: render sprites in `BootScene`
+  via `CanvasRenderingContext2D.fillRect(x, y, 1, 1)` 1-pixel discipline
+  with a locked palette (PICO-8 16, NES 25, GameBoy DMG-04 etc — hex array
+  from `lospec.com/palette-list`). Phaser config `{ pixelArt: true }` +
+  `image-rendering: pixelated` in `index.html`. Integer-scale all positions
+  (`Math.round`). 1px black outline + Bayer 2×2 dither delivers retro feel
+  without an asset.
+- **Pixel asset fallback (atlas, opt-in)**: When procedural emit cannot
+  produce the requested fidelity, use ONLY: Aseprite (CLI
+  `--format json-array --sheet-type packed`), Retro Diffusion
+  (retrodiffusion.ai, palette-locked), PixelLab.ai (sprite + 4-direction
+  walk anim), Scenario.gg (LoRA-trained sprite series), or Pyxel Edit.
+  Forbidden: MidJourney / DALL-E / Recraft for sprite output (palette + grid
+  drift, post-processing burden). Atlas total ≤ 1 MB. Builder MUST record
+  source tool + license in `CREDITS.md`.
 - **Network**: zero runtime requests after CDN load + SW first-fetch — game
   must run offline.
 
