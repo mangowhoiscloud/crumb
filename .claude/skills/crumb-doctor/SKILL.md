@@ -9,7 +9,7 @@ description: >-
   Read-only.
 ---
 
-# /crumb-doctor — 환경 점검
+# /crumb-doctor — environment health check
 
 When the user asks about environment readiness or what presets are viable:
 
@@ -17,7 +17,7 @@ When the user asks about environment readiness or what presets are viable:
 
 **Fallback path** — `npx tsx src/index.ts doctor`.
 
-Output table: `| Host | Status | Detail |` for Claude Code / Codex CLI / Gemini CLI / playwright / htmlhint. Then `## 추천 preset (현재 환경 기준)` with viable / not-viable per preset.
+Output table: `| Host | Status | Detail |` for Claude Code / Codex CLI / Gemini CLI / playwright / htmlhint. Then `## Recommended preset (for the current environment)` with viable / not-viable per preset.
 
 Explicit slash form: `/crumb-doctor`.
 

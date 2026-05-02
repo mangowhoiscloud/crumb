@@ -3,7 +3,7 @@ name: tdd-iron-law
 description: |
   RED-GREEN-REFACTOR Iron Law for Crumb's builder. Ported from obra/superpowers (176k⭐) skills/test-driven-development.
   Read inline by `agents/builder.md` to enforce evidence-over-claims discipline.
-when_to_use: builder spawn 안에서 game.html 작성 전 inline read
+when_to_use: inline-read inside the builder spawn before writing artifacts/game/**
 source: https://github.com/obra/superpowers/blob/main/skills/test-driven-development/SKILL.md
 adapted_for: Crumb v0.1 builder (Phaser HTML5 single-file, no literal pytest)
 ---

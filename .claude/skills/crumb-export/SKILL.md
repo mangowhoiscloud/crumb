@@ -16,7 +16,7 @@ When the user wants to ship a session transcript to an external observability pl
 
 **Fallback path** — `npx tsx src/index.ts export <session-id> --format <fmt>`.
 
-Default format = `otel-jsonl` (Datadog / Vertex / Phoenix / Langfuse / AgentOps 호환). `anthropic-trace` for Claude Console import. `chrome-trace` for `chrome://tracing` (per-actor lane via `tid`).
+Default format = `otel-jsonl` (compatible with Datadog / Vertex / Phoenix / Langfuse / AgentOps). `anthropic-trace` for Claude Console import. `chrome-trace` for `chrome://tracing` (per-actor lane via `tid`).
 
 Auto-emitted on session end at `sessions/<id>/exports/{otel.jsonl, anthropic-trace.json, chrome-trace.json}` — this skill is for ad-hoc on-demand exports.
 

@@ -3,7 +3,7 @@ name: code-review-protocol
 description: |
   Handoff protocol between builder and verifier. Ported from obra/superpowers (176k⭐) skills/{requesting,receiving}-code-review.
   Defines deviation classification (Critical/Important/Suggestion) and handoff routing.
-when_to_use: builder/verifier 양쪽이 inline read. builder는 emit 형식 참조, verifier는 분류 룰 참조.
+when_to_use: inline-read by both builder and verifier. Builder reads it for the emit format; verifier reads it for the classification rules.
 source: https://github.com/obra/superpowers/blob/main/agents/code-reviewer.md
 adapted_for: Crumb v0.1 (handoff.requested + handoff.rollback + spec.update routing)
 ---

@@ -10,7 +10,7 @@ description: >-
   (use `crumb-status`) or fault diagnosis (use `crumb-debug`).
 ---
 
-# /crumb-suggest — 다음 사용자 액션 추천
+# /crumb-suggest — recommend the next user action
 
 Resolve the session id (most recent if unspecified).
 

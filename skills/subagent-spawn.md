@@ -3,7 +3,7 @@ name: subagent-spawn
 description: |
   Task tool / Codex subagent / Gemini extension MCP spawn rules. depth=1 enforced.
   Ported from obra/superpowers (176k⭐) skills/subagent-driven-development.
-when_to_use: planner-lead, builder, verifier 모두 inline read. specialist 호출 룰 + envelope assemble.
+when_to_use: inline-read by planner-lead, builder, and verifier. Covers specialist invocation rules and envelope assembly.
 source: https://github.com/obra/superpowers (subagent-driven-development skill)
 adapted_for: Crumb v0.1 multi-host subagent spawning across 3 CLI harnesses
 ---
