@@ -237,6 +237,59 @@ describe('reducer', () => {
     });
   });
 
+  it('routes verify.result FAIL with builder circuit OPEN → audit + builder-fallback spawn', () => {
+    // v3.4: agents/builder-fallback.md §"in" promises kind=audit
+    // event=fallback_activated as an input the actor reads. Without this
+    // emission the sandwich's documented input never arrives.
+    //
+    // from='verifier' (not 'builder') matters: the reducer's circuit-breaker
+    // recovery branch resets the failure streak on any non-error event from
+    // the actor whose breaker is OPEN. A verify.result emitted by builder
+    // would reset builder's breaker before this case runs. The real flow has
+    // verifier emit verify.result/judge.score, so the test mirrors that.
+    const s0 = initialState('sess-test');
+    s0.progress_ledger.circuit_breaker['builder'] = {
+      state: 'OPEN',
+      consecutive_failures: 3,
+      last_failure_id: '01H0000000000000000000099A',
+    };
+    const verify = fixed({
+      from: 'verifier',
+      kind: 'verify.result',
+      scores: { aggregate: 12, verdict: 'FAIL', feedback: 'AC#3 broken' },
+    });
+    const { effects } = reduce(s0, verify);
+
+    // Expect: append(audit fallback_activated) FIRST, then spawn(builder-fallback).
+    // Order matters — the audit must land on the transcript before the spawn so
+    // the fallback subprocess actually sees it on read.
+    const audit = effects.find((e) => e.type === 'append');
+    const spawn = effects.find((e) => e.type === 'spawn');
+    expect(audit).toBeDefined();
+    expect(spawn).toBeDefined();
+    expect(effects.indexOf(audit!)).toBeLessThan(effects.indexOf(spawn!));
+    if (audit?.type !== 'append') throw new Error('unreachable');
+    expect(audit.message).toMatchObject({
+      from: 'system',
+      kind: 'audit',
+      data: {
+        event: 'fallback_activated',
+        reason: 'builder_circuit_open',
+        consecutive_failures: 3,
+        last_failure_id: '01H0000000000000000000099A',
+      },
+    });
+    expect(audit.message.metadata).toMatchObject({
+      deterministic: true,
+      tool: 'reducer-fallback-route@v1',
+    });
+    expect(spawn).toMatchObject({
+      type: 'spawn',
+      actor: 'builder-fallback',
+      adapter: 'claude-local',
+    });
+  });
+
   it('verify.result PARTIAL → hook(partial)', () => {
     const s0 = initialState('sess-test');
     const verify = fixed({
