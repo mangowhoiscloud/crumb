@@ -35,3 +35,4 @@ Thumbs.db
 # temp
 tmp/
 .tmp/
+.claude/scheduled_tasks.lock
