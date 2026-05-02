@@ -4,6 +4,12 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Fixed — Codex CLI rejects `--prompt` flag (positional only) (2026-05-02)
+
+Followup to PR #23. Real subprocess demo with `--preset solo` (model-config override binds builder=codex+gpt-5.5-codex) crashed at the first builder spawn: `error: unexpected argument '--prompt' found. tip: to pass '--prompt' as a value, use '-- --prompt'. Usage: codex exec [OPTIONS] [PROMPT]`. Codex 0.123.0 takes the prompt as a **positional** argument; the `--prompt` flag never existed (the original conditional `['--prompt', req.prompt]` was wrong even before PR #23 — it just never fired because callers omitted the prompt).
+
+- **`src/adapters/codex-local.ts`** — pass `promptText` as the trailing positional, drop `--prompt` flag entirely. Other adapters (claude / gemini) still use `-p <text>` per their CLI grammar.
+
 ### Fixed — Adapter empty-prompt crash blocks every real subprocess run (2026-05-02)
 
 Discovered while smoke-testing v3.3 against `--preset solo`: every real subprocess spawn died on the first actor with `error: Input must be provided either through stdin or as a prompt argument when using --print` (claude-local exit 1 in 3.7s). Root cause: most reducer spawn effects (goal → planner-lead, spec → builder, qa.result → verifier, fallback → builder-fallback) intentionally omit `prompt` because the actor's job is fully described by the sandwich — but the adapters then forwarded `req.prompt ?? ''` to the host CLI, and `claude -p ""` / `gemini -p ""` reject empty input. Codex's `exec --prompt <text>` was conditionally appended, so codex sat waiting on stdin instead of crashing.
