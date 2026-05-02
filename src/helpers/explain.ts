@@ -1,7 +1,7 @@
 /**
  * /crumb explain <kind> — schema 어휘 lookup helper.
  *
- * 39 kinds × 11 fields. Static registry — no transcript I/O.
+ * 40 kinds × 11 identification fields. Static registry — no transcript I/O.
  * Source-of-truth: protocol/schemas/message.schema.json + v3 §3.
  */
 

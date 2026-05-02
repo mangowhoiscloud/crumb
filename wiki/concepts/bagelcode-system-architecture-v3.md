@@ -33,7 +33,7 @@ updated: 2026-05-02
 
 # Crumb 시스템 구조 v3 — Multi-host × (harness × provider × model)
 
-> **canonical 종합 lock.** v2 ([[bagelcode-system-architecture]] §1-§2 그림) 를 본 페이지가 대체. v2 의 §3-§9 (38 kind schema 코어, prompt assemble 절차) 는 본 페이지의 §3-§4 로 흡수 후 39 kind 로 정정. [[bagelcode-host-harness-decision]] Hybrid lock 위에 (a) Multi-host 3 entry 추가, (b) 3-tuple actor binding, (c) ambient fallback, (d) 3-layer scoring 추가.
+> **canonical 종합 lock.** v2 ([[bagelcode-system-architecture]] §1-§2 그림) 를 본 페이지가 대체. v2 의 §3-§9 (38 kind schema 코어, prompt assemble 절차) 는 본 페이지의 §3-§4 로 흡수 후 40 kind 로 정정 (v3 +qa.result 추가, meta 카운트 6→7 정정). [[bagelcode-host-harness-decision]] Hybrid lock 위에 (a) Multi-host 3 entry 추가, (b) 3-tuple actor binding, (c) ambient fallback, (d) 3-layer scoring 추가.
 
 ---
 
@@ -83,7 +83,7 @@ gamestudio 12  superpowers 14         AutoGen Executor         Paperclip BYO    
                               │
 ┌─────────────────────────────▼───────────────────────────────────────┐
 │ L5 CONTROL PLANE (자체 light layer, src/)                            │
-│   transcript.jsonl (39 kind × 11 field, append-only, ULID)          │
+│   transcript.jsonl (40 kind × 11 field, append-only, ULID)          │
 │      → reducer (pure)                                                │
 │      → effects [spawn, qa_check, append, hook, done]                │
 │      → dispatcher (live / replay / test 3 variant)                  │
@@ -195,7 +195,7 @@ $ npx tsx src/index.ts doctor                                   # 환경 진단
 
 ---
 
-## 3. Schema — 39 kind × 11 field × 8 from × 12 step
+## 3. Schema — 40 kind × 11 field × 8 from × 12 step
 
 ### 3.1 11 field (변경 없음)
 
@@ -245,7 +245,7 @@ metadata?:       { visibility, harness, provider, model, turn, tokens_in/out,
                            ★ engineering-lead 제거, builder + verifier 추가
 ```
 
-### 3.3 39 kind 어휘 (v2 38 → v3 39, +qa.result)
+### 3.3 40 kind 어휘 (v2 38 → v3 40, +qa.result, +meta count 정정)
 
 ```
 ─── system (4) ──────────────────────
@@ -274,7 +274,7 @@ metadata?:       { visibility, harness, provider, model, turn, tokens_in/out,
 ─── handoff (3) ─────────────────────
   handoff.requested / handoff.accepted / handoff.rollback
 
-─── artifact / meta (6) ─────────────
+─── artifact / meta (7) ─────────────
   artifact.created / ack / error / audit / tool.call / tool.result / hook
 ```
 
@@ -650,7 +650,7 @@ consumers: reducer, observer, dashboard, replay, OTel exporter
 |---|---|
 | `agent-activity-dashboard.html` (single HTML, fs/SSE 기반 transcript live tail) | `sessions/<id>/live-activity.html` (transcript fs.watch + colored timeline) |
 | `token-dashboard.html` (cost/cache 실시간) | `sessions/<id>/token-dashboard.html` (per-actor cost + cache hit ratio + budget guardrails 시각화) |
-| `index.html` (hub) | `sessions/<id>/summary.html` (4 산출 + 38 kind summary + judge.score chart) |
+| `index.html` (hub) | `sessions/<id>/summary.html` (4 산출 + 40 kind summary + judge.score chart) |
 | `cors-proxy.mjs` (단일 mjs proxy) | `crumb observe` (단일 SSE proxy) |
 | `diagram-dashboard/` (Vite + React + Hono + Excalidraw) | `crumb diagram` (P1 — actor handoff DAG 를 Excalidraw 로) |
 

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mangowhoiscloud/crumb/protocol/schemas/message.schema.json",
   "title": "Crumb Transcript Message",
-  "description": "Single transcript.jsonl line. v3: 39 kinds × 11 fields × 8 from × 12 step. OTel GenAI alias-able. See wiki/concepts/bagelcode-system-architecture-v3.md §3.",
+  "description": "Single transcript.jsonl line. v3: 40 kinds (4 system + 11 workflow + 5 dialogue + 5 step + 5 user + 3 handoff + 7 meta) × 11 identification/routing/classification fields × 8 from × 12 step. OTel GenAI alias-able. See wiki/concepts/bagelcode-system-architecture-v3.md §3.",
   "type": "object",
   "required": ["id", "ts", "session_id", "from", "kind"],
   "properties": {
@@ -42,7 +42,7 @@
     },
     "kind": {
       "type": "string",
-      "description": "v3: 39 kinds. +qa.result (deterministic ground truth event emitted by dispatcher, no LLM).",
+      "description": "v3: 40 kinds (4 system + 11 workflow + 5 dialogue + 5 step + 5 user + 3 handoff + 7 meta). +qa.result (deterministic ground truth event emitted by dispatcher, no LLM).",
       "enum": [
         "session.start",
         "session.end",
