@@ -54,10 +54,7 @@ describe('session lease', () => {
   });
 
   it('releaseLease ignores when the lease is held by someone else', () => {
-    writeFileSync(
-      leasePath(dir),
-      JSON.stringify({ pid: 1, startedAt: new Date().toISOString() }),
-    );
+    writeFileSync(leasePath(dir), JSON.stringify({ pid: 1, startedAt: new Date().toISOString() }));
     releaseLease(dir);
     // Still there — we did not own it.
     const info = JSON.parse(readFileSync(leasePath(dir), 'utf-8'));
