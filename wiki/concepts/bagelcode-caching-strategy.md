@@ -14,6 +14,8 @@ updated: 2026-05-01
 
 # 캐싱 전략 — 3-Tier (퀄리티 보존)
 
+> ⚠️ **2026-05-02 supersession**: §"Google Gemini 2.5 (Verifier provider)" + Verifier sandwich 적용 예시는 v1-v2 시점. **v3 부터 외부 Gemini Verifier 폐기 → CourtEval (Claude Sonnet 4.6) 로 흡수**. Anthropic ephemeral cache (Tier 1) + sandwich §1-§3 byte-identical (Tier 2) 는 **그대로 유효** — Codex 캐시 로드맵, OpenAI 자동 캐시도 변경 없음. Gemini CachedContent 단락은 historical reference. 최종 lock = [[bagelcode-final-design-2026]].
+
 > Multi-agent 시스템의 토큰 폭발 1번 원인 = **모든 에이전트에게 모든 컨텍스트 broadcast**. 해법은 (a) 변하지 않는 부분의 prompt cache + (b) transcript pull-only access. 이 페이지는 **무엇을 어디에 캐시 박을지**의 경계 결정.
 >
 > **퀄리티 제약 (사용자)**: 캐싱이 답변 quality 를 떨어뜨리면 안 됨. → 3-tier 분류 ([[bagelcode-caching-frontier-2026]]):

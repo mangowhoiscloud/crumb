@@ -13,6 +13,8 @@ updated: 2026-05-01
 
 # 베이글코드 과제 — 제작 방향성 (의사결정 페이지)
 
+> ⚠️ **2026-05-02 supersession (부분)**: 이 페이지의 §초기 안 (Builder.A → Builder.B → Verifier (Gemini)), §"새 방향 = Resilient Hierarchical Builder Pair" (line 173), §Open Questions 의 "Gemini CLI 셋업 가능?" (line 105) 는 **v1-v2 시점**. **v3 부터 Gemini 폐기**, Verifier = Engineering Lead 내부 CourtEval. 의사결정 흐름의 historical record 로 보존하되 현 결정은 [[bagelcode-final-design-2026]] + [[bagelcode-agents-fixed]] 의 supersession banner 참조.
+
 > 다음 단계로 넘어가기 전에 합의할 **제품 컨셉 / 스코프 / 기술 선택** 정리. 미정 항목은 명시적으로 ❓ 표시.
 
 ## 핵심 메시지 한 줄 (작성자 의도)

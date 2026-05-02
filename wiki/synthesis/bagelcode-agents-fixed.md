@@ -1,18 +1,21 @@
 ---
-title: 베이글코드 과제 — 에이전트 고정 결정 (Claude Code + Codex) + Cross-provider Verifier
+title: 베이글코드 과제 — 에이전트 고정 결정 (Claude Code + Codex) + Verifier evolution
 category: synthesis
-tags: [bagelcode, agents, decision, claude-code, codex, gemini, glm, cross-provider, verifier]
+tags: [bagelcode, agents, decision, claude-code, codex, verifier, courteval, evolution-history]
 sources:
   - "[[bagelcode-orchestration-topology]]"
   - "[[bagelcode-fault-tolerance-design]]"
   - "[[bagelcode-frontier-orchestration-2026]]"
+  - "[[bagelcode-final-design-2026]]"
 created: 2026-05-01
-updated: 2026-05-01
+updated: 2026-05-02
 ---
 
-# 에이전트 고정 + Cross-provider Verifier
+# 에이전트 고정 + Verifier evolution
 
-> **사용자 결정 (확정)**: 사용 에이전트는 **Claude Code + Codex** 2종으로 고정. 검증은 **다른 provider 군** 으로 잡는다. 이 페이지는 그 결정을 둘러싼 구체화 + Verifier provider 비교.
+> ⚠️ **2026-05-02 supersession**: 이 페이지는 v1-v2 결정 (Verifier = 외부 Gemini cross-provider) 의 evolution context 를 보존. v3 부터 **Verifier = Engineering Lead 내부 CourtEval** (Grader/Critic/Defender/Re-grader, ACL 2025) 로 흡수됨. 외부 Gemini 폐기 사유 = subscription-only budget ("나 돈이 없어"). **최종 lock 은 [[bagelcode-final-design-2026]]**.
+
+> **사용자 결정 (확정 — 현 상태)**: 사용 에이전트는 **Claude Code + Codex** 2종 고정 (subprocess via subscription). 검증은 **Engineering Lead 내부 CourtEval** (4 sub-roles, Claude Sonnet 4.6 vision). 외부 cross-provider Verifier 는 폐기 (cost 제약). 이 페이지의 §"후보 Verifier provider 비교" 는 historical evolution 으로 보존.
 
 ## 선정 방법 (6-step decision tree)
 

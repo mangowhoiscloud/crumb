@@ -14,6 +14,8 @@ updated: 2026-05-01
 
 # Fault Tolerance 설계 — 연결부 / 통신 / 에이전트 자체
 
+> ⚠️ **2026-05-02 supersession**: 본문에서 "Verifier (Gemini)" 가 OPEN 되면 lint mode 로 degrade 한다는 시나리오는 v1-v2 가정. **v3 부터 Verifier 는 Engineering Lead 내부 CourtEval** — degrade trigger 는 Codex circuit OPEN → builder-fallback (claude-local) 으로 전환 + CourtEval 의 Critic 이 Defender 못 이기면 verdict 자동 다운그레이드 (스키마 강제). 외부 Gemini 키 invalid 시나리오 (line 48) 는 무관. 최종 lock = [[bagelcode-final-design-2026]] + [[bagelcode-budget-guardrails]].
+
 > 사용자 주안점 그대로 받아옴: "환경 변화가 발생했을 때 (1) **연결부**, (2) **통신 과정**, (3) **파트별 에이전트 자체** 에 장애 대응 및 변화를 잡아야 한다." 이 페이지는 그 3축에 frontier safeguard 들을 매핑한 spec.
 
 ## 실패 분류 (Failure Taxonomy)

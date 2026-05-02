@@ -44,6 +44,9 @@ updated: 2026-05-01
 - [[bagelcode-production-cases-2026]] — **2026 production cases 사료 12종** (Anthropic Trends + Lanham "What Survived" + Cursor Composer 2 + Devin/Windsurf 합병 + RAPS + gamestudio-subagents + Meta/Exa/Minimal cases + MIT 결정이론). 우리 결정 8가지 모두 검증.
 - [[bagelcode-mobile-game-tech-2026]] — **LLM × 모바일 게임 사례 + 도구·스펙 사료 13종** (Lovable mobile 2026-04 / Phaser 94% LLM 첫시도 성공 / Unity AI 2026 / Godot 4.6 / WebGPU 광범위 / Coding Leaderboard May 2026). **결정: Phaser 3.80+ via CDN, single-file game.html.**
 - [[bagelcode-stack-and-genre-2026]] — **베이글코드 stack 확정 사실 + 유사 장르 + 한국 경쟁사 사료 15종**. 신작팀 = **Unity** 명시. Royal Match (Unity, $1.44B / 2025) + 더블유게임즈/팍시 AI workflow ('1인 3주 출시'). **Crumb 의 위치 = Unity 의 *전 단계* prototype 도구.**
+- [[bagelcode-gamestudio-subagents-2026]] — **gamestudio-subagents 단독 reference** (193 stars, 12 agent, prompt-only). Crumb host-harness 결정의 시장 검증 + Crumb 이 그 위에 올린 frontier 5축 (transcript / replay / cross-provider / mode 동적 / single-file).
+- [[bagelcode-frontier-cli-convergence-2026]] ★ — **4 CLI convergence (2026-04) 1차 사료 8종**. Claude Code / Codex / Gemini / OpenCode 가 7 공통 primitive (subagents / plan / ask-user / parallel / sandbox / memory / MCP) 로 수렴. Crumb v3 Multi-host unified entry 의 frontier 합의 backbone.
+- [[bagelcode-llm-judge-frontier-2026]] ★ — **LLM-as-judge frontier 6 사료**. CourtEval ACL 2025 (Grader/Critic/Defender/Re-grader) + G-Eval + Position bias IJCNLP 2025 + Self-bias NeurIPS 2024 + Multi-judge consensus 97-98% F1. Crumb v3 scoring 3 layer 의 학술 backbone.
 - [[bagelcode-claude-codex-unity-2026]] — **Claude Code/Codex × Unity 사례 + 우리 결정 framing 강화 (14종)**. BigDevSoon Void Balls 10일 Steam-ready / Unity MCP 4종 (IvanMurzak 100+, Coplay 86, CoderGamester, Bluepuff71) / Bezi 10× faster / MDPI 2026 LLM Unity 한계. **결론: production-ready 수준 인지하면서 의도적 회피 + Crumb = Unity MCP 의 layer above.**
 - [[bagelcode-observability-frontier-2026]] — **Frontier observability + 표준 사료 15종**. Anthropic Claude Managed Agents (2026-04-08, timeline + replay) / Google Vertex Unified Trace Viewer / Microsoft Agent Framework 1.0 / AgentOps OSS / **OpenTelemetry GenAI Semantic Conventions = 2026 de facto 표준**. 결정: Crumb transcript.jsonl alias 로 표준 호환 + 0 SaaS 비용.
 
@@ -66,6 +69,7 @@ updated: 2026-05-01
 - [[bagelcode-naming-crumb]] — **프로젝트명 Crumb 확정** (Bagel motif + breadcrumb pattern + transcript trail = 3중 의미)
 - [[bagelcode-frontier-rationale-5-claims]] — **4-actor 결정의 5 frontier 근거 + TradingAgents §4 정합 매핑** (claim 별 a/b/c/d 분해 + 학술 prior + 운영 layer)
 - [[bagelcode-final-design-2026]] — ★ **최종 설계 종합** (Lead-Specialists + Socratic + CourtEval + 28 kind + envelope/handoff/state machine + OTel alias)
+- [[bagelcode-system-architecture-v3]] ★★ — **canonical v3 시스템 구조 lock**. Multi-host 4 entry (Claude Code + Codex + Gemini + headless) + (harness × provider × model) 3-tuple actor binding + ambient fallback + 3-layer scoring + 자연어 helper 5종 + Kiki 패턴 차용 정적 대시보드. v2 [[bagelcode-system-architecture]] §1-§2 그림 대체.
 
 ## 핵심 가설
 

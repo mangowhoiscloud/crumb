@@ -12,6 +12,8 @@ updated: 2026-05-01
 
 # 캐싱·효율 Frontier 사료 — 퀄리티 보존 우선
 
+> ⚠️ **2026-05-02 supersession**: §1C (Gemini Context Caching) 와 본문의 "우리 적용 (Verifier = Gemini 2.5 Pro)" 적용 노트는 v1-v2 시점. **v3 부터 외부 Gemini Verifier 폐기**. Gemini CachedContent 항목은 *frontier reference 자체* 로 보존하되, "우리 적용" 단락은 **CourtEval (Claude Sonnet 4.6) 의 Anthropic ephemeral cache** 로 대체 해석. Anthropic / OpenAI 캐시 항목 (§1A, §1B) 은 변경 없음. 최종 적용은 [[bagelcode-caching-strategy]] + [[bagelcode-final-design-2026]].
+
 > **사용자 제약**: "퀄리티를 낮추진 안되, 반복되는 작업을 캐싱하고 토큰 및 시간 비용을 줄이는 사례".
 >
 > 그래서 이 페이지는 **3 tier** 로 나눔:

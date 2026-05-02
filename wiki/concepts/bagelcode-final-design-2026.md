@@ -11,6 +11,12 @@ sources:
   - "[[bagelcode-tradingagents-paper]]"
   - "[[bagelcode-observability-frontier-2026]]"
   - "[[bagelcode-paperclip-vs-alternatives]]"
+  - "[[bagelcode-host-harness-decision]]"
+  - "[[bagelcode-system-architecture]]"
+  - "[[bagelcode-verifier-isolation-matrix]]"
+summary: >-
+  Crumb 의 P0 lock — Lead-Specialists 구조 + Socratic + CourtEval + transcript schema + OTel.
+  §1 토폴로지 그림과 §2 "28 kind" 카운트는 system-architecture 가 canonical 로 대체.
 created: 2026-05-02
 updated: 2026-05-02
 ---
@@ -18,12 +24,16 @@ updated: 2026-05-02
 # Crumb 최종 설계 — Schema + Inter-Agent Communication 초점
 
 > **lock 된 결정 종합.** 4 outer actor + 7 inner specialist roles + Lead-Specialists 구조 + Socratic 모호성 제거 + CourtEval verifier + 28 kind transcript schema + OTel GenAI alias.
+>
+> ★ **2026-05-02 정정**: §1 토폴로지 그림과 §2 "28 kind" 카운트는 [[bagelcode-host-harness-decision]] 후 [[bagelcode-system-architecture]] 가 canonical 로 대체. 본 페이지의 §3-§8 (envelope / state machine / adapter / OTel alias) 는 그대로 유효.
 
 ---
 
-## 1. 토폴로지 — Lead-Specialists Hierarchy
+## 1. 토폴로지 — Lead-Specialists Hierarchy ★ deprecated, [[bagelcode-system-architecture]] §1-§2 참조
 
-### 외부 4 actor (subprocess level)
+> 본 §1 그림은 host-harness-decision (Hybrid: Claude Code skill + headless CLI) 이전 결정. 새 canonical 그림은 system-architecture §1 (default) + §2 (cross-provider mode). 변경 요지: 외부 process 4 → 1 (Claude Code single host) + opt-in cross-provider 시 + Codex CLI 1; 내부 specialist = native Task subagent (depth=1). 아래 텍스트는 archive 보존.
+
+### 외부 4 actor (subprocess level) — archive
 
 ```
                        USER (TUI / inbox.txt)
@@ -74,7 +84,11 @@ ENGINEERING LEAD spawn 1회 안에서:
 
 ---
 
-## 2. Transcript Schema — 28 Kind + 11 Field
+## 2. Transcript Schema — 38 Kind + 11 Field ★ 정정 (실 schema 기준)
+
+> 이전 "28 kind" 표기는 P0 이전 카운트. 실 `protocol/schemas/message.schema.json` = **38 kind** (handoff.rollback / tool.call / tool.result / hook + user.pause/resume 분리 등 추가). 38 kind 분류: [[bagelcode-system-architecture]] §3.
+
+### (archive) 28 Kind + 11 Field
 
 ### Message 구조 (TypeScript)
 

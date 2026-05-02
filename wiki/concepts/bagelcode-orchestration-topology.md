@@ -12,6 +12,8 @@ updated: 2026-05-01
 
 # Orchestration Topology — PDCA 폐기 → Hierarchical Hybrid
 
+> ⚠️ **2026-05-02 supersession**: 이 페이지의 토폴로지 다이어그램에서 *Verifier = Gemini / GLM / local* 표기는 v1-v2 시점. **v3 부터 Verifier 는 Engineering Lead 내부 CourtEval 4 sub-role** 로 흡수됨 — 별도 actor 아님. Hub-Ledger-Spoke 토폴로지 자체는 그대로 유효 (3 outer actor: Coord + Planner Lead + Engineering Lead). 최종 lock = [[bagelcode-final-design-2026]].
+
 > **결정 한 줄**: linear PDCA chain 폐기. Anthropic 의 orchestrator-worker + Magentic-One 의 ledger + Cognition 의 단일 transcript + ICML 2025 의 hierarchical resilience 를 합친 **Hub-Ledger-Spoke** 토폴로지로 간다.
 
 ## 왜 PDCA 를 버리는가 (3가지 fact)
