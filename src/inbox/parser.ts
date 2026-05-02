@@ -149,6 +149,10 @@ function parseSlash(line: string, sessionId: string): DraftMessage | null {
       }
       return null;
     }
+    // Underscore alias: the MCP tool exposes /reset_circuit and users type
+    // both forms. Accept either so /reset_circuit doesn't silently fall
+    // through to free-text intervene (real footgun in session 01KQNAK1).
+    case 'reset_circuit':
     case 'reset-circuit': {
       if (rest === 'all') {
         return {

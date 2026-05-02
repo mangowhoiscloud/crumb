@@ -739,6 +739,13 @@ section.scorecard {
 }
 #new-session-goal:focus { border-color: var(--primary); }
 .new-session-row { display: flex; gap: 4px; align-items: center; }
+.adapter-pick-label {
+  font-size: 10px;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
 .new-session-row select {
   flex: 1;
   background: var(--canvas);
@@ -911,6 +918,35 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   padding: 1px 0;
   white-space: pre-wrap;
   word-break: break-word;
+  position: relative;
+}
+/* PR-F D — repeat-collapse badge anchored to the top-right of the row.
+ * Uses the existing accent token (--primary) with subdued opacity so it
+ * reads as a passive counter, not an alert. Bumps to lime once the count
+ * crosses 5 — emergent behavior that catches the user's eye when an
+ * actor is genuinely stuck repeating itself. */
+.feed-repeat-badge {
+  position: absolute;
+  top: 1px;
+  right: 6px;
+  font-size: 10px;
+  line-height: 14px;
+  padding: 0 6px;
+  border-radius: 7px;
+  background: color-mix(in oklab, var(--primary) 70%, transparent);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  user-select: none;
+}
+.feed-line[data-repeat-count="2"] .feed-repeat-badge,
+.feed-line[data-repeat-count="3"] .feed-repeat-badge,
+.feed-line[data-repeat-count="4"] .feed-repeat-badge {
+  background: color-mix(in oklab, var(--primary) 70%, transparent);
+}
+.feed-line[data-repeat-count]:not([data-repeat-count="1"]):not([data-repeat-count="2"]):not([data-repeat-count="3"]):not([data-repeat-count="4"]) .feed-repeat-badge {
+  background: color-mix(in oklab, var(--lime) 60%, transparent);
+  color: var(--bg);
 }
 .feed-line .feed-ts { color: var(--ink-tertiary); }
 .feed-line .feed-actor { color: var(--ink-subtle); }

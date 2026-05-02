@@ -29,8 +29,12 @@ import { probeAdapter } from '../helpers/adapter-health.js';
  * Idle-timeout fires only on genuine stalls (no stdout for N seconds) while
  * the wall-clock remains as a hard ceiling.
  */
-const PER_SPAWN_TIMEOUT_MS = Number(process.env.CRUMB_PER_SPAWN_TIMEOUT_MS) || 15 * 60 * 1000; // 15 min — hard wall-clock ceiling
-const PER_SPAWN_IDLE_TIMEOUT_MS = Number(process.env.CRUMB_PER_SPAWN_IDLE_MS) || 90 * 1000; // 90 s — kill on no stdout for this long
+// v0.4.1 raised: builder Reba Berserker (multi-file 18-file PWA) ran 10m48s
+// exit=0; long Phaser scene generation can pause >90s on a single thinking
+// step. New per-spawn ceiling 30min, idle 5min — still kills genuine hangs
+// but tolerates long-context working spawns.
+const PER_SPAWN_TIMEOUT_MS = Number(process.env.CRUMB_PER_SPAWN_TIMEOUT_MS) || 30 * 60 * 1000; // 30 min hard ceiling
+const PER_SPAWN_IDLE_TIMEOUT_MS = Number(process.env.CRUMB_PER_SPAWN_IDLE_MS) || 5 * 60 * 1000; // 5 min idle
 
 export interface DispatcherDeps {
   writer: TranscriptWriter;
@@ -214,6 +218,39 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         idleMs: deps.perSpawnIdleTimeoutMs ?? PER_SPAWN_IDLE_TIMEOUT_MS,
       });
 
+      // v0.4.1 PR-F C — first-stdout heartbeat. Without this the studio shows
+      // dispatch.spawn → silence for 30-200s (cold spawn + 60KB sandwich
+      // tokenization) and the user can't tell whether the actor is alive or
+      // wedged. Wrap onStdoutActivity so the very first ping emits a single
+      // kind=note "actor=X stdout activity (+Tms)". Subsequent pings reset
+      // the idle timer as before. The note is private + deterministic so
+      // anti-deception ignores it but the studio renders it as a heartbeat.
+      const spawnStartedAt = Date.now();
+      let firstActivityEmitted = false;
+      const baseOnStdoutActivity = timers.onStdoutActivity;
+      timers.onStdoutActivity = (): void => {
+        baseOnStdoutActivity();
+        if (firstActivityEmitted) return;
+        firstActivityEmitted = true;
+        const elapsed = Date.now() - spawnStartedAt;
+        void deps.writer
+          .append({
+            session_id: deps.sessionId,
+            from: 'system',
+            kind: 'note',
+            body: `actor=${effect.actor} stdout activity (+${elapsed}ms via ${adapterId})`,
+            data: { actor: effect.actor, adapter: adapterId, first_activity_ms: elapsed },
+            metadata: {
+              visibility: 'private',
+              deterministic: true,
+              tool: 'spawn-heartbeat@v1',
+            },
+          })
+          .catch(() => {
+            // Writer failure is non-fatal — heartbeat is observability sugar.
+          });
+      };
+
       // v0.3.1 cross_provider wiring (AGENTS.md §136). Resolve the latest build
       // event's provider when spawning the verifier so `crumb event` can stamp
       // metadata.cross_provider on the judge.score it emits. Without this, the
@@ -255,6 +292,35 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
           effort: binding?.effort,
           signal: timers.controller.signal,
           onStdoutActivity: timers.onStdoutActivity,
+          onProgress: (evt) => {
+            // v0.4.1 PR-F B — surface tool_use/result/thinking from the CLI's
+            // stream-json into the transcript as kind=tool.call (private).
+            // Studio renders these as a real-time per-step strip; verifier
+            // never reads them (visibility=private). Throttle: thinking events
+            // collapse on the studio side via repeat-badge — emit them all so
+            // the user sees activity even when no tool fires for 30+s.
+            void deps.writer
+              .append({
+                session_id: deps.sessionId,
+                from: effect.actor,
+                kind: 'tool.call',
+                body: evt.summary,
+                data: {
+                  tool_kind: evt.kind,
+                  ...(evt.tool ? { tool: evt.tool } : {}),
+                  ...(evt.path ? { path: evt.path } : {}),
+                  elapsed_ms: evt.elapsed_ms,
+                },
+                metadata: {
+                  visibility: 'private',
+                  deterministic: true,
+                  tool: 'stream-json-tap@v1',
+                },
+              })
+              .catch(() => {
+                // Writer failure non-fatal — observability sugar.
+              });
+          },
           provider: binding?.provider,
           harness: binding?.harness,
           ...(builderProvider ? { builderProvider } : {}),

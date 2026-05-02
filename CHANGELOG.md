@@ -59,6 +59,31 @@ processing = processing.then(async () => { ... await dispatch(eff) ... })
 
 **Tests** — `src/loop/coordinator.test.ts` adds a `v0.4 immediate-wake — reduce/dispatch decoupling` suite with a `SlowSpawnAdapter` that emits its terminal event quickly but lingers 800ms before resolving. Asserts that the next actor's spawn starts within 600ms of the prior actor's terminal event — would have failed under the old chain. 6/6 loop specs + 429/429 sweep green.
 
+### Added / Fixed — observability + scheduling (PR-F) (2026-05-03)
+
+Five-part batch addressing the "spawn happens, then 200s of silence" gap surfaced live in `01KQNAK1CXTBDEBX2WP2QQK891`. Studio now shows real-time progress (FS-driven artifact emits + stream-json tool_use tap + first-stdout heartbeat); single-session safety enforced by a PID-aware lease; inbox poll halved to 150ms for instant intervene; budgets raised to fit real builder runtimes; UI flips to newest-first with a repeat-collapse badge.
+
+`src/dispatcher/artifact-watcher.ts` (NEW): chokidar tail of `<sessionDir>/artifacts/**` → `kind=artifact.created` per file. Independent of LLM emit habit; dotfiles + `exports/` excluded. 2 unit tests.
+
+`src/adapters/_shared.ts` + `claude-local.ts` / `codex-local.ts` / `gemini-local.ts`: line-buffered stream-json splitter + provider-specific `parseClaudeStreamProgress` / `parseCodexStreamProgress` parsers. New `SpawnRequest.onProgress` hook the dispatcher wires into `kind=tool.call` (private). Studio renders these as `kind-tool-call` rows. 6 unit tests.
+
+`src/dispatcher/live.ts`: first-stdout heartbeat — `kind=note "actor=X stdout activity (+Tms via Y)"` once per spawn so the user sees the cold-start has ended. Per-spawn timeout raised 15min → 30min, idle 90s → 5min (Reba Berserker observed at 10m48s exit=0).
+
+`src/loop/coordinator.ts`: wall-clock soft hook 24min → 50min, hard cap 30min → 60min (override via `CRUMB_WALL_CLOCK_*`). Wires artifact-watcher + lease lifecycle into `finish` / `fail`.
+
+`src/session/lease.ts` (NEW): `<sessionDir>/.crumb-lock` with PID + `startedAt`. `acquireLease` refuses on a live PID; reclaims a stale one. Prevents two coordinators on the same session from double-spawning + double-emitting artifact events. 5 unit tests.
+
+`src/inbox/parser.ts`: `/reset_circuit` underscore alias accepted alongside `/reset-circuit` (the MCP tool emits the underscore form; users typed both). Footgun directly observed in 01KQNAK1 inbox. 3 unit tests.
+
+`src/inbox/watcher.ts`: poll interval 500ms → 150ms default — below 200ms perceptual threshold for "did my action register?". Tests pass `pollIntervalMs` explicitly so no test impact.
+
+`packages/studio/src/client/studio.{html,css,js}`:
+- New-session form gains an Adapter `<select>` populated from `/api/doctor`. Body forwards `adapter` field; HTTP 409 from server surfaces install + auth hints inline.
+- Live execution feed flips to **newest-first** (prepend, scroll-pin top). Repeat events with same `(actor, kindClass, body[:200])` within 60s collapse onto the existing top row with an `×N` badge in the upper-right. Badge color shifts from `--primary` (≤4) to `--lime` (≥5) for genuine "actor stuck" detection.
+- `kind=tool.call` and `kind=artifact.created` get dedicated `kindClass` mappings so PR-F B + PR-F A events render with consistent styling.
+
+Verification: `npm run lint && npm run typecheck && npm run format:check && npm test && npm run build` — 447 tests pass (was 428; +16 new across artifact-watcher, lease, _shared parsers, parser alias).
+
 ### Added / Fixed — studio adapter wiring + pre-spawn doctor + cache ratio fix (PR-E) (2026-05-03)
 
 Live debugging session `01KQNAK1CXTBDEBX2WP2QQK891` surfaced three interlocking bugs where the studio "create session" form was silently dropping the user's adapter pick, the dispatcher was spawning known-broken adapters (codex exit=1 within 3s, three times in a row), and the studio's cache hit rate rendered as `4553319%`.

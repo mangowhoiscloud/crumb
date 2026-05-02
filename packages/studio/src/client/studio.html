@@ -23,6 +23,12 @@
   </div>
   <div id="new-session-form" style="display:none;">
     <input type="text" id="new-session-goal" placeholder="game goal (e.g. 60s 고양이 퍼즐)" autocomplete="off">
+    <div class="new-session-row">
+      <label for="new-session-adapter" class="adapter-pick-label">Adapter</label>
+      <select id="new-session-adapter" class="adapter-pick">
+        <option value="">(default — preset or ambient)</option>
+      </select>
+    </div>
     <div id="new-session-preset-chips" class="preset-chips"></div>
     <details id="new-session-advanced" class="adv-binding">
       <summary>Custom binding (per-actor harness × model)</summary>

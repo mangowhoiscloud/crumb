@@ -34,7 +34,12 @@ export interface InboxWatcherHandle {
 
 /** Start watching the inbox file. Creates it (empty) if absent. Returns a stop handle. */
 export function startInboxWatcher(opts: InboxWatcherOptions): InboxWatcherHandle {
-  const interval = opts.pollIntervalMs ?? 500;
+  // 150ms default keeps inbox commands feeling instant — below the 200ms
+  // perceptual threshold for "did my action register?". Studio appends a
+  // line to inbox.txt; the user expects to see the parsed user.intervene
+  // event in the timeline within one frame's worth of polling. Override
+  // via opts.pollIntervalMs for tests / low-cost CI runs.
+  const interval = opts.pollIntervalMs ?? 150;
 
   // Ensure the file exists so the user can simply `echo ... >> inbox.txt`.
   if (!existsSync(opts.inboxPath)) {

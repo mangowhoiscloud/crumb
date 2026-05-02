@@ -33,6 +33,11 @@ import { MockAdapter } from '../adapters/mock.js';
 import { renderSummary } from '../summary/render.js';
 import { serialize as serializeExport } from '../exporter/otel.js';
 import { startInboxWatcher, type InboxWatcherHandle } from '../inbox/watcher.js';
+import {
+  startArtifactWatcher,
+  type ArtifactWatcherHandle,
+} from '../dispatcher/artifact-watcher.js';
+import { acquireLease, releaseLease } from '../session/lease.js';
 import type { Effect } from '../effects/types.js';
 import type { Message } from '../protocol/types.js';
 
@@ -78,8 +83,14 @@ export interface RunOptions {
   extraAdapters?: Adapter[];
 }
 
-const WALL_CLOCK_HOOK_MS_DEFAULT = Number(process.env.CRUMB_WALL_CLOCK_HOOK_MS) || 24 * 60 * 1000;
-const WALL_CLOCK_HARD_MS_DEFAULT = Number(process.env.CRUMB_WALL_CLOCK_HARD_MS) || 30 * 60 * 1000;
+// Wall-clock defaults raised v0.4.1: builder spawns observed at 10+ min for
+// non-trivial multi-file PWAs (Reba Berserker = 10m48s exit=0 with 18 files);
+// the prior 30-min hard cap killed sessions mid-verifier. New defaults give
+// a complete spec→build→qa→verifier loop a full hour, with the soft hook at
+// 50min so the user gets a budget warning before the cap fires. Override
+// via CRUMB_WALL_CLOCK_HOOK_MS / CRUMB_WALL_CLOCK_HARD_MS for short demos.
+const WALL_CLOCK_HOOK_MS_DEFAULT = Number(process.env.CRUMB_WALL_CLOCK_HOOK_MS) || 50 * 60 * 1000;
+const WALL_CLOCK_HARD_MS_DEFAULT = Number(process.env.CRUMB_WALL_CLOCK_HARD_MS) || 60 * 60 * 1000;
 
 export async function runSession(opts: RunOptions): Promise<{ state: CrumbState }> {
   await mkdir(opts.sessionDir, { recursive: true });
@@ -165,6 +176,19 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
   // (Without this, fromOffset:0 caused every replayed event to be reduced
   // a second time on resume — counters double, score_history duplicates,
   // spawn effects fire twice.)
+  //
+  // v0.4.1 PR-F E — single-writer lease. Two coordinators on the same
+  // session would both poll inbox.txt, both run artifact-watcher (double
+  // emit), and both spawn from the same handoff event. Refuse on a live
+  // lease; reclaim a stale one. Cleanup in finish/fail.
+  const leaseResult = acquireLease(opts.sessionDir, 'coordinator');
+  if (!leaseResult.acquired) {
+    const held = leaseResult.heldBy;
+    throw new Error(
+      `session ${opts.sessionId} is already running (PID ${held?.pid ?? '?'} since ${held?.startedAt ?? '?'}). ` +
+        `If this is stale, remove ${opts.sessionDir}/.crumb-lock and retry.`,
+    );
+  }
   const replayEndOffset = await safeStatSize(transcriptPath);
   const replayed = await readAll(transcriptPath);
   let alreadyStarted = false;
@@ -235,6 +259,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
   return new Promise<{ state: CrumbState }>((resolveOuter, rejectOuter) => {
     let handle: { close: () => void } | null = null;
     let inboxHandle: InboxWatcherHandle | null = null;
+    let artifactHandle: ArtifactWatcherHandle | null = null;
     let resolved = false;
 
     const emitSummary = async (final: CrumbState): Promise<void> => {
@@ -270,6 +295,8 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
       resolved = true;
       handle?.close();
       inboxHandle?.stop();
+      void artifactHandle?.close();
+      releaseLease(opts.sessionDir);
       // Emit summary + exports asynchronously; resolve outer promise after.
       void emitSummary(result.state).then(() => resolveOuter(result));
     };
@@ -279,6 +306,8 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
       resolved = true;
       handle?.close();
       inboxHandle?.stop();
+      void artifactHandle?.close();
+      releaseLease(opts.sessionDir);
       rejectOuter(err);
     };
 
@@ -401,6 +430,20 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
       onError: (err) => {
         // eslint-disable-next-line no-console
         console.error('[crumb] inbox watcher error:', err.message);
+      },
+    });
+
+    // v0.4.1 PR-F A — FS-driven artifact.created emitter. The schema lets the
+    // builder emit kind=artifact.created per file, but in practice the LLM
+    // batches them or skips. The watcher is the ground truth: file appearing
+    // = visible progress. Studio renders these as a real-time bundle strip.
+    artifactHandle = startArtifactWatcher({
+      sessionDir: opts.sessionDir,
+      sessionId: opts.sessionId,
+      writer,
+      onError: (err) => {
+        // eslint-disable-next-line no-console
+        console.error('[crumb] artifact watcher error:', err.message);
       },
     });
 
