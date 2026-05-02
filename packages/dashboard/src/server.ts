@@ -1,12 +1,28 @@
 /**
  * HTTP + SSE server for the Crumb live dashboard.
  *
- * Endpoints:
+ * Read endpoints:
  *   GET  /                              → dashboard HTML
  *   GET  /api/sessions                  → JSON snapshot, project-grouped
- *   GET  /api/sessions/:id/sandwich/:actor
- *                                       → assembled sandwich text (read-only)
+ *   GET  /api/sessions/:id/sandwich/:actor → assembled sandwich text (read-only)
  *   GET  /api/stream?session=<id|*>     → SSE stream of LiveEvents
+ *
+ * v3.4 console mode — bidirectional write endpoint:
+ *   POST /api/sessions/:id/inbox        body=`{ line: "<inbox-grammar-line>" }`
+ *                                       → appends one line to <session>/inbox.txt
+ *                                       → existing inbox watcher converts to transcript event
+ *
+ * Inbox grammar examples:
+ *   "/approve"                          — promote PARTIAL to PASS
+ *   "/veto <reason>"                    — reject latest verdict
+ *   "/pause [@<actor>] [reason]"        — pause global or per-actor
+ *   "/resume [@<actor>]"                — resume
+ *   "/goto <actor> [body]"              — force next_speaker
+ *   "/append [@<actor>] <text>"         — sandwich_append
+ *   "/note <text>"                      — recorded constraint
+ *   "/redo [body]"                      — re-emit last spawn
+ *   "@<actor> <body>"                   — free-text mention
+ *   "<plain text>"                      — generic user.intervene
  *
  * Heartbeat every 15s on the SSE connection prevents proxy timeouts.
  *
@@ -14,8 +30,9 @@
  * SessionWatcher already abstracts via chokidar.
  */
 
-import { readFile } from 'node:fs/promises';
+import { appendFile, readFile } from 'node:fs/promises';
 import http from 'node:http';
+import { join } from 'node:path';
 import { URL } from 'node:url';
 
 import { DASHBOARD_HTML } from './dashboard-html.js';
@@ -58,12 +75,23 @@ export async function startDashboardServer(
 
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? bind}`);
-    if (url.pathname === '/') return serveHtml(res);
-    if (url.pathname === '/api/sessions') return serveSessions(res, watcher);
-    if (url.pathname === '/api/stream') return serveStream(req, res, url, bus);
-    // /api/sessions/:id/sandwich/:actor
+    if (req.method === 'GET' && url.pathname === '/') return serveHtml(res);
+    if (req.method === 'GET' && url.pathname === '/api/sessions') {
+      return serveSessions(res, watcher);
+    }
+    if (req.method === 'GET' && url.pathname === '/api/stream') {
+      return serveStream(req, res, url, bus);
+    }
+    // /api/sessions/:id/sandwich/:actor (GET — read sandwich)
     const sandwichMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/sandwich\/([^/]+)$/);
-    if (sandwichMatch) return serveSandwich(res, watcher, sandwichMatch[1]!, sandwichMatch[2]!);
+    if (req.method === 'GET' && sandwichMatch) {
+      return serveSandwich(res, watcher, sandwichMatch[1]!, sandwichMatch[2]!);
+    }
+    // /api/sessions/:id/inbox (POST — write user line to <session>/inbox.txt)
+    const inboxMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/inbox$/);
+    if (req.method === 'POST' && inboxMatch) {
+      return void serveInboxAppend(req, res, watcher, inboxMatch[1]!);
+    }
     res.statusCode = 404;
     res.end('not found');
   });
@@ -162,6 +190,77 @@ async function serveSandwich(
     res.setHeader('content-type', 'text/plain; charset=utf-8');
     res.end(`sandwich not assembled for ${actor} yet (no spawn this session)`);
   }
+}
+
+async function serveInboxAppend(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  watcher: SessionWatcher,
+  sessionId: string,
+): Promise<void> {
+  const match = watcher.snapshot().find((s) => s.session_id === sessionId);
+  if (!match) {
+    res.statusCode = 404;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end(`session not found: ${sessionId}`);
+    return;
+  }
+  // Read body (cap at 8 KB so a runaway client can't OOM the dashboard).
+  const chunks: Buffer[] = [];
+  let total = 0;
+  const MAX_BYTES = 8192;
+  for await (const chunk of req) {
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
+    total += buf.length;
+    if (total > MAX_BYTES) {
+      res.statusCode = 413;
+      res.setHeader('content-type', 'text/plain; charset=utf-8');
+      res.end(`payload too large (>${MAX_BYTES}B)`);
+      return;
+    }
+    chunks.push(buf);
+  }
+  const raw = Buffer.concat(chunks).toString('utf8');
+  let line: string;
+  try {
+    const body = JSON.parse(raw) as { line?: unknown };
+    if (typeof body.line !== 'string' || body.line.trim().length === 0) {
+      res.statusCode = 400;
+      res.setHeader('content-type', 'text/plain; charset=utf-8');
+      res.end('body must be {"line": "<non-empty string>"}');
+      return;
+    }
+    line = body.line.replace(/\r?\n/g, ' ').trim();
+  } catch {
+    res.statusCode = 400;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end('invalid JSON body');
+    return;
+  }
+  if (line.length > MAX_BYTES) {
+    res.statusCode = 413;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end('line too long');
+    return;
+  }
+  // Append to <session>/inbox.txt — the existing inbox watcher (src/inbox/
+  // watcher.ts) parses it via the same grammar as the TUI slash bar and
+  // emits the corresponding kind=user.* / user.intervene transcript events.
+  // The dashboard never touches transcript.jsonl directly — append-only
+  // invariant + single-writer-per-process stay intact.
+  const sessionDir = sessionDirFromTranscript(match.transcript_path);
+  const inboxPath = join(sessionDir, 'inbox.txt');
+  try {
+    await appendFile(inboxPath, line + '\n', 'utf8');
+  } catch (err) {
+    res.statusCode = 500;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end(`inbox append failed: ${(err as Error).message}`);
+    return;
+  }
+  res.statusCode = 202; // accepted; the watcher will surface the resulting events via SSE
+  res.setHeader('content-type', 'application/json');
+  res.end(JSON.stringify({ ok: true, inbox_path: inboxPath, line }));
 }
 
 function serveStream(

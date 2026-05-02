@@ -42,8 +42,8 @@ afterEach(() => {
   vi.doUnmock('./qa-check-playwright.js');
 });
 
-describe('runQaCheck — mock fallback', () => {
-  it('returns deterministic pass for .mock.html paths', async () => {
+describe('runQaCheck — mock fixture vs missing artifact', () => {
+  it('returns deterministic pass for .mock.html paths (fixture path)', async () => {
     const r = await runQaCheck('/nonexistent/foo.mock.html');
     expect(r.exec_exit_code).toBe(0);
     expect(r.lint_passed).toBe(true);
@@ -51,10 +51,16 @@ describe('runQaCheck — mock fallback', () => {
     expect(r.cross_browser_smoke).toBe('skipped');
   });
 
-  it('returns deterministic pass when artifact missing', async () => {
+  it('FAILs hard when a real-path artifact is missing (builder crashed)', async () => {
+    // v3.4 anti-deception split — a missing artifact at a non-fixture path
+    // means the builder spawn failed before writing the game; we must NOT
+    // reward that with a phantom PASS. D2 ground truth must collapse to 0.
     const r = await runQaCheck('/nonexistent/path/game.html');
-    expect(r.exec_exit_code).toBe(0);
-    expect(r.lint_passed).toBe(true);
+    expect(r.exec_exit_code).toBe(1);
+    expect(r.lint_passed).toBe(false);
+    expect(r.first_interaction).toBe('fail');
+    expect(r.cross_browser_smoke).toBe('fail');
+    expect(r.lint_findings.some((f) => f.includes('artifact_missing'))).toBe(true);
   });
 });
 
