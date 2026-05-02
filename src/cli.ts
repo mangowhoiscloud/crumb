@@ -540,6 +540,59 @@ function truncate(s: string, n: number): string {
 }
 
 /**
+ * `crumb copy-artifacts <session-ulid|vN> --to <dest>`
+ *
+ * Copy frozen artifacts (game.html / spec.md / DESIGN.md / tuning.json / ...) out of
+ * `~/.crumb/projects/<id>/` and into a user-chosen destination. Pure copy, no links —
+ * the destination is independent of `~/.crumb/`. The Bagelcode submission story is
+ * `crumb copy-artifacts <demo-ulid> --to ./demo/` followed by `git add demo/`.
+ *
+ * Resolution: positional matches `^v\d+` → version dir; otherwise → session dir
+ * (resolveStoredSession with new-global → legacy fallback).
+ */
+async function cmdCopyArtifacts(args: ParsedArgs): Promise<void> {
+  const target = args.positional[0];
+  if (!target) throw new Error('copy-artifacts <session-id|vN> required');
+  const dest = args.flags.get('to');
+  if (!dest) throw new Error('--to <dest> required');
+  const cwd = args.flags.get('root') ?? process.cwd();
+
+  const isVersion = /^v\d+/.test(target);
+  let srcDir: string;
+  let summary: string;
+  if (isVersion) {
+    const versionsDir = await getVersionsDir(cwd);
+    // Accept exact match (v2-combo-bonus) or bare name (v2 with any label).
+    const all = await readAllManifests(versionsDir);
+    const m =
+      all.find((x) => versionDirName(x.name, x.label) === target) ??
+      all.find((x) => x.name === target);
+    if (!m) throw new Error(`version not found: ${target}`);
+    srcDir = resolve(versionsDir, versionDirName(m.name, m.label), 'artifacts');
+    summary = `${m.name}${m.label ? `-${m.label}` : ''}`;
+  } else {
+    const sessionDir = await resolveStoredSession(target, cwd);
+    srcDir = resolve(sessionDir, 'artifacts');
+    summary = target;
+  }
+  if (!existsSync(srcDir)) {
+    throw new Error(`no artifacts at ${srcDir}`);
+  }
+
+  const { copyFile, mkdir } = await import('node:fs/promises');
+  const destAbs = resolve(cwd, dest);
+  await mkdir(destAbs, { recursive: true });
+  const files = await readdir(srcDir);
+  let count = 0;
+  for (const f of files) {
+    await copyFile(resolve(srcDir, f), resolve(destAbs, f));
+    count++;
+  }
+  // eslint-disable-next-line no-console
+  console.log(`[crumb copy-artifacts] ${summary} → ${destAbs}  (${count} file(s))`);
+}
+
+/**
  * `crumb release <session-ulid> [--as <vN>] [--label "<name>"] [--no-parent]`
  *
  * Promote a WIP session into an immutable milestone under
@@ -701,6 +754,9 @@ Usage:
                                           # snapshot session artifacts into versions/<vN>[-<label>]/
                                           # (frozen copy + manifest.toml + kind=version.released event)
   crumb versions                           # list released milestones with parent chain
+  crumb copy-artifacts <session-id|vN> --to <dest>
+                                          # copy frozen artifacts (game.html, spec.md, ...) into <dest>
+                                          # Bagelcode submission: crumb copy-artifacts <demo-ulid> --to ./demo/
 
 Flags (run):
   --preset <name>     load .crumb/presets/<name>.toml. e.g. bagelcode-cross-3way / mock /
@@ -771,6 +827,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       break;
     case 'versions':
       await cmdVersions(args);
+      break;
+    case 'copy-artifacts':
+      await cmdCopyArtifacts(args);
       break;
     case 'help':
     case '--help':

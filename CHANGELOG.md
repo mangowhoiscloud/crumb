@@ -4,6 +4,14 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — `crumb copy-artifacts` — v3.3 Phase 2c (2026-05-02)
+
+Closes the Bagelcode submission UX loop. Reviewers expect `cd crumb && open demo/game.html` to just work; with sessions now under `~/.crumb/projects/<id>/`, the user needs an explicit copy step.
+
+- **`crumb copy-artifacts <session-id|vN> --to <dest>`** — pure `copyFile` (no symlinks) of every file under `artifacts/` into `<dest>`. Accepts both raw session ULID and version names (`v1`, or full `v2-combo-bonus`). Version lookup tolerates label-less queries: `crumb copy-artifacts v1 --to ./demo/` resolves to whatever dir matches `v1` regardless of label slug.
+- **Submission story**: `crumb run "..." --label "bagelcode-final"` → `crumb release <ulid> --as v1 --label "bagelcode"` → `crumb copy-artifacts v1 --to ./demo/` → `git add demo/`. Three commands, no symlinks, single-direction copy.
+- **Test**: 217/217 (no test additions — covered by mock e2e). Verified copying from both session ULID and version name resolves the same artifact set.
+
 ### Added — Version graph: `crumb release` + `crumb versions` — v3.3 Phase 2b (2026-05-02)
 
 Sessions become *promotable* — `crumb release <session-ulid>` snapshots a WIP session into an immutable milestone under `~/.crumb/projects/<id>/versions/<vN>[-<label>]/` with a TOML manifest, sha256-keyed frozen artifacts, and a `kind=version.released` event appended to the source transcript so replay re-derives the milestone. Realizes the v0.dev (Project → Chat → Version) + Lovable (favorited milestone vs auto-history) hybrid that Phase 1 reserved space for.
