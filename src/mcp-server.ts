@@ -36,6 +36,7 @@ import { z } from 'zod';
 
 import { reduce } from './reducer/index.js';
 import { initialState } from './state/types.js';
+import { resolveSessionDir as resolveStoredSession } from './paths.js';
 import { readAll } from './transcript/reader.js';
 import { recommendPreset, formatRecommendation } from './helpers/config.js';
 import { computeStatus, formatStatus } from './helpers/status.js';
@@ -47,12 +48,10 @@ import { serialize as serializeExport } from './exporter/otel.js';
 
 const VERSION = '0.2.0';
 
-function resolveSessionDir(target: string, root: string): string {
-  return target.includes('/') ? resolve(target) : resolve(root, 'sessions', target);
-}
-
 async function loadSession(target: string, root: string) {
-  const sessionDir = resolveSessionDir(target, root);
+  // v3.3: resolveStoredSession checks ~/.crumb/projects/<id>/sessions/<ulid>/ first,
+  // falls back to legacy <cwd>/sessions/<ulid>/ until migration.
+  const sessionDir = await resolveStoredSession(target, root);
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
   const events = await readAll(transcriptPath);
   let state = initialState(events[0]?.session_id ?? 'unknown');

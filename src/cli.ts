@@ -12,6 +12,7 @@
  */
 
 import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { ulid } from 'ulid';
 
@@ -22,6 +23,13 @@ import { reduce } from './reducer/index.js';
 import { initialState } from './state/types.js';
 import { ClaudeLocalAdapter } from './adapters/claude-local.js';
 import { CodexLocalAdapter } from './adapters/codex-local.js';
+import {
+  ensureCrumbHome,
+  ensureProjectDir,
+  ensureSessionRoot,
+  getSessionsDir,
+  resolveSessionDir as resolveStoredSession,
+} from './paths.js';
 import type { DraftMessage } from './protocol/types.js';
 
 interface ParsedArgs {
@@ -57,8 +65,12 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
   if (!goal) throw new Error('--goal required');
   const sessionId = args.flags.get('session') ?? ulid();
   const cwd = process.cwd();
-  const sessionDir = resolve(cwd, 'sessions', sessionId);
   const repoRoot = args.flags.get('root') ?? cwd;
+  // v3.3: sessions live under ~/.crumb/projects/<id>/sessions/<ulid>/.
+  // The cwd determines project id (sha256 ambient or pinned via .crumb/project.toml).
+  await ensureCrumbHome();
+  await ensureProjectDir(cwd);
+  const sessionDir = await ensureSessionRoot(cwd, sessionId);
   const adapterOverride = args.flags.get('adapter');
   const presetName = args.flags.get('preset');
   const idleTimeoutMs = Number(args.flags.get('idle-timeout') ?? 60_000);
@@ -104,8 +116,10 @@ async function cmdEvent(): Promise<void> {
 }
 
 async function cmdReplay(args: ParsedArgs): Promise<void> {
-  const sessionDir = args.positional[0] ?? args.flags.get('session-dir');
-  if (!sessionDir) throw new Error('replay <session-dir> required');
+  const target = args.positional[0] ?? args.flags.get('session-dir');
+  if (!target) throw new Error('replay <session-id|dir> required');
+  const cwd = args.flags.get('root') ?? process.cwd();
+  const sessionDir = await resolveStoredSession(target, cwd);
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
   const events = await readAll(transcriptPath);
   if (events.length === 0) {
@@ -147,7 +161,7 @@ async function cmdResume(args: ParsedArgs): Promise<void> {
   if (!target) throw new Error('resume requires a session id or session-dir as positional arg');
   const cwd = args.flags.get('root') ?? process.cwd();
   // Accept either a full path or a bare session id (ULID).
-  const sessionDir = target.includes('/') ? resolve(target) : resolve(cwd, 'sessions', target);
+  const sessionDir = await resolveStoredSession(target, cwd);
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
   const events = await readAll(transcriptPath);
   if (events.length === 0) {
@@ -234,7 +248,7 @@ async function cmdDebug(args: ParsedArgs): Promise<void> {
   const target = args.positional[0];
   if (!target) throw new Error('debug requires a session id or session-dir');
   const cwd = args.flags.get('root') ?? process.cwd();
-  const sessionDir = target.includes('/') ? resolve(target) : resolve(cwd, 'sessions', target);
+  const sessionDir = await resolveStoredSession(target, cwd);
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
   const events = await readAll(transcriptPath);
   let state = initialState(events[0]?.session_id ?? 'unknown');
@@ -249,7 +263,7 @@ async function cmdStatus(args: ParsedArgs): Promise<void> {
   const target = args.positional[0];
   if (!target) throw new Error('status requires a session id or session-dir');
   const cwd = args.flags.get('root') ?? process.cwd();
-  const sessionDir = target.includes('/') ? resolve(target) : resolve(cwd, 'sessions', target);
+  const sessionDir = await resolveStoredSession(target, cwd);
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
   const events = await readAll(transcriptPath);
   let state = initialState(events[0]?.session_id ?? 'unknown');
@@ -271,7 +285,7 @@ async function cmdSuggest(args: ParsedArgs): Promise<void> {
   const target = args.positional[0];
   if (!target) throw new Error('suggest requires a session id or session-dir');
   const cwd = args.flags.get('root') ?? process.cwd();
-  const sessionDir = target.includes('/') ? resolve(target) : resolve(cwd, 'sessions', target);
+  const sessionDir = await resolveStoredSession(target, cwd);
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
   const events = await readAll(transcriptPath);
   let state = initialState(events[0]?.session_id ?? 'unknown');
@@ -285,7 +299,7 @@ async function cmdTui(args: ParsedArgs): Promise<void> {
   const target = args.positional[0];
   if (!target) throw new Error('tui <session-id|dir> required');
   const cwd = args.flags.get('root') ?? process.cwd();
-  const sessionDir = target.includes('/') ? resolve(target) : resolve(cwd, 'sessions', target);
+  const sessionDir = await resolveStoredSession(target, cwd);
   const { runTui } = await import('./tui/app.js');
   await runTui({ sessionDir });
 }
@@ -294,7 +308,7 @@ async function cmdExport(args: ParsedArgs): Promise<void> {
   const target = args.positional[0];
   if (!target) throw new Error('export <session-id|dir> required');
   const cwd = args.flags.get('root') ?? process.cwd();
-  const sessionDir = target.includes('/') ? resolve(target) : resolve(cwd, 'sessions', target);
+  const sessionDir = await resolveStoredSession(target, cwd);
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
   const events = await readAll(transcriptPath);
   const formatRaw = args.flags.get('format') ?? 'otel-jsonl';
@@ -371,26 +385,47 @@ async function cmdModel(args: ParsedArgs): Promise<void> {
 
 async function cmdLs(args: ParsedArgs): Promise<void> {
   const cwd = args.flags.get('root') ?? process.cwd();
-  const dir = resolve(cwd, 'sessions');
-  let entries: string[] = [];
-  try {
-    entries = await readdir(dir);
-  } catch {
+  // v3.3: list sessions in this project (~/.crumb/projects/<id>/sessions/).
+  // Legacy <cwd>/sessions/ is also surfaced with a marker until `crumb migrate`.
+  const dir = await getSessionsDir(cwd);
+  const entries: { id: string; events: number; size: number; legacy: boolean }[] = [];
+  await collectListing(dir, false, entries);
+  const legacyDir = resolve(cwd, 'sessions');
+  if (existsSync(legacyDir)) {
+    await collectListing(legacyDir, true, entries);
+  }
+  if (entries.length === 0) {
     // eslint-disable-next-line no-console
-    console.log('(no sessions/ directory yet)');
+    console.log(`(no sessions yet at ${dir})`);
     return;
   }
-  for (const e of entries) {
+  for (const { id, events, size, legacy } of entries) {
+    const tag = legacy ? '  [legacy]' : '';
+    // eslint-disable-next-line no-console
+    console.log(`${id}  ${events} events  ${size}B${tag}`);
+  }
+}
+
+async function collectListing(
+  dir: string,
+  legacy: boolean,
+  out: { id: string; events: number; size: number; legacy: boolean }[],
+): Promise<void> {
+  let names: string[] = [];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return;
+  }
+  for (const e of names) {
     const t = resolve(dir, e, 'transcript.jsonl');
     try {
       const s = await stat(t);
       const buf = await readFile(t, 'utf8');
       const lines = buf.split('\n').filter((l) => l.trim().length > 0);
-      // eslint-disable-next-line no-console
-      console.log(`${e}  ${lines.length} events  ${s.size}B`);
+      out.push({ id: e, events: lines.length, size: s.size, legacy });
     } catch {
-      // eslint-disable-next-line no-console
-      console.log(`${e}  (no transcript)`);
+      out.push({ id: e, events: 0, size: 0, legacy });
     }
   }
 }

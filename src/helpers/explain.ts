@@ -1,7 +1,7 @@
 /**
  * /crumb explain <kind> — schema 어휘 lookup helper.
  *
- * 40 kinds × 11 identification fields. Static registry — no transcript I/O.
+ * 43 kinds × 11 identification fields. Static registry — no transcript I/O.
  * Source-of-truth: protocol/schemas/message.schema.json + v3 §3.
  */
 
@@ -9,7 +9,7 @@ import type { Kind } from '../protocol/types.js';
 
 export interface KindInfo {
   kind: Kind;
-  category: 'system' | 'workflow' | 'dialogue' | 'step' | 'user' | 'handoff' | 'meta';
+  category: 'system' | 'workflow' | 'dialogue' | 'step' | 'user' | 'handoff' | 'meta' | 'version';
   description: string;
   emitter: string;
   /** Typical parent_event_id chain. */
@@ -37,6 +37,15 @@ export const KIND_REGISTRY: Record<Kind, KindInfo> = {
     description: 'Session 종료. summary.html + exports/* 자동 emit.',
     emitter: 'system (coordinator finish)',
     ref: 'v3 §10 (4 surface)',
+  },
+  'session.forked': {
+    kind: 'session.forked',
+    category: 'system',
+    description:
+      'v3.3: Forked session 의 첫 event. 부모 transcript 복사 없이 metadata.crumb.{parent_session_id, fork_event_id} 만 기록 — reducer 가 read 시점에 부모를 fork_event_id 까지 hydrate.',
+    emitter: 'system (crumb fork)',
+    payload: 'metadata.crumb={parent_session_id, fork_event_id}',
+    ref: 'v3.3 fork model — wiki §v4',
   },
   'agent.wake': {
     kind: 'agent.wake',
@@ -324,6 +333,24 @@ export const KIND_REGISTRY: Record<Kind, KindInfo> = {
     description: '사용자 modal 표면 — PARTIAL verdict / stuck threshold 시.',
     emitter: 'coordinator',
     ref: 'v3 §8.1 (After kind=judge.score PARTIAL → kind=hook)',
+  },
+  'version.released': {
+    kind: 'version.released',
+    category: 'version',
+    description:
+      'v3.3: Session artifacts 가 immutable milestone (versions/<vN>/) 으로 promote 됨. manifest.toml 에 parent_version + scorecard 동결.',
+    emitter: 'system (crumb release)',
+    payload: 'data={version, label?, parent_version, source_session, source_event_id}',
+    ref: 'v3.3 version graph — wiki §v4',
+  },
+  'version.refinement': {
+    kind: 'version.refinement',
+    category: 'version',
+    description:
+      'v3.3: 기존 version 기반의 점진적 개선 표시 (소규모 tweak — D1-D6 scorecard 변동 추적).',
+    emitter: 'system (crumb release --refinement-of vN)',
+    payload: 'data={version, base_version, scorecard_delta}',
+    ref: 'v3.3 version graph — wiki §v4',
   },
 };
 

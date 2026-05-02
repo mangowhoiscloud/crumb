@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { KIND_REGISTRY, explainKind, formatExplain } from './explain.js';
 
 describe('KIND_REGISTRY coverage', () => {
-  it('covers every Kind in the union (40 in v3 implementation; wiki §3.3 mis-counted meta as 6 when actual is 7)', () => {
-    // 40 = 4 system + 11 workflow + 5 dialogue + 5 step + 5 user + 3 handoff + 7 meta.
-    expect(Object.keys(KIND_REGISTRY)).toHaveLength(40);
+  it('covers every Kind in the union (43 in v3.3; +session.forked +version.released +version.refinement)', () => {
+    // 43 = 5 system + 11 workflow + 5 dialogue + 5 step + 5 user + 3 handoff + 7 meta + 2 version.
+    // (v3.3 added session.forked under "system" and 2 "version" kinds for the milestone hierarchy.)
+    expect(Object.keys(KIND_REGISTRY)).toHaveLength(43);
     const required = [
       'qa.result',
       'judge.score',
