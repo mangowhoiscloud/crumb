@@ -300,6 +300,27 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         const eng = next.progress_ledger.circuit_breaker['builder'];
         if (eng?.state === 'OPEN') {
           next.progress_ledger.next_speaker = 'builder-fallback';
+          // v3.4 — emit kind=audit event=fallback_activated BEFORE the spawn so
+          // builder-fallback's sandwich (agents/builder-fallback.md §"in")
+          // actually finds the input event it claims to read. Previously this
+          // event was promised in the sandwich text but never produced.
+          effects.push({
+            type: 'append',
+            message: {
+              session_id: next.session_id,
+              from: 'system',
+              kind: 'audit',
+              body: `fallback_activated — builder circuit OPEN (${eng.consecutive_failures} consecutive failures)`,
+              data: {
+                event: 'fallback_activated',
+                reason: 'builder_circuit_open',
+                consecutive_failures: eng.consecutive_failures,
+                last_failure_id: eng.last_failure_id,
+                substituting_adapter: 'claude-local',
+              },
+              metadata: { deterministic: true, tool: 'reducer-fallback-route@v1' },
+            },
+          });
           effects.push({
             type: 'spawn',
             actor: 'builder-fallback',
