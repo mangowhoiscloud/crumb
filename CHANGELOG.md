@@ -4,6 +4,14 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — `crumb migrate` for legacy `<cwd>/sessions/` — v3.3 Phase 3 (2026-05-02)
+
+Closes the v3.3 storage refactor by giving v3.2-and-older users a one-shot move into the new `~/.crumb/projects/<id>/sessions/` layout.
+
+- **`src/session/migrate.ts`** (~110 LOC, 7/7 vitest specs) — `migrateLegacySessions({ cwd, dryRun })` scans `<cwd>/sessions/` and `fs.rename`s each session dir into `~/.crumb/projects/<sha256(canonical(cwd))[:16]>/sessions/`. Atomic per session (single syscall on most filesystems). Idempotent — destination collisions are reported as `already-migrated` and the source is left intact (no data loss). Empty legacy dir is `rmdir`'d after a clean sweep.
+- **`crumb migrate [--dry-run]`** — wires the helper. Per-session report with action ∈ `moved | already-migrated | collision | skipped`. `--dry-run` previews the plan without touching disk.
+- **Test**: 224/224 (was 217; +7 migrate specs). Mock e2e: 2 legacy sessions → dry-run → real migrate → both at new location → empty legacy dir removed → 2nd run reports `nothing to migrate`.
+
 ### Added — `crumb copy-artifacts` — v3.3 Phase 2c (2026-05-02)
 
 Closes the Bagelcode submission UX loop. Reviewers expect `cd crumb && open demo/game.html` to just work; with sessions now under `~/.crumb/projects/<id>/`, the user needs an explicit copy step.
