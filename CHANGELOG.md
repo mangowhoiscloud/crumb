@@ -4,6 +4,19 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — researcher actor: real text research replaces v3.3 stub (v3.4) (2026-05-02)
+
+The v3.3 researcher had two paths: video → real Gemini SDK, no-video → **empty stub** (`reference_games: []`, `design_lessons: []`). Verifier saw the stub but downstream planner-lead phase B got nothing. Now the no-video path runs a real LLM-driven text research turn.
+
+- **`src/state/types.ts`** — new `goal_has_video_refs: boolean` field on CrumbState. Set in the goal reducer case from `event.data.video_refs` array; consumed by `pickAdapter('researcher')`.
+- **`src/reducer/index.ts` `pickAdapter('researcher')`** — branches on `state.goal_has_video_refs`:
+  - `true` → `gemini-sdk` (programmatic frame sampling, deterministic via cache_key)
+  - `false` → `claude-local` (LLM-driven text research, runs `agents/researcher.md` step 1+3 fallback: 3-5 reference games + design lessons grounded in `wiki/`)
+- **`src/adapters/gemini-sdk.ts`** — text-only stub branch removed. If invoked without `video_refs` (e.g. user hard-bound the actor via `.crumb/config.toml`), emits `kind=error` with `data.reason=gemini_sdk_no_video_refs` explaining how to rebind. Exit code 2.
+- **`.crumb/presets/bagelcode-cross-3way.toml`** — researcher binding's `harness/provider/model` removed. The preset now defers to `pickAdapter` so one preset serves both video and text-only modes. Users who want to FORCE gemini-sdk regardless can override via `.crumb/config.toml`.
+- **Tests**: 294/294 (was 293; +2 reducer specs for video/no-video routing, -1 stub adapter spec, +1 error-path adapter spec). Builds on PR #41's OpenHands #5500 regression specs.
+- The runtime sandwich `agents/researcher.md` already documented step 1+3 text-only fallback (3 reference games × 3 actionable lessons grounded in wiki) — no change needed there. The fix is in routing + adapter behavior so that path actually executes.
+
 ### Added — OpenHands #5500 regression specs for circuit_breaker user-exclusion (2026-05-02)
 
 Pin down the OpenHands #5500 invariant ("stuck-detector must exclude user messages") with explicit regression tests in `src/reducer/index.test.ts`. The property was already correctly implemented at `src/reducer/index.ts:{49,477,489}` (both breaker recovery and failure branches exclude `from='user'`/`'coordinator'`/`'system'`; `stuck_count` only increments on `kind=error`), but lacked a negative test guarding against future refactor regression.

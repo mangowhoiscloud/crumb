@@ -60,11 +60,16 @@ describe('GeminiSdkAdapter', () => {
     expect(h.reason).toContain('GOOGLE_API_KEY');
   });
 
-  it('text-only path: no video_refs in goal → emits step.research + handoff(planner-lead)', async () => {
-    delete process.env.GOOGLE_API_KEY; // must not be called — text-only path doesn't load SDK
+  it('v3.4: no video_refs in goal → emits kind=error (stub branch removed)', async () => {
+    // v3.4: the text-only stub branch was removed because it emitted empty
+    // reference_games[] / design_lessons[] regardless of input — pretending
+    // to research while doing nothing. The reducer's pickAdapter('researcher')
+    // now routes text-only sessions to claude-local; gemini-sdk only
+    // executes when video_refs are actually present. If gemini-sdk is still
+    // invoked without video_refs (e.g. user hard-bound it via .crumb/config.toml),
+    // the adapter surfaces a kind=error explaining how to fix the binding.
+    delete process.env.GOOGLE_API_KEY;
     const { sandwichPath, transcriptPath, sessionDir } = await makeRequest();
-
-    // Pre-seed a goal event with no video_refs.
     const goal: Message = {
       id: '01H0000000000000000000000G',
       ts: '2026-05-02T00:00:00.000Z',
@@ -84,15 +89,18 @@ describe('GeminiSdkAdapter', () => {
       sessionId: 'sess-text-only',
     });
 
-    expect(result.exitCode).toBe(0);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain('no video_refs');
     const events = await readEvents(transcriptPath);
-    const note = events.find((e) => e.kind === 'note' && e.body?.includes('text-only'));
-    expect(note).toBeDefined();
-    expect(note?.metadata?.evidence_kind).toBe('text');
-    const synth = events.find((e) => e.kind === 'step.research');
-    expect(synth).toBeDefined();
-    const handoff = events.find((e) => e.kind === 'handoff.requested');
-    expect(handoff?.to).toBe('planner-lead');
+    const errEvent = events.find((e) => e.kind === 'error');
+    expect(errEvent).toBeDefined();
+    expect(errEvent?.body).toContain('video_refs');
+    expect((errEvent?.data as { reason?: string } | undefined)?.reason).toBe(
+      'gemini_sdk_no_video_refs',
+    );
+    // No step.research / handoff emitted — the spawn surfaces the misconfig and exits.
+    expect(events.find((e) => e.kind === 'step.research')).toBeUndefined();
+    expect(events.find((e) => e.kind === 'handoff.requested')).toBeUndefined();
   });
 
   it('cache hit: matching cache_key in transcript → no SDK call, emits note', async () => {

@@ -82,6 +82,13 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         text: `user goal: ${event.body ?? ''}`,
         category: 'goal',
       });
+      // v3.4: stash whether the goal carried video_refs so pickAdapter('researcher')
+      // can route. true → gemini-sdk (programmatic video evidence), false →
+      // claude-local / ambient (LLM-driven text research). Replaces the previous
+      // gemini-sdk text-only stub which emitted empty reference_games[] regardless.
+      const goalData = (event.data ?? {}) as { video_refs?: unknown };
+      const refs = Array.isArray(goalData.video_refs) ? goalData.video_refs : [];
+      next.goal_has_video_refs = refs.some((r) => typeof r === 'string' && r.length > 0);
       next.progress_ledger.next_speaker = 'planner-lead';
       effects.push({
         type: 'spawn',
@@ -632,12 +639,17 @@ function pickAdapter(
     return 'claude-local';
   }
   if (actor === 'researcher') {
-    // v3.3: bagelcode-cross-3way preset binds researcher = gemini-sdk + Gemini 3.1 Pro
-    // (native YouTube URL, 10fps frame sampling, 1-hour duration cap). gemini-cli has
-    // p1-unresolved video bugs, so the SDK route is the deterministic path. Adapter
-    // override (preset-loader populated) is the canonical mechanism — this default
-    // is the ambient fallback for sessions without a preset configured.
-    return 'gemini-sdk';
+    // v3.4: branch on goal.data.video_refs presence (set by goal reducer case).
+    //  - has video → gemini-sdk (programmatic Gemini 3.1 Pro frame sampling, replay
+    //    via cache_key dedup; gemini-cli has p1-unresolved video bugs so SDK is the
+    //    deterministic path).
+    //  - no video → claude-local (LLM-driven text research per
+    //    agents/researcher.md step 1+3 fallback: read wiki references, identify
+    //    3-5 reference games, distill design lessons). Replaces v3.3's text-only
+    //    stub which emitted empty reference_games[] / design_lessons[] regardless.
+    // Preset binding (e.g. bagelcode-cross-3way → gemini-sdk) overrides this
+    // default via the dispatcher's HARNESS_TO_ADAPTER mapping.
+    return state.goal_has_video_refs ? 'gemini-sdk' : 'claude-local';
   }
   return 'claude-local';
 }
