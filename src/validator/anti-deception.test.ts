@@ -116,4 +116,117 @@ describe('anti-deception validator', () => {
     expect(result.violations).toEqual([]);
     expect(result.scores.verdict).toBe('PASS');
   });
+
+  // ── Rule 5 (v3.3) — researcher_video_evidence_missing ──────────────────────
+
+  it('Rule 5: D5 ≥ 4 with video evidence available but no D5.evidence cited → force D5=0', () => {
+    const result = checkAntiDeception({
+      judgeScore: judgeScore({
+        scores: {
+          D1: { score: 5, source: 'verifier-llm' },
+          D2: { score: 5, source: 'qa-check-effect' },
+          D3: { score: 4, source: 'verifier-llm', semantic: 4 },
+          D4: { score: 5, source: 'reducer-auto' },
+          D5: { score: 5, source: 'verifier-llm', quality: 5 }, // claimed high
+          D6: { score: 5, source: 'qa-check-effect' },
+          verdict: 'PASS',
+          // evidence intentionally absent — verifier did NOT cite the video evidence
+        },
+      }),
+      qaResult: { exec_exit_code: 0 },
+      autoScores: { D3_auto: 4, D4: 5, D5_auto: 4 },
+      builderProvider: 'openai',
+      researchVideoEvidenceIds: ['01H0000000000000000000VID1', '01H0000000000000000000VID2'],
+    });
+    expect(result.violations).toContain('researcher_video_evidence_missing');
+    expect(result.scores.D5?.score).toBe(0);
+  });
+
+  it('Rule 5: D5 ≥ 4 with valid evidence_refs citing a video event → no violation', () => {
+    const result = checkAntiDeception({
+      judgeScore: judgeScore({
+        scores: {
+          D1: { score: 5, source: 'verifier-llm' },
+          D2: { score: 5, source: 'qa-check-effect' },
+          D3: { score: 4, source: 'verifier-llm', semantic: 4 },
+          D4: { score: 5, source: 'reducer-auto' },
+          D5: {
+            score: 4,
+            source: 'verifier-llm',
+            quality: 4,
+            evidence: ['01H0000000000000000000VID1'],
+          },
+          D6: { score: 5, source: 'qa-check-effect' },
+          verdict: 'PASS',
+        },
+      }),
+      qaResult: { exec_exit_code: 0 },
+      autoScores: { D3_auto: 4, D4: 5, D5_auto: 4 },
+      builderProvider: 'openai',
+      researchVideoEvidenceIds: ['01H0000000000000000000VID1', '01H0000000000000000000VID2'],
+    });
+    expect(result.violations).not.toContain('researcher_video_evidence_missing');
+    expect(result.scores.D5?.score).toBe(4);
+  });
+
+  it('Rule 5: D5 < 4 even with empty evidence_refs → no violation (low score is honest)', () => {
+    const result = checkAntiDeception({
+      judgeScore: judgeScore({
+        scores: {
+          D1: { score: 5, source: 'verifier-llm' },
+          D2: { score: 5, source: 'qa-check-effect' },
+          D3: { score: 4, source: 'verifier-llm', semantic: 4 },
+          D4: { score: 5, source: 'reducer-auto' },
+          D5: { score: 2, source: 'verifier-llm', quality: 2 },
+          D6: { score: 5, source: 'qa-check-effect' },
+          verdict: 'PARTIAL',
+        },
+      }),
+      qaResult: { exec_exit_code: 0 },
+      autoScores: { D3_auto: 4, D4: 5, D5_auto: 4 },
+      builderProvider: 'openai',
+      researchVideoEvidenceIds: ['01H0000000000000000000VID1'],
+    });
+    expect(result.violations).not.toContain('researcher_video_evidence_missing');
+    expect(result.scores.D5?.score).toBe(2);
+  });
+
+  it('Rule 5: text-only research path (empty researchVideoEvidenceIds) → no violation regardless of D5', () => {
+    const result = checkAntiDeception({
+      judgeScore: judgeScore({}),
+      qaResult: { exec_exit_code: 0 },
+      autoScores: { D3_auto: 4, D4: 5, D5_auto: 4 },
+      builderProvider: 'openai',
+      researchVideoEvidenceIds: [],
+    });
+    expect(result.violations).not.toContain('researcher_video_evidence_missing');
+    expect(result.scores.D5?.score).toBe(4);
+  });
+
+  it('Rule 5: D5.evidence cites a non-video event id → still a violation', () => {
+    const result = checkAntiDeception({
+      judgeScore: judgeScore({
+        scores: {
+          D1: { score: 5, source: 'verifier-llm' },
+          D2: { score: 5, source: 'qa-check-effect' },
+          D3: { score: 4, source: 'verifier-llm', semantic: 4 },
+          D4: { score: 5, source: 'reducer-auto' },
+          D5: {
+            score: 5,
+            source: 'verifier-llm',
+            quality: 5,
+            evidence: ['01H0000000000000000000FAKE'], // not in researchVideoEvidenceIds
+          },
+          D6: { score: 5, source: 'qa-check-effect' },
+          verdict: 'PASS',
+        },
+      }),
+      qaResult: { exec_exit_code: 0 },
+      autoScores: { D3_auto: 4, D4: 5, D5_auto: 4 },
+      builderProvider: 'openai',
+      researchVideoEvidenceIds: ['01H0000000000000000000VID1'],
+    });
+    expect(result.violations).toContain('researcher_video_evidence_missing');
+    expect(result.scores.D5?.score).toBe(0);
+  });
 });
