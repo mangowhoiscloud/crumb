@@ -19,7 +19,7 @@ import { ulid } from 'ulid';
 
 import { runSession } from './loop/coordinator.js';
 import { readAll } from './transcript/reader.js';
-import { getTranscriptWriter } from './transcript/writer.js';
+import { getTranscriptWriter, type TranscriptWriter } from './transcript/writer.js';
 import { reduce } from './reducer/index.js';
 import { initialState } from './state/types.js';
 import { ClaudeLocalAdapter } from './adapters/claude-local.js';
@@ -45,7 +45,7 @@ import {
   writeManifest,
   type VersionManifest,
 } from './session/version.js';
-import type { DraftMessage } from './protocol/types.js';
+import type { DraftMessage, Message } from './protocol/types.js';
 
 interface ParsedArgs {
   command: string;
@@ -181,19 +181,93 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
   }
 }
 
+/**
+ * Forged-event firewall (anti-deception architecture invariants #4-5).
+ *
+ * Only the dispatcher may emit `from=system` events or `kind=qa.result`. All
+ * legitimate paths (qa-runner, sandwich assembler, release/version helpers)
+ * call writer.append() directly and never traverse this subprocess CLI. An
+ * LLM-driven actor reaching cmdEvent with from='system' or kind='qa.result'
+ * is attempting to forge ground truth — reject the forgery and append a
+ * `kind=audit` violation so the attempt stays on record.
+ *
+ * Without this, a verifier subprocess could emit
+ *   {"from":"system","kind":"qa.result","data":{"exec_exit_code":0}}
+ * and have D2/D6 lookups treat it as deterministic ground truth (anti-
+ * deception Rule 1/2 stash exec_exit_code without checking provenance).
+ *
+ * Returns the actor-emitted Message on success, or a CrumbEventRejection
+ * describing the violation. Either way the writer is unchanged for the
+ * forged draft — only the audit event is appended.
+ */
+export interface CrumbEventRejection {
+  rejected: true;
+  violation:
+    | 'forged_system_event_attempt'
+    | 'forged_qa_result_attempt'
+    | 'fallback_self_assessment_attempt';
+  audit_id: string;
+}
+
+export async function applyEventFirewall(
+  draft: DraftMessage,
+  writer: TranscriptWriter,
+  ctx: { sessionId: string; actor: string | undefined },
+): Promise<{ rejected: false; message: Message } | CrumbEventRejection> {
+  const forgedSystem = draft.from === 'system';
+  const forgedQaResult = draft.kind === 'qa.result';
+  if (forgedSystem || forgedQaResult) {
+    const violation = forgedQaResult
+      ? ctx.actor === 'builder-fallback'
+        ? 'fallback_self_assessment_attempt'
+        : 'forged_qa_result_attempt'
+      : 'forged_system_event_attempt';
+    const audit = await writer.append({
+      session_id: ctx.sessionId,
+      from: 'system',
+      kind: 'audit',
+      body: `rejected forged event from actor=${ctx.actor ?? 'unknown'}: ${violation} (attempted from=${draft.from}, kind=${draft.kind})`,
+      data: {
+        violation,
+        actor: ctx.actor ?? null,
+        attempted_from: draft.from,
+        attempted_kind: draft.kind,
+        attempted_body: typeof draft.body === 'string' ? draft.body.slice(0, 200) : null,
+      },
+      metadata: { deterministic: true, tool: 'crumb-event-firewall@v1' },
+    });
+    return { rejected: true, violation, audit_id: audit.id };
+  }
+  const message = await writer.append(draft);
+  return { rejected: false, message };
+}
+
 async function cmdEvent(): Promise<void> {
-  // Read JSON from stdin, validate, append to $CRUMB_TRANSCRIPT_PATH.
+  // Read JSON from stdin, validate via firewall + writer, append to
+  // $CRUMB_TRANSCRIPT_PATH.
   const path = process.env.CRUMB_TRANSCRIPT_PATH;
   const sessionId = process.env.CRUMB_SESSION_ID;
+  const actor = process.env.CRUMB_ACTOR;
   if (!path || !sessionId) {
     throw new Error('CRUMB_TRANSCRIPT_PATH and CRUMB_SESSION_ID env vars required');
   }
   const raw = await readStdin();
   const draft = JSON.parse(raw) as DraftMessage;
   const writer = getTranscriptWriter({ path, sessionId });
-  const msg = await writer.append(draft);
+  const result = await applyEventFirewall(draft, writer, { sessionId, actor });
+  if (result.rejected) {
+    process.stdout.write(
+      JSON.stringify({
+        rejected: true,
+        violation: result.violation,
+        audit_id: result.audit_id,
+      }) + '\n',
+    );
+    process.exitCode = 2;
+    return;
+  }
   // eslint-disable-next-line no-console
-  process.stdout.write(JSON.stringify({ id: msg.id, ts: msg.ts }) + '\n');
+  process.stdout.write(JSON.stringify({ id: result.message.id, ts: result.message.ts }) + '\n');
 }
 
 async function cmdReplay(args: ParsedArgs): Promise<void> {
