@@ -13,8 +13,9 @@
 
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
+import { existsSync, createReadStream } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
+import { createInterface } from 'node:readline';
 import { ulid } from 'ulid';
 
 import { runSession } from './loop/coordinator.js';
@@ -246,18 +247,10 @@ export async function applyEventFirewall(
  * Stamp provenance metadata onto an actor-emitted draft before append.
  *
  *   - `metadata.provider` ← `CRUMB_PROVIDER` env (binding-resolved by dispatcher).
- *     Without this, anti-deception Rule 4 (validator/anti-deception.ts:111)
- *     can't compare verifier-vs-builder providers — the `judgeScore.metadata
- *     .provider` it reads would be undefined.
  *   - `metadata.cross_provider` ← (CRUMB_PROVIDER !== CRUMB_BUILDER_PROVIDER),
- *     set only on `kind=judge.score`. AGENTS.md §136: "Set
- *     metadata.cross_provider=true when the verifier's provider differs from
- *     the build event's provider." Previously only the mock adapter set this;
- *     `helpers/status.ts:144` falls back to "⚠" when undefined, producing a
- *     bogus same-provider warning on every real session.
+ *     set only on `kind=judge.score`. AGENTS.md §136 invariant.
  *
- * Actor-supplied metadata wins (no overwrite) — this is provenance fallback,
- * not enforcement.
+ * Actor-supplied metadata wins (no overwrite).
  */
 const VALID_PROVIDERS = new Set(['anthropic', 'openai', 'google', 'none']);
 
@@ -282,9 +275,14 @@ export function stampEnvMetadata(draft: DraftMessage, env: NodeJS.ProcessEnv): D
   return mutated ? { ...draft, metadata: md } : draft;
 }
 
-async function cmdEvent(): Promise<void> {
-  // Read JSON from stdin, validate via firewall + writer, append to
-  // $CRUMB_TRANSCRIPT_PATH.
+async function cmdEvent(args: ParsedArgs): Promise<void> {
+  // `crumb event tail` — stream filtered transcript events (default: strip private).
+  if (args.positional[0] === 'tail') {
+    await cmdEventTail(args);
+    return;
+  }
+  // `crumb event` (no positional) — read JSON from stdin, validate via firewall +
+  // writer, append to $CRUMB_TRANSCRIPT_PATH.
   const path = process.env.CRUMB_TRANSCRIPT_PATH;
   const sessionId = process.env.CRUMB_SESSION_ID;
   const actor = process.env.CRUMB_ACTOR;
@@ -308,6 +306,70 @@ async function cmdEvent(): Promise<void> {
   }
   // eslint-disable-next-line no-console
   process.stdout.write(JSON.stringify({ id: result.message.id, ts: result.message.ts }) + '\n');
+}
+
+export interface FilterTranscriptOpts {
+  /** When true, bypass the visibility filter — admin / replay use case. */
+  showAll?: boolean;
+  /** Optional kind allowlist; applied AFTER visibility. */
+  kinds?: string[];
+}
+
+/**
+ * Decide whether a transcript JSONL line should be printed by `crumb event tail`.
+ * Returns the input line unchanged if it should pass through, or `null` if it
+ * should be filtered. Blank / non-JSON lines are filtered as `null`.
+ *
+ * AGENTS.md "Don't" rule: raw chain-of-thought lives in `kind=agent.thought_summary`
+ * with `metadata.visibility="private"` only. The default tail filter strips those
+ * so downstream actors (verifier, dashboard, evaluators) never see the implementer's
+ * private deliberation. Use `--all` for replay / debugging.
+ */
+export function filterTranscriptLine(line: string, opts: FilterTranscriptOpts = {}): string | null {
+  const trimmed = line.trim();
+  if (trimmed.length === 0) return null;
+  let parsed: { kind?: string; metadata?: { visibility?: string } };
+  try {
+    parsed = JSON.parse(trimmed) as typeof parsed;
+  } catch {
+    return null;
+  }
+  if (!opts.showAll && parsed.metadata?.visibility === 'private') {
+    return null;
+  }
+  if (opts.kinds && opts.kinds.length > 0) {
+    if (!parsed.kind || !opts.kinds.includes(parsed.kind)) return null;
+  }
+  return line;
+}
+
+async function cmdEventTail(args: ParsedArgs): Promise<void> {
+  const path = args.flags.get('path') ?? process.env.CRUMB_TRANSCRIPT_PATH;
+  if (!path) {
+    throw new Error('CRUMB_TRANSCRIPT_PATH env var or --path required');
+  }
+  if (!existsSync(path)) {
+    throw new Error(`transcript not found: ${path}`);
+  }
+  const showAll = args.flags.get('all') === 'true' || args.flags.has('all');
+  const kindsFlag = args.flags.get('kinds');
+  const kinds = kindsFlag
+    ? kindsFlag
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+    : undefined;
+  const opts: FilterTranscriptOpts = { showAll, kinds };
+
+  // Stream line-by-line — sessions can have thousands of events; never buffer.
+  const stream = createReadStream(path, { encoding: 'utf8' });
+  const rl = createInterface({ input: stream, crlfDelay: Infinity });
+  for await (const line of rl) {
+    const out = filterTranscriptLine(line, opts);
+    if (out !== null) {
+      process.stdout.write(out + '\n');
+    }
+  }
 }
 
 async function cmdReplay(args: ParsedArgs): Promise<void> {
@@ -905,6 +967,9 @@ function printHelp(): void {
 Usage:
   crumb run --goal "<game pitch>" [--session <id>] [--preset <name>] [--adapter <id>]
   crumb event                              # read JSON from stdin, append to transcript
+  crumb event tail [--all] [--kinds ...]   # stream transcript events with metadata.visibility=private
+                                          # filtered out by default; --all bypasses; --kinds limits to a list
+                                          # (uses $CRUMB_TRANSCRIPT_PATH or --path <file>)
   crumb replay <session-dir>               # re-derive state from transcript
   crumb resume <session-id|dir>            # re-derive state + surface mid-flight resume command (S15)
   crumb doctor                             # full environment check (3 host OAuth + adapter health)
@@ -958,7 +1023,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       await cmdRun(args);
       break;
     case 'event':
-      await cmdEvent();
+      await cmdEvent(args);
       break;
     case 'replay':
       await cmdReplay(args);
