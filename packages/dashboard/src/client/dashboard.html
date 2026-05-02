@@ -9,7 +9,25 @@
 <body>
 
 <aside class="sessions">
-  <h2>Sessions</h2>
+  <div class="sessions-header">
+    <h2>Sessions</h2>
+    <button id="new-session" class="icon-btn" title="Start a new crumb session">＋</button>
+  </div>
+  <div id="new-session-form" style="display:none;">
+    <input type="text" id="new-session-goal" placeholder="game goal (e.g. 60s 고양이 퍼즐)" autocomplete="off">
+    <div class="new-session-row">
+      <select id="new-session-preset">
+        <option value="">(default — ambient)</option>
+        <option value="bagelcode-cross-3way">bagelcode-cross-3way</option>
+        <option value="mock">mock (deterministic, 0-cost)</option>
+        <option value="sdk-enterprise">sdk-enterprise</option>
+        <option value="solo">solo</option>
+      </select>
+      <button id="new-session-go">Run</button>
+      <button id="new-session-cancel" class="muted">Cancel</button>
+    </div>
+    <div id="new-session-feedback" class="console-feedback"></div>
+  </div>
   <div id="sess-list"></div>
 </aside>
 
@@ -17,7 +35,7 @@
   <header class="summary">
     <div>
       <h1 id="header-title"><span class="pill muted">no session</span></h1>
-      <div class="goal" id="header-goal">Pick a session on the left to track its progress in real time.</div>
+      <div class="goal" id="header-goal">Pick a session on the left or hit ＋ to start a new crumb run.</div>
     </div>
     <dl class="metrics-row">
       <div><dt>events</dt><dd id="m-events">—</dd></div>
@@ -31,9 +49,14 @@
 
   <div id="audit-banner"></div>
 
+  <section class="scorecard-bar" id="scorecard-bar">
+    <div class="scorecard-strip" id="scorecard"></div>
+  </section>
+
   <nav class="view-tabs" id="view-tabs">
     <button data-view="pipeline" class="active">Pipeline</button>
     <button data-view="logs">Logs</button>
+    <button data-view="output">Output</button>
   </nav>
 
   <div class="view-pane active" id="view-pipeline">
@@ -44,17 +67,6 @@
 
     <section class="swimlane" id="swimlane">
       <div class="empty" id="swim-empty">Waiting for events…</div>
-    </section>
-
-    <section class="scorecard" id="scorecard"></section>
-
-    <section class="console-input" id="console-section">
-      <div class="console-row">
-        <input type="text" id="console-line" placeholder="Type a slash command or @actor mention — e.g. /goto verifier, @builder use red palette, /pause" autocomplete="off" disabled>
-        <button id="console-send" disabled>Send</button>
-      </div>
-      <div class="console-hints" id="console-hints"></div>
-      <div class="console-feedback" id="console-feedback"></div>
     </section>
   </div>
 
@@ -75,6 +87,40 @@
       </div>
     </section>
   </div>
+
+  <div class="view-pane" id="view-output">
+    <section class="output">
+      <div class="output-toolbar">
+        <span id="output-path-label">artifact:</span>
+        <select id="output-path-select"></select>
+        <button id="output-reload">reload</button>
+        <button id="output-open">open in new tab ↗</button>
+      </div>
+      <div class="output-frame-wrap" id="output-frame-wrap">
+        <div class="logs-empty" id="output-empty">No artifacts emitted yet for this session.</div>
+        <iframe id="output-frame" sandbox="allow-scripts allow-pointer-lock allow-same-origin" style="display:none;"></iframe>
+      </div>
+    </section>
+  </div>
+
+  <section class="console-feed" id="console-feed-section">
+    <div class="console-feed-toolbar">
+      <span class="console-feed-title">Live execution feed</span>
+      <span id="console-feed-status" class="console-feed-status">—</span>
+      <button id="console-feed-pause" class="ghost-btn">pause</button>
+      <button id="console-feed-clear" class="ghost-btn">clear</button>
+    </div>
+    <div class="console-feed-body" id="console-feed-body"></div>
+  </section>
+
+  <section class="console-input" id="console-section">
+    <div class="console-row">
+      <input type="text" id="console-line" placeholder='Type a slash command, @actor mention, plain text, or "/crumb <goal>" to start a new session' autocomplete="off" disabled>
+      <button id="console-send" disabled>Send</button>
+    </div>
+    <div class="console-hints" id="console-hints"></div>
+    <div class="console-feedback" id="console-feedback"></div>
+  </section>
 </main>
 
 <aside class="detail" id="detail">

@@ -524,3 +524,232 @@ section.scorecard {
   padding: 40px 24px;
   font-size: 13px;
 }
+/* v3.5 console redo — sidebar header / new-session form / × close button */
+.sessions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px 0;
+}
+.sessions-header h2 {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  color: var(--ink-subtle);
+  text-transform: uppercase;
+  padding: 0;
+}
+.icon-btn {
+  background: var(--surface-2);
+  color: var(--ink-muted);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  width: 22px; height: 22px;
+  font-size: 14px; line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.icon-btn:hover { color: var(--ink); border-color: var(--primary); }
+#new-session-form {
+  padding: 8px 16px 12px;
+  border-bottom: 1px solid var(--hairline);
+}
+#new-session-goal {
+  width: 100%;
+  background: var(--canvas);
+  color: var(--ink);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  outline: none;
+  margin-bottom: 6px;
+}
+#new-session-goal:focus { border-color: var(--primary); }
+.new-session-row { display: flex; gap: 4px; align-items: center; }
+.new-session-row select {
+  flex: 1;
+  background: var(--canvas);
+  color: var(--ink-muted);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 4px 6px;
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+}
+.new-session-row button {
+  background: var(--primary);
+  color: var(--ink);
+  border: none;
+  border-radius: var(--r-sm);
+  padding: 4px 10px;
+  font-size: 10px;
+  cursor: pointer;
+}
+.new-session-row button.muted {
+  background: var(--surface-2);
+  color: var(--ink-muted);
+}
+
+.session-row {
+  position: relative;
+}
+.session-row .row-close {
+  position: absolute;
+  top: 6px; right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--ink-tertiary);
+  font-size: 14px; line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 60ms ease;
+}
+.session-row:hover .row-close { opacity: 1; }
+.session-row .row-close:hover { color: var(--audit-fg); background: var(--surface-2); }
+
+/* v3.5 — scorecard moved up; horizontal strip across the top of main */
+.scorecard-bar {
+  border-bottom: 1px solid var(--hairline);
+  background: var(--surface-1);
+  padding: 8px 16px;
+}
+.scorecard-strip {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+.scorecard-strip .dim {
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 6px 10px;
+}
+.scorecard-strip .dim .label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--ink-subtle);
+}
+.scorecard-strip .dim .value {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 14px;
+  color: var(--ink);
+  margin-top: 2px;
+}
+.scorecard-strip .dim .source {
+  font-size: 9px;
+  color: var(--ink-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-top: 1px;
+}
+
+/* v3.5 — Output (artifact iframe) tab */
+section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.output-toolbar {
+  display: flex; gap: 8px; align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--surface-1);
+  font-size: 11px;
+  color: var(--ink-subtle);
+}
+.output-toolbar select {
+  flex: 1;
+  background: var(--canvas);
+  color: var(--ink);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 4px 8px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+.output-toolbar button {
+  background: var(--surface-2);
+  color: var(--ink-muted);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 4px 10px;
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  cursor: pointer;
+}
+.output-toolbar button:hover { color: var(--ink); border-color: var(--primary); }
+.output-frame-wrap {
+  flex: 1; min-height: 0;
+  background: #000;
+  position: relative;
+}
+.output-frame-wrap iframe {
+  width: 100%; height: 100%;
+  border: none;
+  background: #fff;
+}
+
+/* v3.5 — live execution feed (terminal-like) right above the input */
+.console-feed {
+  border-top: 1px solid var(--hairline);
+  background: var(--canvas);
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  min-height: 120px;
+}
+.console-feed-toolbar {
+  display: flex; gap: 8px; align-items: center;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--surface-1);
+  font-size: 10px;
+  color: var(--ink-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.console-feed-title { color: var(--ink-muted); flex: 0 0 auto; }
+.console-feed-status { color: var(--ink-tertiary); flex: 1; font-family: ui-monospace, monospace; text-transform: none; letter-spacing: 0; }
+.ghost-btn {
+  background: var(--surface-2);
+  color: var(--ink-muted);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 2px 8px;
+  font-size: 9px;
+  font-family: ui-monospace, monospace;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.ghost-btn:hover { color: var(--ink); border-color: var(--primary); }
+.ghost-btn.paused { color: var(--warn); border-color: var(--warn); }
+.console-feed-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 14px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.feed-line {
+  display: grid;
+  grid-template-columns: 64px 110px 1fr;
+  gap: 8px;
+  padding: 1px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.feed-line .feed-ts { color: var(--ink-tertiary); }
+.feed-line .feed-actor { color: var(--ink-subtle); }
+.feed-line .feed-body { color: var(--ink-muted); }
+.feed-line.kind-error .feed-body,
+.feed-line.kind-audit .feed-body { color: var(--audit-fg); }
+.feed-line.kind-spec .feed-body,
+.feed-line.kind-build .feed-body,
+.feed-line.kind-judge .feed-body { color: var(--lime); }
+.feed-line.kind-handoff .feed-body { color: var(--primary-hover); }
+.feed-line.kind-log .feed-body { color: var(--ink-muted); opacity: 0.85; }
+.feed-line.kind-log.stderr .feed-body { color: var(--audit-fg); opacity: 0.95; }
+.feed-line.kind-system .feed-body { color: var(--ink-tertiary); font-style: italic; }

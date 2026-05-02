@@ -36,7 +36,13 @@ const js = readFileSync(resolve(clientDir, 'dashboard.js'), 'utf8');
 if (!html.includes('__CSS__')) throw new Error('dashboard.html missing __CSS__ placeholder');
 if (!html.includes('__JS__')) throw new Error('dashboard.html missing __JS__ placeholder');
 
-const inlined = html.replace('__CSS__', css).replace('__JS__', js);
+// IMPORTANT: pass a *function* replacer to .replace(). The string-replacer
+// form interprets $' / $` / $& / $1.. in the replacement, which silently
+// mangles any JS containing a literal `'$'` (e.g. `return '$' + cost`):
+// the apostrophe-after-dollar becomes the special "portion after the
+// matched substring" pattern, splicing trailing HTML (`</script>...`) into
+// the middle of dashboard.js and breaking the entire client.
+const inlined = html.replace('__CSS__', () => css).replace('__JS__', () => js);
 
 // Escape backticks + ${ for a tagged-template-safe string literal.
 const escaped = inlined.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
