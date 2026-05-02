@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { existsSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
 
-import { dispatch, parseInlineRefs, type DispatcherDeps } from './live.js';
+import { dispatch, parseInlineRefs, readLatestBuildProvider, type DispatcherDeps } from './live.js';
 import { TranscriptWriter } from '../transcript/writer.js';
 import {
   AdapterRegistry,
@@ -674,4 +674,56 @@ describe('dispatcher idle-timeout (v3.4)', () => {
       timeout_ms: 200,
     });
   }, 5_000);
+});
+
+describe('readLatestBuildProvider', () => {
+  async function writeTranscript(lines: string[]): Promise<string> {
+    const dir = await mkdtemp(resolve(tmpdir(), 'crumb-buildprov-'));
+    const path = resolve(dir, 'transcript.jsonl');
+    await writeFile(path, lines.join('\n') + '\n');
+    return path;
+  }
+
+  it('returns metadata.provider from the most recent kind=build event', async () => {
+    const path = await writeTranscript([
+      JSON.stringify({ id: '1', kind: 'goal', body: 'x' }),
+      JSON.stringify({ id: '2', kind: 'build', metadata: { provider: 'openai' } }),
+      JSON.stringify({ id: '3', kind: 'qa.result' }),
+    ]);
+    expect(await readLatestBuildProvider(path)).toBe('openai');
+  });
+
+  it('walks backwards: returns the latest build provider when multiple exist', async () => {
+    const path = await writeTranscript([
+      JSON.stringify({ id: '1', kind: 'build', metadata: { provider: 'openai' } }),
+      JSON.stringify({ id: '2', kind: 'build', metadata: { provider: 'anthropic' } }),
+    ]);
+    expect(await readLatestBuildProvider(path)).toBe('anthropic');
+  });
+
+  it('returns undefined when no build event exists yet', async () => {
+    const path = await writeTranscript([
+      JSON.stringify({ id: '1', kind: 'goal' }),
+      JSON.stringify({ id: '2', kind: 'spec' }),
+    ]);
+    expect(await readLatestBuildProvider(path)).toBeUndefined();
+  });
+
+  it('returns undefined when build event omits metadata.provider', async () => {
+    const path = await writeTranscript([JSON.stringify({ id: '1', kind: 'build' })]);
+    expect(await readLatestBuildProvider(path)).toBeUndefined();
+  });
+
+  it('returns undefined for missing transcript file', async () => {
+    expect(await readLatestBuildProvider('/tmp/does-not-exist-' + Date.now())).toBeUndefined();
+  });
+
+  it('skips malformed lines without crashing', async () => {
+    const path = await writeTranscript([
+      'not json {',
+      JSON.stringify({ id: '1', kind: 'build', metadata: { provider: 'google' } }),
+      'also not json',
+    ]);
+    expect(await readLatestBuildProvider(path)).toBe('google');
+  });
 });

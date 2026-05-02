@@ -1,10 +1,16 @@
 /**
- * cli.ts tests — focused on the forged-event firewall (anti-deception
- * architecture invariants #4-5). Without this firewall, an LLM-driven actor
- * can emit `from=system` or `kind=qa.result` via the `crumb event` subprocess
- * CLI, then the reducer's qa.result handler stashes the forged exec_exit_code
- * and anti-deception's Rule 1/2 use it as deterministic ground truth. The
- * firewall rejects such drafts and appends a `kind=audit` violation.
+ * cli.ts tests — covers two cmdEvent surfaces:
+ *
+ *   1. `applyEventFirewall` — forged-event firewall (anti-deception
+ *      architecture invariants #4-5). Blocks `from=system` and
+ *      `kind=qa.result` from any LLM-driven actor and appends a
+ *      `kind=audit` violation so the attempt stays on record.
+ *
+ *   2. `stampEnvMetadata` — provenance fallback that fills
+ *      `metadata.provider` (always) and `metadata.cross_provider` (on
+ *      `kind=judge.score` only) from CRUMB_PROVIDER /
+ *      CRUMB_BUILDER_PROVIDER env vars passed by the dispatcher.
+ *      AGENTS.md §136 invariant.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -12,7 +18,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
-import { applyEventFirewall } from './cli.js';
+import { applyEventFirewall, stampEnvMetadata } from './cli.js';
 import { TranscriptWriter } from './transcript/writer.js';
 import type { DraftMessage, Message } from './protocol/types.js';
 
@@ -148,5 +154,68 @@ describe('applyEventFirewall — forged event blocking', () => {
     expect(events).toHaveLength(1);
     expect(events[0].from).toBe('builder-fallback');
     expect(events[0].kind).toBe('audit');
+  });
+});
+
+const baseDraft = (overrides: Partial<DraftMessage> = {}): DraftMessage => ({
+  session_id: '01H0000000000000000000000A',
+  from: 'verifier',
+  kind: 'judge.score',
+  body: 'PASS 28/30',
+  ...overrides,
+});
+
+describe('stampEnvMetadata', () => {
+  it('stamps metadata.provider from CRUMB_PROVIDER when actor omitted it', () => {
+    const out = stampEnvMetadata(baseDraft({ kind: 'note' }), { CRUMB_PROVIDER: 'anthropic' });
+    expect(out.metadata?.provider).toBe('anthropic');
+  });
+
+  it('does NOT overwrite actor-supplied metadata.provider', () => {
+    const out = stampEnvMetadata(baseDraft({ kind: 'note', metadata: { provider: 'openai' } }), {
+      CRUMB_PROVIDER: 'anthropic',
+    });
+    expect(out.metadata?.provider).toBe('openai');
+  });
+
+  it('sets cross_provider=true on judge.score when providers differ', () => {
+    const out = stampEnvMetadata(baseDraft(), {
+      CRUMB_PROVIDER: 'google',
+      CRUMB_BUILDER_PROVIDER: 'openai',
+    });
+    expect(out.metadata?.cross_provider).toBe(true);
+    expect(out.metadata?.provider).toBe('google');
+  });
+
+  it('sets cross_provider=false on judge.score when providers match', () => {
+    const out = stampEnvMetadata(baseDraft(), {
+      CRUMB_PROVIDER: 'anthropic',
+      CRUMB_BUILDER_PROVIDER: 'anthropic',
+    });
+    expect(out.metadata?.cross_provider).toBe(false);
+  });
+
+  it('does NOT stamp cross_provider on non-judge.score kinds', () => {
+    const out = stampEnvMetadata(baseDraft({ kind: 'build' }), {
+      CRUMB_PROVIDER: 'google',
+      CRUMB_BUILDER_PROVIDER: 'openai',
+    });
+    expect(out.metadata?.cross_provider).toBeUndefined();
+    expect(out.metadata?.provider).toBe('google');
+  });
+
+  it('skips cross_provider when builder provider is missing', () => {
+    // First-build case — no prior build event → CRUMB_BUILDER_PROVIDER unset.
+    const out = stampEnvMetadata(baseDraft(), { CRUMB_PROVIDER: 'google' });
+    expect(out.metadata?.cross_provider).toBeUndefined();
+    expect(out.metadata?.provider).toBe('google');
+  });
+
+  it('returns draft unchanged when nothing to stamp', () => {
+    const draft = baseDraft({ kind: 'note', metadata: { provider: 'openai' } });
+    const out = stampEnvMetadata(draft, {});
+    // Identity preserved when no env-driven mutation occurs (cheap fast-path
+    // for the dominant case where actors set their own metadata).
+    expect(out).toBe(draft);
   });
 });
