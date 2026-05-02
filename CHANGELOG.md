@@ -4,6 +4,16 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Fixed — Dashboard discovers legacy flat-layout sessions (2026-05-03)
+
+Dashboard launched with `CRUMB_HOME=$HOME/workspace/crumb` reported "No sessions yet" even though two sessions existed at `~/workspace/crumb/sessions/<ulid>/transcript.jsonl`. The watcher glob only matched the v3.4 project-scoped layout `<home>/projects/*/sessions/*/transcript.jsonl`, so any home that still had a flat `sessions/` directory (legacy home prior to v3.4 OR a dev `<repo>/sessions/` checkout) was silently skipped.
+
+- **`packages/dashboard/src/paths.ts`** — each home now contributes TWO globs: project-scoped (`<home>/projects/*/sessions/*/transcript.jsonl`) AND flat legacy (`<home>/sessions/*/transcript.jsonl`). `defaultTranscriptGlobs(): string[]` flat-maps both per active home so a single dashboard surfaces every session on the host without forcing migration.
+- **`crumbHomeFromPath()` extended** — falls back to `lastIndexOf('/sessions/')` when `/projects/` is absent so it correctly identifies the home for flat-layout transcripts.
+- **`projectIdFromPath()` extended** — returns synthetic id `'(legacy)'` for flat sessions so they group together in the API response instead of colliding with empty-string projects from genuinely malformed paths.
+- **Tests** — `paths.test.ts` adds 5 specs for the legacy layout (sessionId, projectId='(legacy)', crumbHome extraction) + 2 specs for `defaultTranscriptGlobs()` confirming both globs emitted per home (single-home + multi-home cases). 10/10 paths specs pass; 347/347 sweep green.
+- Verified end-to-end: `CRUMB_HOMES=$HOME/.crumb:$HOME/workspace/crumb crumb-dashboard` returns 7 sessions (5 project-scoped from `~/.crumb` + 2 flat legacy from `~/workspace/crumb/sessions/`).
+
 ### Added — Dashboard live exec feed: Claude-Code-style stream-json narrative (2026-05-03)
 
 The per-session live execution feed (above the chat input) was dumping spawn-log stream-json as raw text. User feedback: "이건 세션 내 채팅 입력창 위에 붙어있어야 해" — the user wants the same `⏺` / `⎿` / `✓` narrative bubbles they see inside Claude Code, faithfully mirrored in the dashboard so they can watch what the agent is doing without context-switching to the terminal.
