@@ -31,6 +31,7 @@ import {
   getVersionsDir,
   resolveSessionDir as resolveStoredSession,
 } from './paths.js';
+import { formatMigrateResult, migrateLegacySessions } from './session/migrate.js';
 import { newMeta, readMeta, updateMeta, writeMeta } from './session/meta.js';
 import {
   deriveScorecard,
@@ -540,6 +541,20 @@ function truncate(s: string, n: number): string {
 }
 
 /**
+ * `crumb migrate [--dry-run]` — relocate legacy `<cwd>/sessions/<id>/` directories
+ * (v3.2 and older) into `~/.crumb/projects/<id>/sessions/<id>/`. Idempotent —
+ * existing destination dirs are left intact and the source remains so the operator
+ * can resolve manually.
+ */
+async function cmdMigrate(args: ParsedArgs): Promise<void> {
+  const cwd = args.flags.get('root') ?? process.cwd();
+  const dryRun = args.flags.has('dry-run');
+  const r = await migrateLegacySessions({ cwd, dryRun });
+  // eslint-disable-next-line no-console
+  console.log(formatMigrateResult(r));
+}
+
+/**
  * `crumb copy-artifacts <session-ulid|vN> --to <dest>`
  *
  * Copy frozen artifacts (game.html / spec.md / DESIGN.md / tuning.json / ...) out of
@@ -757,6 +772,8 @@ Usage:
   crumb copy-artifacts <session-id|vN> --to <dest>
                                           # copy frozen artifacts (game.html, spec.md, ...) into <dest>
                                           # Bagelcode submission: crumb copy-artifacts <demo-ulid> --to ./demo/
+  crumb migrate [--dry-run]                # move legacy <cwd>/sessions/ → ~/.crumb/projects/<id>/sessions/
+                                          # idempotent; --dry-run previews
 
 Flags (run):
   --preset <name>     load .crumb/presets/<name>.toml. e.g. bagelcode-cross-3way / mock /
@@ -830,6 +847,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       break;
     case 'copy-artifacts':
       await cmdCopyArtifacts(args);
+      break;
+    case 'migrate':
+      await cmdMigrate(args);
       break;
     case 'help':
     case '--help':
