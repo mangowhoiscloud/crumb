@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "crumb": {
+      "command": "npx",
+      "args": ["tsx", "src/mcp-server.ts"],
+      "env": {
+        "CRUMB_AMBIENT_HARNESS": "claude-code"
+      }
+    }
+  }
+}

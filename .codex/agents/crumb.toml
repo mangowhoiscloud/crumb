@@ -83,11 +83,9 @@ Codex 는 Markdown 선호하지만 XML 도 parse 가능 (wiki/references/bagelco
 """
 
 [mcp_servers.crumb]
-# v3 S11: Crumb 자체를 MCP server 로 expose. claude.ai / Cursor / 외부 client 도 호출 가능.
+# v3 S11: Crumb MCP server — 7 NL-triggered tools shared by Claude Code / Codex / Gemini.
+# Auto-registers: crumb_recommend_preset / crumb_session_status / crumb_explain_kind /
+# crumb_suggest_next_action / crumb_diagnose_faults / crumb_doctor_environment / crumb_export_transcript.
 command = "npx"
 args = ["tsx", "src/mcp-server.ts"]
-
-[skills]
-config = { description = "preset 추천 helper", source = "src/helpers/config.ts" }
-debug  = { description = "F1-F7 routing 장애 진단", source = "src/helpers/debug.ts" }
-doctor = { description = "환경 점검 (3 host OAuth + dep)", source = "src/helpers/doctor.ts" }
+env = { CRUMB_AMBIENT_HARNESS = "codex" }
