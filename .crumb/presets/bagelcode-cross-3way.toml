@@ -2,7 +2,12 @@
 #
 # 메일 verbatim 정조준: "Claude Code, Codex, Gemini CLI 등 다양한 에이전트를 동시에 사용".
 # coordinator/planner-lead/builder-fallback = ambient (entry harness 따라감).
-# builder = Codex (구현), verifier = Gemini (검증, multimodal screenshot grading).
+# builder    = Codex                 (구현)
+# verifier   = Gemini CLI            (검증, multimodal screenshot grading)
+# researcher = Gemini SDK (v3.3, ★)  (gameplay video → mechanic extraction;
+#                                     gemini-cli has p1-unresolved video bugs,
+#                                     so the SDK route is the deterministic path
+#                                     for native YouTube URL ingestion @ 10fps)
 # cross-provider self-bias mitigation (NeurIPS 2024 self-recognition cure).
 #
 # Resolve order (per [[bagelcode-system-architecture-v3]] §5.1):
@@ -26,6 +31,15 @@ sandwich = "agents/coordinator.md"
 [actors.planner-lead]
 sandwich = "agents/planner-lead.md"
 
+# researcher (v3.3): ★ 명시 — 비디오 evidence = Google Gemini SDK
+# (gemini-cli 의 비디오 인식이 4 closed/p1-unresolved bug — #1556, #1691, #3379, #15634 — 라
+#  SDK 직호출이 deterministic 경로. 이 actor 만 SDK 로 묶어 planner-lead 는 ambient 유지.)
+[actors.researcher]
+sandwich = "agents/researcher.md"
+harness  = "gemini-sdk"
+provider = "google"
+model    = "gemini-3-1-pro"
+
 # builder: ★ 명시 — 구현 = OpenAI Codex
 [actors.builder]
 sandwich = "agents/builder.md"
@@ -34,11 +48,13 @@ provider = "openai"
 model    = "gpt-5.5-codex"
 
 # verifier: ★ 명시 — 검증 = Google Gemini (multimodal screenshot grading)
+# v3.3 model bump: 2.5-pro → 3.1-pro (10fps frame sampling for fast action,
+# 1M input context, parity with researcher's video evidence stream).
 [actors.verifier]
 sandwich = "agents/verifier.md"
 harness  = "gemini-cli"
 provider = "google"
-model    = "gemini-2.5-pro"
+model    = "gemini-3-1-pro"
 
 # builder-fallback: 명시 없음 → ambient (Codex 죽었을 때 같은 sandwich, Claude 변형)
 [actors.builder-fallback]
@@ -58,11 +74,14 @@ code_review_protocol          = "skills/code-review-protocol.md"
 parallel_dispatch             = "skills/parallel-dispatch.md"
 subagent_spawn                = "skills/subagent-spawn.md"
 
-# Specialists (planner-lead 내부 step inline)
+# Specialists (planner-lead 내부 step inline; v3.3: research 는 별도 actor 로 분리됨)
 [specialists.planner-lead]
-concept   = "agents/specialists/concept-designer.md"
-research  = "agents/specialists/researcher.md"
-design    = "agents/specialists/visual-designer.md"
+concept = "agents/specialists/concept-designer.md"
+design  = "agents/specialists/visual-designer.md"
+# game-design.md (envelope + video evidence schema + DESIGN.md synth format) 는
+# 4+ actor 가 inline-read 하는 binding contract — researcher / planner-lead /
+# builder / builder-fallback / verifier 모두 사용.
+contract = "agents/specialists/game-design.md"
 
 # Verifier mode (CourtEval inline 4 sub-step)
 [verifier]
@@ -70,9 +89,11 @@ mode                     = "courteval"
 adaptive_stop_threshold  = 1.0
 sub_steps                = ["grader", "critic", "defender", "regrader"]
 
-# Routing rules ([[bagelcode-system-architecture-v3]] §8.1)
+# Routing rules ([[bagelcode-system-architecture-v3]] §8.1, v3.3 researcher inserted)
+# Two-phase planner: phase A (Socratic + Concept) → researcher (video evidence) →
+# phase B (resumed planner: Design + Synth) → builder → qa_check → verifier.
 [routing]
-flow                = ["coordinator", "planner-lead", "builder", "qa_check", "verifier"]
-escalate_on_fail    = "builder-fallback"
-escalate_on_stuck   = 5
-adaptive_stop       = true
+flow              = ["coordinator", "planner-lead", "researcher", "planner-lead", "builder", "qa_check", "verifier"]
+escalate_on_fail  = "builder-fallback"
+escalate_on_stuck = 5
+adaptive_stop     = true
