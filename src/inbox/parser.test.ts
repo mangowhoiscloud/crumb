@@ -136,6 +136,73 @@ describe('inbox parser', () => {
     });
   });
 
+  // /append (v3.2 G4 — sandwich override)
+
+  it('/append <text> writes broadcast sandwich_append (no target_actor)', () => {
+    const m = parseInboxLine('/append always emit kind=note before kind=verify.result', SID);
+    expect(m).toMatchObject({
+      kind: 'user.intervene',
+      data: { sandwich_append: 'always emit kind=note before kind=verify.result' },
+    });
+    expect(m?.data?.target_actor).toBeUndefined();
+  });
+
+  it('/append @<actor> <text> scopes the append to that actor', () => {
+    const m = parseInboxLine('/append @builder use phaser 3.80 only', SID);
+    expect(m).toMatchObject({
+      kind: 'user.intervene',
+      data: { target_actor: 'builder', sandwich_append: 'use phaser 3.80 only' },
+    });
+    expect(m?.body).toBeUndefined();
+  });
+
+  it('/append with empty body returns null (no-op)', () => {
+    expect(parseInboxLine('/append', SID)).toBeNull();
+    expect(parseInboxLine('/append   ', SID)).toBeNull();
+  });
+
+  it('/append @<unknown-actor> falls through to broadcast append (literal text)', () => {
+    const m = parseInboxLine('/append @nobody do thing', SID);
+    expect(m).toMatchObject({
+      kind: 'user.intervene',
+      data: { sandwich_append: '@nobody do thing' },
+    });
+    expect(m?.data?.target_actor).toBeUndefined();
+  });
+
+  // /note (free-form annotation, kind=note)
+
+  it('/note <text> becomes kind=note with body', () => {
+    const m = parseInboxLine('/note watching for cache hit ratio', SID);
+    expect(m).toMatchObject({
+      from: 'user',
+      kind: 'note',
+      body: 'watching for cache hit ratio',
+    });
+    expect(m?.data).toBeUndefined();
+  });
+
+  it('/note with empty body returns null', () => {
+    expect(parseInboxLine('/note', SID)).toBeNull();
+  });
+
+  // /redo (alias for free-text user.intervene)
+
+  it('/redo <body> aliases free-text user.intervene', () => {
+    const m = parseInboxLine('/redo fix the score formula', SID);
+    expect(m).toMatchObject({
+      kind: 'user.intervene',
+      body: 'fix the score formula',
+    });
+    expect(m?.data).toBeUndefined();
+  });
+
+  it('/redo without args still emits user.intervene (no body)', () => {
+    const m = parseInboxLine('/redo', SID);
+    expect(m).toMatchObject({ kind: 'user.intervene' });
+    expect(m?.body).toBeUndefined();
+  });
+
   // Unknown slash
 
   it('unknown slash command falls through to user.intervene with original line', () => {

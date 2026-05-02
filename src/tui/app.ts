@@ -26,6 +26,7 @@ import { initialState, type CrumbState } from '../state/types.js';
 import type { Message } from '../protocol/types.js';
 import { readAll, tail } from '../transcript/reader.js';
 import { TranscriptWriter } from '../transcript/writer.js';
+import { parseInboxLine } from '../inbox/parser.js';
 
 import { formatActorList, formatRow, formatStatus } from './format.js';
 
@@ -124,7 +125,8 @@ export async function runTui(opts: TuiOptions): Promise<void> {
     right: 0,
     height: 3,
     tags: true,
-    label: ' /approve /veto /redo /note /pause /resume /q ',
+    label:
+      ' /approve /veto /pause /resume /goto /swap /reset-circuit /append /note /redo /q · @actor msg ',
     border: { type: 'line' },
     style: { border: { fg: 'gray' } },
     inputOnFocus: true,
@@ -187,30 +189,18 @@ export async function runTui(opts: TuiOptions): Promise<void> {
   });
 
   async function handleCommand(input: string): Promise<void> {
-    const m = input.match(/^\/(\w+)\s*(.*)$/);
-    const cmdName = m?.[1] ?? '';
-    const arg = m?.[2] ?? '';
-    if (cmdName === 'q' || cmdName === 'quit') {
+    // TUI-local action: /q and /quit terminate the screen, not the session.
+    const quit = input.match(/^\/(q|quit)\b/i);
+    if (quit) {
       shutdown();
       return;
     }
-    const map: Record<string, Message['kind']> = {
-      approve: 'user.approve',
-      veto: 'user.veto',
-      redo: 'user.intervene',
-      note: 'note',
-      pause: 'user.pause',
-      resume: 'user.resume',
-      intervene: 'user.intervene',
-    };
-    const kind = map[cmdName];
-    if (!kind) return;
-    await writer.append({
-      session_id: sessionId,
-      from: 'user',
-      kind,
-      body: arg || undefined,
-    });
+    // Everything else delegates to the inbox parser so the TUI slash bar and
+    // headless inbox.txt share one grammar (full data field passthrough —
+    // target_actor, goto, swap, reset_circuit, actor, sandwich_append).
+    const draft = parseInboxLine(input, sessionId);
+    if (!draft) return;
+    await writer.append(draft);
   }
 
   // Global keys
