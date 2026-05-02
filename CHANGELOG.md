@@ -4,6 +4,21 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — v3.1 Multi-host harness pivot (2026-05-02)
+
+Universal identity layer + sandwich Markdown unification + multi-host entry verifier. Closes the "host-aware control harness" loop opened by v3.
+
+- **`CRUMB.md`** (repo root, 174 lines) — Crumb runtime identity, host-agnostic. Sibling of `AGENTS.md` (Linux Foundation Agentic AI Foundation contributor identity); the two have separate responsibilities — `AGENTS.md` tells contributors how to work on this repo, `CRUMB.md` tells the host harness what Crumb is. 11 architecture invariants, 5 actor + 3 specialist + 5 skill flow, 39 kind schema, multi-host entry table, preset philosophy, universal Don't / Must.
+- **`wiki/references/bagelcode-multi-host-harness-research-2026.md`** (~700 lines, 9 part) — research basis for the pivot. Part 1: 7 frontier cases verbatim (bkit-claude-code / claude-flow / contains-studio/agents / openclaw skills/coding-agent / hermes-agent / Linux Foundation AGENTS.md / gamestudio-subagents). Part 2: 7×6 dim matrix. Part 3: 5 핵심 발견 (host 위 universal control = D + F 둘 뿐). Part 4: Crumb 3-tier identity 청사진. Part 5: 차용/회피/신설 매트릭스. Part 6: 1차 5 결정. Part 7: context hierarchy 추가 4 사례 (Claude Code memory `@path` import / Cursor rules / Spec-kit `.specify/` / Gemini CLI extensions). Part 8: `.crumb/` 재정렬 3 옵션 비교 (절충안 권장). Part 9: 추가 5 결정.
+- **Host entries import CRUMB.md + AGENTS.md as universal identity prelude**: `.codex/agents/crumb.toml` (developer_instructions §0), `.gemini/extensions/crumb/GEMINI.md` (header banner), `.gemini/extensions/crumb/commands/crumb.toml` (prompt §0). Pattern source: Spec-kit `.specify/memory/constitution.md` referenced by every host integration.
+- **`crumb init` command** (`src/helpers/init.ts` + `src/cli.ts`) — multi-host entry verifier, distinct from `crumb doctor`. Verifies `CRUMB.md` / `AGENTS.md` + per-host entries (`.claude/skills/crumb`, `.codex/agents`, `.gemini/extensions/crumb`). Subcommands: `crumb init` (default = check all), `--host claude|codex|gemini`, `--format human|json` (human is default; json for scripts/CI). Exits non-zero on missing files. 7 vitest specs.
+
+### Changed — v3.1
+
+- **5 sandwiches converted from XML-in-Markdown wrapper to claude-code style pure Markdown** (per Part 7 contains-studio/agents + Linux Foundation AGENTS.md + multi-host research): `agents/coordinator.md` (routing-rules v3 — `build → qa_check → verifier`), `agents/planner-lead.md` (handoff target = `builder`, v2 `engineering-lead` retired), `agents/builder.md`, `agents/verifier.md`, `agents/builder-fallback.md` (builder substitute, v2 engineering-lead substitute retired). Tokenizer-friendly imperatives preserved: heading-as-command (`## Don't`, `## Must`, `## Reminders`), imperative bullets (❌ / STOP / Don't try), blockquote emphasis. All Korean narrative removed for English consistency. Ref: `wiki/references/bagelcode-multi-host-harness-research-2026.md` §Part 5.
+- **`AGENTS.md`** updated to Linux Foundation Agentic AI Foundation v3 standard — 11 invariants (added v3: actor split / 3-tuple binding / user-controlled preset), file map updated for v3 (builder/verifier split, qa-runner.ts, preset-loader.ts, helpers/, multi-host entries), forbidden + must lists v3-aligned.
+- **`.claude/skills/crumb/SKILL.md`** References section now imports `CRUMB.md` + `AGENTS.md` as the first two reference targets — the host loads them before any actor sandwich.
+
 ### Added — v3 Multi-host × (harness × provider × model) tuple (in progress)
 
 - **System architecture v3 lock** (`wiki/concepts/bagelcode-system-architecture-v3.md`) — Multi-host 4 entry (Claude Code + Codex CLI + Gemini CLI + headless), (harness × provider × model) 3-tuple actor binding with ambient fallback, 5 actor (coordinator / planner-lead / **builder** / **verifier** / builder-fallback) + 3 specialist + 5 skill, 3-layer scoring (reducer auto + qa_check effect + verifier CourtEval), MCP server (Provider) for cross-host self-hosted exposure, auth-manager (`/crumb doctor`) for environment readiness, persistence boost (`crumb resume <session-id>` + adapter session-id metadata + flock). Replaces v2 `bagelcode-system-architecture.md` §1-§2 topology; v2 §3-§9 absorbed.
