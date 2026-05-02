@@ -17,6 +17,31 @@ The v3.3 researcher had two paths: video → real Gemini SDK, no-video → **emp
 - **Tests**: 294/294 (was 293; +2 reducer specs for video/no-video routing, -1 stub adapter spec, +1 error-path adapter spec). Builds on PR #41's OpenHands #5500 regression specs.
 - The runtime sandwich `agents/researcher.md` already documented step 1+3 text-only fallback (3 reference games × 3 actionable lessons grounded in wiki) — no change needed there. The fix is in routing + adapter behavior so that path actually executes.
 
+### Changed — Rule 6 G-D composite-gaming AND-gate (D1 ≥ 3 AND D5 ≥ 3) (2026-05-02)
+
+Implements **G-D** of the scoring+ratchet frontier survey (`wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md` §7 P1). Closes the last open frontier gap from the survey (G-C length normalization remains, queued for post-deadline).
+
+**Compensatory aggregation gap**: the existing aggregate-floor check (`aggregate ≥ 24 → PASS`) is OR-gate — any combination summing to 24 passes. Without per-dimension floors, the builder can game cheap-to-saturate deterministic dims (D2 exec / D6 portability — typically 5 each from `qa-check-effect` ground truth) and overshadow weak LLM-judge dims (D1 spec_fit / D5 quality). Example: `D1=2 + D2=5 + D3=5 + D4=5 + D5=2 + D6=5` sums to **24 → PASS** even though the builder is failing on the two LLM-judge dimensions that capture spec compliance and player UX.
+
+**Rule 6 enforcement**: when verifier emits `verdict='PASS'` AND (`D1.score < 3` OR `D5.score < 3`), record `composite_gaming_d1_d5_below_minimum` violation and demote PASS → PARTIAL. FAIL/PARTIAL verdicts are unchanged (the gaming case only inflates PASS). Composes correctly with Rule 4 (cross-provider self-bias) — both fire and the violation list captures both signals.
+
+**Threshold 3/5 (60%), not 4/5**: judge variance σ≈0.6 per Zheng et al. NeurIPS 2023 MT-Bench analysis. 4/5 floor produces too many false negatives at current judge noise. Tightening to 4/5 is queued for P2 once extended-thinking adopters lower variance (Snell ICLR 2025 backing).
+
+**Frontier convergence on AND-gate per-dim floor** (release/PASS gate, not training-signal aggregation):
+- **SWE-bench Verified 2024** — pass/fail binary (test ground truth)
+- **RewardBench v2** (Lambert AI2 2025 §4.2) — explicit "per-category to prevent compensatory averaging masking safety regressions"
+- **LiveCodeBench** (Jain ICLR 2025) — per-difficulty + per-contest min
+- **HELM Capabilities** (Liang Stanford 2024) — "per-scenario worst-case" headline
+- **OpenAI Preparedness Framework 2024-12** — AND-gate per-dim floor on capability eval
+- **Anthropic RSP v2 2024-10** — every safety dim must clear threshold
+
+Counter-evidence (DeepSeek-R1 GRPO, Constitutional AI/RLAIF) uses soft aggregation only for *training signal*, not deployment gate — the dual structure (soft training, hard floor gate) is 2025-2026 standard.
+
+Changes:
+- **`src/validator/anti-deception.ts`** — Rule 6 added below Rule 4. Snapshots verifier's *original* PASS verdict so Rule 4's downgrade doesn't mask the gaming signal in the violation list. Order: aggregate floor → Rule 4 → Rule 6 (composes idempotently).
+- **`src/validator/anti-deception.test.ts`** — +5 specs: D1<3 demotes, D5<3 demotes, both = 3 (at floor) stays PASS, FAIL stays FAIL, Rule 4 + Rule 6 compose. Suite total **318/318** (was 313 on main + 5).
+- **`wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md`** — G-A/G-B/G-D/G-E status flipped to "Defended" with PR refs; G-C remains the only open gap.
+
 ### Added — OpenHands #5500 regression specs for circuit_breaker user-exclusion (2026-05-02)
 
 Pin down the OpenHands #5500 invariant ("stuck-detector must exclude user messages") with explicit regression tests in `src/reducer/index.test.ts`. The property was already correctly implemented at `src/reducer/index.ts:{49,477,489}` (both breaker recovery and failure branches exclude `from='user'`/`'coordinator'`/`'system'`; `stuck_count` only increments on `kind=error`), but lacked a negative test guarding against future refactor regression.

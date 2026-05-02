@@ -284,4 +284,120 @@ describe('anti-deception validator', () => {
     expect(result.violations).toContain('researcher_video_evidence_missing');
     expect(result.scores.D5?.score).toBe(0);
   });
+
+  // ── Rule 6 — composite_gaming_d1_d5_below_minimum (G-D) ─────────────────────
+
+  it('Rule 6: D1 < 3 demotes PASS → PARTIAL even when aggregate ≥ 24', () => {
+    // Builder games D2/D6 (max from qa-check) to overshadow D1 weakness.
+    // Aggregate = 2+5+5+5+5+5 = 27 ≥ 24, but D1=2 fails the LLM-judge floor.
+    const result = checkAntiDeception({
+      judgeScore: judgeScore({
+        metadata: { provider: 'google' },
+        scores: {
+          D1: { score: 2, source: 'verifier-llm' },
+          D2: { score: 5, source: 'qa-check-effect' },
+          D3: { score: 5, source: 'verifier-llm', semantic: 5 },
+          D4: { score: 5, source: 'reducer-auto' },
+          D5: { score: 5, source: 'verifier-llm', quality: 5 },
+          D6: { score: 5, source: 'qa-check-effect' },
+          verdict: 'PASS',
+        },
+      }),
+      qaResult: { exec_exit_code: 0 },
+      autoScores: { D3_auto: 5, D4: 5, D5_auto: 5 },
+      builderProvider: 'openai',
+    });
+    expect(result.violations).toContain('composite_gaming_d1_d5_below_minimum');
+    expect(result.scores.verdict).toBe('PARTIAL');
+  });
+
+  it('Rule 6: D5 < 3 demotes PASS → PARTIAL', () => {
+    const result = checkAntiDeception({
+      judgeScore: judgeScore({
+        metadata: { provider: 'google' },
+        scores: {
+          D1: { score: 5, source: 'verifier-llm' },
+          D2: { score: 5, source: 'qa-check-effect' },
+          D3: { score: 5, source: 'verifier-llm', semantic: 5 },
+          D4: { score: 5, source: 'reducer-auto' },
+          D5: { score: 2, source: 'verifier-llm', quality: 2 },
+          D6: { score: 5, source: 'qa-check-effect' },
+          verdict: 'PASS',
+        },
+      }),
+      qaResult: { exec_exit_code: 0 },
+      autoScores: { D3_auto: 5, D4: 5, D5_auto: 2 },
+      builderProvider: 'openai',
+    });
+    expect(result.violations).toContain('composite_gaming_d1_d5_below_minimum');
+    expect(result.scores.verdict).toBe('PARTIAL');
+  });
+
+  it('Rule 6: D1 = 3 AND D5 = 3 (at the floor) stays PASS', () => {
+    const result = checkAntiDeception({
+      judgeScore: judgeScore({
+        metadata: { provider: 'google' },
+        scores: {
+          D1: { score: 3, source: 'verifier-llm' },
+          D2: { score: 5, source: 'qa-check-effect' },
+          D3: { score: 4, source: 'verifier-llm', semantic: 4 },
+          D4: { score: 5, source: 'reducer-auto' },
+          D5: { score: 3, source: 'verifier-llm', quality: 3 },
+          D6: { score: 5, source: 'qa-check-effect' },
+          verdict: 'PASS',
+        },
+      }),
+      qaResult: { exec_exit_code: 0 },
+      autoScores: { D3_auto: 4, D4: 5, D5_auto: 3 },
+      builderProvider: 'openai',
+    });
+    expect(result.violations).not.toContain('composite_gaming_d1_d5_below_minimum');
+    expect(result.scores.verdict).toBe('PASS');
+  });
+
+  it('Rule 6: FAIL stays FAIL even when D1/D5 fall below floor (idempotent)', () => {
+    const result = checkAntiDeception({
+      judgeScore: judgeScore({
+        metadata: { provider: 'google' },
+        scores: {
+          D1: { score: 1, source: 'verifier-llm' },
+          D2: { score: 5, source: 'qa-check-effect' },
+          D3: { score: 1, source: 'verifier-llm', semantic: 1 },
+          D4: { score: 5, source: 'reducer-auto' },
+          D5: { score: 1, source: 'verifier-llm', quality: 1 },
+          D6: { score: 5, source: 'qa-check-effect' },
+          verdict: 'FAIL',
+        },
+      }),
+      qaResult: { exec_exit_code: 0 },
+      autoScores: { D3_auto: 1, D4: 5, D5_auto: 1 },
+      builderProvider: 'openai',
+    });
+    // Rule 6 only fires on PASS (the gaming case). FAIL stays FAIL.
+    expect(result.violations).not.toContain('composite_gaming_d1_d5_below_minimum');
+    expect(result.scores.verdict).toBe('FAIL');
+  });
+
+  it('Rule 6: composes with Rule 4 — same-provider PASS with D1<3 stays PARTIAL via either rule', () => {
+    const result = checkAntiDeception({
+      judgeScore: judgeScore({
+        metadata: { provider: 'openai' }, // same as builder → Rule 4 fires
+        scores: {
+          D1: { score: 2, source: 'verifier-llm' }, // D1<3 → Rule 6 fires too
+          D2: { score: 5, source: 'qa-check-effect' },
+          D3: { score: 5, source: 'verifier-llm', semantic: 5 },
+          D4: { score: 5, source: 'reducer-auto' },
+          D5: { score: 5, source: 'verifier-llm', quality: 5 },
+          D6: { score: 5, source: 'qa-check-effect' },
+          verdict: 'PASS',
+        },
+      }),
+      qaResult: { exec_exit_code: 0 },
+      autoScores: { D3_auto: 5, D4: 5, D5_auto: 5 },
+      builderProvider: 'openai',
+    });
+    expect(result.violations).toContain('self_bias_risk_same_provider');
+    expect(result.violations).toContain('composite_gaming_d1_d5_below_minimum');
+    expect(result.scores.verdict).toBe('PARTIAL');
+  });
 });

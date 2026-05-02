@@ -131,11 +131,11 @@ related:
 
 | # | Gap | 영향 | 권고 |
 |---|---|---|---|
-| G-A | **Verifier self-bias 미강제** | `metadata.cross_provider`는 단순 관측, validator가 enforce 안 함. Ambient preset에서 builder=verifier 같은 모델일 때 PASS +14~22% 인플레이션 (Stureborg) | `anti-deception.ts`에 cross-provider 검증 추가: same-provider일 때 verdict 강등 |
-| G-B | **Goodhart drift cap 없음** | variance-based stop은 bias drift 감지 못함. round 4+에서 점수↑ vs 품질↓ divergence (DeepMind 2024) | iteration hard ceiling (e.g., max 4 rounds) 추가 |
-| G-C | **Length bias normalization 부재** | AlpacaEval LC 같은 길이 보정 없음. Verifier가 더 긴 spec.md / DESIGN.md 선호 가능 | spec / DESIGN token 길이를 verifier prompt에 explicit 노출 |
-| G-D | **Composite score gaming** | 6 dimension 단순 합산 → builder가 D2/D6 만족시키며 D1/D5 약점 가릴 수 있음 | D1+D5 minimum threshold (각 4/5 이상)을 aggregate threshold와 AND 결합 |
-| G-E | **Playwright optional → required** | 현재 htmlhint만 강제, headless run optional. SWE-bench 2025 / DeepSeek-R1 모두 exec gate 필수 | qa-runner에서 Playwright smoke run 의무화 (CI에 Chromium 80MB) |
+| G-A | ✅ **Defended** (PR #38, 2026-05-02) | Rule 4 `self_bias_risk_same_provider` 가 PASS → PARTIAL 강등 enforce. Stureborg EMNLP 2024 +14-22% inflation 차단. `bagelcode-cross-3way` preset 권장 path. |
+| G-B | ✅ **Already implemented** | `VERIFY_MAX=5` (`src/reducer/index.ts`) + variance-based adaptive_stop + ratchet regression — 3-layer cap. Goodhart drift round 4+ 차단. |
+| G-C | ⏸ **Open** (length bias normalization 부재) | AlpacaEval LC 같은 길이 보정 없음. Verifier 가 더 긴 spec.md / DESIGN.md 선호 가능 — token 길이 explicit 노출 권장 |
+| G-D | ✅ **Defended** (PR _TBD_, 2026-05-02) | Rule 6 `composite_gaming_d1_d5_below_minimum` — `aggregate ≥ 24 AND D1 ≥ 3 AND D5 ≥ 3` AND-gate. SWE-bench Verified / RewardBench v2 / OpenAI Preparedness / Anthropic RSP v2 수렴. Threshold 3/5: judge variance σ≈0.6 (Zheng NeurIPS 2023) — 4/5 false-negative 위험. |
+| G-E | ✅ **Defended** (PR #33, 2026-05-02) | Playwright real Chromium smoke + 3-way env contract (`CRUMB_QA_REQUIRE_PLAYWRIGHT=1` strict). SWE-bench top10 / Cognition Devin / DeepSeek-R1 정렬. CI strict gate 는 deadline 후 후속. |
 
 ---
 
@@ -148,9 +148,9 @@ related:
 
 ### P1 (다음 ratchet — validator 강화)
 
-3. **Cross-provider enforcement** (G-A). `anti-deception.ts`에 `builder.provider == verifier.provider`이면 `verdict` 한 단계 강등 (PASS → PARTIAL, PARTIAL → FAIL) 또는 metadata.cross_provider_required=true 시에만 PASS 인정.
-4. **Iteration hard ceiling** (G-B). `progress_ledger.iteration_count >= 4`이면 강제 done(adaptive_stop).
-5. **Composite gaming 방어** (G-D). aggregate >= 24 AND D1 >= 4 AND D5 >= 4 일 때만 PASS 허용.
+3. ✅ **Cross-provider enforcement** (G-A) — PR #38 ship. `anti-deception.ts` Rule 4: same-provider → PASS → PARTIAL.
+4. ✅ **Iteration hard ceiling** (G-B) — already `VERIFY_MAX=5` + variance + ratchet regression 3-layer.
+5. ✅ **Composite gaming 방어** (G-D) — PR _TBD_ ship. Rule 6: `aggregate ≥ 24 AND D1 ≥ 3 AND D5 ≥ 3`. Threshold 3/5 (4/5 대신) — judge variance σ≈0.6 (Zheng NeurIPS 2023) 고려한 frontier-aligned calibration; 4/5 tightening 은 extended-thinking 채택 후 P2.
 
 ### SKIP (frontier가 후퇴 중)
 
