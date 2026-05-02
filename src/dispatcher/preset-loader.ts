@@ -50,20 +50,6 @@ export interface PresetSpec {
     schema?: string;
   };
   actors: Record<string, ActorBinding>;
-  effects: Record<string, { tool: string; harness: Harness; provider: Provider }>;
-  skills: Record<string, string>;
-  specialists: Record<string, Record<string, string>>;
-  verifier: {
-    mode?: string;
-    adaptive_stop_threshold?: number;
-    sub_steps?: string[];
-  };
-  routing: {
-    flow?: string[];
-    escalate_on_fail?: string;
-    escalate_on_stuck?: number;
-    adaptive_stop?: boolean;
-  };
 }
 
 export interface AmbientContext {
@@ -215,14 +201,7 @@ export function loadPreset(
     actors[name] = resolveActor(name, rawActor, ambient);
   }
 
-  const effects =
-    (raw.effects as Record<string, { tool: string; harness: Harness; provider: Provider }>) ?? {};
-  const skills = (raw.skills as Record<string, string>) ?? {};
-  const specialists = (raw.specialists as Record<string, Record<string, string>>) ?? {};
-  const verifier = (raw.verifier as PresetSpec['verifier']) ?? {};
-  const routing = (raw.routing as PresetSpec['routing']) ?? {};
-
-  return { meta, actors, effects, skills, specialists, verifier, routing };
+  return { meta, actors };
 }
 
 /** Resolve a preset by name from .crumb/presets/<name>.toml relative to project root. */
