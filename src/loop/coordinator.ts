@@ -78,8 +78,8 @@ export interface RunOptions {
   extraAdapters?: Adapter[];
 }
 
-const WALL_CLOCK_HOOK_MS_DEFAULT = 24 * 60 * 1000; // 24 min
-const WALL_CLOCK_HARD_MS_DEFAULT = 30 * 60 * 1000; // 30 min
+const WALL_CLOCK_HOOK_MS_DEFAULT = Number(process.env.CRUMB_WALL_CLOCK_HOOK_MS) || 24 * 60 * 1000;
+const WALL_CLOCK_HARD_MS_DEFAULT = Number(process.env.CRUMB_WALL_CLOCK_HARD_MS) || 30 * 60 * 1000;
 
 export async function runSession(opts: RunOptions): Promise<{ state: CrumbState }> {
   await mkdir(opts.sessionDir, { recursive: true });
