@@ -100,21 +100,56 @@ tail -f sessions/<ulid>/transcript.jsonl | jq -r '
 
 ### 4. 사용자 자연어 개입 (running 중)
 
-session 진행 중 사용자가 자연어로 추가 입력하면:
+session 진행 중 사용자 개입은 3 표면 모두 동일 transcript line 으로 떨어짐 — routing 은 source 무관 (`agents/coordinator.md` Routing Rules 참조).
+
+**선호 표면**: 사용자가 명시 없으면 `inbox.txt` (이 skill 은 headless로 `crumb run` 을 spawn하므로 TUI 가 항상 떠있지는 않음).
+
+#### 표면 1 — `inbox.txt` (headless friendly)
 
 ```bash
 SESSION_ID="<active ulid>"
-TRANSCRIPT="sessions/$SESSION_ID/transcript.jsonl"
+echo "@builder use red/green palette only" >> sessions/$SESSION_ID/inbox.txt
+```
 
-KIND="user.intervene"  # 또는 user.veto / user.approve / user.pause / user.resume
-echo "{\"from\":\"user\",\"kind\":\"$KIND\",\"body\":\"<원문 그대로>\",\"data\":{\"target\":\"<infer: spec/tuning/design>\"}}" \
-  | CRUMB_TRANSCRIPT_PATH="$TRANSCRIPT" \
+500 ms 마다 watcher 가 한 줄씩 parse 해서 transcript 에 append. 이 skill 은 사용자가 자연어로 "빌더한테 빨강/초록만 쓰라고 해" 같은 입력을 하면 위 형식으로 변환 후 inbox 에 append.
+
+#### 표면 2 — TUI 슬래시 바 (사용자가 `crumb tui` 띄운 경우)
+
+```
+/approve            /veto <id>          /pause [@<a>] [reason]
+/resume [@<a>]      /goto <a> [body]    /swap <from>=<adapter>
+/reset-circuit <a|all>                  /append [@<a>] <text>
+/note <text>        /redo [body]        /q  /quit
+@<a> <body>         (free text mention)
+```
+
+TUI 와 inbox.txt 는 동일 grammar (`src/inbox/parser.ts`). 사용자 muscle memory 양방향 호환.
+
+#### 표면 3 — JSON event 직접 (low-level)
+
+```bash
+SESSION_ID="<active ulid>"
+echo '{"from":"user","kind":"user.intervene","body":"<원문>","data":{"target_actor":"builder","sandwich_append":"phaser 3.80 only"}}' \
+  | CRUMB_TRANSCRIPT_PATH="sessions/$SESSION_ID/transcript.jsonl" \
     CRUMB_SESSION_ID="$SESSION_ID" \
     CRUMB_SESSION_DIR="sessions/$SESSION_ID" \
     npx tsx src/index.ts event
 ```
 
-reducer 가 받아서 `progress.next_speaker` 를 갱신 (보통 planner-lead 로 회귀해서 spec.update 발행).
+#### `data` 필드 의미 (5 user.* 이벤트 공통)
+
+| `data.<key>` | 효과 (reducer 처리) |
+|---|---|
+| `target_actor: <actor>` | fact 가 `@<actor>` 로 태그됨 — 다음 `<actor>` spawn 의 sandwich 에 노출 (라우팅 변경 X) |
+| `goto: <actor>` | `next_speaker = <actor>` 강제 + 즉시 spawn (LangGraph `Command(goto)`) |
+| `swap: { from: <a>, to: <adapter> }` | `progress_ledger.adapter_override[a] = <adapter>` (Paperclip BYO swap) |
+| `reset_circuit: <a> \| true` | `circuit_breaker[<a>]` 클리어 (또는 `true` 시 전체 클리어) |
+| `sandwich_append: <text>` | fact `category='sandwich_append'` 추가 — dispatcher 가 이후 모든 매칭 spawn 의 시스템 프롬프트 에 concatenate (v3.2 G4) |
+| `actor: <actor>` (`user.pause` / `user.resume` 한정) | 글로벌 일시정지 대신 해당 actor 만 일시정지 / 해제 |
+
+> **Frontier 매핑**: LangGraph `Command(goto/update={...})` 53/60 + Paperclip BYO swap 38/60 + Codex `APPEND_SYSTEM.md` 38/60. 자세한 배경은 `wiki/synthesis/bagelcode-user-intervention-frontier-2026-05-02.md`.
+
+reducer 가 받아서 `progress.next_speaker` 를 갱신 (보통 planner-lead 로 회귀해서 spec.update 발행하거나, `data.goto` 면 명시 actor 로 직행).
 
 ### 5. 결과 surface
 

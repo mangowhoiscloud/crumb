@@ -46,7 +46,38 @@ For each routing decision:
 
 # 4. User intervention
 
-User natural language → kind=user.intervene (next spec/build 에 반영).
+3 표면 (TUI / inbox.txt / JSON event) 모두 동일 transcript line 으로 떨어짐. routing 은 source 무관 (`agents/coordinator.md` Routing Rules 참조).
+
+## 표면 1 — `inbox.txt` (Gemini CLI shell 친화)
+
+  echo "@verifier multimodal screenshot 검증 강화" >> $CRUMB_SESSION_DIR/inbox.txt
+  echo "/pause @builder waiting on color refinement" >> $CRUMB_SESSION_DIR/inbox.txt
+  echo "/append @verifier check D5 motion smoothness extra carefully" >> $CRUMB_SESSION_DIR/inbox.txt
+
+500 ms 마다 watcher 가 한 줄씩 parse. Grammar 는 `src/inbox/parser.ts` (TUI 슬래시 바 1:1 동일).
+
+## 표면 2 — TUI 슬래시 바 (`crumb tui`)
+
+  /approve  /veto <id>  /pause [@<a>] [reason]  /resume [@<a>]
+  /goto <a> [body]  /swap <from>=<adapter>  /reset-circuit <a|all>
+  /append [@<a>] <text>  /note <text>  /redo [body]  /q  /quit
+  @<a> <body>  (free-text mention)
+
+## 표면 3 — JSON event 직접
+
+  echo '{"from":"user","kind":"user.intervene","body":"<원문>","data":{"target_actor":"verifier"}}' \\
+    | npx tsx src/index.ts event
+
+## `data` 필드 의미
+
+  target_actor    fact 에 @<actor> 태그 (다음 <actor> spawn sandwich 에 노출)
+  goto            next_speaker 강제 + 즉시 spawn (LangGraph Command)
+  swap {from,to}  adapter_override[from] = to (Paperclip BYO swap)
+  reset_circuit   circuit_breaker 클리어 (actor 명 또는 true)
+  sandwich_append dispatcher 가 다음 spawn 부터 system prompt 에 concat (v3.2 G4)
+  actor           pause/resume 한정 — 글로벌 대신 해당 actor 만
+
+→ Frontier: LangGraph Command(goto/update={...}) 53/60, Paperclip 38/60, Codex APPEND_SYSTEM.md 38/60.
 
 # 5. Done
 
