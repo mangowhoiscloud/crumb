@@ -10,7 +10,7 @@ description: >-
   preset questions (use `crumb-config` skill).
 ---
 
-# /crumb-status — 진행 상황 + last events + scores
+# /crumb-status — progress + last events + scores
 
 Resolve the session id: prefer the most recent `sessions/<ulid>/` if not specified, else ask the user.
 

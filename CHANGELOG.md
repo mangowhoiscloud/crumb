@@ -4,6 +4,27 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Skills KO → EN translation pass (PR-C-2) (2026-05-03)
+
+Continues the KO→EN sweep started in PR-C-1 (sandwiches). This pass covers Claude Code skills + procedural workflow skills.
+
+Translated body prose in:
+- `.claude/skills/crumb/SKILL.md` — full body rewrite (~1538 KO chars). 3-layer separation, when-to-trigger, in-flight branching, How to Run §1-§6, Surface 1-4 user-intervention guide, `data` field semantics, Preset table, Actor split, Multi-host table, Swap cookbook (static / dynamic / startup / one-glance), enforcement (do NOT), References. KO triggers in frontmatter `description` + `when_to_use` + body trigger lists are retained verbatim — they activate Korean user input recognition.
+- `.claude/skills/serve-game/SKILL.md` — Examples section ("열었어" → "Opened …", "그만하려면" → "to stop").
+- `.claude/skills/crumb-suggest/SKILL.md` — H1 ("다음 사용자 액션 추천" → "recommend the next user action").
+- `.claude/skills/crumb-doctor/SKILL.md` — H1 + "추천 preset (현재 환경 기준)" → "Recommended preset (for the current environment)".
+- `.claude/skills/crumb-status/SKILL.md` — H1 ("진행 상황" → "progress").
+- `.claude/skills/crumb-config/SKILL.md` — H1 + "선택은 사용자 …" → "The choice is yours …".
+- `.claude/skills/crumb-debug/SKILL.md` — H1 ("F1-F7 routing 장애 진단" → "F1-F7 routing fault diagnosis").
+- `.claude/skills/crumb-export/SKILL.md` — "호환" → "compatible with".
+- `skills/{code-review-protocol,verification-before-completion,tdd-iron-law,subagent-spawn}.md` frontmatter `when_to_use` — all 4 KO sentences rewritten in EN.
+
+Intentionally retained KO (trigger phrases — translating would break LLM activation on Korean user input):
+- All `.claude/skills/*/SKILL.md` `description` + `when_to_use` frontmatter (Korean pitch / status / preset / debug / model / export trigger samples).
+- Body trigger lists that quote user-input examples in `"..."`.
+
+After this PR every skill body is fully EN; the only KO in skills is intentional trigger keywords. PR-C-3..N (wiki, ~33k KO chars across 31+ files) follow.
+
 ## [0.4.0] - 2026-05-03
 
 ### Changed — Version mapping v3.x → v0.x + bump to 0.4.0 (PR-Z) (2026-05-03)

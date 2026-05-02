@@ -164,14 +164,14 @@ Or aggressively: `pkill -f 'http.server.*876[0-9]'` for the 8760-8769 default ra
 3. detect `<script type="module">` → multi-file
 4. `python3 -m http.server 8765` in artifact dir, background
 5. `open http://localhost:8765/`
-6. report: "고양이 퍼즐 (cat-tap-match3-v1, session 01KQMS9...) 열었어. http://localhost:8765/ — 그만하려면 `pkill -f 'http.server 8765'`"
+6. report: "Opened 고양이 퍼즐 (cat-tap-match3-v1, session 01KQMS9...) at http://localhost:8765/ — to stop: `pkill -f 'http.server 8765'`"
 
 **"그 단순한 demo 열어줘"** →
 1. find candidates, grep `single|demo|simple`
 2. pick most recent `game.html` (single-file)
 3. detect no `type="module"` → single-file
 4. `open <path>` directly
-5. report: "Drag-Color-Catcher (session 01KQMM7...) 열었어 — file:// 직접 오픈"
+5. report: "Opened Drag-Color-Catcher (session 01KQMM7...) — file:// direct open"
 
 ## Reference
 

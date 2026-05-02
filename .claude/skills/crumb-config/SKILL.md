@@ -10,7 +10,7 @@ description: >-
   `crumb-status` skill).
 ---
 
-# /crumb-config — preset 추천
+# /crumb-config — preset recommendation
 
 When the user asks for a preset suggestion in natural language:
 
@@ -23,7 +23,7 @@ cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 npx tsx src/index.ts config "<user's natural-language intent>"
 ```
 
-Show the output verbatim — `recommended` line + `reason` + alternatives table. End with: "선택은 사용자 — `--preset <name>` 으로 적용". Do NOT auto-pick.
+Show the output verbatim — `recommended` line + `reason` + alternatives table. End with: "The choice is yours — apply via `--preset <name>`." Do NOT auto-pick.
 
 Explicit slash form: type `/crumb-config <intent>` to invoke directly.
 

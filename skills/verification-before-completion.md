@@ -3,7 +3,7 @@ name: verification-before-completion
 description: |
   Evidence-over-claims gate for Crumb's verifier. Ported from obra/superpowers (176k⭐) skills/verification-before-completion.
   Read inline by `agents/verifier.md` before emitting kind=judge.score.
-when_to_use: verifier spawn 안에서 grader/critic/defender/regrader 진입 전 + judge.score emit 직전 final check
+when_to_use: inline-read inside the verifier spawn before grader/critic/defender/regrader and as a final check just before judge.score is emitted
 source: https://github.com/obra/superpowers (verification-before-completion skill family)
 adapted_for: Crumb v0.1 verifier (CourtEval + 3-layer scoring + anti-deception)
 ---

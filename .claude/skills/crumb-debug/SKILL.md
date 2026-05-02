@@ -9,7 +9,7 @@ description: >-
   events). Read-only. Returns table + suggested actions per detected fault.
 ---
 
-# /crumb-debug — F1-F7 routing 장애 진단
+# /crumb-debug — F1-F7 routing fault diagnosis
 
 When the user reports the session is stuck / broken:
 
