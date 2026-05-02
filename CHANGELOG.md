@@ -4,6 +4,32 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added / Fixed — studio adapter wiring + pre-spawn doctor + cache ratio fix (PR-E) (2026-05-03)
+
+Live debugging session `01KQNAK1CXTBDEBX2WP2QQK891` surfaced three interlocking bugs where the studio "create session" form was silently dropping the user's adapter pick, the dispatcher was spawning known-broken adapters (codex exit=1 within 3s, three times in a row), and the studio's cache hit rate rendered as `4553319%`.
+
+`src/helpers/adapter-health.ts` (NEW) — fast pre-spawn probe (`probeAdapter(id)`):
+- Mock + SDK adapters short-circuit (no I/O).
+- Binary adapters: `<binary> --version` with 2s timeout + auth-hint check (codex requires `~/.codex/auth.json`).
+- Cached per adapter id for the lifetime of the dispatcher.
+- 4 unit tests covering mock, SDK env, unknown id, cache.
+
+`src/dispatcher/live.ts` — pre-spawn health gate:
+- Before invoking `adapter.spawn()`, calls `probeAdapter(adapterId)` (skipped for already-claude-local + mock).
+- On unhealthy: emits `kind=note body="adapter X unhealthy (reason) — substituting claude-local for actor Y"` with `metadata.tool=adapter-health-probe@v1`, then swaps `adapterId` to `claude-local`.
+- Frontier-aligned with Paperclip "atomic checkout" pattern (don't burn worker on a known-broken target).
+
+`packages/studio/src/server.ts` — `/api/crumb/run` accepts `adapter` body field:
+- Forwards as `--adapter <id>` flag to the spawned `crumb run`.
+- Pre-spawn probe via existing `probeAdapters()` — refuses launch with HTTP 409 + structured `{ error, install_hint, auth_hint, available }` when the picked adapter is missing, so the modal can prompt.
+
+`packages/studio/src/metrics.ts` — cache_ratio formula fix:
+- Old: `cache_read / tokens_in` (rendered 1000%+ when cached prefix dwarfed miss tokens).
+- New: `cache_read / (cache_read + cache_write + tokens_in)` per Anthropic API conventions (`usage.input_tokens` = miss, `cache_read_input_tokens` = hit, `cache_creation_input_tokens` = write).
+- Existing test updated + 1 new test asserts ratio stays ≤ 1.0 even when cache_write is non-zero.
+
+Verification: `npm run lint && npm run typecheck && npm run format:check && npm test && npm run build` — 428 tests pass (was 423 + 5 new).
+
 ### Changed — qa-check multi-file bundle support, single-file size cap removed (PR-D) (2026-05-03)
 
 Aligns deterministic qa-check with the multi-file PWA envelope (`agents/specialists/game-design.md` §1.1). Single-file profile retired in v0.4.0; `MAX_OWN_CODE_BYTES = 60_000` no longer makes sense as a fail gate.

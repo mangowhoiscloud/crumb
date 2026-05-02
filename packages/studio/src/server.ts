@@ -680,10 +680,12 @@ async function serveCrumbRun(
   }
   let goal: string;
   let preset: string | undefined;
+  let adapter: string | undefined;
   try {
     const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
       goal?: unknown;
       preset?: unknown;
+      adapter?: unknown;
     };
     if (typeof body.goal !== 'string' || body.goal.trim().length === 0) {
       res.statusCode = 400;
@@ -693,6 +695,7 @@ async function serveCrumbRun(
     }
     goal = body.goal.trim();
     if (typeof body.preset === 'string' && body.preset.length > 0) preset = body.preset;
+    if (typeof body.adapter === 'string' && body.adapter.length > 0) adapter = body.adapter;
   } catch {
     res.statusCode = 400;
     res.setHeader('content-type', 'text/plain; charset=utf-8');
@@ -700,15 +703,50 @@ async function serveCrumbRun(
     return;
   }
 
+  // Pre-spawn adapter health gate. The studio form lets the user pick an
+  // adapter, but if its binary is missing or auth is gone the runtime burns
+  // 5-15s before exit 1 and trips the circuit-breaker for nothing. Refuse the
+  // launch up front so the modal can prompt the user to fix install/auth or
+  // pick a different adapter.
+  if (adapter && adapter !== 'mock') {
+    const adapters = await probeAdapters();
+    const target = adapters.find((a) => a.id === adapter);
+    if (!target?.installed) {
+      res.statusCode = 409;
+      res.setHeader('content-type', 'application/json');
+      res.end(
+        JSON.stringify({
+          ok: false,
+          error: 'adapter_unavailable',
+          adapter,
+          reason: target ? 'binary not installed' : `unknown adapter id: ${adapter}`,
+          install_hint: target?.install_hint,
+          auth_hint: target?.auth_hint,
+          available: adapters.filter((a) => a.installed).map((a) => a.id),
+        }),
+      );
+      return;
+    }
+  }
+
   const { spawn } = await import('node:child_process');
   const args = ['tsx', 'src/index.ts', 'run', '--goal', goal];
   if (preset) args.push('--preset', preset);
+  if (adapter) args.push('--adapter', adapter);
   const child = spawn('npx', args, { cwd: repoRoot, detached: true, stdio: 'ignore' });
   child.unref();
 
   res.statusCode = 202;
   res.setHeader('content-type', 'application/json');
-  res.end(JSON.stringify({ ok: true, pid: child.pid, goal, preset: preset ?? null }));
+  res.end(
+    JSON.stringify({
+      ok: true,
+      pid: child.pid,
+      goal,
+      preset: preset ?? null,
+      adapter: adapter ?? null,
+    }),
+  );
 }
 
 /**

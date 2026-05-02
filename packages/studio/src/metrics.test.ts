@@ -38,7 +38,24 @@ describe('computeMetrics', () => {
     expect(r.tokens_out).toBe(1500);
     expect(r.cache_read).toBe(2000);
     expect(r.cost_usd).toBeCloseTo(0.17);
-    expect(r.cache_ratio).toBeCloseTo(2000 / 3000);
+    // cache_ratio = read / (read + write + miss). Here cache_write=0 implicit,
+    // so ratio = 2000 / (2000 + 0 + 3000) = 0.4. The earlier read/miss formula
+    // returned 0.667 but rendered 1000%+ in real Anthropic API responses where
+    // cache_read dwarfs the miss tokens.
+    expect(r.cache_ratio).toBeCloseTo(2000 / 5000);
+  });
+
+  it('cache_ratio honors cache_write tokens (full prefill denominator)', () => {
+    const r = computeMetrics([
+      m({
+        from: 'planner-lead',
+        kind: 'spec',
+        metadata: { tokens_in: 100, cache_read: 8000, cache_write: 2000 },
+      }),
+    ]);
+    // 8000 / (8000 + 2000 + 100) = 0.7920... — never exceeds 1.0
+    expect(r.cache_ratio).toBeCloseTo(8000 / 10100);
+    expect(r.cache_ratio).toBeLessThan(1);
   });
 
   it('counts errors and audit events', () => {
