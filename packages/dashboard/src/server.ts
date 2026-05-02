@@ -30,10 +30,11 @@
  * SessionWatcher already abstracts via chokidar.
  */
 
-import { appendFile, readFile } from 'node:fs/promises';
+import { appendFile, readFile, readdir, stat } from 'node:fs/promises';
 import http from 'node:http';
 import { join } from 'node:path';
 import { URL } from 'node:url';
+import { watch as fsWatch, createReadStream } from 'node:fs';
 
 import { DASHBOARD_HTML } from './dashboard-html.js';
 import { EventBus, type LiveEvent } from './event-bus.js';
@@ -91,6 +92,16 @@ export async function startDashboardServer(
     const inboxMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/inbox$/);
     if (req.method === 'POST' && inboxMatch) {
       return void serveInboxAppend(req, res, watcher, inboxMatch[1]!);
+    }
+    // /api/sessions/:id/logs/:actor (GET — full log snapshot, all spawn-*.log files concatenated)
+    const logsMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/logs\/([^/]+)$/);
+    if (req.method === 'GET' && logsMatch) {
+      return void serveActorLogs(res, watcher, logsMatch[1]!, logsMatch[2]!);
+    }
+    // /api/sessions/:id/logs/:actor/stream (GET — SSE live tail of <actor>'s newest spawn log)
+    const logsStreamMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/logs\/([^/]+)\/stream$/);
+    if (req.method === 'GET' && logsStreamMatch) {
+      return void serveActorLogsStream(req, res, watcher, logsStreamMatch[1]!, logsStreamMatch[2]!);
     }
     res.statusCode = 404;
     res.end('not found');
@@ -261,6 +272,169 @@ async function serveInboxAppend(
   res.statusCode = 202; // accepted; the watcher will surface the resulting events via SSE
   res.setHeader('content-type', 'application/json');
   res.end(JSON.stringify({ ok: true, inbox_path: inboxPath, line }));
+}
+
+/**
+ * Resolve <session>/agent-workspace/<actor>/ and list spawn-*.log files
+ * (sorted, newest last). Used by both the snapshot + stream endpoints.
+ */
+async function findActorLogFiles(
+  watcher: SessionWatcher,
+  sessionId: string,
+  actor: string,
+): Promise<{ dir: string; files: string[] } | null> {
+  const match = watcher.snapshot().find((s) => s.session_id === sessionId);
+  if (!match) return null;
+  if (!/^[a-z0-9-]+$/i.test(actor)) return null;
+  const sessionDir = sessionDirFromTranscript(match.transcript_path);
+  const dir = join(sessionDir, 'agent-workspace', actor);
+  let entries: string[];
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return { dir, files: [] };
+  }
+  const files = entries.filter((f) => f.startsWith('spawn-') && f.endsWith('.log')).sort();
+  return { dir, files };
+}
+
+async function serveActorLogs(
+  res: http.ServerResponse,
+  watcher: SessionWatcher,
+  sessionId: string,
+  actor: string,
+): Promise<void> {
+  const found = await findActorLogFiles(watcher, sessionId, actor);
+  if (!found) {
+    res.statusCode = 404;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end(`session or actor not found: ${sessionId}/${actor}`);
+    return;
+  }
+  if (found.files.length === 0) {
+    res.statusCode = 200;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.setHeader('cache-control', 'no-cache');
+    res.end(`(no spawn log yet for ${actor} in this session)`);
+    return;
+  }
+  // Concatenate all spawn logs newest-last so the dashboard sees natural order.
+  const parts: string[] = [];
+  for (const f of found.files) {
+    try {
+      const content = await readFile(join(found.dir, f), 'utf8');
+      parts.push(`╭── ${f} ──╮\n${content}\n`);
+    } catch {
+      // skip unreadable file
+    }
+  }
+  res.statusCode = 200;
+  res.setHeader('content-type', 'text/plain; charset=utf-8');
+  res.setHeader('cache-control', 'no-cache');
+  res.end(parts.join('\n'));
+}
+
+async function serveActorLogsStream(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  watcher: SessionWatcher,
+  sessionId: string,
+  actor: string,
+): Promise<void> {
+  const found = await findActorLogFiles(watcher, sessionId, actor);
+  if (!found) {
+    res.statusCode = 404;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end(`session or actor not found: ${sessionId}/${actor}`);
+    return;
+  }
+  res.setHeader('content-type', 'text/event-stream');
+  res.setHeader('cache-control', 'no-cache, no-transform');
+  res.setHeader('connection', 'keep-alive');
+  res.setHeader('x-accel-buffering', 'no');
+
+  let closed = false;
+  const send = (event: string, data: unknown): void => {
+    if (closed) return;
+    try {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    } catch {
+      closed = true;
+    }
+  };
+
+  // Pick the newest log file as the live target. New spawns will create new
+  // files; we re-resolve every time chokidar fires `add` on the parent dir.
+  let currentFile: string | null = null;
+  let currentSize = 0;
+
+  const sendChunkSince = async (file: string, fromOffset: number): Promise<number> => {
+    try {
+      const stats = await stat(join(found.dir, file));
+      if (stats.size <= fromOffset) return fromOffset;
+      const stream = createReadStream(join(found.dir, file), {
+        encoding: 'utf8',
+        start: fromOffset,
+        end: stats.size - 1,
+      });
+      let buf = '';
+      for await (const chunk of stream) buf += chunk;
+      if (buf.length > 0) send('chunk', { file, text: buf });
+      return stats.size;
+    } catch {
+      return fromOffset;
+    }
+  };
+
+  const refresh = async (): Promise<void> => {
+    const refound = await findActorLogFiles(watcher, sessionId, actor);
+    if (!refound || refound.files.length === 0) return;
+    const newest = refound.files[refound.files.length - 1]!;
+    if (newest !== currentFile) {
+      // Switched to a newer spawn — reset offset and announce.
+      currentFile = newest;
+      currentSize = 0;
+      send('rotate', { file: newest });
+    }
+    currentSize = await sendChunkSince(newest, currentSize);
+  };
+
+  // Initial heartbeat + first refresh.
+  send('heartbeat', { ts: new Date().toISOString() });
+  await refresh();
+
+  // chokidar is overkill here — a small fs.watch on the actor dir + 500ms
+  // poll fallback covers WSL / NFS the same way the main watcher does.
+  let watcher_handle: ReturnType<typeof fsWatch> | null = null;
+  try {
+    watcher_handle = fsWatch(found.dir, { persistent: false }, () => {
+      void refresh();
+    });
+  } catch {
+    // dir doesn't exist yet — polling-only path covers it.
+  }
+  const poll = setInterval(() => {
+    void refresh();
+  }, 500);
+  const heartbeat = setInterval(() => {
+    send('heartbeat', { ts: new Date().toISOString() });
+  }, 15_000);
+
+  const cleanup = (): void => {
+    closed = true;
+    clearInterval(poll);
+    clearInterval(heartbeat);
+    if (watcher_handle) {
+      try {
+        watcher_handle.close();
+      } catch {
+        // ignore
+      }
+    }
+  };
+  req.on('close', cleanup);
+  req.on('error', cleanup);
 }
 
 function serveStream(

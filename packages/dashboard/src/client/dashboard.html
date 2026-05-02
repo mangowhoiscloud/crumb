@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crumb · Live Dashboard</title>
+<style>__CSS__</style>
+</head>
+<body>
+
+<aside class="sessions">
+  <h2>Sessions</h2>
+  <div id="sess-list"></div>
+</aside>
+
+<main>
+  <header class="summary">
+    <div>
+      <h1 id="header-title"><span class="pill muted">no session</span></h1>
+      <div class="goal" id="header-goal">Pick a session on the left to track its progress in real time.</div>
+    </div>
+    <dl class="metrics-row">
+      <div><dt>events</dt><dd id="m-events">—</dd></div>
+      <div><dt>tokens</dt><dd id="m-tokens">—</dd></div>
+      <div><dt>cache</dt><dd id="m-cache">—</dd></div>
+      <div><dt>cost</dt><dd id="m-cost">—</dd></div>
+      <div><dt>p95 lat</dt><dd id="m-p95">—</dd></div>
+      <div><dt>err / audit</dt><dd id="m-err">—</dd></div>
+    </dl>
+  </header>
+
+  <div id="audit-banner"></div>
+
+  <nav class="view-tabs" id="view-tabs">
+    <button data-view="pipeline" class="active">Pipeline</button>
+    <button data-view="logs">Logs</button>
+  </nav>
+
+  <div class="view-pane active" id="view-pipeline">
+    <section class="dag" id="dag-section">
+      <h2>Pipeline DAG · weaving</h2>
+      <svg class="dag-svg" id="dag-svg" viewBox="0 0 720 180" preserveAspectRatio="xMidYMid meet"></svg>
+    </section>
+
+    <section class="swimlane" id="swimlane">
+      <div class="empty" id="swim-empty">Waiting for events…</div>
+    </section>
+
+    <section class="scorecard" id="scorecard"></section>
+
+    <section class="console-input" id="console-section">
+      <div class="console-row">
+        <input type="text" id="console-line" placeholder="Type a slash command or @actor mention — e.g. /goto verifier, @builder use red palette, /pause" autocomplete="off" disabled>
+        <button id="console-send" disabled>Send</button>
+      </div>
+      <div class="console-hints" id="console-hints"></div>
+      <div class="console-feedback" id="console-feedback"></div>
+    </section>
+  </div>
+
+  <div class="view-pane" id="view-logs">
+    <section class="logs">
+      <div class="logs-actor-list" id="logs-actor-list"></div>
+      <div class="logs-pane">
+        <div class="logs-toolbar">
+          <span id="logs-current-actor" style="color:var(--ink);font-family:ui-monospace,monospace;">—</span>
+          <input type="text" id="logs-filter" placeholder="grep… (substring match)">
+          <label><input type="checkbox" id="logs-follow" checked> follow</label>
+          <button id="logs-clear">clear</button>
+          <button id="logs-copy">copy</button>
+        </div>
+        <div class="logs-content" id="logs-content">
+          <div class="logs-empty">Pick an actor on the left to tail its spawn logs in real time.</div>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<aside class="detail" id="detail">
+  <button class="close" id="detail-close" aria-label="Close detail">×</button>
+  <h3 id="detail-title">Event detail</h3>
+  <div id="detail-pipeline-pos" style="font-size:11px;color:var(--ink-subtle);margin-bottom:8px;font-family:ui-monospace,monospace;"></div>
+  <div id="detail-nav" style="display:flex;gap:6px;margin-bottom:8px;">
+    <button id="detail-prev" style="background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);padding:3px 10px;border-radius:var(--r-sm);font-size:11px;cursor:pointer;">↑ parent</button>
+    <button id="detail-next" style="background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);padding:3px 10px;border-radius:var(--r-sm);font-size:11px;cursor:pointer;">↓ children</button>
+  </div>
+  <pre id="detail-meta"></pre>
+  <h3>Body</h3>
+  <pre id="detail-body"></pre>
+  <h3>Data</h3>
+  <pre id="detail-data"></pre>
+  <h3>Conversation thread (parent → this → children)</h3>
+  <div id="detail-thread" style="font-size:11px;font-family:ui-monospace,monospace;max-height:200px;overflow:auto;border:1px solid var(--hairline);border-radius:var(--r-md);padding:8px;background:var(--canvas);"></div>
+  <h3>Sandwich preview</h3>
+  <div id="sandwich-actor-bar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+  <pre id="sandwich-content" style="display:none;max-height:360px;overflow:auto;"></pre>
+  <h3>Send message to this actor</h3>
+  <div style="display:flex;gap:6px;">
+    <input type="text" id="detail-msg" placeholder="@actor or /command or text" style="flex:1;background:var(--canvas);color:var(--ink);border:1px solid var(--hairline);border-radius:var(--r-md);padding:6px 10px;font-family:ui-monospace,monospace;font-size:12px;outline:none;">
+    <button id="detail-msg-send" style="background:var(--primary);color:var(--ink);border:none;border-radius:var(--r-md);padding:6px 12px;font-size:11px;cursor:pointer;">Send</button>
+  </div>
+  <div id="detail-msg-feedback" style="font-size:10px;color:var(--ink-subtle);margin-top:4px;font-family:ui-monospace,monospace;min-height:12px;"></div>
+</aside>
+
+<script>__JS__</script>
+</body>
+</html>

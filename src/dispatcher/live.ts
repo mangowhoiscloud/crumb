@@ -197,6 +197,33 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
 
       const timedOut = controller.signal.aborted;
 
+      // v3.4 ArgoCD-style logs — persist full stdout / stderr to disk under
+      // <session>/agent-workspace/<actor>/spawn-<ts>.log so the dashboard's
+      // log viewer can tail it. The transcript-side `kind=note` summary
+      // remains a 4KB preview; the full stream lives on disk and is offered
+      // via the dashboard's GET /api/sessions/:id/logs/:actor stream + snapshot
+      // endpoints. Best-effort: a write failure must NOT break the spawn.
+      const logTs = new Date().toISOString().replace(/[:.]/g, '-');
+      const logPath = resolve(
+        deps.sessionDir,
+        'agent-workspace',
+        effect.actor,
+        `spawn-${logTs}.log`,
+      );
+      try {
+        await mkdir(resolve(deps.sessionDir, 'agent-workspace', effect.actor), {
+          recursive: true,
+        });
+        const logBody =
+          `=== adapter ${adapterId} spawn @ ${new Date().toISOString()} ` +
+          `(exit=${result.exitCode}, ${result.durationMs}ms${timedOut ? ', timed out' : ''}) ===\n\n` +
+          `--- stdout ---\n${result.stdout ?? ''}\n\n--- stderr ---\n${result.stderr ?? ''}\n`;
+        await writeFile(logPath, logBody, 'utf8');
+      } catch {
+        // log persistence is observability-only — keep the dispatcher silent
+        // on disk failure so the spawn lifecycle isn't disrupted.
+      }
+
       // v3.3+ observability — always capture truncated stdout/stderr as
       // kind=note so an exit-0-but-silent spawn (planner-lead emits no
       // transcript events) is still diagnosable. Without this, exit=0 with
