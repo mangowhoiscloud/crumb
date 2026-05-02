@@ -10,7 +10,13 @@ import type { SessionMetrics } from './metrics.js';
 
 export type LiveEvent =
   | { type: 'append'; session_id: string; msg: DashboardMessage }
-  | { type: 'session_start'; session_id: string; goal: string | null; preset: string | null }
+  | {
+      type: 'session_start';
+      session_id: string;
+      project_id: string;
+      goal: string | null;
+      preset: string | null;
+    }
   | { type: 'state'; session_id: string; metrics: SessionMetrics }
   | { type: 'heartbeat'; ts: string };
 
