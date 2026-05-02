@@ -14,6 +14,16 @@ const STUCK_THRESHOLD = 5;
 const ADAPTIVE_STOP_VARIANCE = 1.0;
 const CIRCUIT_OPEN_AT = 3;
 
+// v3.2 budget guardrails — hard caps. Wiki: bagelcode-budget-guardrails.md §"P0".
+const RESPEC_MAX = 3; // max # of spec.update events before done(too_many_respec)
+const VERIFY_MAX = 5; // max # of judge.score events before done(too_many_verify)
+const TOKEN_BUDGET_HOOK = 40_000; // hook(token_budget) at this threshold
+const TOKEN_BUDGET_HARD = 50_000; // done(token_exhausted) at this threshold
+
+// v3.2 ratchet (autoresearch P4 keep/revert) — score regression beyond this many
+// aggregate points triggers done(ratchet_revert) to stop unbounded loops.
+const RATCHET_REGRESSION_THRESHOLD = 2;
+
 export interface ReduceResult {
   state: CrumbState;
   effects: Effect[];
@@ -56,6 +66,14 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
   const effects: Effect[] = [];
 
   switch (event.kind) {
+    case 'session.start': {
+      // Capture wall-clock start once (loop watchdog SIGTERMs after 30min).
+      if (!next.progress_ledger.session_started_at) {
+        next.progress_ledger.session_started_at = event.ts;
+      }
+      break;
+    }
+
     case 'goal': {
       next.task_ledger.goal = event.body ?? '';
       next.task_ledger.facts.push({
@@ -83,6 +101,16 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           text: `AC: ${item}`,
           category: 'spec',
         });
+      }
+      // v3.2 budget cap: respec_count > RESPEC_MAX → done(too_many_respec).
+      // Only spec.update counts as a respec (initial spec is the first try).
+      if (event.kind === 'spec.update') {
+        next.progress_ledger.respec_count += 1;
+        if (next.progress_ledger.respec_count > RESPEC_MAX) {
+          next.done = true;
+          effects.push({ type: 'done', reason: 'too_many_respec' });
+          break;
+        }
       }
       next.progress_ledger.next_speaker = 'builder';
       const adapter = pickAdapter(next, 'builder');
@@ -135,6 +163,27 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           aggregate,
           verdict,
         });
+      }
+      // v3.2 budget cap: verify_count > VERIFY_MAX → done(too_many_verify).
+      next.progress_ledger.verify_count += 1;
+      if (next.progress_ledger.verify_count > VERIFY_MAX) {
+        next.done = true;
+        effects.push({ type: 'done', reason: 'too_many_verify' });
+        break;
+      }
+      // v3.2 ratchet (autoresearch P4 keep/revert): track best aggregate so far;
+      // RATCHET_REGRESSION_THRESHOLD-point drop triggers auto-terminate to prevent
+      // unbounded score-oscillation loops.
+      if (verdict && aggregate > 0) {
+        const prev = next.progress_ledger.max_aggregate_so_far;
+        if (aggregate >= prev) {
+          next.progress_ledger.max_aggregate_so_far = aggregate;
+          next.progress_ledger.max_aggregate_msg_id = event.id;
+        } else if (prev - aggregate >= RATCHET_REGRESSION_THRESHOLD) {
+          next.done = true;
+          effects.push({ type: 'done', reason: 'ratchet_revert' });
+          break;
+        }
       }
       // Adaptive stop: if last 2 verdicts have variance < 1.0, force done.
       if (shouldAdaptiveStop(next.progress_ledger.score_history)) {
@@ -387,10 +436,30 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
       break;
   }
 
-  // v3.2 G1+G5 — pause filter. If global pause OR per-actor pause matches, demote spawn
-  // to hook so the dispatcher doesn't burn an LLM call. Routing survives in next_speaker
-  // for `user.resume` to re-fire later. user.resume case handles its own re-spawn after
-  // clearing paused state, so we skip it here.
+  // v3.2 token budget (PR #12) — accumulate across every event regardless of kind.
+  // Hook fires once at the 40K crossing (transition guard via prev/next compare),
+  // hard cap at 50K terminates the session. Determinism: event.metadata only.
+  const tokensThisEvent = (event.metadata?.tokens_in ?? 0) + (event.metadata?.tokens_out ?? 0);
+  if (tokensThisEvent > 0) {
+    const prevTotal = state.progress_ledger.session_token_total;
+    const nextTotal = prevTotal + tokensThisEvent;
+    next.progress_ledger.session_token_total = nextTotal;
+    if (!next.done && nextTotal >= TOKEN_BUDGET_HARD) {
+      next.done = true;
+      effects.push({ type: 'done', reason: 'token_exhausted' });
+    } else if (!next.done && prevTotal < TOKEN_BUDGET_HOOK && nextTotal >= TOKEN_BUDGET_HOOK) {
+      effects.push({
+        type: 'hook',
+        kind: 'token_budget',
+        body: `session token total ${nextTotal} crossed ${TOKEN_BUDGET_HOOK} (hard cap ${TOKEN_BUDGET_HARD})`,
+        data: { tokens: nextTotal, threshold: TOKEN_BUDGET_HOOK, hard_cap: TOKEN_BUDGET_HARD },
+      });
+    }
+  }
+
+  // v3.2 G1+G5 pause filter — demote spawn to hook so dispatcher doesn't burn an LLM
+  // call. Routing survives in next_speaker for `user.resume` to re-fire later. Runs
+  // AFTER token budget so budget hooks / done effects are not filtered.
   if (event.kind !== 'user.resume') {
     const globalPause = next.progress_ledger.paused;
     const pausedActors = next.progress_ledger.paused_actors;
