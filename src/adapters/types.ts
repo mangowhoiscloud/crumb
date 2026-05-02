@@ -5,6 +5,24 @@
 
 import type { Actor } from '../protocol/types.js';
 
+/**
+ * Normalized progress event surfaced by adapters when the underlying CLI
+ * emits stream-json. Keeps the dispatcher provider-agnostic — each adapter
+ * maps its CLI's vocabulary onto this shape.
+ */
+export interface ProgressEvent {
+  /** What kind of step the agent is taking. */
+  kind: 'tool_use' | 'tool_result' | 'message_delta' | 'thinking' | 'system';
+  /** Tool name (Read / Write / Bash / Edit / TodoWrite / ...). Optional for non-tool events. */
+  tool?: string;
+  /** Short summary suitable for the studio strip — e.g. "Write artifacts/game/index.html". ≤ 200 chars. */
+  summary: string;
+  /** Optional path the tool touched. */
+  path?: string;
+  /** Wall-clock at emit (ms since spawn start). Adapters compute when forwarding. */
+  elapsed_ms?: number;
+}
+
 export interface SpawnRequest {
   actor: Actor;
   sessionDir: string;
@@ -51,6 +69,16 @@ export interface SpawnRequest {
    * omit the call — the spawn then falls back to wall-clock-only timeout.
    */
   onStdoutActivity?: () => void;
+  /**
+   * Optional progress callback. Adapters parse their CLI's stream-json
+   * output (claude-local: `--output-format stream-json`, codex-local:
+   * `experimental_json`, gemini-local: `--show-progress` events) into a
+   * normalized shape and forward each tool_use / write / progress notice.
+   * The dispatcher emits these as `kind=tool.call` so the studio can render
+   * a real-time per-step strip — without this, the user only sees one
+   * `agent.wake` and then 200s of silence until the actor stops.
+   */
+  onProgress?: (evt: ProgressEvent) => void;
   /**
    * Optional provider id for the actor's preset binding ('anthropic',
    * 'openai', 'google', 'none'). Forwarded into the subprocess env as

@@ -914,16 +914,56 @@ selectSession = function(id) {
 let feedPaused = false;
 const FEED_MAX_LINES = 2000; // bumped from 800 — stream-json rendering produces 3-5× line density
 
+// v0.4.1 PR-F D — newest-first ordering + repeat-collapse badge.
+// Behavior change: feed grows TOP-DOWN (newest at top, oldest scrolling
+// off the bottom). Same actor + same kindClass + same body within a 60s
+// window collapses into the existing top row with a "×N" badge in the
+// upper-right. Reset on any non-matching event so a different kind reopens
+// the timeline cleanly.
+function feedRepeatKey(meta) {
+  return [meta.actor || '', meta.kindClass || '', (meta.body || '').slice(0, 200)].join('|');
+}
+
 function appendFeedLine(meta) {
   const root = $('console-feed-body');
   if (!root) return;
   if (feedPaused) return;
   const ts = (meta.ts || new Date().toISOString()).split('T')[1]?.slice(0, 8) || '--:--:--';
+
+  // Repeat-collapse: if the most-recent (top) row matches this event's
+  // signature within the dedup window, bump its ×N badge instead of
+  // inserting a new row.
+  const top = root.firstChild;
+  const key = feedRepeatKey(meta);
+  if (top && top.dataset && top.dataset.repeatKey === key) {
+    const lastTs = Number(top.dataset.lastTs || 0);
+    const now = Date.now();
+    if (now - lastTs < 60_000) {
+      const count = (Number(top.dataset.repeatCount) || 1) + 1;
+      top.dataset.repeatCount = String(count);
+      top.dataset.lastTs = String(now);
+      let badge = top.querySelector('.feed-repeat-badge');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'feed-repeat-badge';
+        top.appendChild(badge);
+      }
+      badge.textContent = '×' + count;
+      // Refresh the timestamp on the row so the user sees it's still active.
+      const tsEl = top.querySelector('.feed-ts');
+      if (tsEl) tsEl.textContent = ts;
+      return;
+    }
+  }
+
   const cls = ['feed-line'];
   if (meta.kindClass) cls.push('kind-' + meta.kindClass);
   if (meta.stderr) cls.push('stderr');
   const div = document.createElement('div');
   div.className = cls.join(' ');
+  div.dataset.repeatKey = key;
+  div.dataset.repeatCount = '1';
+  div.dataset.lastTs = String(Date.now());
   const tsSpan = document.createElement('span');
   tsSpan.className = 'feed-ts';
   tsSpan.textContent = ts;
@@ -941,9 +981,15 @@ function appendFeedLine(meta) {
   div.appendChild(tsSpan);
   div.appendChild(actorSpan);
   div.appendChild(bodySpan);
-  root.appendChild(div);
-  while (root.childNodes.length > FEED_MAX_LINES) root.removeChild(root.firstChild);
-  root.scrollTop = root.scrollHeight;
+  // Newest-first: prepend instead of append, drop oldest from the bottom.
+  if (root.firstChild) {
+    root.insertBefore(div, root.firstChild);
+  } else {
+    root.appendChild(div);
+  }
+  while (root.childNodes.length > FEED_MAX_LINES) root.removeChild(root.lastChild);
+  // Pin scroll to the top so the latest row is visible.
+  root.scrollTop = 0;
   // Re-collect matches so the counter reflects the newly-streamed line. Keep cursor in place.
   if (grepState.feed.query) {
     refreshGrepNav('feed', root, $('console-feed-grep-count'), $('console-feed-grep-prev'), $('console-feed-grep-next'));
@@ -970,6 +1016,11 @@ function classifyKindForFeed(kind) {
   if (kind === 'build' || kind === 'qa.result') return 'build';
   if (kind === 'judge.score' || kind === 'verify.result' || kind.startsWith('step.judge')) return 'judge';
   if (kind.startsWith('handoff.')) return 'handoff';
+  // PR-F B — stream-json tap surfaces tool_use as kind=tool.call. Render as
+  // assistant-text style so it stands out from system notes but blends with
+  // the actor's own narration. Repeat-collapse (PR-F D) handles the volume.
+  if (kind === 'tool.call') return 'tool-call';
+  if (kind === 'artifact.created') return 'build';
   if (kind === 'session.start' || kind === 'session.end' || kind === 'note') return 'system';
   return '';
 }
@@ -1147,22 +1198,37 @@ async function spawnNewCrumbRun() {
   const body = { goal };
   // v3.5: preset is set from chip selection; per-actor binding from advanced grid.
   if (newSessionForm.preset) body.preset = newSessionForm.preset;
-  // (Per-actor binding payload reserved for a future /api/crumb/run extension —
-  // current backend honours `preset` only. We still surface the bindings UI so
-  // the user can preview the resolved harness × model per actor.)
+  // PR-F D — adapter picker. When set, server forwards `--adapter <id>` to
+  // `crumb run` so every actor goes through that adapter regardless of
+  // preset / config.toml. Combined with the server's pre-spawn probe, the
+  // user gets HTTP 409 + install/auth hints when the adapter isn't ready.
+  const adapterSel = $('new-session-adapter');
+  const adapterPick = adapterSel?.value?.trim();
+  if (adapterPick) body.adapter = adapterPick;
   try {
     const res = await fetch('/api/crumb/run', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     });
+    if (res.status === 409) {
+      // Server refused because the adapter probe failed. Surface the install
+      // hint inline so the user can fix it without leaving the form.
+      const j = await res.json().catch(() => ({}));
+      const hint = j.install_hint ? '  install: ' + j.install_hint : '';
+      const auth = j.auth_hint ? '  auth: ' + j.auth_hint : '';
+      const avail = j.available?.length ? '  available: ' + j.available.join(', ') : '';
+      fb.textContent = '✗ adapter ' + j.adapter + ' unavailable (' + j.reason + ')' + hint + auth + avail;
+      fb.className = 'console-feedback err';
+      return;
+    }
     if (!res.ok) {
       fb.textContent = '✗ ' + res.status + ': ' + (await res.text()).slice(0, 200);
       fb.className = 'console-feedback err';
       return;
     }
     const j = await res.json();
-    fb.textContent = '✓ pid=' + j.pid + ' — session will appear shortly';
+    fb.textContent = '✓ pid=' + j.pid + (j.adapter ? ' (' + j.adapter + ')' : '') + ' — session will appear shortly';
     fb.className = 'console-feedback ok';
     goalEl.value = '';
     setTimeout(() => {
@@ -1666,6 +1732,28 @@ function renderStreamJsonLine(raw) {
 
 let adapterCache = [];
 
+// PR-F D — populate the new-session adapter dropdown from the latest probe.
+// Disabled options for missing binaries so the user can see the gap (and
+// the install hint shows up if they pick an unavailable one and submit).
+function renderAdapterPicker() {
+  const sel = $('new-session-adapter');
+  if (!sel) return;
+  const current = sel.value;
+  const opts = ['<option value="">(default — preset or ambient)</option>'];
+  for (const a of adapterCache) {
+    const installed = a.installed && a.authenticated !== false;
+    const label = a.display_name + (installed ? '' : ' (not installed)');
+    opts.push(
+      '<option value="' + escapeHTML(a.id) + '"' + (installed ? '' : ' disabled') + '>' +
+      escapeHTML(label) + '</option>'
+    );
+  }
+  sel.innerHTML = opts.join('');
+  // Restore selection if still valid + still installed.
+  const stillValid = adapterCache.some(a => a.id === current && a.installed && a.authenticated !== false);
+  if (stillValid) sel.value = current;
+}
+
 async function refreshAdapterList() {
   const root = $('adapter-list');
   if (!root) return;
@@ -1676,6 +1764,7 @@ async function refreshAdapterList() {
     renderAdapterList();
     renderPresetChips(); // re-disable preset chips that reference unavailable adapters
     renderBindingsGrid();
+    renderAdapterPicker();
   } catch (err) {
     root.innerHTML = '<div class="adapter-empty">probe failed: ' + escapeHTML(err.message) + '</div>';
   }

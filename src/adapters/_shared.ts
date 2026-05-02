@@ -15,7 +15,7 @@
 
 import { spawn, type ChildProcess } from 'node:child_process';
 
-import type { SpawnRequest } from './types.js';
+import type { ProgressEvent, SpawnRequest } from './types.js';
 
 /**
  * Default action-oriented kickoff prompt — used when the dispatcher passes
@@ -103,4 +103,144 @@ export function checkAdapterHealth(cmd: string): Promise<{ ok: boolean; reason?:
       else resolve({ ok: false, reason: `${cmd} --version exited ${code}: ${out}` });
     });
   });
+}
+
+/**
+ * Line-buffered chunk splitter. Adapters call `feed(buf)` with each stdout
+ * chunk; the splitter yields zero or more complete lines (newline-terminated)
+ * and buffers any incomplete trailing line for the next call. Necessary
+ * because Node child_process emits arbitrary chunk sizes — a JSON event
+ * may straddle multiple chunks. Returns a closure with two methods:
+ *
+ *   const split = makeLineSplitter();
+ *   child.stdout.on('data', (b) => split.feed(b, line => parse(line)));
+ *   child.on('close', () => split.flush(line => parse(line)));
+ */
+export function makeLineSplitter(): {
+  feed: (buf: Buffer | string, onLine: (line: string) => void) => void;
+  flush: (onLine: (line: string) => void) => void;
+} {
+  let pending = '';
+  return {
+    feed(buf, onLine) {
+      pending += typeof buf === 'string' ? buf : buf.toString('utf-8');
+      let nl = pending.indexOf('\n');
+      while (nl >= 0) {
+        const line = pending.slice(0, nl).replace(/\r$/, '');
+        pending = pending.slice(nl + 1);
+        if (line.length > 0) onLine(line);
+        nl = pending.indexOf('\n');
+      }
+    },
+    flush(onLine) {
+      const tail = pending.replace(/\r$/, '');
+      pending = '';
+      if (tail.length > 0) onLine(tail);
+    },
+  };
+}
+
+/**
+ * Parse one stream-json line into a normalized ProgressEvent.
+ *
+ * Provider conventions covered:
+ *  - claude-local: {"type":"assistant","message":{"content":[{"type":"tool_use","name":"Write","input":{"file_path":"..."}}]}}
+ *                  {"type":"assistant","message":{"content":[{"type":"thinking","thinking":"..."}]}}
+ *                  {"type":"user","message":{"content":[{"type":"tool_result","content":"..."}]}}
+ *  - codex-local : {"event":"agent.message","content":"..."} / {"event":"tool_call","name":"...","arguments":...}
+ *                  (codex experimental_json shape — coverage best-effort)
+ *  - gemini-local: similar to claude (gemini CLI 2026 follows the Anthropic
+ *                  stream-json schema in its `--show-progress` mode).
+ *
+ * Returns null when the line isn't recognizable as a progress event (system
+ * banners, hook events, init blobs). The caller drops nulls silently.
+ */
+export function parseClaudeStreamProgress(line: string): ProgressEvent | null {
+  let evt: unknown;
+  try {
+    evt = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (!evt || typeof evt !== 'object') return null;
+  const e = evt as Record<string, unknown>;
+  // Anthropic / Claude Code stream-json:
+  //   { type: "assistant", message: { content: [ {type:"tool_use", name, input}, ...] } }
+  if (e.type === 'assistant' && e.message && typeof e.message === 'object') {
+    const msg = e.message as { content?: unknown };
+    const content = Array.isArray(msg.content)
+      ? (msg.content as Array<Record<string, unknown>>)
+      : [];
+    for (const c of content) {
+      if (c.type === 'tool_use') {
+        const tool = typeof c.name === 'string' ? c.name : 'tool';
+        const input = (c.input ?? {}) as Record<string, unknown>;
+        const path =
+          (typeof input.file_path === 'string' && input.file_path) ||
+          (typeof input.path === 'string' && input.path) ||
+          undefined;
+        const summary = path ? `${tool} ${path}` : tool;
+        return {
+          kind: 'tool_use',
+          tool,
+          summary: summary.slice(0, 200),
+          ...(path ? { path } : {}),
+        };
+      }
+      if (c.type === 'thinking') {
+        return { kind: 'thinking', summary: 'thinking' };
+      }
+    }
+  }
+  if (e.type === 'user' && e.message && typeof e.message === 'object') {
+    const msg = e.message as { content?: unknown };
+    const content = Array.isArray(msg.content)
+      ? (msg.content as Array<Record<string, unknown>>)
+      : [];
+    for (const c of content) {
+      if (c.type === 'tool_result') {
+        return { kind: 'tool_result', summary: 'tool_result' };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Codex CLI experimental_json shape. Best-effort: codex emits diverse event
+ * names ("agent_reasoning", "tool_call", "function_call_output"). We only
+ * surface the user-meaningful ones.
+ */
+export function parseCodexStreamProgress(line: string): ProgressEvent | null {
+  let evt: unknown;
+  try {
+    evt = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (!evt || typeof evt !== 'object') return null;
+  const e = evt as Record<string, unknown>;
+  const kind = (typeof e.event === 'string' && e.event) || (typeof e.type === 'string' && e.type);
+  if (!kind) return null;
+  if (kind === 'tool_call' || kind === 'function_call' || kind === 'shell_call') {
+    const tool = typeof e.name === 'string' ? e.name : kind;
+    const args = (e.arguments ?? e.args ?? {}) as Record<string, unknown>;
+    const path =
+      (typeof args.path === 'string' && args.path) ||
+      (typeof args.file === 'string' && args.file) ||
+      undefined;
+    return {
+      kind: 'tool_use',
+      tool,
+      summary: (path ? `${tool} ${path}` : tool).slice(0, 200),
+      ...(path ? { path } : {}),
+    };
+  }
+  if (kind === 'tool_result' || kind === 'function_call_output' || kind === 'shell_call_output') {
+    return { kind: 'tool_result', summary: kind };
+  }
+  if (kind === 'agent_reasoning' || kind === 'reasoning') {
+    return { kind: 'thinking', summary: 'thinking' };
+  }
+  return null;
 }

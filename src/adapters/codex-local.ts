@@ -19,6 +19,8 @@ import {
   attachAbortHandler,
   buildAdapterEnv,
   checkAdapterHealth,
+  makeLineSplitter,
+  parseCodexStreamProgress,
   resolvePrompt,
 } from './_shared.js';
 
@@ -46,9 +48,18 @@ export class CodexLocalAdapter implements Adapter {
       });
       let stdout = '';
       let stderr = '';
+      const splitter = makeLineSplitter();
+      const onProgress = req.onProgress;
+      const t0 = start;
       child.stdout.on('data', (b) => {
         stdout += b.toString();
         req.onStdoutActivity?.();
+        if (onProgress) {
+          splitter.feed(b, (line) => {
+            const evt = parseCodexStreamProgress(line);
+            if (evt) onProgress({ ...evt, elapsed_ms: Date.now() - t0 });
+          });
+        }
       });
       child.stderr.on('data', (b) => {
         stderr += b.toString();
@@ -58,6 +69,12 @@ export class CodexLocalAdapter implements Adapter {
       const detachAbort = attachAbortHandler(child, req.signal);
       child.on('close', (code) => {
         detachAbort();
+        if (onProgress) {
+          splitter.flush((line) => {
+            const evt = parseCodexStreamProgress(line);
+            if (evt) onProgress({ ...evt, elapsed_ms: Date.now() - t0 });
+          });
+        }
         resolve({
           exitCode: code ?? -1,
           stdout,
