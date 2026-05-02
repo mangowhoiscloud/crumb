@@ -19,7 +19,13 @@ import { tmpdir } from 'node:os';
 import { existsSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
 
-import { dispatch, parseInlineRefs, readLatestBuildProvider, type DispatcherDeps } from './live.js';
+import {
+  buildVerifierInputBundle,
+  dispatch,
+  parseInlineRefs,
+  readLatestBuildProvider,
+  type DispatcherDeps,
+} from './live.js';
 import { TranscriptWriter } from '../transcript/writer.js';
 import {
   AdapterRegistry,
@@ -725,5 +731,143 @@ describe('readLatestBuildProvider', () => {
       'also not json',
     ]);
     expect(await readLatestBuildProvider(path)).toBe('google');
+  });
+});
+
+describe('buildVerifierInputBundle', () => {
+  async function makeBundleEnv(): Promise<{ transcriptPath: string; sessionDir: string }> {
+    const dir = await mkdtemp(resolve(tmpdir(), 'crumb-judge-input-'));
+    const sessionDir = resolve(dir, 'session');
+    await mkdir(sessionDir, { recursive: true });
+    const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
+    return { transcriptPath, sessionDir };
+  }
+
+  async function readBundle(path: string): Promise<{ kind?: string; id?: string }[]> {
+    const raw = await readFile(path, 'utf-8');
+    return raw
+      .split('\n')
+      .filter((l) => l.trim().length > 0)
+      .map((l) => JSON.parse(l) as { kind?: string; id?: string });
+  }
+
+  it('whitelists goal / spec / build / qa.result / artifact.created / step.research.video', async () => {
+    const { transcriptPath, sessionDir } = await makeBundleEnv();
+    await writeFile(
+      transcriptPath,
+      [
+        JSON.stringify({ id: '1', kind: 'goal', body: 'g' }),
+        JSON.stringify({ id: '2', kind: 'step.concept', body: 'planner reasoning' }),
+        JSON.stringify({ id: '3', kind: 'spec', body: 's' }),
+        JSON.stringify({ id: '4', kind: 'step.research.video', body: 'v1' }),
+        JSON.stringify({ id: '5', kind: 'step.research', body: 'planner synthesis' }),
+        JSON.stringify({ id: '6', kind: 'step.research.video', body: 'v2' }),
+        JSON.stringify({ id: '7', kind: 'build', body: 'b' }),
+        JSON.stringify({ id: '8', kind: 'qa.result', data: { exec_exit_code: 0 } }),
+        JSON.stringify({ id: '9', kind: 'artifact.created' }),
+      ].join('\n') + '\n',
+    );
+    const bundlePath = await buildVerifierInputBundle(transcriptPath, sessionDir);
+    const bundle = await readBundle(bundlePath);
+    const kinds = bundle.map((e) => e.kind);
+    expect(kinds).toEqual([
+      'goal',
+      'spec',
+      'build',
+      'qa.result',
+      'artifact.created',
+      'step.research.video',
+      'step.research.video',
+    ]);
+  });
+
+  it('blocks planner reasoning and prior verifier output', async () => {
+    const { transcriptPath, sessionDir } = await makeBundleEnv();
+    await writeFile(
+      transcriptPath,
+      [
+        JSON.stringify({ id: '1', kind: 'goal' }),
+        JSON.stringify({ id: '2', kind: 'step.concept', body: 'framing' }),
+        JSON.stringify({ id: '3', kind: 'step.design', body: 'design' }),
+        JSON.stringify({ id: '4', kind: 'step.research', body: 'synth' }),
+        JSON.stringify({ id: '5', kind: 'step.judge', body: 'grader' }),
+        JSON.stringify({ id: '6', kind: 'judge.score', body: 'prior round' }),
+        JSON.stringify({ id: '7', kind: 'verify.result', body: 'legacy alias' }),
+        JSON.stringify({ id: '8', kind: 'agent.thought_summary', body: 'private cot' }),
+        JSON.stringify({ id: '9', kind: 'note', body: 'dispatcher' }),
+        JSON.stringify({ id: '10', kind: 'audit', body: 'validator' }),
+        JSON.stringify({ id: '11', kind: 'user.intervene', body: 'user hint' }),
+      ].join('\n') + '\n',
+    );
+    const bundlePath = await buildVerifierInputBundle(transcriptPath, sessionDir);
+    const bundle = await readBundle(bundlePath);
+    expect(bundle.map((e) => e.kind)).toEqual(['goal']);
+  });
+
+  it('keeps only the LATEST spec / build / qa.result / artifact.created', async () => {
+    const { transcriptPath, sessionDir } = await makeBundleEnv();
+    await writeFile(
+      transcriptPath,
+      [
+        JSON.stringify({ id: '1', kind: 'spec', body: 'old spec' }),
+        JSON.stringify({ id: '2', kind: 'build', body: 'old build' }),
+        JSON.stringify({ id: '3', kind: 'qa.result', data: { exec_exit_code: 1 } }),
+        JSON.stringify({ id: '4', kind: 'spec', body: 'new spec' }),
+        JSON.stringify({ id: '5', kind: 'build', body: 'new build' }),
+        JSON.stringify({ id: '6', kind: 'qa.result', data: { exec_exit_code: 0 } }),
+      ].join('\n') + '\n',
+    );
+    const bundlePath = await buildVerifierInputBundle(transcriptPath, sessionDir);
+    const bundle = await readBundle(bundlePath);
+    expect(bundle).toHaveLength(3);
+    expect(bundle.map((e) => e.id)).toEqual(['4', '5', '6']);
+  });
+
+  it('treats spec.update as an updated spec (latest in the spec slot)', async () => {
+    const { transcriptPath, sessionDir } = await makeBundleEnv();
+    await writeFile(
+      transcriptPath,
+      [
+        JSON.stringify({ id: '1', kind: 'spec', body: 'v1' }),
+        JSON.stringify({ id: '2', kind: 'spec.update', body: 'v2' }),
+      ].join('\n') + '\n',
+    );
+    const bundlePath = await buildVerifierInputBundle(transcriptPath, sessionDir);
+    const bundle = await readBundle(bundlePath);
+    expect(bundle).toHaveLength(1);
+    expect(bundle[0].kind).toBe('spec.update');
+    expect(bundle[0].id).toBe('2');
+  });
+
+  it('keeps ALL step.research.video events (D5 evidence is multi-source)', async () => {
+    const { transcriptPath, sessionDir } = await makeBundleEnv();
+    await writeFile(
+      transcriptPath,
+      [
+        JSON.stringify({ id: '1', kind: 'step.research.video', body: 'v1' }),
+        JSON.stringify({ id: '2', kind: 'step.research.video', body: 'v2' }),
+        JSON.stringify({ id: '3', kind: 'step.research.video', body: 'v3' }),
+      ].join('\n') + '\n',
+    );
+    const bundlePath = await buildVerifierInputBundle(transcriptPath, sessionDir);
+    const bundle = await readBundle(bundlePath);
+    expect(bundle).toHaveLength(3);
+  });
+
+  it('writes empty bundle when transcript is missing', async () => {
+    const { sessionDir } = await makeBundleEnv();
+    const missing = resolve(sessionDir, 'no-such.jsonl');
+    const bundlePath = await buildVerifierInputBundle(missing, sessionDir);
+    const raw = await readFile(bundlePath, 'utf-8');
+    expect(raw).toBe('');
+  });
+
+  it('writes the bundle into agent-workspace/verifier/judge-input.jsonl', async () => {
+    const { transcriptPath, sessionDir } = await makeBundleEnv();
+    await writeFile(transcriptPath, JSON.stringify({ id: '1', kind: 'goal' }) + '\n');
+    const bundlePath = await buildVerifierInputBundle(transcriptPath, sessionDir);
+    expect(bundlePath).toBe(
+      resolve(sessionDir, 'agent-workspace', 'verifier', 'judge-input.jsonl'),
+    );
   });
 });

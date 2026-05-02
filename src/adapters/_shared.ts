@@ -60,6 +60,11 @@ export function buildAdapterEnv(req: SpawnRequest): NodeJS.ProcessEnv {
     ...(req.provider ? { CRUMB_PROVIDER: req.provider } : {}),
     ...(req.model ? { CRUMB_MODEL: req.model } : {}),
     ...(req.builderProvider ? { CRUMB_BUILDER_PROVIDER: req.builderProvider } : {}),
+    // v3.4: verifier-only minimal-context bundle. Set by the dispatcher when
+    // spawning the verifier so the sandwich reads the bundle instead of the
+    // full transcript. Hard isolation against framing / anchor / preference
+    // leakage biases. See [[bagelcode-verifier-context-isolation-2026-05-03]].
+    ...(req.judgeInputPath ? { CRUMB_JUDGE_INPUT_PATH: req.judgeInputPath } : {}),
   };
 }
 

@@ -75,6 +75,16 @@ export interface SpawnRequest {
    * provider + model per the active preset binding").
    */
   harness?: string;
+  /**
+   * Optional path to a pre-built minimal-context judge-input bundle.
+   * Set by the dispatcher only when spawning the verifier; forwarded as
+   * `CRUMB_JUDGE_INPUT_PATH` so the verifier sandwich reads the bundle
+   * instead of the full transcript. Hard isolation against planner
+   * reasoning / prior judge.score / agent.thought_summary leakage. See
+   * [[bagelcode-verifier-context-isolation-2026-05-03]] + ComplexEval
+   * Bench EMNLP 2025 Findings §805 + Preference Leakage ICLR 2026.
+   */
+  judgeInputPath?: string;
 }
 
 export interface SpawnResult {
