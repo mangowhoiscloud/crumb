@@ -35,26 +35,7 @@ export class CodexLocalAdapter implements Adapter {
     }
     const sandwich = await readFile(req.sandwichPath, 'utf8');
 
-    // Codex CLI flags differ from claude — using `exec` mode for non-interactive run.
-    // The sandwich is piped via stdin; the prompt is a POSITIONAL argument
-    // (`codex exec [OPTIONS] [PROMPT]`). The `--prompt` flag is rejected with
-    // "unexpected argument '--prompt' found" — verified against codex-cli 0.123.0.
-    //
-    // Most reducer spawn effects omit `prompt` because the actor's job is fully
-    // described by the sandwich. Fall back to a generic kickoff so codex always
-    // receives a positional prompt and doesn't sit waiting on stdin.
-    const promptText =
-      req.prompt && req.prompt.trim().length > 0
-        ? req.prompt
-        : 'Begin your turn now. Read $CRUMB_TRANSCRIPT_PATH for full context (latest goal, spec, qa.result, etc.) and execute the next step per the system prompt. Do not wait for additional input.';
-    const args = [
-      'exec',
-      '--cd',
-      req.sessionDir,
-      '--skip-git-repo-check', // session dirs aren't git repos; codex refuses without this
-      '--full-auto', // skip confirmation prompts
-      promptText, // positional, always last
-    ];
+    const args = buildCodexArgs(req);
 
     const env: NodeJS.ProcessEnv = {
       ...process.env,
@@ -97,4 +78,55 @@ export class CodexLocalAdapter implements Adapter {
       child.stdin.end();
     });
   }
+}
+
+/**
+ * Pure argv builder — separated from spawn() so tests can verify the
+ * `--model` / `-c model_reasoning_effort=...` plumbing without launching codex.
+ *
+ * Codex CLI flags differ from claude — using `exec` mode for non-interactive run.
+ * The sandwich is piped via stdin; the prompt is a POSITIONAL argument
+ * (`codex exec [OPTIONS] [PROMPT]`). The `--prompt` flag is rejected with
+ * "unexpected argument '--prompt' found" — verified against codex-cli 0.123.0.
+ *
+ * Most reducer spawn effects omit `prompt` because the actor's job is fully
+ * described by the sandwich. Fall back to a generic kickoff so codex always
+ * receives a positional prompt and doesn't sit waiting on stdin.
+ *
+ * Effort mapping (Snell ICLR 2025 — test-time compute 4× ≈ 14× pretrain):
+ *   crumb effort  → codex model_reasoning_effort
+ *   low           → low
+ *   med           → medium
+ *   high          → high
+ * Backing: wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md §7 P0-1.
+ */
+export function buildCodexArgs(req: SpawnRequest): string[] {
+  const promptText =
+    req.prompt && req.prompt.trim().length > 0
+      ? req.prompt
+      : 'Begin your turn now. Read $CRUMB_TRANSCRIPT_PATH for full context (latest goal, spec, qa.result, etc.) and execute the next step per the system prompt. Do not wait for additional input.';
+  const effortValue =
+    req.effort === 'low'
+      ? 'low'
+      : req.effort === 'med'
+        ? 'medium'
+        : req.effort === 'high'
+          ? 'high'
+          : null;
+
+  const args = [
+    'exec',
+    '--cd',
+    req.sessionDir,
+    '--skip-git-repo-check', // session dirs aren't git repos; codex refuses without this
+    '--full-auto', // skip confirmation prompts
+  ];
+  if (req.model) {
+    args.push('--model', req.model);
+  }
+  if (effortValue) {
+    args.push('-c', `model_reasoning_effort=${effortValue}`);
+  }
+  args.push(promptText); // positional, always last
+  return args;
 }

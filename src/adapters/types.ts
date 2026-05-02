@@ -16,6 +16,24 @@ export interface SpawnRequest {
   transcriptPath: string;
   sessionId: string;
   /**
+   * Optional model identifier from preset / config.toml binding. When set,
+   * adapters that support `--model` / `-m` style flags pass it through.
+   * codex-local: `--model <id>`. claude-local / gemini-local: not exposed by
+   * the `-p` / non-interactive surface (API-only) — the field is informational
+   * for those adapters until SDK adapters land.
+   */
+  model?: string;
+  /**
+   * Optional reasoning effort from preset / config.toml binding.
+   * Mapped to provider-specific spawn params at the adapter boundary:
+   *   codex-local : -c model_reasoning_effort=<low|medium|high>
+   *   claude-local: API-only (extended thinking budget_tokens 8K/24K/64K) —
+   *                 not exposed by `claude -p`, kept informational
+   *   gemini-local: API-only (thinking_config) — same constraint
+   * See `mapEffort()` in `src/config/model-config.ts` for the canonical mapping.
+   */
+  effort?: 'low' | 'med' | 'high';
+  /**
    * Optional cancellation signal. The dispatcher sets a per-spawn timeout
    * (autoresearch P3 budget guardrail; default 5min, see
    * wiki/concepts/bagelcode-budget-guardrails.md §"per_spawn_timeout"). On

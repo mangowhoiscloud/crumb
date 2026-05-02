@@ -8,6 +8,19 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 New reference page `wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md` extends the existing `wiki/synthesis/bagelcode-user-intervention-frontier-2026-05-02.md` matrix from 5 systems to 12, with a fresh dimension: NL classification mechanism. Survey result: 9/12 frontier systems use **implicit LLM judgment** (LangGraph, Cursor, Cline, OpenHands, Devin, Manus, Claude Code skill matcher, Codex CLI, AutoGen UserProxy), 2/12 use **protocol gates only** (Inspect AI, Aider), and 1/12 (bkit) uses an **explicit regex enum classifier** with documented FP-precision bug history (ENH-226 patch). Crumb's PR-A/PR-B path (raw NL → `kind=user.intervene body` + `collectSandwichAppends` → next actor LLM judges in context) matches the majority pattern; the page records the avoid-decision against introducing an `intent.schema.json` enum classifier as bkit-style regression. Cross-references: OpenHands #5500 stuck-detector exclusion (verify our circuit_breaker), Cursor 2.0 worktree isolation (matches our v3 invariant 8), AutoGen GroupChatManager known-broken (matches our v3 Must 5 STOP-after-handoff), LangGraph `Command` tagged-union (matches our `data.{goto, swap, target_actor, sandwich_append, reset_circuit}` 6-field shape from PR-B).
 
+### Added — codex-local adapter `--model` + reasoning_effort plumbing (2026-05-02)
+
+Closes the signaling-only gap acknowledged in PR #29 (verifier extended thinking default landed in `.crumb/config.toml` but adapters didn't pass `effort` to the underlying CLI). Codex CLI is the first adapter wired end-to-end.
+
+- **`src/adapters/types.ts`** — `SpawnRequest` gains `model?: string` and `effort?: 'low' | 'med' | 'high'` fields. JSDoc documents the per-adapter contract: codex consumes both; claude / gemini are API-only and remain informational until SDK adapters land.
+- **`src/adapters/codex-local.ts`** — argv composition extracted as exported pure function `buildCodexArgs(req)`. When `req.model` set: appends `--model <id>`. When `req.effort` set: appends `-c model_reasoning_effort=<low|medium|high>` (crumb `med` → codex `medium`). Order: base flags → `--model` → `-c effort` → positional prompt. Verified against `codex exec --help` (codex CLI 0.123.0 — `-c` config override surface).
+- **`src/dispatcher/live.ts`** — passes `binding.model` + `binding.effort` from preset / `.crumb/config.toml` resolve order through `adapter.spawn()`. claude-local + gemini-local accept the fields silently (no behavior change there yet).
+- **`src/adapters/codex-local.test.ts`** (NEW) — 10 specs covering argv composition: base flags, prompt fallback, --model presence/absence, all 3 effort values + the missing case, and the canonical flag ordering. Suite total **291/291** (was 281 + 10).
+
+Frontier backing: **Snell et al. ICLR 2025** — test-time compute 4× ≈ 14× pretrain. Verifier benefits most from `effort=high` per CourtEval ACL 2025 (multi-role judgment). With `bagelcode-cross-3way` preset binding builder=codex, this PR makes the builder spawn actually receive the codex `model_reasoning_effort=high` flag the catalog has been asserting since model-config UI shipped.
+
+Limitation acknowledged: claude-local / gemini-local effort plumbing remains API-only (extended thinking budget_tokens is not exposed via `claude -p` / `gemini -p`). SDK adapters are the next ratchet for those.
+
 ### Fixed — `_event-protocol.md` not inlined into emitting sandwiches (2026-05-02)
 
 Followup to PR #36 RCA. After fixing the goal-prompt and observability, real subprocess STILL didn't emit transcript events: the post-spawn note captured 2KB of well-formed `kind=question.socratic` JSON in stdout, but Claude printed it instead of invoking `crumb event` via the Bash tool.
@@ -16,6 +29,16 @@ Root cause: `agents/_event-protocol.md` (the canonical doc on how to emit events
 
 - **`src/dispatcher/live.ts` `assembleSandwich()`** — for any actor in `EMITTING_ACTORS = { planner-lead, builder, verifier, builder-fallback, researcher }`, inline `agents/_event-protocol.md` into the assembled sandwich. The early-return fast-path is updated to also fire when no event protocol injection is needed (preserving v3.1 behavior for sessions that don't exercise the override surface).
 - This unblocks Claude/Codex from the JSON-print failure mode discovered in run 01KQMCSC (planner exit 0 in 41s, 2047b stdout, zero transcript events).
+
+### Changed — Rule 4 self-bias enforcement: PASS → PARTIAL when builder.provider == verifier.provider (2026-05-02)
+
+Implements **G-A** of the scoring+ratchet frontier survey (`wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md` §7 P1).
+
+Backing: **Stureborg et al. EMNLP 2024** measured PASS-rate inflation of **+14-22%** when builder and verifier share the same provider (LLM self-recognition + sycophancy compounded). Rule 4 of `validator/anti-deception.ts` was previously warn-only — recording `self_bias_risk_same_provider` in `audit_violations` but not changing the verdict. New behavior: when same-provider self-bias is detected AND the verifier returned PASS, the verdict is demoted to PARTIAL — the user must explicitly approve via `kind=user.approve` (G1 surface). FAIL/REJECT/PARTIAL verdicts are unchanged (self-bias only inflates PASS, not failure).
+
+- **`src/validator/anti-deception.ts`** Rule 4 — added verdict downgrade alongside the existing warn. Order: aggregate-floor check first (PASS → PARTIAL when aggregate < 24), then self-bias downgrade. Both are idempotent.
+- **`src/validator/anti-deception.test.ts`** — Rule 4 spec expanded from 1 → 4: (a) PASS → PARTIAL on self-bias, (b) cross-provider PASS unchanged, (c) self-bias FAIL stays FAIL, (d) self-bias PARTIAL stays PARTIAL. Suite total **281/281** (was 278 + 3 new specs).
+- Frontier alignment matrix moves G-A from "exposed gap" to "defended": `bagelcode-cross-3way` preset is now the recommended path (binds builder=codex/openai + verifier=gemini-cli/google → automatically passes the cross-provider gate). Ambient/solo presets that bind both to the same provider will see the new downgrade until a preset / `crumb_model "verifier 모델을 ..." ` swap restores the cross.
 
 ### Fixed — Real subprocess RCA: planner-lead "awaiting input" stall + observability + 3 minor (2026-05-02)
 
