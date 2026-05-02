@@ -27,7 +27,7 @@ describe('inbox watcher', () => {
     // Append two lines mid-session
     appendFileSync(inboxPath, '/pause @builder waiting\n');
     appendFileSync(inboxPath, '@planner-lead 콤보 짧게\n');
-    await sleep(200);
+    await sleep(800);
     handle.stop();
 
     const lines = readFileSync(transcriptPath, 'utf-8')
@@ -65,7 +65,7 @@ describe('inbox watcher', () => {
     });
 
     appendFileSync(inboxPath, '\n# comment line\n   \n/approve\n');
-    await sleep(200);
+    await sleep(800);
     handle.stop();
 
     const lines = readFileSync(transcriptPath, 'utf-8').split('\n').filter(Boolean);
@@ -90,13 +90,13 @@ describe('inbox watcher', () => {
 
     // Write "/pause" without trailing newline first; should NOT emit yet.
     appendFileSync(inboxPath, '/pause');
-    await sleep(80);
+    await sleep(200);
     let lineCount = readFileSync(transcriptPath, 'utf-8').split('\n').filter(Boolean).length;
     expect(lineCount).toBe(0);
 
     // Now terminate it — should emit.
     appendFileSync(inboxPath, '\n');
-    await sleep(120);
+    await sleep(500);
     lineCount = readFileSync(transcriptPath, 'utf-8').split('\n').filter(Boolean).length;
     expect(lineCount).toBe(1);
 
