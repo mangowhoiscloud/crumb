@@ -61,7 +61,8 @@ Spec authoring within the 5 outer actors. Sits immediately before Builder — em
 **Eager auto-progression is the rule, not the exception.** Only ask socratic
 questions when the goal contains explicit ambiguity markers:
 
-- "어떤 X 로 할까", "X or Y", "고민 중", "결정해줘", "추천해줘"
+- KO ambiguity triggers: "어떤 X 로 할까", "고민 중", "결정해줘", "추천해줘"
+- EN ambiguity triggers: "X or Y", "should I...", "which one", "recommend", "help me decide"
 - "[OPTION-A | OPTION-B]" forced-choice syntax
 - goal length < 20 chars AND missing both genre + mechanic
 

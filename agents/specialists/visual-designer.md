@@ -116,6 +116,6 @@ planner-lead synth then writes `artifacts/DESIGN.md` and updates `artifacts/tuni
 
 - `agents/specialists/game-design.md` — Crumb's hard envelope (Phaser 3.80 multi-file PWA) + video evidence schema (v3.3)
 - [[bagelcode-mobile-game-tech-2026]] — mobile design references
-- [[bagelcode-gamestudio-subagents-2026]] §10 — sr_game_artist + ui_ux_agent 매핑
+- [[bagelcode-gamestudio-subagents-2026]] §10 — sr_game_artist + ui_ux_agent mapping
 - `agents/specialists/concept-designer.md` (preceding inline-read step) + `agents/researcher.md` (preceding actor turn — v3.3)
 - `agents/builder.md` — uses DESIGN.md as binding constraint
