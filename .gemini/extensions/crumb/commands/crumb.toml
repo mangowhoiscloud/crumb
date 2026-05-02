@@ -7,13 +7,13 @@ User goal: ${1}
 
 # 0. Universal identity (read first)
 
-Before anything else, read the repo-root identity files:
+Before anything else, the universal Crumb identity is loaded by Gemini CLI automatically:
 
-- `CRUMB.md` — Crumb runtime identity (universal, host-agnostic). 11 architecture invariants, 5-actor flow, 39-kind schema, preset philosophy.
-- `AGENTS.md` — contributor identity (Linux Foundation Agentic AI Foundation standard).
-- `.gemini/extensions/crumb/GEMINI.md` — this extension's Gemini-specific glue (already loaded).
+- `AGENTS.md` (repo root) — Linux Foundation Agentic AI Foundation standard. 11 architecture invariants, 5-actor flow, 39-kind schema, preset philosophy. Auto-loaded via `.gemini/settings.json` `contextFileName`.
+- `GEMINI.md` (repo root) — Gemini CLI session-scoped augmentation. Auto-loaded.
+- `.gemini/extensions/crumb/GEMINI.md` — this extension's Gemini-specific glue (loaded when extension activates).
 
-These are the same identity every host harness loads. The rest of this prompt is Gemini-specific routing on top of that universal identity.
+The rest of this prompt is Gemini-specific routing on top of that universal identity.
 
 # 1. Setup
 
