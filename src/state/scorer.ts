@@ -1,13 +1,14 @@
 /**
- * Layer 1 reducer auto-scorer — D3 / D4 / D5 hybrid auto components.
+ * Layer 1 reducer auto-scorer — D3 / D4 / D5 auto components + deterministic
+ * combine for D3/D5 (verifier LLM component + reducer auto component).
  *
- * Pure function of (transcript, state) → partial scores. No LLM, no I/O.
- * Verifier reads these as ground truth for D4 and as auto component for D3/D5.
+ * Pure functions of (transcript, …) → numbers. No LLM, no I/O.
+ * Verifier reads these as ground truth for D4 and as the auto component for D3/D5.
  *
  * See [[bagelcode-system-architecture-v3]] §7 (3-layer scoring), §7.2 (source matrix).
  */
 
-import type { Message, Kind } from '../protocol/types.js';
+import type { Message, Kind, Scores } from '../protocol/types.js';
 
 export interface AutoScores {
   /** D3 observability auto — kind diversity + body length info density. */
@@ -88,7 +89,7 @@ function scoreD5(transcript: Message[]): number {
 
 /**
  * Compute Layer 1 auto scores from full transcript.
- * Verifier reads these as D4 lookup + D3.auto + D5.auto components.
+ * Verifier reads these as D4 lookup + D3 auto + D5 auto components.
  */
 export function computeAutoScores(transcript: Message[]): AutoScores {
   return {
@@ -96,4 +97,48 @@ export function computeAutoScores(transcript: Message[]): AutoScores {
     D4: scoreD4(transcript),
     D5_auto: scoreD5(transcript),
   };
+}
+
+/**
+ * Deterministic combine for split D3/D5 dimensions.
+ *
+ * For D3 / D5, the verifier emits a single ScoreDimension with source='verifier-llm'
+ * carrying its LLM-judged value (0-5). The matching reducer-auto component lives in
+ * AutoScores.{D3_auto, D5_auto}. This helper averages the two halves so callers
+ * (aggregate computation, summary display) never need to know the combine rule —
+ * it's a single function in code, immune to LLM inflation.
+ *
+ * For dimensions whose source is 'qa-check-effect' or 'reducer-auto', the score is
+ * already authoritative and is returned as-is.
+ *
+ * Rule: combined = round((llm + auto) / 2 * 10) / 10  (one decimal, clamped 0-5).
+ */
+export function combineDimScore(
+  dim: { score: number; source: 'verifier-llm' | 'qa-check-effect' | 'reducer-auto' } | undefined,
+  autoComponent: number | undefined,
+): number {
+  if (!dim) return 0;
+  if (dim.source !== 'verifier-llm' || autoComponent === undefined) return dim.score;
+  const avg = (dim.score + autoComponent) / 2;
+  return Math.round(Math.max(0, Math.min(5, avg)) * 10) / 10;
+}
+
+/**
+ * Recompute aggregate (sum of D1..D6, /30 max) from a Scores struct using the
+ * deterministic combine rule for D3/D5. Used by the anti-deception pass and by
+ * summary rendering so verdict math stays consistent across surfaces.
+ */
+export function combineAggregate(scores: Scores | undefined, autoScores: AutoScores): number {
+  if (!scores) return 0;
+  const D3 = combineDimScore(scores.D3, autoScores.D3_auto);
+  const D5 = combineDimScore(scores.D5, autoScores.D5_auto);
+  const dims = [
+    scores.D1?.score ?? 0,
+    scores.D2?.score ?? 0,
+    D3,
+    scores.D4?.score ?? 0,
+    D5,
+    scores.D6?.score ?? 0,
+  ];
+  return dims.reduce((sum, n) => sum + n, 0);
 }

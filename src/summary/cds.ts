@@ -159,7 +159,6 @@ section.card h2 .anchor {
 .badge.source-llm { background: rgba(123,79,184,.12); color: #5A3A8E; }
 .badge.source-qa-check { background: rgba(200,146,58,.18); color: var(--crumb-warm); }
 .badge.source-reducer { background: rgba(46,139,87,.12); color: var(--ok); }
-.badge.source-hybrid { background: rgba(110,99,87,.15); color: var(--ink-muted); }
 .deterministic-star {
   color: var(--deterministic);
   font-weight: 700;

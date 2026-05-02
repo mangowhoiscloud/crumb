@@ -66,9 +66,9 @@ function fixture(): { transcript: Message[]; state: ReturnType<typeof initialSta
       scores: {
         D1: { score: 4.5, source: 'verifier-llm' },
         D2: { score: 5.0, source: 'qa-check-effect', lookup: 'qa.result.exec_exit_code' },
-        D3: { score: 4.0, source: 'hybrid', auto: 3.5, semantic: 4.0 },
+        D3: { score: 4.0, source: 'verifier-llm', semantic: 4.0 },
         D4: { score: 5.0, source: 'reducer-auto' },
-        D5: { score: 4.0, source: 'hybrid' },
+        D5: { score: 4.0, source: 'verifier-llm' },
         D6: { score: 4.5, source: 'qa-check-effect' },
         aggregate: 27.0,
         verdict: 'PASS',
@@ -135,7 +135,6 @@ describe('renderSummary', () => {
     expect(html).toContain('source-llm');
     expect(html).toContain('source-qa-check');
     expect(html).toContain('source-reducer');
-    expect(html).toContain('source-hybrid');
     expect(html).toContain('qa.result.exec_exit_code');
   });
 
