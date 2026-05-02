@@ -4,6 +4,29 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Wiki concepts KO → EN, batch 1 of N (PR-C-3) (2026-05-03)
+
+Continues the KO→EN sweep. Wiki is the largest tranche (~33k KO chars across 31+ files); this PR ships the heaviest single concepts file.
+
+Translated:
+- `wiki/concepts/bagelcode-caching-strategy.md` — full file rewrite (1249 KO chars). Frontmatter title, all body sections, headings, tables, decision rationale. Technical terms (Anthropic ephemeral cache, TTL, breakpoints, KVCOMM, ACON, vCache, MDPI, APC NeurIPS 2025, Vertex AI verbatim quote, etc.) preserved verbatim. Cache supersession note (v1-v2 era CourtEval external Gemini retired) explicitly EN with the same dates and references.
+
+Out of scope (queued for PR-C-4..N):
+- `wiki/concepts/bagelcode-system-architecture-v0.1.md` (1159 KO chars)
+- `wiki/concepts/bagelcode-fault-tolerance-design.md` (1101 KO chars)
+- `wiki/concepts/bagelcode-system-architecture.md` (971 KO chars)
+- `wiki/concepts/bagelcode-verifier-isolation-matrix.md` (960 KO chars)
+- `wiki/concepts/bagelcode-rubric-scoring.md` (933 KO chars)
+- `wiki/concepts/bagelcode-transcripts-schema.md` (908 KO chars)
+- `wiki/concepts/bagelcode-system-architecture-v0.3.5.md` (795 KO chars)
+- `wiki/concepts/bagelcode-orchestration-topology.md` (787 KO chars)
+- `wiki/concepts/bagelcode-final-design-2026.md` (701 KO chars)
+- `wiki/concepts/bagelcode-budget-guardrails.md` (687 KO chars)
+- `wiki/concepts/bagelcode-system-diagrams-v0.3.5.md` (170 KO chars)
+- `wiki/synthesis/**/*.md` (~8k KO chars / 8 files)
+- `wiki/references/**/*.md` (~15k KO chars / 12 files)
+- `wiki/findings/**/*.md` (~100 KO chars / 1 file)
+
 ### Changed — Skills KO → EN translation pass (PR-C-2) (2026-05-03)
 
 Continues the KO→EN sweep started in PR-C-1 (sandwiches). This pass covers Claude Code skills + procedural workflow skills.
