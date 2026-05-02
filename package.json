@@ -7,6 +7,31 @@
   "bin": {
     "crumb": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "protocol/schemas/**/*.json",
+    "agents/**/*.md",
+    "skills/**/*.md",
+    "skills/**/*.py",
+    "skills/**/LICENSE.txt",
+    ".crumb/presets/*.toml",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md",
+    "README.ko.md",
+    "!**/__pycache__",
+    "!**/*.pyc",
+    "!**/*.test.ts",
+    "!**/*.test.js",
+    "!**/*.test.d.ts",
+    "!**/*.test.js.map",
+    "!**/*.spec.ts",
+    "!**/*.spec.js",
+    "!**/*.tsbuildinfo"
+  ],
   "workspaces": [
     "packages/*"
   ],
