@@ -4,6 +4,35 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — D3/D5 split into single-origin dims, drop `'hybrid'` source (2026-05-02)
+
+Every score dimension now reports a single origin in `scores.D*.source`: `verifier-llm` | `qa-check-effect` | `reducer-auto`. The prior `'hybrid'` value forced the verifier and reducer components into one number that the LLM emitted, which (a) duplicated information already carried by the `auto` / `semantic` / `quality` fields and (b) created an attack surface where the verifier could inflate the merged score (mitigated previously by anti-deception Rule 5).
+
+The split:
+- Verifier emits D3/D5 with `source='verifier-llm'`, `score`=its LLM component (0-5).
+- Reducer computes the auto component independently via `computeAutoScores()`.
+- `combineDimScore()` in `src/state/scorer.ts` averages the two halves in code — a single function the verifier cannot influence.
+- `combineAggregate()` recomputes the /30 aggregate using the deterministic combine.
+
+Anti-deception Rule 5 (`verifier_inflated_hybrid`) is removed — there is no merged score for the LLM to inflate. Rules 1-4 are unchanged. Verifier sandwich (`agents/verifier.md`) updated: D3/D5 instructions tell the LLM to emit only its component, never pre-blend.
+
+Frontier alignment: matches the "verifiable reward + LLM rubric kept separate" pattern in RLVR (Lambert et al. 2024) and Anthropic's 2026 hybrid-norm guidance — but the source label itself is now single-origin so the schema mirrors the runtime architecture.
+
+Changes:
+- **`protocol/schemas/message.schema.json`** — `source` enum 4→3 values, D3/D5 descriptions updated.
+- **`src/protocol/types.ts`** — TS union 4→3, ScoreDimension JSDoc clarified.
+- **`src/state/scorer.ts`** — `combineDimScore()` + `combineAggregate()` added (pure, replay-deterministic).
+- **`src/validator/anti-deception.ts`** — Rule 5 removed, aggregate recomputation delegates to `combineAggregate`.
+- **`src/validator/anti-deception.test.ts`** — Rule 5 spec replaced with split-after-combine assertion.
+- **`src/summary/render.ts`** + **`cds.ts`** — `source-hybrid` CSS / dispatch removed.
+- **`src/adapters/mock.ts`** + **`src/summary/render.test.ts`** + **`src/session/version.test.ts`** — fixtures updated.
+- **`agents/verifier.md`** — sandwich instructions ("Do NOT pre-blend"), source matrix table refreshed.
+- **`AGENTS.md`** + **`.claude/skills/crumb/SKILL.md`** — invariant #4 wording + skill router source-list synced (this PR).
+
+**Breaking**: legacy transcripts that emitted `source='hybrid'` will fail validation under the new enum. Intentional — anyone replaying a v0.x session needs to migrate. v3.3 is the first submission cycle so real impact is minimal.
+
+PR: #27 (refactor) + this PR (docs sync).
+
 ### Fixed — `.crumb/config.toml` schema drift + verifier effort=high default (2026-05-02)
 
 Implements P0-1 of the scoring+ratchet frontier survey (`wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md` §7). Two coupled gaps fixed:

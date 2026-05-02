@@ -40,7 +40,7 @@ These are non-negotiable across every host harness:
 1. **transcript.jsonl is the single source of truth.** Never store agent state in a DB or in-memory only. All state derives from the transcript via `reduce()`.
 2. **Pure reducer for state.** `src/reducer/` is pure (no I/O, no time, no randomness). Side effects live in `src/dispatcher/`.
 3. **Subprocess injection, not auto-load.** Sandwich content reaches host CLIs via `--append-system-prompt` / stdin / `--system-prompt`. Never depend on AGENTS.md / CLAUDE.md / GEMINI.md auto-loading at the agent CLI level for the sandwich body itself.
-4. **Three-layer scoring.** D2 (exec) and D6 (portability) are produced deterministically by `qa_check` effect (`src/dispatcher/qa-runner.ts` → `kind=qa.result`, no LLM). D3/D4 are reducer-auto. D1/D5 are verifier-llm or hybrid. **Never let an LLM forge D2/D6** — the dispatcher's ground truth always wins.
+4. **Three-layer scoring.** Every dimension reports a single origin in `scores.D*.source`: `verifier-llm` (D1, plus the LLM components of D3/D5), `qa-check-effect` (D2/D6, deterministic ground truth from `src/dispatcher/qa-runner.ts` → `kind=qa.result`, no LLM), or `reducer-auto` (D4, plus the auto components of D3/D5). D3/D5 are split: the verifier emits its LLM-judged value, the reducer computes the auto component independently in `computeAutoScores()`, and `combineDimScore()` averages the two halves in code. **Never let an LLM forge D2/D6** — the dispatcher's ground truth always wins.
 5. **Anti-deception schema enforcement.** Any `kind=judge.score` / `kind=verify.result` with `verdict=PASS` but missing the corresponding qa.result `exec_exit_code` MUST have `D2=0` enforced by `validator/anti-deception.ts`.
 6. **ULID for message IDs.** Never use sequential or random UUIDs. ULIDs preserve sort order = transcript chronology.
 7. **Append-only transcript.** Use `O_APPEND` (and `flock` once landed). Never modify existing lines.
@@ -78,7 +78,7 @@ Source: `protocol/schemas/message.schema.json`.
 
 ```
 39 kinds × 11 fields × 12 specialist steps × 8 actors
-  + scores D1–D6 source-of-truth matrix (verifier-llm / qa-check-effect / reducer-auto / hybrid)
+  + scores D1–D6 source-of-truth matrix (verifier-llm / qa-check-effect / reducer-auto — single origin per dim; D3/D5 LLM and auto components are combined deterministically by combineDimScore)
   + metadata 14 fields (incl. v3: harness / provider / adapter_session_id / cache_carry_over /
     deterministic / cross_provider)
 ```
