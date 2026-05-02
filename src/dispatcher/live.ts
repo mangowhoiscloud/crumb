@@ -60,6 +60,11 @@ const ACTOR_TO_SANDWICH: Partial<Record<Actor, string>> = {
   verifier: 'agents/verifier.md',
   'builder-fallback': 'agents/builder-fallback.md',
   coordinator: 'agents/coordinator.md',
+  // v3.4 fix: missing researcher entry caused baseSandwichPath to fall back
+  // to '' → resolve(repoRoot, '') = repoRoot (a directory) → readFile threw
+  // EISDIR when the no-video researcher path routed through claude-local.
+  // Stack trace from session 01KQMGNW: assembleSandwich → readFileHandle EISDIR.
+  researcher: 'agents/researcher.md',
 };
 
 /** Harness → adapter id mapping for preset bindings. v3.3 added gemini-sdk for the researcher actor (Gemini 3.1 Pro native YouTube URL + 10fps frame sampling — gemini-cli has p1-unresolved video bugs). */

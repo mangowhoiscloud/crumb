@@ -201,6 +201,16 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
   };
 
   let processing: Promise<void> = Promise.resolve();
+  // v3.4: pendingItems counts onMessage chain handlers that have been queued
+  // but not yet fully resolved (including their awaited dispatch effects).
+  // The idle-timeout watchdog must not call finish() while pendingItems > 0,
+  // otherwise a long-running dispatch (e.g. planner-spawn for 7min) would
+  // settle the OLD `processing` reference but leave queued downstream items
+  // (handoff.requested(researcher).reduce → dispatch(spawn-researcher)) unrun
+  // before resolveOuter fires and the process exits. Observed: session
+  // 01KQMFWA exited at agent.stop+7ms with state.done=false and 0 researcher
+  // events despite handoff.requested being recorded.
+  let pendingItems = 0;
   let lastEventAt = Date.now();
   const idleMs = opts.idleTimeoutMs ?? 60_000;
 
@@ -256,15 +266,20 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
 
     const onMessage = (msg: Message): void => {
       lastEventAt = Date.now();
+      pendingItems += 1;
       processing = processing
         .then(async () => {
-          if (state.done) return; // ignore events after terminal state
-          const { state: nextState, effects } = reduce(state, msg);
-          state = nextState;
-          for (const eff of applyOverride(effects)) {
-            await dispatch(eff, deps);
+          try {
+            if (state.done) return; // ignore events after terminal state
+            const { state: nextState, effects } = reduce(state, msg);
+            state = nextState;
+            for (const eff of applyOverride(effects)) {
+              await dispatch(eff, deps);
+            }
+            if (state.done) finish({ state });
+          } finally {
+            pendingItems -= 1;
           }
-          if (state.done) finish({ state });
         })
         .catch(fail);
     };
@@ -325,10 +340,17 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
         }
       }
 
-      if (Date.now() - lastEventAt > idleMs) {
+      if (Date.now() - lastEventAt > idleMs && pendingItems === 0) {
+        // v3.4: only fire finish when the chain has truly drained AND no new
+        // events have arrived for idleMs. The previous `processing.finally()`
+        // grabbed a snapshot of the chain tail at that instant; subsequent
+        // chain extensions (e.g. handoff.requested(researcher) → dispatch
+        // spawn researcher) didn't extend the snapshot, so finish() fired
+        // before researcher could even start. Tracking pendingItems lets the
+        // watchdog distinguish "idle + chain empty" (true done) from "idle +
+        // chain still draining" (keep waiting).
         clearInterval(watchdog);
-        // Drain pending then finish with whatever state we have.
-        processing.finally(() => finish({ state }));
+        finish({ state });
       }
     }, opts.watchdogTickMs ?? 1000);
 
