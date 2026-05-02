@@ -164,3 +164,8 @@ Append in order:
 
 **Simplicity (Karpathy P10).**
 > When scoring D1, penalize unjustified complexity. "Added 20 lines for a 0.001 quality bump" is rejection-worthy. Code deletion that meets the same AC = score up.
+
+**Length bias firewall (G-C — 2025-2026 frontier).**
+> Frontier judges still show **+1.6 ~ +3.4% win-rate inflation per length-extended response at content-equal** (Krumdick et al., EMNLP 2025 measuring Sonnet 4 / GPT-5 / Gemini 2.5 Pro / Opus 4). RewardBench v2 (Lambert AI2 2025 §Focus) confirms length bias as a "dominant failure mode" in 2025 reward models. Length bias **concentrates in qualitative dimensions** (Rubric-Anchored Judging, NeurIPS 2025) — exactly your D1 spec_fit and D5 quality. D2/D6 are deterministic ground truth and immune.
+>
+> The dispatcher injects an "Artifact length context" section (sources: `spec.md`, `DESIGN.md`, `tuning.json`, `game.html` byte/token counts) into your sandwich for every verifier spawn. **Read it as a calibration anchor, not as evidence**. Two equal-content artifacts at 800B vs 4000B should score identically on D1/D5 — score on AC compliance and design intent, not on prose volume. Length-controlled scoring is the 2025-2026 frontier standard (Arena-Hard v2 default, AlpacaEval LC 2024). Anthropic 2026 Hybrid Normalization guidance confirms prompt-only mitigation reaches ~50% effect reduction; the residual is *your* responsibility.

@@ -110,9 +110,26 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
       // → sessions/<id>/agent-workspace/<actor>/sandwich.assembled.md
       // The assembled file becomes the adapter's --append-system-prompt source so
       // observers can inspect exactly what each spawn saw.
+      // G-C — length bias firewall (verifier-only). Inject artifact byte/token
+      // counts so the LLM judge has explicit length context and is reminded
+      // that length is not a quality signal. Frontier backing:
+      //   - AlpacaEval LC (Dubois 2024) → +4.7%/100 tokens at content-equal
+      //   - RewardBench v2 (Lambert AI2 2025 §Focus) → length-controlled split
+      //     5-12 pt drop in SOTA reward models
+      //   - Judge-Bench (Krumdick EMNLP 2025) → Sonnet 4 +1.6 ~ Gemini 2.5 Pro
+      //     +3.4% inflated win-rate per length-extended response (residual after
+      //     2024-era debiasing)
+      //   - Anthropic Hybrid Normalization 2026 (dev docs Q1) → token count
+      //     disclosure + "ignore length" → ~50% effect reduction
+      //   - Rubric-Anchored Judging (NeurIPS 2025) → length bias concentrates
+      //     in qualitative dims (D1 spec_fit / D5 quality) while quantitative
+      //     dims (D2/D6 from qa-check-effect) are immune. Hence: D1/D5 scope.
+      // Wiki: [[bagelcode-scoring-ratchet-frontier-2026-05-02]] §6 G-C.
+      const lengthAppends =
+        effect.actor === 'verifier' ? await buildLengthContextAppends(deps.sessionDir) : [];
       const sandwichPath = await assembleSandwich({
         baseSandwichPath,
-        appends: effect.sandwich_appends ?? [],
+        appends: [...lengthAppends, ...(effect.sandwich_appends ?? [])],
         sessionDir: deps.sessionDir,
         actor: effect.actor,
         repoRoot: deps.repoRoot,
@@ -312,6 +329,47 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
       break;
     }
   }
+}
+
+/** v3.4 G-C — length-bias firewall artifacts the verifier consumes. The byte
+ * counts come from the on-disk artifact files; token counts use the standard
+ * 4-byte heuristic (good enough for length-context disclosure — the LLM only
+ * needs an order-of-magnitude signal that "this doc is N tokens, not 4N").
+ *
+ * D2/D6 are deterministic (qa-check-effect ground truth) and immune to length
+ * bias per Rubric-Anchored Judging (NeurIPS 2025). The firewall therefore
+ * scopes to D1/D5 — the LLM-judged dims where length confound concentrates.
+ */
+const LENGTH_CONTEXT_ARTIFACTS = ['spec.md', 'DESIGN.md', 'tuning.json', 'game.html'] as const;
+
+export async function buildLengthContextAppends(
+  sessionDir: string,
+): Promise<{ source_id: string; text: string }[]> {
+  const artifactsDir = resolve(sessionDir, 'artifacts');
+  const lines: string[] = [];
+  for (const name of LENGTH_CONTEXT_ARTIFACTS) {
+    const path = resolve(artifactsDir, name);
+    if (!existsSync(path)) continue;
+    const stat = await import('node:fs/promises').then((m) => m.stat(path));
+    const bytes = stat.size;
+    const tokens = Math.ceil(bytes / 4); // 4-byte heuristic, see fn header
+    lines.push(`- ${name}: ${bytes}B (~${tokens} tokens)`);
+  }
+  if (lines.length === 0) return [];
+  const text = [
+    '## Artifact length context (G-C — do NOT use as a quality signal)',
+    '',
+    'Sizes of the artifacts you are about to evaluate:',
+    ...lines,
+    '',
+    '**Reminder**: length is not quality. Frontier judges (Sonnet 4, GPT-5,',
+    'Gemini 2.5 Pro, Opus 4) still show +1.6 ~ +3.4% win-rate inflation per',
+    'length-extended response at content-equal (Krumdick EMNLP 2025).',
+    'Score D1 (spec_fit) and D5 (quality) on AC compliance and design intent,',
+    'not on prose volume. Length-controlled scoring is the 2025-2026 frontier',
+    'standard (Arena-Hard v2 default; AlpacaEval LC 2024).',
+  ].join('\n');
+  return [{ source_id: 'system:length-context@v1', text }];
 }
 
 interface AssembleArgs {

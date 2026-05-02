@@ -300,6 +300,84 @@ describe('dispatcher usage forwarding', () => {
   });
 });
 
+describe('dispatcher — G-C length bias firewall (verifier-only)', () => {
+  it('injects artifact length context into verifier sandwich when artifacts exist', async () => {
+    const { deps, capture, repoRoot, sessionDir } = await makeSandwichDeps();
+    await writeFile(resolve(repoRoot, 'agents/verifier.md'), '# verifier base\n');
+    const artifactsDir = resolve(sessionDir, 'artifacts');
+    await mkdir(artifactsDir, { recursive: true });
+    await writeFile(resolve(artifactsDir, 'spec.md'), '# spec\n'.repeat(50));
+    await writeFile(resolve(artifactsDir, 'game.html'), '<html>'.repeat(200));
+    const eff: Effect = { type: 'spawn', actor: 'verifier', adapter: 'capture' };
+    await dispatch(eff, deps);
+    const assembled = await readFile(capture.lastRequest!.sandwichPath, 'utf-8');
+    expect(assembled).toContain('# verifier base');
+    expect(assembled).toContain('Artifact length context');
+    expect(assembled).toContain('spec.md:');
+    expect(assembled).toContain('game.html:');
+    expect(assembled).toContain('source=system:length-context@v1');
+    // Reminds the judge not to use length as a quality signal
+    expect(assembled).toContain('length is not quality');
+  });
+
+  it('does NOT inject length context for builder spawns (D2/D6 immune per Rubric-Anchored Judging NeurIPS 2025)', async () => {
+    const { deps, capture, repoRoot, sessionDir } = await makeSandwichDeps();
+    await writeFile(resolve(repoRoot, 'agents/builder.md'), '# builder base\n');
+    const artifactsDir = resolve(sessionDir, 'artifacts');
+    await mkdir(artifactsDir, { recursive: true });
+    await writeFile(resolve(artifactsDir, 'spec.md'), '# spec\n');
+    const eff: Effect = { type: 'spawn', actor: 'builder', adapter: 'capture' };
+    await dispatch(eff, deps);
+    // Builder gets the base sandwich path unchanged (no length context to inject).
+    expect(capture.lastRequest!.sandwichPath).toBe(resolve(repoRoot, 'agents/builder.md'));
+  });
+
+  it('verifier without artifacts emits no length context (graceful no-op)', async () => {
+    const { deps, capture, repoRoot } = await makeSandwichDeps();
+    await writeFile(resolve(repoRoot, 'agents/verifier.md'), '# verifier base\n');
+    // No artifacts dir → length context list is empty → assembleSandwich's
+    // additive-only fast path returns the base sandwich path.
+    const eff: Effect = { type: 'spawn', actor: 'verifier', adapter: 'capture' };
+    await dispatch(eff, deps);
+    expect(capture.lastRequest!.sandwichPath).toBe(resolve(repoRoot, 'agents/verifier.md'));
+  });
+
+  it('reports byte + token counts for present artifacts only', async () => {
+    const { deps, capture, repoRoot, sessionDir } = await makeSandwichDeps();
+    await writeFile(resolve(repoRoot, 'agents/verifier.md'), '# verifier base\n');
+    const artifactsDir = resolve(sessionDir, 'artifacts');
+    await mkdir(artifactsDir, { recursive: true });
+    // Only spec.md exists; DESIGN.md / tuning.json / game.html absent
+    await writeFile(resolve(artifactsDir, 'spec.md'), 'x'.repeat(800));
+    const eff: Effect = { type: 'spawn', actor: 'verifier', adapter: 'capture' };
+    await dispatch(eff, deps);
+    const assembled = await readFile(capture.lastRequest!.sandwichPath, 'utf-8');
+    expect(assembled).toContain('spec.md: 800B (~200 tokens)');
+    expect(assembled).not.toContain('DESIGN.md:');
+    expect(assembled).not.toContain('game.html:');
+  });
+
+  it('length context appends BEFORE user-supplied sandwich_appends so user notes win', async () => {
+    const { deps, capture, repoRoot, sessionDir } = await makeSandwichDeps();
+    await writeFile(resolve(repoRoot, 'agents/verifier.md'), '# verifier base\n');
+    const artifactsDir = resolve(sessionDir, 'artifacts');
+    await mkdir(artifactsDir, { recursive: true });
+    await writeFile(resolve(artifactsDir, 'spec.md'), 'x');
+    const eff: Effect = {
+      type: 'spawn',
+      actor: 'verifier',
+      adapter: 'capture',
+      sandwich_appends: [{ source_id: '01H0000000000USERNOTE', text: 'USER_NOTE_LAST' }],
+    };
+    await dispatch(eff, deps);
+    const assembled = await readFile(capture.lastRequest!.sandwichPath, 'utf-8');
+    const lengthIdx = assembled.indexOf('Artifact length context');
+    const userIdx = assembled.indexOf('USER_NOTE_LAST');
+    expect(lengthIdx).toBeGreaterThan(0);
+    expect(userIdx).toBeGreaterThan(lengthIdx);
+  });
+});
+
 describe('dispatcher per_spawn_timeout', () => {
   it('fast spawn completes without recording an error', async () => {
     const adapter = new FastAdapter();
