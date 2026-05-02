@@ -19,6 +19,25 @@ Closes the last item from PR-A's audit punch list (`wiki/references/bagelcode-nl
 
 Note on the audit's "P0 effort tuning asymmetry" (gemini-local missing `req.effort`): re-read of `src/adapters/types.ts:18-35` showed this is **intentional and already documented** — gemini-cli's `-p` flag does not expose thinking budget (API-only via `thinking_config`), same as `claude -p` and extended thinking budget_tokens. The field is informational on those adapters until SDK adapters land. Not a gap; the documentation does the work the audit wanted a code change to do.
 
+### Added — G-C length bias firewall (verifier-only D1/D5 scope, 2026-05-02)
+
+Implements **G-C** of the scoring+ratchet frontier survey (`wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md` §6) — the last open frontier gap. With G-A/B/D/E already defended, **all 5 frontier failure modes from the survey are now closed**.
+
+Confirmed length bias persists in 2025-2026 frontier judges (NOT just a 2024 artifact):
+- **Krumdick et al., EMNLP 2025 Judge-Bench** — direct measurement: Sonnet 4 **+1.6%**, GPT-5 / Gemini 2.5 Pro **+2.1-3.4%** inflated win-rate per length-extended response at content-equal. Opus 4 lowest but non-zero.
+- **RewardBench v2 §Focus** (Lambert AI2 2025, arXiv:2506.01937) — length-controlled split shows 5-12 pt drop in SOTA reward models; "length bias as dominant failure mode" persists.
+- **Skywork-Reward-V2** (arXiv:2507.01352, 2025) — even with length-debiasing term, residual ~3% per 100 tokens.
+- **Arena-Hard v2** (LMSYS 2025) — Style Control (length + markdown covariate regression) is now **default** — community confirms persistence.
+- **Anthropic 2026 Hybrid Normalization** (dev docs Q1) — prompt-only mitigation reaches ~50% reduction; "complete elimination is not achieved by prompting alone".
+
+Frontier scope guidance (**Rubric-Anchored Judging**, Hashimoto & Liang group, NeurIPS 2025): length bias **concentrates in qualitative dimensions** (creativity, design quality) and is **negligible in deterministic dimensions** (correctness, exec result). For Crumb that maps to D1 spec_fit + D5 quality (verifier LLM judge) vs D2/D6 (`qa-check-effect` ground truth, immune). Hence the firewall scope is verifier spawns only, not blanket.
+
+Changes:
+- **`src/dispatcher/live.ts`** — new `buildLengthContextAppends(sessionDir)` reads `sessions/<id>/artifacts/{spec.md, DESIGN.md, tuning.json, game.html}` byte sizes, computes ~tokens via 4-byte heuristic, returns a single `sandwich_append` carrying the calibration anchor + frontier-cited reminder. Spawn case calls it conditionally (`effect.actor === 'verifier'`); the appends are prepended to `effect.sandwich_appends` so user-supplied G4 notes still win on the override pipeline. Builder/planner/researcher spawns: zero behavior change.
+- **`agents/verifier.md`** — new "Length bias firewall (G-C — 2025-2026 frontier)" reminder citing Krumdick EMNLP 2025 + RewardBench v2 + Rubric-Anchored NeurIPS 2025 + Anthropic 2026 Hybrid Norm. Tells the LLM to read the dispatcher-injected length context as a calibration anchor, not as evidence — D1/D5 should score on AC compliance and design intent, not prose volume.
+- **`src/dispatcher/live.test.ts`** — +5 specs: verifier-with-artifacts injects context + reminder + source_id, builder-with-artifacts gets no injection, verifier-without-artifacts is graceful no-op, partial artifact set reports only present files with byte/token counts, length context is prepended (user `sandwich_appends` win on override). Suite total **324/324** (was 319 + 5).
+- **`wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md`** — G-C status flipped to "Defended"; all 5 frontier gaps now closed.
+
 ### Refactored — Adapter 3-way dedup: extract `_shared.ts` lifecycle helpers (2026-05-02)
 
 `src/adapters/{claude,codex,gemini}-local.ts` were 95% structurally identical: same health-check spawn pattern, same env construction, same AbortSignal wiring, same default-prompt string. jscpd had flagged 414 duplicated lines / 2.92% across the three files. PR-A audit (`wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md` §10 punch list P1) called this out.

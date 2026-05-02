@@ -133,7 +133,7 @@ related:
 |---|---|---|---|
 | G-A | ✅ **Defended** (PR #38, 2026-05-02) | Rule 4 `self_bias_risk_same_provider` 가 PASS → PARTIAL 강등 enforce. Stureborg EMNLP 2024 +14-22% inflation 차단. `bagelcode-cross-3way` preset 권장 path. |
 | G-B | ✅ **Already implemented** | `VERIFY_MAX=5` (`src/reducer/index.ts`) + variance-based adaptive_stop + ratchet regression — 3-layer cap. Goodhart drift round 4+ 차단. |
-| G-C | ⏸ **Open** (length bias normalization 부재) | AlpacaEval LC 같은 길이 보정 없음. Verifier 가 더 긴 spec.md / DESIGN.md 선호 가능 — token 길이 explicit 노출 권장 |
+| G-C | ✅ **Defended** (PR _TBD_, 2026-05-02) | Dispatcher 가 verifier spawn 시 artifact byte/token count auto-inject + sandwich firewall 섹션. 2025-2026 frontier 측정 (Krumdick EMNLP 2025 — Sonnet 4 +1.6%, GPT-5 / Gemini 2.5 Pro +3.4% residual; RewardBench v2 §Focus 2025 — length 5-12pt drop) 으로 length bias 잔존 확인. Rubric-Anchored Judging (NeurIPS 2025): 정성 dim (D1/D5) 만 노출, 정량 dim (D2/D6 qa-check-effect) 면역 → D1/D5 한정 scope. Anthropic Hybrid Norm 2026 prompt-only 패턴은 ~50% 감소; residual 은 verifier sandwich 의 reviewer persona 와 anti-deception Rule 6 (D1/D5 ≥ 3 floor) 이 함께 차단. |
 | G-D | ✅ **Defended** (PR _TBD_, 2026-05-02) | Rule 6 `composite_gaming_d1_d5_below_minimum` — `aggregate ≥ 24 AND D1 ≥ 3 AND D5 ≥ 3` AND-gate. SWE-bench Verified / RewardBench v2 / OpenAI Preparedness / Anthropic RSP v2 수렴. Threshold 3/5: judge variance σ≈0.6 (Zheng NeurIPS 2023) — 4/5 false-negative 위험. |
 | G-E | ✅ **Defended** (PR #33, 2026-05-02) | Playwright real Chromium smoke + 3-way env contract (`CRUMB_QA_REQUIRE_PLAYWRIGHT=1` strict). SWE-bench top10 / Cognition Devin / DeepSeek-R1 정렬. CI strict gate 는 deadline 후 후속. |
 
@@ -150,7 +150,8 @@ related:
 
 3. ✅ **Cross-provider enforcement** (G-A) — PR #38 ship. `anti-deception.ts` Rule 4: same-provider → PASS → PARTIAL.
 4. ✅ **Iteration hard ceiling** (G-B) — already `VERIFY_MAX=5` + variance + ratchet regression 3-layer.
-5. ✅ **Composite gaming 방어** (G-D) — PR _TBD_ ship. Rule 6: `aggregate ≥ 24 AND D1 ≥ 3 AND D5 ≥ 3`. Threshold 3/5 (4/5 대신) — judge variance σ≈0.6 (Zheng NeurIPS 2023) 고려한 frontier-aligned calibration; 4/5 tightening 은 extended-thinking 채택 후 P2.
+5. ✅ **Composite gaming 방어** (G-D) — PR #44 ship. Rule 6: `aggregate ≥ 24 AND D1 ≥ 3 AND D5 ≥ 3`. Threshold 3/5 (4/5 대신) — judge variance σ≈0.6 (Zheng NeurIPS 2023) 고려한 frontier-aligned calibration; 4/5 tightening 은 extended-thinking 채택 후 P2.
+6. ✅ **Length bias firewall** (G-C) — PR _TBD_ ship. Verifier spawn 시 dispatcher 가 artifact byte/token count auto-inject + sandwich firewall 섹션. D1/D5 한정 (D2/D6 immune per Rubric-Anchored NeurIPS 2025). Anthropic Hybrid Norm 2026 패턴: prompt-only ~50% 감소 + Rule 6 floor 결합 → residual ~1% level.
 
 ### SKIP (frontier가 후퇴 중)
 
