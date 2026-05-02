@@ -134,3 +134,40 @@ describe('formatConfig', () => {
     expect(out).toContain('gemini-2.5-pro');
   });
 });
+
+// Committed-config integrity guard — the live `.crumb/config.toml` must parse
+// into the v3 schema and resolve verifier (the highest-leverage actor for
+// extended thinking per Snell ICLR 2025) to effort=high. Backing: wiki/synthesis/
+// bagelcode-scoring-ratchet-frontier-2026-05-02.md §7 P0-1.
+describe('committed .crumb/config.toml', () => {
+  it('parses into v3 schema with verifier effort=high', () => {
+    const repoRoot = join(import.meta.dirname, '..', '..');
+    const live = loadConfig(repoRoot);
+    expect(live.defaults.effort).toBe('high');
+    expect(live.actors.verifier?.effort).toBe('high');
+    expect(live.actors.verifier?.harness).toBe('gemini-cli');
+    expect(live.actors.verifier?.model).toBe('gemini-2.5-pro');
+  });
+
+  it('all 5 actors carry effort=high (no silent low/med drift)', () => {
+    const repoRoot = join(import.meta.dirname, '..', '..');
+    const live = loadConfig(repoRoot);
+    for (const name of [
+      'coordinator',
+      'planner-lead',
+      'builder',
+      'verifier',
+      'builder-fallback',
+    ] as const) {
+      expect(live.actors[name]?.effort).toBe('high');
+    }
+  });
+
+  it('all 3 local providers enabled (matches frontier-research recommended baseline)', () => {
+    const repoRoot = join(import.meta.dirname, '..', '..');
+    const live = loadConfig(repoRoot);
+    expect(live.providers['claude-local'].enabled).toBe(true);
+    expect(live.providers['codex-local'].enabled).toBe(true);
+    expect(live.providers['gemini-cli-local'].enabled).toBe(true);
+  });
+});

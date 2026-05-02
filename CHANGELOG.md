@@ -4,6 +4,19 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Fixed — `.crumb/config.toml` schema drift + verifier effort=high default (2026-05-02)
+
+Implements P0-1 of the scoring+ratchet frontier survey (`wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md` §7). Two coupled gaps fixed:
+
+- **Schema drift**: the committed `.crumb/config.toml` used the v2 layout (`[agents.coordinator]`, `[agents.engineering-lead]`, `thinking_effort`) while `loadConfig()` since the model-config UI ship has expected v3 (`[actors."<name>"]`, `[providers."<id>"]`, `effort`). Result: `loadConfig()` was silently falling through to `defaultConfig()` at runtime. The TUI / `crumb_model` MCP tool saved correctly in v3, but the seed file shipped with the repo was unparseable as overrides — a fresh checkout's first run got nothing user-tunable from the seed.
+- **Verifier extended thinking default**: rewrote the seed in v3 layout with explicit `effort = "high"` on every actor, with comments citing **Snell et al. ICLR 2025** ("Scaling LLM Test-Time Compute Optimally" — test-time compute 4× ≈ 14× pretrain) and **CourtEval ACL 2025** (multi-role +12.4%). Verifier is the highest-leverage actor — Critic / Defender steps benefit most from extended thinking budget.
+
+Changes:
+- **`.crumb/config.toml`** — full rewrite to v3 layout. 5 actors, 3 providers, `effort = "high"` on all. Header documents resolve order + effort mapping + frontier backing.
+- **`src/config/model-config.test.ts`** — +3 regression specs locking the committed config: (a) verifier effort=high + harness=gemini-cli + model=gemini-2.5-pro, (b) all 5 actors carry effort=high (no silent low/med drift), (c) all 3 local providers enabled. Suite total 236/236 (was 233).
+
+**Limitation acknowledged**: this PR is signaling-only at the dispatcher → adapter boundary. The adapters (`claude-local`, `codex-local`, `gemini-local`) do not yet pass `effort` to the underlying CLI flags (`--reasoning-effort` exists for codex; Anthropic / Gemini extended thinking is API-only and not exposed by `claude -p` / `gemini -p`). Adapter-level effort plumbing is queued as the next ratchet step (codex-local first; Anthropic/Gemini wait for SDK adapter ships).
+
 ### Added — Scoring + ratchet frontier survey (2026-05-02)
 
 `wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md` ingested. Frontier verdict on whether the multi-agent "scoring + ratchet" pattern (verifier produces D1-D6 → iterate until PASS or variance-based adaptive_stop) actually raises quality, and what 2026 alternatives exist.
