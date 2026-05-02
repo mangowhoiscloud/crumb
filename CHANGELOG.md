@@ -33,6 +33,23 @@ Changes:
 
 PR: #27 (refactor) + this PR (docs sync).
 
+### Added — Playwright smoke run real implementation + opt-in strict gate (2026-05-02)
+
+Implements P0-2 of the scoring+ratchet frontier survey (`wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md` §7). Frontier backing: SWE-bench Verified 2025 top10 / Cognition Devin "Don't Build Multi-Agents" Jun 2025 / DeepSeek-R1 Jan 2025 — all converge on rule-based exec gate as the strongest D2 / D6 ground truth.
+
+- **`src/effects/qa-check-playwright.ts`** — replaced the 6-line stub with a real Chromium smoke: launch headless → `file://${artifact}` → wait up to 5s for `<canvas>` (Phaser 3.80 boot signal) → watch console + page errors for 1.5s → fail with `reason` on missing canvas, console error, or page error. Single-browser gate (chromium) covers the SWE-bench-style P0 ground truth; firefox+webkit cross-browser is P1.
+- **`src/effects/qa-check.ts`** — Playwright detection now auto-detects via dynamic import (no more `PLAYWRIGHT_AVAILABLE=1` opt-in). New env contract:
+  - **default** (Playwright not installed) — `first_interaction='skipped'`, `lint_findings` includes guidance (`'playwright not installed (D6 portability unverified); install: npm i -D playwright && npx playwright install chromium'`), `exec_exit_code` unchanged. Signaling without breaking existing runs.
+  - **`CRUMB_QA_REQUIRE_PLAYWRIGHT=1`** (strict gate, recommended for CI) — missing Playwright → `first_interaction='fail'`, `exec_exit_code=1`. Forces D2/D6 ground truth.
+  - **`CRUMB_QA_PLAYWRIGHT_OPTIONAL=1`** — silent skip (suppresses the warning finding). Backward-compat for environments that explicitly don't want Playwright.
+  - Smoke success → `first_interaction='ok'`, `cross_browser_smoke='ok'`. Smoke failure → `first_interaction='fail'`, `exec_exit_code=1`, finding carries the smoke reason.
+- **`src/effects/qa-check.test.ts`** (NEW) — 10 specs covering: mock fallback (.mock.html / missing artifact), lint + size checks, all 5 Playwright detection branches (default missing, REQUIRE strict-fail, OPTIONAL silent skip, smoke success, smoke fail, smoke runtime error). Suite total **246/246** (was 236).
+- Anti-deception synergy: `validator/anti-deception.ts` already forces `D2=0` when `verdict=PASS && exec_exit_code != 0`. With Playwright smoke now enforcing real failure modes (no canvas / console error / page error), the anti-deception layer gains genuine teeth — a builder can no longer ship a syntactically lint-clean file that crashes on load.
+
+**Scope notes**:
+- This PR is **opt-in strict** (CI not yet mandatory). The CI workflow update to `npx playwright install --with-deps chromium` + `CRUMB_QA_REQUIRE_PLAYWRIGHT=1` is queued as a follow-up after the Bagelcode submission deadline (2026-05-03 23:59 KST), to avoid pre-deadline CI infra risk.
+- `playwright` is **not** added as a direct dep — kept as an optional peer (dynamic import, runtime string-built module name to bypass `tsc --noEmit`). Local installation (`npm i -D playwright && npx playwright install chromium`) immediately activates the real smoke for any user / evaluator who wants D2/D6 ground truth.
+
 ### Fixed — `.crumb/config.toml` schema drift + verifier effort=high default (2026-05-02)
 
 Implements P0-1 of the scoring+ratchet frontier survey (`wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md` §7). Two coupled gaps fixed:
