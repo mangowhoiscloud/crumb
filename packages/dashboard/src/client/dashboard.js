@@ -64,8 +64,13 @@ function renderSessionList() {
       if (s.live) cls.push('live');
       if (activeSession === s.id) cls.push('active');
       const cost = s.metrics ? formatCost(s.metrics.cost_usd) : '—';
+      const verdict = s.metrics?.last_verdict;
+      const status = verdict
+        ? (verdict === 'PASS' ? '✓' : verdict === 'PARTIAL' ? '~' : '✗')
+        : (s.metrics?.done ? '·' : '▶');
       return '<div class="' + cls.join(' ') + '" data-id="' + s.id + '">' +
-        '<div><span class="row-dot"></span><span class="row-id">' + escapeHTML(s.id.slice(0, 12)) + '…</span></div>' +
+        '<button class="row-close" data-close="' + s.id + '" title="dismiss from sidebar (transcript preserved on disk)">×</button>' +
+        '<div><span class="row-dot"></span><span class="row-id">' + escapeHTML(s.id.slice(0, 12)) + '…</span> <span style="color:var(--ink-tertiary);">' + status + '</span></div>' +
         '<div class="row-goal">' + escapeHTML(s.goal ?? '(no goal yet)') + '</div>' +
         '<div class="row-meta">' + cost + ' · ' + (s.metrics?.events ?? 0) + ' evt</div>' +
       '</div>';
@@ -77,7 +82,29 @@ function renderSessionList() {
   });
   list.innerHTML = blocks.join('');
   list.querySelectorAll('.session-row').forEach(el => {
-    el.addEventListener('click', () => selectSession(el.dataset.id));
+    el.addEventListener('click', (e) => {
+      // close button has its own handler — don't double-fire
+      if (e.target?.closest?.('.row-close')) return;
+      selectSession(el.dataset.id);
+    });
+  });
+  list.querySelectorAll('.row-close').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.close;
+      try {
+        await fetch('/api/sessions/' + encodeURIComponent(id) + '/close', { method: 'POST' });
+      } catch {}
+      sessions.delete(id);
+      eventCache.delete(id);
+      if (activeSession === id) {
+        activeSession = null;
+        renderHeader();
+        renderSwimlane();
+        renderScorecard();
+      }
+      renderSessionList();
+    });
   });
 }
 
@@ -702,4 +729,354 @@ const _origSelectForLogs = selectSession;
 selectSession = function(id) {
   _origSelectForLogs(id);
   if (activeView === 'logs') renderLogActorList();
+};
+
+// ─── v3.5 console — Output tab + new-session form + live execution feed ───
+//
+// "/crumb <text>" in the input bar  → POST /api/crumb/run (spawn a new session
+//                                     with that goal as a child process)
+// "/approve | /veto | @actor ..."   → existing inbox forward (PR #56)
+// plain text                        → existing inbox forward as user.intervene
+
+// ── (1) Live execution feed — terminal-like console above the input bar ──
+
+let feedPaused = false;
+const FEED_MAX_LINES = 800;
+
+function appendFeedLine(meta) {
+  const root = $('console-feed-body');
+  if (!root) return;
+  if (feedPaused) return;
+  const ts = (meta.ts || new Date().toISOString()).split('T')[1]?.slice(0, 8) || '--:--:--';
+  const cls = ['feed-line'];
+  if (meta.kindClass) cls.push('kind-' + meta.kindClass);
+  if (meta.stderr) cls.push('stderr');
+  const div = document.createElement('div');
+  div.className = cls.join(' ');
+  const tsSpan = document.createElement('span');
+  tsSpan.className = 'feed-ts';
+  tsSpan.textContent = ts;
+  const actorSpan = document.createElement('span');
+  actorSpan.className = 'feed-actor';
+  actorSpan.textContent = meta.actor || '';
+  const bodySpan = document.createElement('span');
+  bodySpan.className = 'feed-body';
+  bodySpan.textContent = meta.body || '';
+  div.appendChild(tsSpan);
+  div.appendChild(actorSpan);
+  div.appendChild(bodySpan);
+  root.appendChild(div);
+  while (root.childNodes.length > FEED_MAX_LINES) root.removeChild(root.firstChild);
+  root.scrollTop = root.scrollHeight;
+}
+
+function classifyKindForFeed(kind) {
+  if (kind === 'error') return 'error';
+  if (kind === 'audit') return 'audit';
+  if (kind === 'spec' || kind === 'spec.update') return 'spec';
+  if (kind === 'build' || kind === 'qa.result') return 'build';
+  if (kind === 'judge.score' || kind === 'verify.result' || kind.startsWith('step.judge')) return 'judge';
+  if (kind.startsWith('handoff.')) return 'handoff';
+  if (kind === 'session.start' || kind === 'session.end' || kind === 'note') return 'system';
+  return '';
+}
+
+function feedLineFromTranscriptEvent(msg) {
+  if (!msg) return null;
+  let body = msg.body || '';
+  if (!body && msg.data) {
+    try {
+      body = JSON.stringify(msg.data).slice(0, 200);
+    } catch {
+      body = '(data)';
+    }
+  }
+  return {
+    ts: msg.ts,
+    actor: msg.from,
+    body: '[' + msg.kind + '] ' + body,
+    kindClass: classifyKindForFeed(msg.kind),
+  };
+}
+
+$('console-feed-pause').addEventListener('click', () => {
+  feedPaused = !feedPaused;
+  $('console-feed-pause').classList.toggle('paused', feedPaused);
+  $('console-feed-pause').textContent = feedPaused ? 'paused' : 'pause';
+  $('console-feed-status').textContent = feedPaused ? 'paused — incoming events queued' : '';
+});
+$('console-feed-clear').addEventListener('click', () => {
+  $('console-feed-body').innerHTML = '';
+});
+
+// Wire the existing append SSE handler to also push to the feed.
+es.addEventListener('append', e => {
+  const d = JSON.parse(e.data);
+  if (activeSession && d.session_id !== activeSession) return;
+  const line = feedLineFromTranscriptEvent(d.msg);
+  if (line) appendFeedLine(line);
+});
+es.addEventListener('session_start', e => {
+  const d = JSON.parse(e.data);
+  if (activeSession && d.session_id !== activeSession) return;
+  appendFeedLine({
+    ts: new Date().toISOString(),
+    actor: 'system',
+    body: '🌱 session_start — goal=' + (d.goal || '?') + ' preset=' + (d.preset || 'ambient'),
+    kindClass: 'system',
+  });
+});
+
+// Per-session log streaming (multiplexed: opens for the *active session* only,
+// re-opens when activeSession changes). Pulls every actor's spawn log together
+// so the feed shows raw stdout + stderr alongside transcript events.
+let feedLogSource = null;
+let feedLogActorSet = new Set();
+function refreshFeedLogStreams() {
+  // Close any prior streams.
+  if (feedLogSource) {
+    for (const es of feedLogSource) es.close();
+  }
+  feedLogSource = [];
+  feedLogActorSet = new Set();
+  if (!activeSession) {
+    $('console-feed-status').textContent = 'no session selected';
+    return;
+  }
+  const s = sessions.get(activeSession);
+  $('console-feed-status').textContent = 'tailing ' + activeSession.slice(0, 12) + '…';
+  const actors = (s?.actors ?? []).slice();
+  for (const actor of actors) attachFeedLogStream(actor);
+}
+
+function attachFeedLogStream(actor) {
+  if (feedLogActorSet.has(actor)) return;
+  feedLogActorSet.add(actor);
+  const url = '/api/sessions/' + encodeURIComponent(activeSession) + '/logs/' + encodeURIComponent(actor) + '/stream';
+  const src = new EventSource(url);
+  src.addEventListener('rotate', e => {
+    const d = JSON.parse(e.data);
+    appendFeedLine({
+      ts: new Date().toISOString(),
+      actor: actor,
+      body: '── new spawn: ' + d.file + ' ──',
+      kindClass: 'system',
+    });
+  });
+  src.addEventListener('chunk', e => {
+    const d = JSON.parse(e.data);
+    let inStderr = false;
+    for (const raw of d.text.split('\n')) {
+      const line = raw.replace(/\r$/, '');
+      if (line.length === 0) continue;
+      if (/^--- stderr ---$/.test(line)) { inStderr = true; continue; }
+      if (/^--- stdout ---$/.test(line)) { inStderr = false; continue; }
+      if (/^=== adapter /.test(line)) {
+        appendFeedLine({ ts: new Date().toISOString(), actor: actor, body: line, kindClass: 'system' });
+        continue;
+      }
+      appendFeedLine({
+        ts: new Date().toISOString(),
+        actor: actor,
+        body: line,
+        kindClass: 'log',
+        stderr: inStderr,
+      });
+    }
+  });
+  src.addEventListener('heartbeat', () => {});
+  feedLogSource.push(src);
+}
+
+// When a new agent.wake arrives for the active session, attach its log stream too.
+es.addEventListener('append', e => {
+  const d = JSON.parse(e.data);
+  if (d.session_id !== activeSession) return;
+  if (d.msg.kind === 'agent.wake' && d.msg.from && !feedLogActorSet.has(d.msg.from)) {
+    attachFeedLogStream(d.msg.from);
+  }
+});
+
+// Hook session select to (re)open feed log streams.
+const _origSelectForFeed = selectSession;
+selectSession = function(id) {
+  _origSelectForFeed(id);
+  refreshFeedLogStreams();
+  refreshOutputTab();
+};
+
+// ── (2) New-session form (＋ button) — POST /api/crumb/run ──
+
+$('new-session').addEventListener('click', () => {
+  const f = $('new-session-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  if (f.style.display === 'block') $('new-session-goal').focus();
+});
+$('new-session-cancel').addEventListener('click', () => {
+  $('new-session-form').style.display = 'none';
+});
+$('new-session-go').addEventListener('click', spawnNewCrumbRun);
+$('new-session-goal').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); spawnNewCrumbRun(); }
+});
+
+async function spawnNewCrumbRun() {
+  const goalEl = $('new-session-goal');
+  const presetEl = $('new-session-preset');
+  const fb = $('new-session-feedback');
+  const goal = (goalEl.value || '').trim();
+  if (!goal) {
+    fb.textContent = 'goal is required';
+    fb.className = 'console-feedback err';
+    return;
+  }
+  fb.textContent = 'spawning crumb run…';
+  fb.className = 'console-feedback';
+  const body = { goal };
+  if (presetEl.value) body.preset = presetEl.value;
+  try {
+    const res = await fetch('/api/crumb/run', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      fb.textContent = '✗ ' + res.status + ': ' + (await res.text()).slice(0, 200);
+      fb.className = 'console-feedback err';
+      return;
+    }
+    const j = await res.json();
+    fb.textContent = '✓ pid=' + j.pid + ' — session will appear shortly';
+    fb.className = 'console-feedback ok';
+    goalEl.value = '';
+    setTimeout(() => {
+      $('new-session-form').style.display = 'none';
+      fb.textContent = '';
+    }, 2000);
+  } catch (err) {
+    fb.textContent = '✗ ' + err.message;
+    fb.className = 'console-feedback err';
+  }
+}
+
+// ── (3) Console input — interpret "/crumb <goal>" as a new session spawn ──
+
+const _origConsoleSendClick = $('console-send').onclick;
+$('console-send').addEventListener('click', async () => {
+  const line = $('console-line').value.trim();
+  if (!line) return;
+  if (/^\/crumb\s+/.test(line)) {
+    // intercept — start a new session with the rest as goal
+    const goal = line.replace(/^\/crumb\s+/, '').trim();
+    const fb = $('console-feedback');
+    fb.textContent = 'spawning new session: ' + goal.slice(0, 60);
+    fb.className = 'console-feedback';
+    try {
+      const res = await fetch('/api/crumb/run', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ goal }),
+      });
+      if (!res.ok) {
+        fb.textContent = '✗ ' + res.status + ': ' + (await res.text()).slice(0, 200);
+        fb.className = 'console-feedback err';
+      } else {
+        fb.textContent = '✓ new session spawning — will appear in sidebar';
+        fb.className = 'console-feedback ok';
+        $('console-line').value = '';
+      }
+    } catch (err) {
+      fb.textContent = '✗ ' + err.message;
+      fb.className = 'console-feedback err';
+    }
+  }
+  // Non-/crumb lines fall through to the existing inbox handler (already wired in PR #56).
+});
+
+// ── (4) Output tab — iframe live render of artifacts/{game/index.html | game.html} ──
+
+function refreshOutputTab() {
+  const select = $('output-path-select');
+  const iframe = $('output-frame');
+  const empty = $('output-empty');
+  if (!activeSession) {
+    select.innerHTML = '';
+    iframe.style.display = 'none';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  const events = eventCache.get(activeSession) ?? [];
+  // Collect every artifact path emitted via kind=artifact.created (or build.artifacts).
+  const seen = new Map(); // path → sha256
+  for (const e of events) {
+    for (const a of (e.artifacts ?? [])) {
+      if (a.path && a.sha256) seen.set(a.path, a.sha256);
+    }
+  }
+  // Pick the renderable head: prefer multi-file index.html, fall back to game.html.
+  const head = (() => {
+    const indexHit = [...seen.keys()].find(p => /(^|\/)index\.html$/.test(p));
+    if (indexHit) return indexHit;
+    const gameHit = [...seen.keys()].find(p => /(^|\/)game\.html$/.test(p));
+    if (gameHit) return gameHit;
+    const anyHtml = [...seen.keys()].find(p => /\.html$/.test(p));
+    return anyHtml ?? null;
+  })();
+  if (!head) {
+    select.innerHTML = '';
+    iframe.style.display = 'none';
+    if (empty) {
+      empty.style.display = 'block';
+      empty.textContent = 'No HTML artifact emitted yet for this session.';
+    }
+    return;
+  }
+  // Populate dropdown with all html artifacts.
+  const htmlPaths = [...seen.keys()].filter(p => /\.html$/.test(p));
+  select.innerHTML = htmlPaths.map(p =>
+    '<option value="' + escapeHTML(p) + '"' + (p === head ? ' selected' : '') + '>' + escapeHTML(p) + '</option>'
+  ).join('');
+  loadArtifactIntoFrame(head);
+}
+
+function loadArtifactIntoFrame(artifactPath) {
+  if (!activeSession || !artifactPath) return;
+  const iframe = $('output-frame');
+  const empty = $('output-empty');
+  // strip "artifacts/" prefix because the server endpoint roots at <session>/artifacts.
+  const rel = artifactPath.replace(/^artifacts\//, '');
+  const url = '/api/sessions/' + encodeURIComponent(activeSession) +
+              '/artifact/' + rel.split('/').map(encodeURIComponent).join('/') +
+              '?t=' + Date.now();
+  iframe.src = url;
+  iframe.style.display = 'block';
+  if (empty) empty.style.display = 'none';
+}
+
+$('output-path-select').addEventListener('change', e => {
+  loadArtifactIntoFrame(e.target.value);
+});
+$('output-reload').addEventListener('click', () => {
+  const select = $('output-path-select');
+  if (select.value) loadArtifactIntoFrame(select.value);
+});
+$('output-open').addEventListener('click', () => {
+  const iframe = $('output-frame');
+  if (iframe.src) window.open(iframe.src, '_blank');
+});
+
+// Refresh Output tab when artifact.created events arrive.
+es.addEventListener('append', e => {
+  const d = JSON.parse(e.data);
+  if (d.session_id !== activeSession) return;
+  if (d.msg.kind === 'artifact.created' && activeView === 'output') {
+    refreshOutputTab();
+  }
+});
+
+// Hook the existing setActiveView so switching to Output triggers a refresh.
+const _origSetActiveView = setActiveView;
+setActiveView = function(view) {
+  _origSetActiveView(view);
+  if (view === 'output') refreshOutputTab();
 };

@@ -58,6 +58,12 @@ export interface DashboardServerOptions {
   /** v3.4: multi-home transcript globs. Takes precedence over `glob`. */
   globs?: string[];
   pollInterval?: number;
+  /**
+   * Crumb repository root for `crumb run` invocations from POST /api/crumb/run.
+   * Defaults to `process.cwd()` when omitted (typical CLI usage). Tests pass a
+   * tmpdir to keep filesystem effects isolated.
+   */
+  repoRoot?: string;
 }
 
 export async function startDashboardServer(
@@ -65,6 +71,12 @@ export async function startDashboardServer(
 ): Promise<DashboardServer> {
   const bind = opts.bind ?? '127.0.0.1';
   const requestedPort = opts.port ?? 7321;
+  const repoRoot = opts.repoRoot ?? process.cwd();
+  // Sessions the user dismissed via the sidebar × button. The transcript on
+  // disk is untouched (read-only invariant); /api/sessions filters them out
+  // until the dashboard restarts. Volatile-by-design — there's no notion of
+  // "session deleted" in the on-disk model.
+  const hiddenSessions = new Set<string>();
 
   const bus = new EventBus();
   const watcher = new SessionWatcher(bus, {
@@ -78,7 +90,7 @@ export async function startDashboardServer(
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? bind}`);
     if (req.method === 'GET' && url.pathname === '/') return serveHtml(res);
     if (req.method === 'GET' && url.pathname === '/api/sessions') {
-      return serveSessions(res, watcher);
+      return serveSessions(res, watcher, hiddenSessions);
     }
     if (req.method === 'GET' && url.pathname === '/api/stream') {
       return serveStream(req, res, url, bus);
@@ -102,6 +114,20 @@ export async function startDashboardServer(
     const logsStreamMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/logs\/([^/]+)\/stream$/);
     if (req.method === 'GET' && logsStreamMatch) {
       return void serveActorLogsStream(req, res, watcher, logsStreamMatch[1]!, logsStreamMatch[2]!);
+    }
+    // /api/sessions/:id/artifact/* (GET — serve any file under <session>/artifacts/ for iframe)
+    const artifactMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/artifact\/(.+)$/);
+    if (req.method === 'GET' && artifactMatch) {
+      return void serveArtifactFile(res, watcher, artifactMatch[1]!, artifactMatch[2]!);
+    }
+    // /api/crumb/run (POST — spawn `crumb run --goal <text>` as a child process)
+    if (req.method === 'POST' && url.pathname === '/api/crumb/run') {
+      return void serveCrumbRun(req, res, repoRoot);
+    }
+    // /api/sessions/:id/close (POST — mark dashboard-side hidden; transcript is never deleted)
+    const closeMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/close$/);
+    if (req.method === 'POST' && closeMatch) {
+      return void serveSessionClose(res, hiddenSessions, closeMatch[1]!);
     }
     res.statusCode = 404;
     res.end('not found');
@@ -133,8 +159,12 @@ function serveHtml(res: http.ServerResponse): void {
   res.end(DASHBOARD_HTML);
 }
 
-function serveSessions(res: http.ServerResponse, watcher: SessionWatcher): void {
-  const snapshot = watcher.snapshot();
+function serveSessions(
+  res: http.ServerResponse,
+  watcher: SessionWatcher,
+  hiddenSessions: Set<string>,
+): void {
+  const snapshot = watcher.snapshot().filter((s) => !hiddenSessions.has(s.session_id));
   const sessions = snapshot.map(
     ({ session_id, project_id, crumb_home, transcript_path, history }) => {
       const metrics = computeMetrics(history);
@@ -478,4 +508,140 @@ function serveStream(
   };
   req.on('close', cleanup);
   req.on('error', cleanup);
+}
+
+// ─── v3.5 console — artifact iframe + crumb run / close ────────────────────
+
+/**
+ * Serve any file under <session>/artifacts/ for the dashboard's Output tab.
+ * Resolves to the session dir + 'artifacts' + relative path with traversal
+ * protection (resolved path must remain inside the session's artifacts root).
+ */
+async function serveArtifactFile(
+  res: http.ServerResponse,
+  watcher: SessionWatcher,
+  sessionId: string,
+  relPath: string,
+): Promise<void> {
+  const match = watcher.snapshot().find((s) => s.session_id === sessionId);
+  if (!match) {
+    res.statusCode = 404;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end(`session not found: ${sessionId}`);
+    return;
+  }
+  if (relPath.includes('..') || relPath.startsWith('/')) {
+    res.statusCode = 400;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end('invalid path');
+    return;
+  }
+  const sessionDir = sessionDirFromTranscript(match.transcript_path);
+  const artifactsRoot = join(sessionDir, 'artifacts');
+  const decoded = decodeURIComponent(relPath);
+  const target = join(artifactsRoot, decoded);
+  if (!target.startsWith(artifactsRoot)) {
+    res.statusCode = 400;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end('path escapes artifacts/');
+    return;
+  }
+  try {
+    const buf = await readFile(target);
+    const ext = decoded.split('.').pop()?.toLowerCase() ?? '';
+    const contentType =
+      ext === 'html'
+        ? 'text/html; charset=utf-8'
+        : ext === 'js' || ext === 'mjs'
+          ? 'application/javascript; charset=utf-8'
+          : ext === 'css'
+            ? 'text/css; charset=utf-8'
+            : ext === 'json' || ext === 'webmanifest'
+              ? 'application/json; charset=utf-8'
+              : ext === 'svg'
+                ? 'image/svg+xml'
+                : ext === 'png'
+                  ? 'image/png'
+                  : ext === 'jpg' || ext === 'jpeg'
+                    ? 'image/jpeg'
+                    : ext === 'md'
+                      ? 'text/markdown; charset=utf-8'
+                      : 'application/octet-stream';
+    res.setHeader('content-type', contentType);
+    res.setHeader('cache-control', 'no-cache');
+    res.end(buf);
+  } catch {
+    res.statusCode = 404;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end(`artifact not found: ${decoded}`);
+  }
+}
+
+/**
+ * POST /api/crumb/run — spawn `npx tsx src/index.ts run --goal <text>`.
+ */
+async function serveCrumbRun(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  repoRoot: string,
+): Promise<void> {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  const MAX_BYTES = 8192;
+  for await (const chunk of req) {
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
+    total += buf.length;
+    if (total > MAX_BYTES) {
+      res.statusCode = 413;
+      res.setHeader('content-type', 'text/plain; charset=utf-8');
+      res.end('payload too large');
+      return;
+    }
+    chunks.push(buf);
+  }
+  let goal: string;
+  let preset: string | undefined;
+  try {
+    const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+      goal?: unknown;
+      preset?: unknown;
+    };
+    if (typeof body.goal !== 'string' || body.goal.trim().length === 0) {
+      res.statusCode = 400;
+      res.setHeader('content-type', 'text/plain; charset=utf-8');
+      res.end('body must be {"goal": "<non-empty>"}');
+      return;
+    }
+    goal = body.goal.trim();
+    if (typeof body.preset === 'string' && body.preset.length > 0) preset = body.preset;
+  } catch {
+    res.statusCode = 400;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end('invalid JSON body');
+    return;
+  }
+
+  const { spawn } = await import('node:child_process');
+  const args = ['tsx', 'src/index.ts', 'run', '--goal', goal];
+  if (preset) args.push('--preset', preset);
+  const child = spawn('npx', args, { cwd: repoRoot, detached: true, stdio: 'ignore' });
+  child.unref();
+
+  res.statusCode = 202;
+  res.setHeader('content-type', 'application/json');
+  res.end(JSON.stringify({ ok: true, pid: child.pid, goal, preset: preset ?? null }));
+}
+
+/**
+ * POST /api/sessions/:id/close — dashboard-side hide (volatile).
+ */
+function serveSessionClose(
+  res: http.ServerResponse,
+  hiddenSessions: Set<string>,
+  sessionId: string,
+): void {
+  hiddenSessions.add(sessionId);
+  res.statusCode = 200;
+  res.setHeader('content-type', 'application/json');
+  res.end(JSON.stringify({ ok: true, hidden: sessionId }));
 }
