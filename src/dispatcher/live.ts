@@ -28,8 +28,8 @@ import type { Harness, PresetSpec } from './preset-loader.js';
  * Idle-timeout fires only on genuine stalls (no stdout for N seconds) while
  * the wall-clock remains as a hard ceiling.
  */
-const PER_SPAWN_TIMEOUT_MS = 15 * 60 * 1000; // 15 min — hard wall-clock ceiling
-const PER_SPAWN_IDLE_TIMEOUT_MS = 90 * 1000; // 90 s — kill on no stdout for this long
+const PER_SPAWN_TIMEOUT_MS = Number(process.env.CRUMB_PER_SPAWN_TIMEOUT_MS) || 15 * 60 * 1000; // 15 min — hard wall-clock ceiling
+const PER_SPAWN_IDLE_TIMEOUT_MS = Number(process.env.CRUMB_PER_SPAWN_IDLE_MS) || 90 * 1000; // 90 s — kill on no stdout for this long
 
 export interface DispatcherDeps {
   writer: TranscriptWriter;
