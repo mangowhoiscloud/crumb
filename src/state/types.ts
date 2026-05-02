@@ -65,6 +65,22 @@ export interface ProgressLedger {
    * `data.actor` clears the entire set (and global pause).
    */
   paused_actors: Actor[];
+
+  // v3.2 budget guardrails (autoresearch P3 wall-clock + spec budget-guardrails P0).
+  // Reducer increments/aggregates these from event metadata; loop + dispatcher enforce
+  // the corresponding hard caps (wall-clock / per-spawn timeout). See
+  // wiki/concepts/bagelcode-budget-guardrails.md and .skills/karpathy-patterns/SKILL.md P3.
+  respec_count: number; // # of spec.update events (rollback re-entry to planner)
+  verify_count: number; // # of judge.score events (caps verifier loop)
+  session_token_total: number; // Σ metadata.tokens_in + tokens_out across all events
+  session_started_at: string; // ISO-8601, set on first session.start event
+  per_spawn_started_at: string | null; // current spawn ts (loop watchdog SIGTERMs after 5min)
+
+  // v3.2 ratchet (autoresearch P4 keep/revert). Tracks the best aggregate score so
+  // far; if a later judge.score regresses by RATCHET_THRESHOLD points, the session
+  // is auto-terminated with reason='ratchet_revert' to prevent unbounded loops.
+  max_aggregate_so_far: number;
+  max_aggregate_msg_id: string | null;
 }
 
 export interface CrumbState {
@@ -95,6 +111,13 @@ export const initialState = (sessionId: string): CrumbState => ({
     circuit_breaker: {},
     paused: false,
     paused_actors: [],
+    respec_count: 0,
+    verify_count: 0,
+    session_token_total: 0,
+    session_started_at: '',
+    per_spawn_started_at: null,
+    max_aggregate_so_far: 0,
+    max_aggregate_msg_id: null,
   },
   last_message: null,
   done: false,
