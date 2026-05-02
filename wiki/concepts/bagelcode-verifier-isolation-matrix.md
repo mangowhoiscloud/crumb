@@ -187,6 +187,8 @@ CRUMB_CROSS_PROVIDER=1
 
 ## See also
 
+- ★ **[[bagelcode-system-architecture-v3.5]]** invariant #11 — 본 매트릭스의 C1 (격리 frontier consensus) 가 v3.5 에서 file-level enforcement (judge-input bundle) 로 격상
+- ★ **[[bagelcode-verifier-context-isolation-2026-05-03]]** — bundle 결정 논리 (whitelist/blocklist + frontier evidence)
 - [[bagelcode]] / [[bagelcode-host-harness-decision]] — 이 매트릭스가 backing 하는 결정
 - [[bagelcode-agents-fixed]] — Verifier 격리 결정 (이 매트릭스로 default cross-provider 강제 → opt-in 으로 정정 필요)
 - [[bagelcode-tradingagents-paper]] — 학술 1차

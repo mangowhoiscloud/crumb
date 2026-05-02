@@ -208,6 +208,7 @@ anthropic/anthropic 과 google/google 의 inflation 이 다를 수 있음 (Sture
 
 ## 7. Cross-links
 
+- ★ **[[bagelcode-system-architecture-v3.5]]** §5 (R1-R7 표) — 본 페이지의 R4 가 v3.5 의 anti-deception 7 rules 중 하나
 - [[bagelcode-scoring-ratchet-frontier-2026-05-02]] §3 (Failure modes), §4 (Frontier 수렴), §7 (P0 권고)
 - [[bagelcode-system-architecture-v3]] §7.3 (anti-deception Rules)
 - [[bagelcode-verifier-isolation-matrix]] C2 (cross-provider standard), C5 (isolation cost)
