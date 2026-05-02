@@ -224,6 +224,11 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
   // background spawn (e.g. verifier 7min) would let the watchdog terminate
   // the session before its terminal event lands.
   let pendingItems = 0;
+  // P1 #9: reset on every loop entry. Resume replay does NOT call onMessage
+  // (which is what normally bumps lastEventAt), so on a fresh resume the
+  // counter could be far enough in the past that the watchdog fires
+  // immediately. Force `lastEventAt = Date.now()` after replay completes so
+  // the idle window starts fresh from the moment we begin tailing.
   let lastEventAt = Date.now();
   const idleMs = opts.idleTimeoutMs ?? 60_000;
 

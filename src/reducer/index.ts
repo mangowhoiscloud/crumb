@@ -211,6 +211,15 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           ? { cross_browser_smoke: smoke }
           : {}),
       };
+      // P1 #7: verifier circuit OPEN → no working judge path. Without a
+      // verifier the pipeline can't get a verdict, so spawning again would
+      // just stack more errors. Terminate with a distinct done reason.
+      const verifierBreaker = next.progress_ledger.circuit_breaker['verifier'];
+      if (verifierBreaker?.state === 'OPEN') {
+        next.done = true;
+        effects.push({ type: 'done', reason: 'verifier_unavailable' });
+        break;
+      }
       next.progress_ledger.next_speaker = 'verifier';
       const adapter = pickAdapter(next, 'verifier');
       effects.push({
@@ -330,6 +339,16 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
       } else if (verdict === 'FAIL' || verdict === 'REJECT') {
         // Rollback to planner for respec — unless engineering circuit is OPEN, then fallback.
         const eng = next.progress_ledger.circuit_breaker['builder'];
+        const fallback = next.progress_ledger.circuit_breaker['builder-fallback'];
+        // P1 #6: when BOTH builder and builder-fallback are OPEN, there's no
+        // working build path. Spawning fallback again would just burn tokens
+        // until wall-clock exhausted. Terminate cleanly with a distinct done
+        // reason so observers see the deadlock.
+        if (eng?.state === 'OPEN' && fallback?.state === 'OPEN') {
+          next.done = true;
+          effects.push({ type: 'done', reason: 'all_builders_open' });
+          break;
+        }
         if (eng?.state === 'OPEN') {
           next.progress_ledger.next_speaker = 'builder-fallback';
           // v0.3.1 — emit kind=audit event=fallback_activated BEFORE the spawn so
@@ -586,6 +605,31 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           actor: 'researcher',
           adapter,
           sandwich_appends: collectSandwichAppends(next, 'researcher'),
+        });
+        break;
+      }
+      // P1 #8: any other handoff.requested target falls through silently. To
+      // prevent future "no-success / no-error" stall when a new handoff route
+      // is added without reducer wiring, emit a kind=note recording the
+      // unhandled handoff. This is observability-only — does not change
+      // routing — but turns silent stalls into visible warnings in the
+      // transcript so debug + studio can surface them.
+      if (event.to) {
+        effects.push({
+          type: 'append',
+          message: {
+            session_id: next.session_id,
+            from: 'system',
+            kind: 'note',
+            body: `handoff.requested to=${event.to} from=${event.from} — no reducer routing for this pair (acknowledged as no-op)`,
+            data: {
+              event: 'handoff_unrouted',
+              from: event.from,
+              to: event.to,
+              parent_event_id: event.id,
+            },
+            metadata: { deterministic: true, tool: 'reducer-handoff-default@v1' },
+          },
         });
       }
       break;

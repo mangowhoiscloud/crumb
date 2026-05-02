@@ -849,7 +849,7 @@ describe('reducer', () => {
     });
   });
 
-  it('v0.3.0: handoff.requested(to=other) from non-planner is a no-op', () => {
+  it('v0.4: handoff.requested(to=other) emits a note (no routing change)', () => {
     const s0 = initialState('sess-test');
     const handoff = fixed({
       from: 'builder',
@@ -858,8 +858,18 @@ describe('reducer', () => {
     });
     const { state, effects } = reduce(s0, handoff);
 
+    // Routing is still not changed (next_speaker stays null) — but a kind=note
+    // append effect is now produced for observability so silent stalls become
+    // visible warnings in the transcript.
     expect(state.progress_ledger.next_speaker).toBe(null);
-    expect(effects).toHaveLength(0);
+    expect(effects).toHaveLength(1);
+    expect(effects[0]!.type).toBe('append');
+    const appendEff = effects[0] as {
+      type: 'append';
+      message: { kind: string; data?: { event?: string } };
+    };
+    expect(appendEff.message.kind).toBe('note');
+    expect(appendEff.message.data?.event).toBe('handoff_unrouted');
   });
 
   it('v0.3.0: step.research from researcher → resume planner-lead for phase B', () => {
@@ -893,5 +903,78 @@ describe('reducer', () => {
     // step.research as an inline marker must NOT trigger a phase-B spawn.
     expect(state.progress_ledger.next_speaker).toBe(null);
     expect(effects).toHaveLength(0);
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // v0.4 P1 #6 + #7: circuit breaker dead-end termination
+  // ────────────────────────────────────────────────────────────────────
+
+  it('v0.4 P1 #6: judge.score FAIL with builder + builder-fallback both OPEN → done(all_builders_open)', () => {
+    const s0 = initialState('sess-test');
+    s0.progress_ledger.circuit_breaker['builder'] = {
+      state: 'OPEN',
+      consecutive_failures: 3,
+      last_failure_id: '01HBLDFAIL',
+    };
+    s0.progress_ledger.circuit_breaker['builder-fallback'] = {
+      state: 'OPEN',
+      consecutive_failures: 3,
+      last_failure_id: '01HFALLFAIL',
+    };
+    const judge = fixed({
+      from: 'verifier',
+      kind: 'judge.score',
+      scores: { verdict: 'FAIL', aggregate: 4.2, audit_violations: [] },
+    });
+    const { state, effects } = reduce(s0, judge);
+
+    expect(state.done).toBe(true);
+    const doneEff = effects.find((e) => e.type === 'done') as { type: 'done'; reason: string };
+    expect(doneEff).toBeDefined();
+    expect(doneEff.reason).toBe('all_builders_open');
+    // No spawn-builder-fallback effect should slip through.
+    expect(effects.find((e) => e.type === 'spawn')).toBeUndefined();
+  });
+
+  it('v0.4 P1 #6: judge.score FAIL with only builder OPEN still spawns builder-fallback (regression guard)', () => {
+    const s0 = initialState('sess-test');
+    s0.progress_ledger.circuit_breaker['builder'] = {
+      state: 'OPEN',
+      consecutive_failures: 3,
+      last_failure_id: '01HBLDFAIL',
+    };
+    const judge = fixed({
+      from: 'verifier',
+      kind: 'judge.score',
+      scores: { verdict: 'FAIL', aggregate: 4.2, audit_violations: [] },
+    });
+    const { state, effects } = reduce(s0, judge);
+
+    expect(state.done).toBe(false);
+    const spawn = effects.find((e) => e.type === 'spawn') as { type: 'spawn'; actor: string };
+    expect(spawn).toBeDefined();
+    expect(spawn.actor).toBe('builder-fallback');
+  });
+
+  it('v0.4 P1 #7: qa.result with verifier OPEN → done(verifier_unavailable)', () => {
+    const s0 = initialState('sess-test');
+    s0.progress_ledger.circuit_breaker['verifier'] = {
+      state: 'OPEN',
+      consecutive_failures: 3,
+      last_failure_id: '01HVERIFFAIL',
+    };
+    const qa = fixed({
+      from: 'system',
+      kind: 'qa.result',
+      data: { exec_exit_code: 0, build_event_id: '01HBUILD' },
+    });
+    const { state, effects } = reduce(s0, qa);
+
+    expect(state.done).toBe(true);
+    const doneEff = effects.find((e) => e.type === 'done') as { type: 'done'; reason: string };
+    expect(doneEff).toBeDefined();
+    expect(doneEff.reason).toBe('verifier_unavailable');
+    // No spawn-verifier effect should slip through.
+    expect(effects.find((e) => e.type === 'spawn')).toBeUndefined();
   });
 });
