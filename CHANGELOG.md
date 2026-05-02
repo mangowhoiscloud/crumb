@@ -51,6 +51,23 @@ The Pipeline DAG drew a `verifier → coordinator → builder-fallback` arc thro
 - **`WEAVE_TARGET` map expanded** — `step.research → planner-lead` resume (line 546). New `weaveTargetForVerdict()` branches by verdict (PASS→done, FAIL+(builder-error≥3)→fallback, FAIL→planner). `edgePath()` curves rollback up-over and fallback down-under.
 - SVG viewBox widened 720×180 → 820×215.
 
+### Added — `serve-game` skill: open Crumb games with auto single/multi-file detection (2026-05-03)
+
+User feedback: opening a multi-file Crumb-generated `index.html` directly with `open <path>` (file://) shows "Loading…" forever — `<script type="module">` imports and `serviceWorker.register()` are both blocked under the `file://` protocol. Single-file games (`game.html` with inline `<script>`) work with `file://` fine. Whichever shape applies should be auto-detected, not memorized.
+
+- **`.claude/skills/serve-game/SKILL.md`** (NEW) — slash-skill that:
+  1. Locates the game artifact by searching `~/.crumb/projects/*/sessions/*/artifacts/{game.html,*/index.html}` and `versions/*/artifacts/...`, sorted by mtime desc.
+  2. Disambiguates by the user's pitch keyword (`고양이`, `cat`, `match-3`, etc.) when given — greps `spec.md` siblings + `<title>` so the right session opens.
+  3. Detects shape — `<script type="module">` or `navigator.serviceWorker` present → multi-file → http server. Otherwise single-file → `file://` direct.
+  4. For multi-file: `python3 -m http.server <port>` backgrounded in a subshell (never blocks the conversation), port auto-bumps from 8765 if occupied, log to `/tmp/crumb-serve-<port>.log`.
+  5. Reports the picked session (so user can correct), the URL or path, and the stop command (`pkill -f 'http.server <port>'`).
+  6. Stop sub-procedure: `lsof -nP -iTCP -sTCP:LISTEN | grep python3` to enumerate, `pkill -f 'http.server <port>'` to kill.
+- **Triggers** (KO + EN): "이전 게임 열어줘", "고양이 퍼즐 열어줘", "전에 만든 거 열어줘", "그 게임 다시 보자", "demo 열어줘", "open the cat puzzle", "open the previous game", "serve the multi-file game", "show me what we built". Slash form `/serve-game [<keyword>]`.
+- **Honors `$CRUMB_HOME`** — falls through to `~/.crumb` only when unset, matching the rest of the codebase's path convention.
+- **Don'ts documented**: never open multi-file with `file://`, never run http server in the foreground (blocks the conversation), never skip pitch-keyword disambiguation when supplied, never hardcode `~/.crumb`.
+
+This codifies the diagnose-and-fix sequence that arose when the user reported "고양이 퍼즐이 지금 로딩중으로 나와" — the multi-file game's ES modules silently failed under `file://`. With the skill, future "이전 게임 열어줘" requests will short-circuit to the right protocol automatically.
+
 ### Added — Dashboard IDE-style grep highlight + ↑↓ nav across Logs / Transcript / Live feed (2026-05-03)
 
 The dashboard's text panels supported a substring filter that highlighted whole matching lines in faint blue (logs only), filtered entries (transcript), or had no search at all (live execution feed). User feedback: "grep 했을 때 해당되는 패턴 주황색으로 표시하고 위아래로 조작 가능(IDE처럼)하게 세팅이 아직 안되었거든." — they wanted the inline-substring orange highlight + IDE-style match navigation present in every modern editor.
