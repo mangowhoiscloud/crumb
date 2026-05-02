@@ -52,11 +52,23 @@ export class MockAdapter implements Adapter {
       await writeVerifierSequence(writer, req, wakeId);
     }
 
+    // Mock usage telemetry — deterministic numbers per actor so the dashboard
+    // shows non-zero metrics in mock-only demos. Real adapters (claude-local
+    // etc.) overwrite these with actual stream-json `result` data.
+    const mockUsage: SpawnResult['usage'] = {
+      tokens_in: req.actor === 'verifier' ? 4000 : req.actor === 'builder' ? 5000 : 2000,
+      tokens_out: req.actor === 'verifier' ? 1500 : req.actor === 'builder' ? 3000 : 800,
+      cache_read: req.actor === 'verifier' ? 3000 : req.actor === 'builder' ? 3500 : 1500,
+      cost_usd: req.actor === 'verifier' ? 0.08 : req.actor === 'builder' ? 0.12 : 0.05,
+      model: 'mock@v1',
+    };
+
     return {
       exitCode: req.signal?.aborted ? 124 : 0,
       stdout: `mock ${req.actor} ${req.signal?.aborted ? 'aborted mid-flight' : 'completed'}`,
       stderr: req.signal?.aborted ? 'aborted' : '',
       durationMs: Date.now() - start,
+      usage: mockUsage,
     };
   }
 }

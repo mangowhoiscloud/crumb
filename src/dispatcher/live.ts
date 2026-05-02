@@ -226,6 +226,19 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         });
       }
       // Always append agent.stop so observers know the turn ended.
+      // v3.3 — token usage / cost / model from the adapter's parsed output
+      // (Anthropic stream-json `result` event, OpenAI Codex `usage`, etc.)
+      // get folded into metadata here so the dashboard surfaces real numbers
+      // instead of zeros. Adapters that can't recover usage (text mode / mock)
+      // simply omit the field.
+      const usage = result.usage ?? {};
+      const stopMetadata: Record<string, unknown> = { latency_ms: result.durationMs };
+      if (typeof usage.tokens_in === 'number') stopMetadata.tokens_in = usage.tokens_in;
+      if (typeof usage.tokens_out === 'number') stopMetadata.tokens_out = usage.tokens_out;
+      if (typeof usage.cache_read === 'number') stopMetadata.cache_read = usage.cache_read;
+      if (typeof usage.cache_write === 'number') stopMetadata.cache_write = usage.cache_write;
+      if (typeof usage.cost_usd === 'number') stopMetadata.cost_usd = usage.cost_usd;
+      if (typeof usage.model === 'string') stopMetadata.model = usage.model;
       await deps.writer.append({
         session_id: deps.sessionId,
         from: effect.actor,
@@ -233,7 +246,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         body: `${effect.actor} stopped (exit=${result.exitCode}, ${result.durationMs}ms${
           timedOut ? ', timed out' : ''
         })`,
-        metadata: { latency_ms: result.durationMs },
+        metadata: stopMetadata,
       });
       break;
     }

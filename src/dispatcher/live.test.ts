@@ -244,6 +244,62 @@ describe('dispatcher — v3.2 G4 sandwich override', () => {
   });
 });
 
+describe('dispatcher usage forwarding', () => {
+  class UsageAdapter implements Adapter {
+    readonly id = 'stub-usage';
+    async health(): Promise<{ ok: boolean }> {
+      return { ok: true };
+    }
+    async spawn(): Promise<SpawnResult> {
+      return {
+        exitCode: 0,
+        stdout: '',
+        stderr: '',
+        durationMs: 42,
+        usage: {
+          tokens_in: 1500,
+          tokens_out: 800,
+          cache_read: 1200,
+          cache_write: 200,
+          cost_usd: 0.0123,
+          model: 'claude-opus-4-7',
+        },
+      };
+    }
+  }
+
+  it('folds adapter SpawnResult.usage into agent.stop metadata', async () => {
+    const adapter = new UsageAdapter();
+    const deps = await makeTimeoutDeps(adapter, 1000);
+    await dispatch({ ...spawnEffect, adapter: adapter.id }, deps);
+
+    const events = await readEvents(deps.transcriptPath);
+    const stop = events.find((e) => e.kind === 'agent.stop');
+    expect(stop).toBeDefined();
+    expect(stop?.metadata).toMatchObject({
+      latency_ms: 42,
+      tokens_in: 1500,
+      tokens_out: 800,
+      cache_read: 1200,
+      cache_write: 200,
+      cost_usd: 0.0123,
+      model: 'claude-opus-4-7',
+    });
+  });
+
+  it('omits token fields when adapter does not surface usage', async () => {
+    const adapter = new FastAdapter();
+    const deps = await makeTimeoutDeps(adapter, 1000);
+    await dispatch({ ...spawnEffect, adapter: adapter.id }, deps);
+
+    const events = await readEvents(deps.transcriptPath);
+    const stop = events.find((e) => e.kind === 'agent.stop');
+    expect(stop?.metadata?.latency_ms).toBeDefined();
+    expect(stop?.metadata?.tokens_in).toBeUndefined();
+    expect(stop?.metadata?.cost_usd).toBeUndefined();
+  });
+});
+
 describe('dispatcher per_spawn_timeout', () => {
   it('fast spawn completes without recording an error', async () => {
     const adapter = new FastAdapter();

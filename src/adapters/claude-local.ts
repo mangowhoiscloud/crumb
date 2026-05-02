@@ -47,6 +47,9 @@ export class ClaudeLocalAdapter implements Adapter {
     // (goal → planner-lead, spec → builder, qa.result → verifier, fallback)
     // omit `prompt` because the actor's job is fully described by the sandwich.
     // resolvePrompt() falls back to DEFAULT_SPAWN_PROMPT in _shared.ts.
+    // stream-json output gives us usage telemetry (tokens_in/out, cache, cost)
+    // in the final `result` event. We must also pass --verbose; the Claude CLI
+    // refuses --output-format=stream-json --print without it.
     const args = [
       '-p',
       resolvePrompt(req),
@@ -56,7 +59,8 @@ export class ClaudeLocalAdapter implements Adapter {
       req.sessionDir,
       '--dangerously-skip-permissions',
       '--output-format',
-      'text',
+      'stream-json',
+      '--verbose',
     ];
 
     const start = Date.now();
@@ -74,13 +78,59 @@ export class ClaudeLocalAdapter implements Adapter {
       const detachAbort = attachAbortHandler(child, req.signal);
       child.on('close', (code) => {
         detachAbort();
+        const usage = parseClaudeStreamJsonUsage(stdout);
         resolve({
           exitCode: code ?? -1,
           stdout,
           stderr,
           durationMs: Date.now() - start,
+          ...(usage ? { usage } : {}),
         });
       });
     });
   }
+}
+
+/**
+ * Parse the final `result` event of `claude -p --output-format stream-json`.
+ * Each line of stdout is one JSON object; the last `type: "result"` line
+ * carries `usage.input_tokens`, `usage.output_tokens`,
+ * `usage.cache_read_input_tokens`, `usage.cache_creation_input_tokens`, and
+ * `total_cost_usd`. Earlier `system`/`assistant` events are ignored.
+ *
+ * Defensive: returns null on any malformed line, so a partial / truncated
+ * stream still resolves with `usage` undefined (never throws).
+ */
+export function parseClaudeStreamJsonUsage(stdout: string): SpawnResult['usage'] | null {
+  if (!stdout) return null;
+  let result: SpawnResult['usage'] | null = null;
+  for (const rawLine of stdout.split('\n')) {
+    const line = rawLine.replace(/\r$/, '').trim();
+    if (line.length === 0) continue;
+    let evt: unknown;
+    try {
+      evt = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (typeof evt !== 'object' || evt === null) continue;
+    const o = evt as Record<string, unknown>;
+    if (o.type !== 'result') continue;
+    const usage = o.usage as Record<string, unknown> | undefined;
+    const collected: SpawnResult['usage'] = {};
+    if (usage) {
+      if (typeof usage.input_tokens === 'number') collected.tokens_in = usage.input_tokens;
+      if (typeof usage.output_tokens === 'number') collected.tokens_out = usage.output_tokens;
+      if (typeof usage.cache_read_input_tokens === 'number') {
+        collected.cache_read = usage.cache_read_input_tokens;
+      }
+      if (typeof usage.cache_creation_input_tokens === 'number') {
+        collected.cache_write = usage.cache_creation_input_tokens;
+      }
+    }
+    if (typeof o.total_cost_usd === 'number') collected.cost_usd = o.total_cost_usd;
+    if (typeof o.model === 'string') collected.model = o.model;
+    if (Object.keys(collected).length > 0) result = collected;
+  }
+  return result;
 }
