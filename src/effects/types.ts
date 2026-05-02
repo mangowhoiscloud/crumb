@@ -11,7 +11,8 @@ export type Effect =
   | HookEffect
   | DoneEffect
   | RollbackEffect
-  | StopEffect;
+  | StopEffect
+  | QaCheckEffect;
 
 export interface SpawnEffect {
   type: 'spawn';
@@ -53,4 +54,24 @@ export interface StopEffect {
   type: 'stop';
   actor: Actor;
   reason: string;
+}
+
+/**
+ * v3 qa_check — deterministic ground-truth check (no LLM).
+ *
+ * Pattern: AutoGen Executor (57.6k⭐, "Assistant writes code, Executor executes deterministically").
+ * Emitted by reducer after kind=build; dispatcher runs htmlhint + optional playwright;
+ * result becomes kind=qa.result transcript event with metadata.deterministic=true.
+ *
+ * See [[bagelcode-system-architecture-v3]] §3.5 (qa.result schema), §7 (3-layer scoring),
+ * skills/verification-before-completion.md.
+ */
+export interface QaCheckEffect {
+  type: 'qa_check';
+  /** Path to artifact to check (e.g., "artifacts/game.html"). Relative to session dir. */
+  artifact: string;
+  /** Source build event id (for parent_event_id chain). */
+  build_event_id: string;
+  /** sha256 of the artifact (for tamper detection between build and qa). */
+  artifact_sha256?: string;
 }

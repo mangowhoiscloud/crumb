@@ -1,31 +1,51 @@
-# solo — Anthropic Claude Max 만 (단일 host)
+# sdk-enterprise (production-grade, opt-in)
 #
-# 평가자가 Codex / Gemini 미로그인일 때 fallback.
-# 모든 actor = ambient (entry harness 따라감 — 보통 claude-code).
-# Cross-provider 효과 없음 (self-bias risk warn). 단순 셋업.
+# Anthropic Managed Agents-style direct SDK orchestration.
+# API key 필요 (3 vendor: Anthropic + OpenAI + Google).
+# Notion/Rakuten/Sentry 가 쓰는 production-grade pattern.
+# OAuth ban 영향 0 — Commercial ToS 따름.
 
 [meta]
-name = "solo"
-description = "단일 host (Claude Max only). Codex / Gemini 미로그인 시 안전. self-bias risk warn."
+name = "sdk-enterprise"
+description = "Anthropic Managed Agents-style direct SDK orchestration (API key 필요, production-grade, Notion/Rakuten/Sentry pattern)"
 recommended = false
-requires_cli = ["claude"]
+requires_api_keys = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY"]
 schema = "crumb/v3"
 
-# 모든 actor: 명시 없음 → ambient (보통 claude-code)
 [actors.coordinator]
 sandwich = "agents/coordinator.md"
+harness  = "anthropic-sdk"
+provider = "anthropic"
+model    = "claude-haiku-4-5"
+auth     = "api-key"
 
 [actors.planner-lead]
 sandwich = "agents/planner-lead.md"
+harness  = "anthropic-sdk"
+provider = "anthropic"
+model    = "claude-sonnet-4-6"
+auth     = "api-key"
 
 [actors.builder]
 sandwich = "agents/builder.md"
+harness  = "openai-sdk"
+provider = "openai"
+model    = "gpt-5.5-codex"
+auth     = "api-key"
 
 [actors.verifier]
 sandwich = "agents/verifier.md"
+harness  = "google-sdk"
+provider = "google"
+model    = "gemini-2.5-pro"
+auth     = "api-key"
 
 [actors.builder-fallback]
 sandwich = "agents/builder-fallback.md"
+harness  = "anthropic-sdk"
+provider = "anthropic"
+model    = "claude-sonnet-4-6"
+auth     = "api-key"
 
 [effects.qa_check]
 tool     = "qa-check-effect@v1"

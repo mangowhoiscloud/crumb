@@ -1,11 +1,27 @@
 /**
  * Transcript writer — append-only JSONL with ULID + ISO-8601 ts injection.
  *
- * Concurrency: O_APPEND on POSIX gives atomicity for writes <= PIPE_BUF (4096 bytes
- * on Linux, 512 on macOS); we serialize writes per process via a Promise chain so
- * that multiple async appends don't interleave at the JS level. Cross-process
- * locking is out of scope for the walking skeleton — Coordinator and subprocesses
- * write to disjoint files (subprocesses use `crumb event` which goes through here).
+ * Concurrency policy (v3 S15 persistence boost — see [[bagelcode-system-architecture-v3]] §"S15"):
+ *   - **Single-writer-per-process** is enforced via Promise chain serialization. JS-level
+ *     interleaving is impossible because every append() awaits the previous one.
+ *   - **Cross-process atomicity** rides on POSIX O_APPEND: writes ≤ PIPE_BUF (4096 bytes on
+ *     Linux, 512 on macOS) are atomic at the kernel level. Crumb messages are well within
+ *     PIPE_BUF for the typical message body, so concurrent process appends don't interleave
+ *     mid-line.
+ *   - **Multi-writer race protection (P1)**: if message bodies grow beyond PIPE_BUF (large
+ *     CourtEval reasoning bodies, or multi-builder parallel writes), the writer can be
+ *     upgraded to use `flock(fd, 'ex')` via the `fs-ext` package. P0 keeps the simpler
+ *     Promise-chain-only path because Crumb's actor model is sequential by default
+ *     (parallel-dispatch preset is P1).
+ *   - Coordinator + subprocess agents both go through this writer (subprocesses via
+ *     `crumb event` CLI), so single-writer-per-process is sufficient for the default
+ *     bagelcode-cross-3way preset where actors run sequentially.
+ *
+ * Adapter session-id policy: when a subprocess agent emits via `crumb event`, the parent
+ * harness (Claude Code / Codex / Gemini) propagates its native session id through env
+ * (CRUMB_ADAPTER_SESSION_ID). The adapter writes this into msg.metadata.adapter_session_id
+ * so the next spawn can use --resume <sid> for cache carry-over. See preset.actors[*]
+ * binding spec in `.crumb/presets/*.toml`.
  */
 
 import { appendFile } from 'node:fs/promises';

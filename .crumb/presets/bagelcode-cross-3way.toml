@@ -1,0 +1,78 @@
+# bagelcode-cross-3way (★ default, recommended)
+#
+# 메일 verbatim 정조준: "Claude Code, Codex, Gemini CLI 등 다양한 에이전트를 동시에 사용".
+# coordinator/planner-lead/builder-fallback = ambient (entry harness 따라감).
+# builder = Codex (구현), verifier = Gemini (검증, multimodal screenshot grading).
+# cross-provider self-bias mitigation (NeurIPS 2024 self-recognition cure).
+#
+# Resolve order (per [[bagelcode-system-architecture-v3]] §5.1):
+#   1. preset.actors.<name>.{harness, model} 명시 사용
+#   2. preset.[defaults] block (없음)
+#   3. ambient (entry host 따라감) ← 이 preset 의 default
+#   4. system fallback (claude-code + claude-sonnet-4-6)
+
+[meta]
+name = "bagelcode-cross-3way"
+description = "베이글코드 신작팀 (Claude Code + Codex + Gemini CLI 동시 사용 환경) 정조준 default"
+recommended = true
+schema = "crumb/v3"
+
+# coordinator: 명시 없음 → ambient
+[actors.coordinator]
+sandwich = "agents/coordinator.md"
+# harness, provider, model 모두 ambient 따라감
+
+# planner-lead: 명시 없음 → ambient
+[actors.planner-lead]
+sandwich = "agents/planner-lead.md"
+
+# builder: ★ 명시 — 구현 = OpenAI Codex
+[actors.builder]
+sandwich = "agents/builder.md"
+harness  = "codex"
+provider = "openai"
+model    = "gpt-5.5-codex"
+
+# verifier: ★ 명시 — 검증 = Google Gemini (multimodal screenshot grading)
+[actors.verifier]
+sandwich = "agents/verifier.md"
+harness  = "gemini-cli"
+provider = "google"
+model    = "gemini-2.5-pro"
+
+# builder-fallback: 명시 없음 → ambient (Codex 죽었을 때 같은 sandwich, Claude 변형)
+[actors.builder-fallback]
+sandwich = "agents/builder-fallback.md"
+
+# Effects (deterministic, no LLM)
+[effects.qa_check]
+tool     = "qa-check-effect@v1"
+harness  = "none"
+provider = "none"
+
+# Skills (procedural workflow, sandwich 가 inline read)
+[skills]
+tdd_iron_law                  = "skills/tdd-iron-law.md"
+verification_before_completion = "skills/verification-before-completion.md"
+code_review_protocol          = "skills/code-review-protocol.md"
+parallel_dispatch             = "skills/parallel-dispatch.md"
+subagent_spawn                = "skills/subagent-spawn.md"
+
+# Specialists (planner-lead 내부 step inline)
+[specialists.planner-lead]
+concept   = "agents/specialists/concept-designer.md"
+research  = "agents/specialists/researcher.md"
+design    = "agents/specialists/visual-designer.md"
+
+# Verifier mode (CourtEval inline 4 sub-step)
+[verifier]
+mode                     = "courteval"
+adaptive_stop_threshold  = 1.0
+sub_steps                = ["grader", "critic", "defender", "regrader"]
+
+# Routing rules ([[bagelcode-system-architecture-v3]] §8.1)
+[routing]
+flow                = ["coordinator", "planner-lead", "builder", "qa_check", "verifier"]
+escalate_on_fail    = "builder-fallback"
+escalate_on_stuck   = 5
+adaptive_stop       = true

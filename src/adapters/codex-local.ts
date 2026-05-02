@@ -3,7 +3,7 @@
  * subprocess. Sandwich is injected via stdin (Codex prefers Markdown over XML).
  *
  * If `codex` is unavailable on this machine the adapter health-check fails; the
- * Coordinator should then OPEN the engineering-lead circuit and route to
+ * Coordinator should then OPEN the builder circuit and route to
  * builder-fallback (claude-local).
  */
 

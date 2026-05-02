@@ -7,7 +7,8 @@ export type Actor =
   | 'user'
   | 'coordinator'
   | 'planner-lead'
-  | 'engineering-lead'
+  | 'builder'
+  | 'verifier'
   | 'builder-fallback'
   | 'validator'
   | 'system';
@@ -25,6 +26,8 @@ export type Kind =
   | 'spec'
   | 'spec.update'
   | 'build'
+  // v3: deterministic ground truth (dispatcher emit, no LLM)
+  | 'qa.result'
   // verification
   | 'verify.request'
   | 'verify.result'
@@ -82,17 +85,58 @@ export interface Artifact {
   role?: 'src' | 'doc' | 'config' | 'screenshot' | 'data';
 }
 
+/**
+ * v3 score dimension (D1-D6 source-of-truth matrix).
+ * source field encodes which layer produced the score:
+ *   - "verifier-llm": verifier sandwich CourtEval reasoning
+ *   - "qa-check-effect": dispatcher deterministic effect (D2/D6)
+ *   - "reducer-auto": reducer auto-computed (D3 auto / D4 / D5 auto)
+ *   - "hybrid": auto + LLM blend (D3 / D5)
+ * lookup encodes the source-of-truth pointer for non-LLM dimensions.
+ * anti-deception validator forbids verifier override of non-LLM sources.
+ */
+export interface ScoreDimension {
+  score: number;
+  source: 'verifier-llm' | 'qa-check-effect' | 'reducer-auto' | 'hybrid';
+  lookup?: string;
+  evidence?: string[];
+  auto?: number;
+  semantic?: number;
+  quality?: number;
+}
+
 export interface Scores {
-  goal_completion?: number;
-  collaboration?: number;
-  groundedness?: number;
-  actionability?: number;
-  cost_efficiency?: number;
-  intervention_response?: number;
+  // v3 D1-D6 (preferred)
+  D1?: ScoreDimension;
+  D2?: ScoreDimension;
+  D3?: ScoreDimension;
+  D4?: ScoreDimension;
+  D5?: ScoreDimension;
+  D6?: ScoreDimension;
   aggregate?: number;
   verdict?: Verdict;
   feedback?: string;
+  /** CourtEval (ACL 2025) sub-step msg id refs for audit trail. */
+  courteval?: {
+    grader_msg_id?: string;
+    critic_msg_id?: string;
+    defender_msg_id?: string;
+    regrader_msg_id?: string;
+  };
   audit_violations?: string[];
+  // v0.1.x deprecated aliases (kept for replay of old transcripts)
+  /** @deprecated use D1 */
+  goal_completion?: number;
+  /** @deprecated use D3 */
+  collaboration?: number;
+  /** @deprecated */
+  groundedness?: number;
+  /** @deprecated use D2 */
+  actionability?: number;
+  /** @deprecated */
+  cost_efficiency?: number;
+  /** @deprecated use D5 */
+  intervention_response?: number;
 }
 
 export interface Content {
@@ -100,9 +144,35 @@ export interface Content {
   text: string;
 }
 
+/** v3 harness identifier — mirrors preset binding 3-tuple. */
+export type Harness =
+  | 'claude-code'
+  | 'codex'
+  | 'gemini-cli'
+  | 'anthropic-sdk'
+  | 'openai-sdk'
+  | 'google-sdk'
+  | 'mock'
+  | 'none';
+
+export type Provider = 'anthropic' | 'openai' | 'google' | 'none';
+
 export interface Metadata {
   visibility?: 'public' | 'private';
+  // v3: 3-tuple actor binding
+  harness?: Harness;
+  provider?: Provider;
   model?: string;
+  /** v3: native session id from host harness for cache carry-over (S15). */
+  adapter_session_id?: string;
+  /** v3: signals next spawn may use --resume <adapter_session_id> for cache hit. */
+  cache_carry_over?: boolean;
+  /** v3: true on judge.score events when verifier provider !== builder provider. */
+  cross_provider?: boolean;
+  /** v3: true for events emitted by dispatcher effects (qa_check / validator / reducer audit). */
+  deterministic?: boolean;
+  /** v3: tool/effect identifier for deterministic events (e.g., 'qa-check-effect@v1'). */
+  tool?: string;
   turn?: number;
   tokens_in?: number;
   tokens_out?: number;

@@ -1,0 +1,17 @@
+{
+  "name": "crumb",
+  "version": "0.2.0",
+  "description": "베이글코드 신작팀 멀티 에이전트 협업 도구 — Gemini CLI entry. /crumb <자연어 goal>.",
+  "contextFileName": "GEMINI.md",
+  "mcpServers": {
+    "crumb": {
+      "command": "npx",
+      "args": ["tsx", "${extensionPath}/../../src/mcp-server.ts"],
+      "env": {
+        "CRUMB_AMBIENT_HARNESS": "gemini-cli",
+        "CRUMB_REPO_ROOT": "${workspacePath}"
+      }
+    }
+  },
+  "excludeTools": []
+}

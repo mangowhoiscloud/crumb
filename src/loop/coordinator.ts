@@ -23,9 +23,11 @@ import { initialState, type CrumbState } from '../state/types.js';
 import { tail, readAll } from '../transcript/reader.js';
 import { TranscriptWriter } from '../transcript/writer.js';
 import { dispatch, type DispatcherDeps } from '../dispatcher/live.js';
+import { loadPresetByName, type PresetSpec } from '../dispatcher/preset-loader.js';
 import { AdapterRegistry } from '../adapters/types.js';
 import { ClaudeLocalAdapter } from '../adapters/claude-local.js';
 import { CodexLocalAdapter } from '../adapters/codex-local.js';
+import { GeminiLocalAdapter } from '../adapters/gemini-local.js';
 import { MockAdapter } from '../adapters/mock.js';
 import type { Effect } from '../effects/types.js';
 import type { Message } from '../protocol/types.js';
@@ -37,6 +39,8 @@ export interface RunOptions {
   repoRoot: string;
   /** Force every actor to use this adapter id (e.g. "mock" for the demo). */
   adapterOverride?: string;
+  /** Load .crumb/presets/<name>.toml for actor binding. User-controlled, no auto-default. */
+  presetName?: string;
   /** How long to wait after the last event before declaring stuck. ms. */
   idleTimeoutMs?: number;
 }
@@ -61,7 +65,31 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
   const registry = new AdapterRegistry();
   registry.register(new ClaudeLocalAdapter());
   registry.register(new CodexLocalAdapter());
+  registry.register(new GeminiLocalAdapter());
   registry.register(new MockAdapter());
+
+  // Preset 로딩 — 사용자 명시 시만. ambient/binding 결정은 사용자 통제권.
+  let preset: PresetSpec | undefined;
+  if (opts.presetName) {
+    try {
+      preset = loadPresetByName(opts.presetName, opts.repoRoot);
+      const actorCount = Object.keys(preset.actors).length;
+      // eslint-disable-next-line no-console
+      console.log(
+        `[crumb] preset loaded: ${preset.meta.name} — ${actorCount} actor(s), schema=${preset.meta.schema ?? '(unset)'}`,
+      );
+      for (const [name, b] of Object.entries(preset.actors)) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `[crumb]   ${name}: ${b.harness}/${b.provider}/${b.model}${b.ambient_resolved ? ' (ambient)' : ''}`,
+        );
+      }
+    } catch (err) {
+      throw new Error(
+        `Failed to load preset "${opts.presetName}" from ${opts.repoRoot}/.crumb/presets/: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
 
   const deps: DispatcherDeps = {
     writer,
@@ -75,6 +103,8 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
       console.log(`[hook:${kind}] ${body}`);
     },
   };
+  // preset 은 dispatcher 통합 단계에서 deps 에 전달 예정. 현재는 로딩 검증만.
+  void preset;
 
   let state = initialState(opts.sessionId);
 

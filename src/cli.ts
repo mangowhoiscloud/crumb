@@ -3,7 +3,12 @@
  *  run     : start a new session
  *  event   : append a JSON event to $CRUMB_TRANSCRIPT_PATH (used by subprocess agents)
  *  replay  : re-derive state from an existing transcript (deterministic check)
- *  doctor  : adapter health check
+ *  resume  : surface mid-flight state + next-speaker suggestion (S15)
+ *  doctor  : full environment check
+ *  config  : preset 추천
+ *  debug   : F1-F7 routing 장애 진단
+ *  export  : transcript → OTel GenAI / Anthropic-Trace / Chrome-Trace (§10.3)
+ *  ls      : list sessions/
  */
 
 import { resolve } from 'node:path';
@@ -55,12 +60,17 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
   const sessionDir = resolve(cwd, 'sessions', sessionId);
   const repoRoot = args.flags.get('root') ?? cwd;
   const adapterOverride = args.flags.get('adapter');
+  const presetName = args.flags.get('preset');
   const idleTimeoutMs = Number(args.flags.get('idle-timeout') ?? 60_000);
 
   // eslint-disable-next-line no-console
   console.log(`[crumb] session=${sessionId} dir=${sessionDir}`);
+  if (presetName) {
+    // eslint-disable-next-line no-console
+    console.log(`[crumb] preset=${presetName}`);
+  }
   // eslint-disable-next-line no-console
-  console.log(`[crumb] adapter=${adapterOverride ?? '(per-actor)'} repo=${repoRoot}`);
+  console.log(`[crumb] adapter=${adapterOverride ?? '(preset or ambient)'} repo=${repoRoot}`);
 
   const { state } = await runSession({
     goal,
@@ -68,6 +78,7 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
     sessionId,
     repoRoot,
     adapterOverride,
+    presetName,
     idleTimeoutMs,
   });
 
@@ -123,14 +134,132 @@ async function cmdReplay(args: ParsedArgs): Promise<void> {
   );
 }
 
+/**
+ * v3 S15 — resume: re-derive state from a transcript and report what's next.
+ *
+ * P0: surfaces last state + next_speaker so the user can decide how to continue.
+ * P1: live re-entry into the coordinator loop (spawns next actor automatically).
+ *
+ * See [[bagelcode-system-architecture-v3]] §"S15 persistence boost".
+ */
+async function cmdResume(args: ParsedArgs): Promise<void> {
+  const target = args.positional[0];
+  if (!target) throw new Error('resume requires a session id or session-dir as positional arg');
+  const cwd = args.flags.get('root') ?? process.cwd();
+  // Accept either a full path or a bare session id (ULID).
+  const sessionDir = target.includes('/') ? resolve(target) : resolve(cwd, 'sessions', target);
+  const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
+  const events = await readAll(transcriptPath);
+  if (events.length === 0) {
+    throw new Error(`empty transcript at ${transcriptPath}`);
+  }
+  let state = initialState(events[0].session_id);
+  for (const e of events) {
+    state = reduce(state, e).state;
+  }
+
+  // eslint-disable-next-line no-console
+  console.log(
+    JSON.stringify(
+      {
+        session_id: state.session_id,
+        events: events.length,
+        done: state.done,
+        next_speaker: state.progress_ledger.next_speaker,
+        last_active_actor: state.progress_ledger.last_active_actor,
+        last_kind: state.last_message?.kind ?? null,
+        score_history_count: state.progress_ledger.score_history.length,
+        stuck_count: state.progress_ledger.stuck_count,
+        circuit_breaker: state.progress_ledger.circuit_breaker,
+      },
+      null,
+      2,
+    ),
+  );
+
+  if (state.done) {
+    // eslint-disable-next-line no-console
+    console.log('[resume] session already done — nothing to re-enter');
+    return;
+  }
+
+  // eslint-disable-next-line no-console
+  console.log(
+    `[resume] session is mid-flight; last event was ${state.last_message?.kind ?? '?'}; ` +
+      `next_speaker=${state.progress_ledger.next_speaker ?? '?'}.`,
+  );
+  // eslint-disable-next-line no-console
+  console.log('[resume] P0: re-derived state only. To continue mid-flight, run:');
+  // eslint-disable-next-line no-console
+  console.log(
+    `  crumb run --session ${state.session_id} --goal "${state.task_ledger.goal ?? ''}" --root ${cwd}`,
+  );
+}
+
 async function cmdDoctor(): Promise<void> {
+  // v3 S12: full environment check (3 host OAuth + playwright + htmlhint).
+  const { runDoctor, formatReport } = await import('./helpers/doctor.js');
+  const report = await runDoctor();
+  // eslint-disable-next-line no-console
+  console.log(formatReport(report));
+
+  // Legacy adapter health (still useful for adapter circuit-breaker debugging).
+  // eslint-disable-next-line no-console
+  console.log('\n## Adapter health (subprocess probe)');
   const adapters = [new ClaudeLocalAdapter(), new CodexLocalAdapter()];
   for (const a of adapters) {
     const r = await a.health();
-    const sym = r.ok ? 'ok' : 'FAIL';
+    const sym = r.ok ? '✅' : '❌';
     // eslint-disable-next-line no-console
-    console.log(`[${sym}] ${a.id}${r.reason ? ` — ${r.reason}` : ''}`);
+    console.log(`  ${sym} ${a.id}${r.reason ? ` — ${r.reason}` : ''}`);
   }
+}
+
+async function cmdConfig(args: ParsedArgs): Promise<void> {
+  // v3 S12: /crumb config <자연어> — preset 추천.
+  const naturalLanguage = args.positional.join(' ') || args.flags.get('query') || '';
+  if (!naturalLanguage) {
+    throw new Error(
+      'config requires a natural-language description, e.g.: crumb config "솔로 셋업"',
+    );
+  }
+  const { recommendPreset, formatRecommendation } = await import('./helpers/config.js');
+  const rec = recommendPreset(naturalLanguage, args.flags.get('root') ?? process.cwd());
+  // eslint-disable-next-line no-console
+  console.log(formatRecommendation(rec));
+}
+
+async function cmdDebug(args: ParsedArgs): Promise<void> {
+  // v3 S12: /crumb debug — F1-F7 routing 장애 진단.
+  const target = args.positional[0];
+  if (!target) throw new Error('debug requires a session id or session-dir');
+  const cwd = args.flags.get('root') ?? process.cwd();
+  const sessionDir = target.includes('/') ? resolve(target) : resolve(cwd, 'sessions', target);
+  const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
+  const events = await readAll(transcriptPath);
+  let state = initialState(events[0]?.session_id ?? 'unknown');
+  for (const e of events) state = reduce(state, e).state;
+  const { diagnose, formatDiagnosis } = await import('./helpers/debug.js');
+  const detections = diagnose(events, state);
+  // eslint-disable-next-line no-console
+  console.log(formatDiagnosis(detections));
+}
+
+async function cmdExport(args: ParsedArgs): Promise<void> {
+  const target = args.positional[0];
+  if (!target) throw new Error('export <session-id|dir> required');
+  const cwd = args.flags.get('root') ?? process.cwd();
+  const sessionDir = target.includes('/') ? resolve(target) : resolve(cwd, 'sessions', target);
+  const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
+  const events = await readAll(transcriptPath);
+  const formatRaw = args.flags.get('format') ?? 'otel-jsonl';
+  const allowed = ['otel-jsonl', 'anthropic-trace', 'chrome-trace'];
+  if (!allowed.includes(formatRaw)) {
+    throw new Error(`unknown --format ${formatRaw}. allowed: ${allowed.join(', ')}`);
+  }
+  const { serialize } = await import('./exporter/otel.js');
+  const out = serialize(formatRaw as 'otel-jsonl' | 'anthropic-trace' | 'chrome-trace', events);
+  process.stdout.write(out);
 }
 
 async function cmdLs(args: ParsedArgs): Promise<void> {
@@ -170,17 +299,30 @@ function printHelp(): void {
   console.log(`Crumb v0.1.0 — multi-agent execution harness
 
 Usage:
-  crumb run --goal "<game pitch>" [--session <id>] [--adapter mock|claude-local|codex-local]
+  crumb run --goal "<game pitch>" [--session <id>] [--preset <name>] [--adapter <id>]
   crumb event                              # read JSON from stdin, append to transcript
   crumb replay <session-dir>               # re-derive state from transcript
-  crumb doctor                             # adapter health check
+  crumb resume <session-id|dir>            # re-derive state + surface mid-flight resume command (S15)
+  crumb doctor                             # full environment check (3 host OAuth + adapter health)
+  crumb config <자연어>                     # preset 추천 (Crumb 추천만, 사용자 선택)
+  crumb debug <session-id|dir>             # F1-F7 routing 장애 진단
+  crumb export <session-id|dir> [--format otel-jsonl|anthropic-trace|chrome-trace]
+                                          # transcript → OTel GenAI / Anthropic / chrome://tracing
   crumb ls                                 # list sessions/
+
+Flags (run):
+  --preset <name>     load .crumb/presets/<name>.toml. e.g. bagelcode-cross-3way / mock /
+                      sdk-enterprise / solo. provider × harness × model 결정은 사용자 통제권.
+                      명시 없으면 ambient (entry host 따라감).
+  --adapter <id>      force every actor to one adapter (override preset). claude-local /
+                      codex-local / mock. 디버깅용.
 
 Env (subprocess agents only):
   CRUMB_TRANSCRIPT_PATH  full path to transcript.jsonl
   CRUMB_SESSION_ID       ULID
   CRUMB_SESSION_DIR      working directory
   CRUMB_ACTOR            from-actor for emitted events
+  CRUMB_AMBIENT_HARNESS  override ambient harness detection (claude-code / codex / gemini-cli)
 `);
 }
 
@@ -196,8 +338,20 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
     case 'replay':
       await cmdReplay(args);
       break;
+    case 'resume':
+      await cmdResume(args);
+      break;
     case 'doctor':
       await cmdDoctor();
+      break;
+    case 'config':
+      await cmdConfig(args);
+      break;
+    case 'debug':
+      await cmdDebug(args);
+      break;
+    case 'export':
+      await cmdExport(args);
       break;
     case 'ls':
       await cmdLs(args);

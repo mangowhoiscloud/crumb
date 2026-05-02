@@ -25,7 +25,7 @@ describe('reducer', () => {
     expect(effects).toEqual([{ type: 'spawn', actor: 'planner-lead', adapter: 'claude-local' }]);
   });
 
-  it('routes spec → spawn(engineering-lead, codex-local) by default', () => {
+  it('routes spec → spawn(builder, codex-local) by default', () => {
     const s0 = initialState('sess-test');
     const spec = fixed({
       from: 'planner-lead',
@@ -36,12 +36,46 @@ describe('reducer', () => {
 
     expect(state.task_ledger.acceptance_criteria).toEqual(['ac1', 'ac2', 'ac3']);
     expect(state.task_ledger.facts).toHaveLength(3);
-    expect(effects).toEqual([{ type: 'spawn', actor: 'engineering-lead', adapter: 'codex-local' }]);
+    expect(effects).toEqual([{ type: 'spawn', actor: 'builder', adapter: 'codex-local' }]);
+  });
+
+  it('v3: routes build → qa_check effect (deterministic, no LLM spawn)', () => {
+    const s0 = initialState('sess-test');
+    const build = fixed({
+      id: '01H0000000000000000000000B',
+      from: 'builder',
+      kind: 'build',
+      artifacts: [{ path: 'artifacts/game.html', sha256: 'a'.repeat(64), role: 'src' }],
+    });
+    const { effects } = reduce(s0, build);
+
+    expect(effects).toHaveLength(1);
+    expect(effects[0]).toMatchObject({
+      type: 'qa_check',
+      artifact: 'artifacts/game.html',
+      build_event_id: '01H0000000000000000000000B',
+      artifact_sha256: 'a'.repeat(64),
+    });
+  });
+
+  it('v3: routes qa.result → spawn(verifier)', () => {
+    const s0 = initialState('sess-test');
+    const qaResult = fixed({
+      id: '01H0000000000000000000000C',
+      from: 'system',
+      kind: 'qa.result',
+      data: { exec_exit_code: 0, lint_passed: true },
+      metadata: { deterministic: true, tool: 'qa-check-effect@v1' },
+    });
+    const { state, effects } = reduce(s0, qaResult);
+
+    expect(state.progress_ledger.next_speaker).toBe('verifier');
+    expect(effects).toEqual([{ type: 'spawn', actor: 'verifier', adapter: 'claude-local' }]);
   });
 
   it('routes spec → builder-fallback when codex circuit OPEN', () => {
     const s0 = initialState('sess-test');
-    s0.progress_ledger.circuit_breaker['engineering-lead'] = {
+    s0.progress_ledger.circuit_breaker['builder'] = {
       state: 'OPEN',
       consecutive_failures: 3,
     };
@@ -54,7 +88,7 @@ describe('reducer', () => {
 
     expect(effects[0]).toMatchObject({
       type: 'spawn',
-      actor: 'engineering-lead',
+      actor: 'builder',
       adapter: 'claude-local',
     });
   });
@@ -62,7 +96,7 @@ describe('reducer', () => {
   it('routes verify.result PASS → done', () => {
     const s0 = initialState('sess-test');
     const verify = fixed({
-      from: 'engineering-lead',
+      from: 'builder',
       kind: 'verify.result',
       scores: { aggregate: 25, verdict: 'PASS' },
     });
@@ -76,7 +110,7 @@ describe('reducer', () => {
   it('routes verify.result FAIL → rollback to planner-lead', () => {
     const s0 = initialState('sess-test');
     const verify = fixed({
-      from: 'engineering-lead',
+      from: 'builder',
       kind: 'verify.result',
       scores: { aggregate: 12, verdict: 'FAIL', feedback: 'AC#3 broken' },
     });
@@ -93,7 +127,7 @@ describe('reducer', () => {
   it('verify.result PARTIAL → hook(partial)', () => {
     const s0 = initialState('sess-test');
     const verify = fixed({
-      from: 'engineering-lead',
+      from: 'builder',
       kind: 'verify.result',
       scores: { aggregate: 20, verdict: 'PARTIAL' },
     });
@@ -106,7 +140,7 @@ describe('reducer', () => {
     const s0 = initialState('sess-test');
     s0.progress_ledger.score_history = [{ msg_id: 'm1', aggregate: 22, verdict: 'PARTIAL' }];
     const verify = fixed({
-      from: 'engineering-lead',
+      from: 'builder',
       kind: 'verify.result',
       scores: { aggregate: 22.3, verdict: 'PARTIAL' },
     });
@@ -116,22 +150,22 @@ describe('reducer', () => {
     expect(effects).toEqual([{ type: 'done', reason: 'adaptive_stop' }]);
   });
 
-  it('error from engineering-lead trips circuit breaker after 3 failures', () => {
+  it('error from builder trips circuit breaker after 3 failures', () => {
     let state = initialState('sess-test');
     for (let i = 0; i < 3; i++) {
       const err = fixed({
         id: `01H000000000000000000000${i}A`,
-        from: 'engineering-lead',
+        from: 'builder',
         kind: 'error',
       });
       state = reduce(state, err).state;
     }
-    expect(state.progress_ledger.circuit_breaker['engineering-lead']?.state).toBe('OPEN');
+    expect(state.progress_ledger.circuit_breaker['builder']?.state).toBe('OPEN');
   });
 
   it('user.intervene records constraint without changing speaker', () => {
     const s0 = initialState('sess-test');
-    s0.progress_ledger.next_speaker = 'engineering-lead';
+    s0.progress_ledger.next_speaker = 'builder';
     const intervene = fixed({
       from: 'user',
       kind: 'user.intervene',
@@ -140,7 +174,7 @@ describe('reducer', () => {
     const { state, effects } = reduce(s0, intervene);
 
     expect(state.task_ledger.facts.some((f) => f.category === 'constraint')).toBe(true);
-    expect(state.progress_ledger.next_speaker).toBe('engineering-lead');
+    expect(state.progress_ledger.next_speaker).toBe('builder');
     expect(effects).toEqual([]);
   });
 
@@ -155,7 +189,7 @@ describe('reducer', () => {
       }),
       fixed({
         id: '01H0000000000000000000002A',
-        from: 'engineering-lead',
+        from: 'builder',
         kind: 'verify.result',
         scores: { aggregate: 25, verdict: 'PASS' },
       }),

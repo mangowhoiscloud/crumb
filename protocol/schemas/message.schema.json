@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mangowhoiscloud/crumb/protocol/schemas/message.schema.json",
   "title": "Crumb Transcript Message",
-  "description": "Single transcript.jsonl line. 28 kinds × 11 fields. OTel GenAI alias-able.",
+  "description": "Single transcript.jsonl line. v3: 39 kinds × 11 fields × 8 from × 12 step. OTel GenAI alias-able. See wiki/concepts/bagelcode-system-architecture-v3.md §3.",
   "type": "object",
   "required": ["id", "ts", "session_id", "from", "kind"],
   "properties": {
@@ -20,11 +20,13 @@
     "task_id": { "type": "string" },
     "from": {
       "type": "string",
+      "description": "v3: 8 actors. engineering-lead split into builder + verifier (cross-provider boundary).",
       "enum": [
         "user",
         "coordinator",
         "planner-lead",
-        "engineering-lead",
+        "builder",
+        "verifier",
         "builder-fallback",
         "validator",
         "system"
@@ -40,6 +42,7 @@
     },
     "kind": {
       "type": "string",
+      "description": "v3: 39 kinds. +qa.result (deterministic ground truth event emitted by dispatcher, no LLM).",
       "enum": [
         "session.start",
         "session.end",
@@ -51,6 +54,7 @@
         "spec",
         "spec.update",
         "build",
+        "qa.result",
         "verify.request",
         "verify.result",
         "judge.score",
@@ -124,19 +128,54 @@
     },
     "scores": {
       "type": "object",
+      "description": "v3: D1-D6 source-of-truth matrix. Each dimension carries score + source (verifier-llm | qa-check-effect | reducer-auto | hybrid) + optional lookup/evidence/auto/semantic/quality. Legacy 6-dim fields kept as deprecated aliases for v0.1.x transcript replay.",
       "properties": {
-        "goal_completion": { "type": "number", "minimum": 0, "maximum": 5 },
-        "collaboration": { "type": "number", "minimum": 0, "maximum": 5 },
-        "groundedness": { "type": "number", "minimum": 0, "maximum": 5 },
-        "actionability": { "type": "number", "minimum": 0, "maximum": 5 },
-        "cost_efficiency": { "type": "number", "minimum": 0, "maximum": 5 },
-        "intervention_response": { "type": "number", "minimum": 0, "maximum": 5 },
+        "D1": { "$ref": "#/$defs/scoreDimension", "description": "spec_fit (LLM, AC ✓/✗)" },
+        "D2": {
+          "$ref": "#/$defs/scoreDimension",
+          "description": "exec (qa_check effect, ground truth)"
+        },
+        "D3": {
+          "$ref": "#/$defs/scoreDimension",
+          "description": "observability (hybrid: reducer auto + verifier semantic)"
+        },
+        "D4": { "$ref": "#/$defs/scoreDimension", "description": "convergence (reducer auto)" },
+        "D5": {
+          "$ref": "#/$defs/scoreDimension",
+          "description": "intervention (hybrid: reducer auto + verifier quality)"
+        },
+        "D6": {
+          "$ref": "#/$defs/scoreDimension",
+          "description": "portability (qa_check effect, optional)"
+        },
         "aggregate": { "type": "number", "minimum": 0, "maximum": 30 },
         "verdict": { "type": "string", "enum": ["PASS", "PARTIAL", "FAIL", "REJECT"] },
         "feedback": { "type": "string" },
+        "courteval": {
+          "type": "object",
+          "description": "CourtEval (ACL 2025) 4 sub-step msg id refs for audit trail.",
+          "properties": {
+            "grader_msg_id": { "type": "string" },
+            "critic_msg_id": { "type": "string" },
+            "defender_msg_id": { "type": "string" },
+            "regrader_msg_id": { "type": "string" }
+          }
+        },
         "audit_violations": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": { "type": "string" },
+          "description": "anti-deception violations: verify_pass_without_exec_zero | verifier_overrode_d2_ground_truth | verifier_overrode_d4_ground_truth | self_bias_risk_same_provider | verifier_inflated_hybrid"
+        },
+        "goal_completion": { "type": "number", "minimum": 0, "maximum": 5, "deprecated": true },
+        "collaboration": { "type": "number", "minimum": 0, "maximum": 5, "deprecated": true },
+        "groundedness": { "type": "number", "minimum": 0, "maximum": 5, "deprecated": true },
+        "actionability": { "type": "number", "minimum": 0, "maximum": 5, "deprecated": true },
+        "cost_efficiency": { "type": "number", "minimum": 0, "maximum": 5, "deprecated": true },
+        "intervention_response": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5,
+          "deprecated": true
         }
       }
     },
@@ -146,7 +185,52 @@
       "type": "object",
       "properties": {
         "visibility": { "type": "string", "enum": ["public", "private"], "default": "public" },
+        "harness": {
+          "type": "string",
+          "description": "v3: which CLI/SDK harness produced this event. Used for cross-provider self-bias detection.",
+          "enum": [
+            "claude-code",
+            "codex",
+            "gemini-cli",
+            "anthropic-sdk",
+            "openai-sdk",
+            "google-sdk",
+            "mock",
+            "none"
+          ]
+        },
+        "provider": {
+          "type": "string",
+          "description": "v3: vendor LLM provider. 'none' for deterministic effects.",
+          "enum": ["anthropic", "openai", "google", "none"]
+        },
         "model": { "type": "string" },
+        "adapter_session_id": {
+          "type": "string",
+          "description": "v3: native session id from host harness (Claude Code uuid / Codex thread_id / Gemini context_id) for cache carry-over. See [[bagelcode-system-architecture-v3]] §5.2.2."
+        },
+        "cache_carry_over": {
+          "type": "boolean",
+          "description": "v3: signals that next spawn may use --resume <adapter_session_id> for cache hit."
+        },
+        "cross_provider": {
+          "type": "boolean",
+          "description": "v3: true when verifier provider differs from builder provider (self-bias risk mitigation, NeurIPS 2024). Set on judge.score events."
+        },
+        "deterministic": {
+          "type": "boolean",
+          "description": "v3: true for events emitted by dispatcher effects (qa_check, validator, reducer audit). Cannot be forged by LLM actors."
+        },
+        "tool": {
+          "type": "string",
+          "description": "v3: tool/effect identifier for deterministic events (e.g., 'qa-check-effect@v1')."
+        },
+        "verifier_provider": {
+          "type": "string",
+          "deprecated": true,
+          "description": "v3: use metadata.provider on judge.score events instead."
+        },
+        "builder_provider": { "type": "string", "deprecated": true },
         "turn": { "type": "number" },
         "tokens_in": { "type": "number" },
         "tokens_out": { "type": "number" },
@@ -159,5 +243,46 @@
       }
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "scoreDimension": {
+      "type": "object",
+      "required": ["score", "source"],
+      "properties": {
+        "score": { "type": "number", "minimum": 0, "maximum": 5 },
+        "source": {
+          "type": "string",
+          "enum": ["verifier-llm", "qa-check-effect", "reducer-auto", "hybrid"],
+          "description": "Which layer produced this dimension's score. anti-deception validator forbids verifier override of qa-check-effect / reducer-auto sources."
+        },
+        "lookup": {
+          "type": "string",
+          "description": "JSON pointer to ground-truth source (e.g., 'qa.result.exec_exit_code')."
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "AC items / msg ids supporting the score (LLM-derived dimensions)."
+        },
+        "auto": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Reducer auto-computed component for hybrid sources (D3, D5)."
+        },
+        "semantic": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Verifier LLM semantic component for D3."
+        },
+        "quality": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Verifier LLM quality component for D5."
+        }
+      }
+    }
+  }
 }

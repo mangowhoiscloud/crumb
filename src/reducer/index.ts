@@ -65,9 +65,34 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           category: 'spec',
         });
       }
-      next.progress_ledger.next_speaker = 'engineering-lead';
-      const adapter = pickAdapter(next, 'engineering-lead');
-      effects.push({ type: 'spawn', actor: 'engineering-lead', adapter });
+      next.progress_ledger.next_speaker = 'builder';
+      const adapter = pickAdapter(next, 'builder');
+      effects.push({ type: 'spawn', actor: 'builder', adapter });
+      break;
+    }
+
+    case 'build': {
+      // v3: build → deterministic qa-check effect (no LLM). qa.result event flows back.
+      // See [[bagelcode-system-architecture-v3]] §4.2 (per-turn flow), §7 (3-layer scoring).
+      const artifacts = event.artifacts ?? next.task_ledger.artifacts;
+      const lastArtifact = artifacts[artifacts.length - 1];
+      const artifactPath = lastArtifact?.path ?? 'artifacts/game.html';
+      const artifactSha = lastArtifact?.sha256;
+      effects.push({
+        type: 'qa_check',
+        artifact: artifactPath,
+        build_event_id: event.id,
+        artifact_sha256: artifactSha,
+      });
+      break;
+    }
+
+    case 'qa.result': {
+      // v3: qa.result → spawn verifier (CourtEval inline 4 sub-step).
+      // Verifier reads qa.result as D2 + D6 ground truth lookup.
+      next.progress_ledger.next_speaker = 'verifier';
+      const adapter = pickAdapter(next, 'verifier');
+      effects.push({ type: 'spawn', actor: 'verifier', adapter });
       break;
     }
 
@@ -100,7 +125,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         });
       } else if (verdict === 'FAIL' || verdict === 'REJECT') {
         // Rollback to planner for respec — unless engineering circuit is OPEN, then fallback.
-        const eng = next.progress_ledger.circuit_breaker['engineering-lead'];
+        const eng = next.progress_ledger.circuit_breaker['builder'];
         if (eng?.state === 'OPEN') {
           next.progress_ledger.next_speaker = 'builder-fallback';
           effects.push({
@@ -122,7 +147,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
 
     case 'user.veto': {
       const target = next.progress_ledger.last_active_actor;
-      if (target && (target === 'planner-lead' || target === 'engineering-lead')) {
+      if (target && (target === 'planner-lead' || target === 'builder')) {
         next.progress_ledger.next_speaker = target;
         effects.push({
           type: 'spawn',
@@ -190,13 +215,18 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
   return { state: next, effects };
 }
 
-function pickAdapter(state: CrumbState, actor: 'engineering-lead' | 'planner-lead'): string {
+function pickAdapter(state: CrumbState, actor: 'builder' | 'verifier' | 'planner-lead'): string {
   const override = state.progress_ledger.adapter_override[actor];
   if (override) return override;
-  if (actor === 'engineering-lead') {
-    const eng = state.progress_ledger.circuit_breaker['engineering-lead'];
+  if (actor === 'builder') {
+    const eng = state.progress_ledger.circuit_breaker['builder'];
     if (eng?.state === 'OPEN') return 'claude-local'; // fallback to builder-fallback uses claude
     return 'codex-local';
+  }
+  if (actor === 'verifier') {
+    // bagelcode-cross-3way preset: verifier = gemini-cli (multimodal). Default codex if Gemini unavailable.
+    // Adapter override is the proper P0 path — preset-loader should populate this.
+    return 'claude-local';
   }
   return 'claude-local';
 }

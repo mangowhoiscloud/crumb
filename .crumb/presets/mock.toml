@@ -1,35 +1,50 @@
-# solo — Anthropic Claude Max 만 (단일 host)
+# mock (deterministic CI / 1회 응시 fallback)
 #
-# 평가자가 Codex / Gemini 미로그인일 때 fallback.
-# 모든 actor = ambient (entry harness 따라감 — 보통 claude-code).
-# Cross-provider 효과 없음 (self-bias risk warn). 단순 셋업.
+# 어느 host 도 미설치 / OAuth 미로그인 환경에서 동작 보장.
+# 모든 actor = mock adapter (deterministic synthetic agent).
+# `npx tsx src/index.ts run --goal "..." --preset mock` 로 즉시 동작.
 
 [meta]
-name = "solo"
-description = "단일 host (Claude Max only). Codex / Gemini 미로그인 시 안전. self-bias risk warn."
+name = "mock"
+description = "Deterministic mock adapter — CI 또는 평가자 어느 도구도 미설치 시 fallback. README 동작 보장."
 recommended = false
-requires_cli = ["claude"]
+requires_api_keys = []
+requires_cli = []
 schema = "crumb/v3"
 
-# 모든 actor: 명시 없음 → ambient (보통 claude-code)
 [actors.coordinator]
 sandwich = "agents/coordinator.md"
+harness  = "mock"
+provider = "none"
+model    = "fixture-v1"
 
 [actors.planner-lead]
 sandwich = "agents/planner-lead.md"
+harness  = "mock"
+provider = "none"
+model    = "fixture-v1"
 
 [actors.builder]
 sandwich = "agents/builder.md"
+harness  = "mock"
+provider = "none"
+model    = "fixture-v1"
 
 [actors.verifier]
 sandwich = "agents/verifier.md"
+harness  = "mock"
+provider = "none"
+model    = "fixture-v1"
 
 [actors.builder-fallback]
 sandwich = "agents/builder-fallback.md"
+harness  = "mock"
+provider = "none"
+model    = "fixture-v1"
 
 [effects.qa_check]
 tool     = "qa-check-effect@v1"
-harness  = "none"
+harness  = "mock"
 provider = "none"
 
 [skills]

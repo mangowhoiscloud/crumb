@@ -10,6 +10,7 @@ import type { Effect } from '../effects/types.js';
 import type { Actor } from '../protocol/types.js';
 import type { TranscriptWriter } from '../transcript/writer.js';
 import type { AdapterRegistry } from '../adapters/types.js';
+import { runQaCheckEffect } from './qa-runner.js';
 
 export interface DispatcherDeps {
   writer: TranscriptWriter;
@@ -25,7 +26,8 @@ export interface DispatcherDeps {
 
 const ACTOR_TO_SANDWICH: Partial<Record<Actor, string>> = {
   'planner-lead': 'agents/planner-lead.md',
-  'engineering-lead': 'agents/engineering-lead.md',
+  builder: 'agents/builder.md',
+  verifier: 'agents/verifier.md',
   'builder-fallback': 'agents/builder-fallback.md',
   coordinator: 'agents/coordinator.md',
 };
@@ -113,6 +115,16 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         from: 'coordinator',
         kind: 'session.end',
         body: `session terminated: ${effect.reason}`,
+      });
+      break;
+    }
+    case 'qa_check': {
+      // v3: deterministic ground-truth check (no LLM). Emits kind=qa.result.
+      // See [[bagelcode-system-architecture-v3]] §3.5, §7 (3-layer scoring).
+      await runQaCheckEffect(effect, {
+        writer: deps.writer,
+        sessionId: deps.sessionId,
+        sessionDir: deps.sessionDir,
       });
       break;
     }
