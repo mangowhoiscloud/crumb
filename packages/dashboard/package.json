@@ -13,6 +13,9 @@
     "crumb-dashboard": "dist/cli.js"
   },
   "scripts": {
+    "inline-client": "node scripts/inline-client.mjs",
+    "prebuild": "node scripts/inline-client.mjs",
+    "pretypecheck": "node scripts/inline-client.mjs",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/cli.js"
