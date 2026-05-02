@@ -29,6 +29,22 @@
 import type { Message, Scores, ScoreDimension } from '../protocol/types.js';
 import { combineAggregate, type AutoScores } from '../state/scorer.js';
 
+/**
+ * Same-provider self-bias numerical discount factor for Rule 4. Applied to
+ * D1 (spec_fit) and D5 (quality) — the LLM-judged qualitative dims where
+ * Stureborg EMNLP 2024 §4.2 measured +14-22% PASS-rate inflation when the
+ * verifier shares the provider with the builder. 0.15 is the conservative
+ * midpoint of that 14-22% range, accounting for the prompt-mitigation 50%
+ * coverage from Anthropic Hybrid Normalization 2026.
+ *
+ * D2 (qa-check exec) / D6 (qa-check portability) / D4 (reducer-auto budget)
+ * are deterministic and immune. D3 (LLM+auto split via combineDimScore) is
+ * P2 — discounting the combined value would over-correct the auto half.
+ *
+ * See [[bagelcode-same-provider-discount-2026-05-03]] for the full rationale.
+ */
+const SAME_PROVIDER_DISCOUNT = 0.15;
+
 export interface QaResultLike {
   exec_exit_code: number;
   cross_browser_smoke?: 'ok' | 'fail' | 'skipped';
@@ -95,25 +111,50 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
     scores.D4 = forceScore(scores.D4, input.autoScores.D4, 'reducer-auto');
   }
 
-  // ── Rule 4 — self_bias_risk_same_provider ──────────────────────────────────
-  // Verdict-downgrade enforcement (G-A from
-  // [[bagelcode-scoring-ratchet-frontier-2026-05-02]] §7 P1).
+  // ── Rule 4 — self_bias_risk_same_provider + numerical D1/D5 discount ──────
+  // [[bagelcode-same-provider-discount-2026-05-03]] (replaces the v3.3 binary
+  // verdict downgrade). Stureborg EMNLP 2024 §4.2 measured +14-22% PASS-rate
+  // inflation when builder and verifier share the provider. The previous
+  // binary PASS → PARTIAL gate collapsed dynamic range and treated a
+  // measured continuous bias as a discrete action.
   //
-  // Stureborg et al. EMNLP 2024 measured PASS-rate inflation of +14-22% when
-  // builder and verifier share the same provider. Prior behavior was warn-only
-  // (record violation, don't act). New behavior: demote PASS → PARTIAL so the
-  // user must explicitly approve via `kind=user.approve` (G1 surface).
-  // FAIL/REJECT/PARTIAL are unchanged — self-bias matters when the judge is
-  // letting the builder's work through, not when it's already saying no.
+  // New behavior: discount D1 (spec_fit) and D5 (quality) — the LLM-judged
+  // qualitative dims where same-provider bias concentrates per Rubric-
+  // Anchored Judging (NeurIPS 2025) — by SAME_PROVIDER_DISCOUNT (0.15,
+  // Stureborg midpoint, conservative). D2/D6 (qa-check ground truth) and
+  // D4 (reducer-auto) are immune. Aggregate is recomputed below; standard
+  // verdict thresholds (≥24=PASS, 18-23=PARTIAL, <18=FAIL) re-fire
+  // naturally — no special PASS demotion. Anthropic Hybrid Normalization
+  // 2026: prompt mitigation reaches ~50% effect reduction; numerical
+  // correction is the residual half.
   //
-  // The verdict downgrade is applied below alongside the aggregate-floor
-  // recomputation so the violation list and the verdict update atomically.
+  // D3 is split LLM/auto via combineDimScore — its LLM half is also biased
+  // but the reducer doesn't preserve raw inputs separately. Discounting the
+  // already-combined D3 would over-correct the auto half. P2 deferred until
+  // the reducer carries raw LLM/auto inputs.
   const verifierProvider = input.judgeScore.metadata?.provider;
   const sameProvider = Boolean(
     verifierProvider && input.builderProvider && verifierProvider === input.builderProvider,
   );
   if (sameProvider) {
     violations.push('self_bias_risk_same_provider');
+    if (scores.D1) {
+      scores.D1 = forceScore(
+        scores.D1,
+        scores.D1.score * (1 - SAME_PROVIDER_DISCOUNT),
+        scores.D1.source,
+      );
+    }
+    if (scores.D5) {
+      scores.D5 = forceScore(
+        scores.D5,
+        scores.D5.score * (1 - SAME_PROVIDER_DISCOUNT),
+        scores.D5.source,
+      );
+    }
+    if (scores.D1 || scores.D5) {
+      violations.push('self_bias_score_discounted');
+    }
   }
 
   // ── Rule 5 (v3.3) — researcher_video_evidence_missing ──────────────────────
@@ -141,13 +182,10 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
     : sumDimsAsIs(scores);
   if (scores.verdict === 'PASS' && (scores.aggregate ?? 0) < 24) scores.verdict = 'PARTIAL';
 
-  // G-A — Rule 4 verdict downgrade. Applied AFTER the aggregate-floor check so
-  // a PASS that was already demoted to PARTIAL by the floor stays PARTIAL
-  // (idempotent) and a PASS that survives the floor still gets demoted on
-  // self-bias. Order matters: floor first, then bias.
-  if (sameProvider && scores.verdict === 'PASS') {
-    scores.verdict = 'PARTIAL';
-  }
+  // Note: the v3.3 binary `if (sameProvider && verdict === 'PASS') verdict =
+  // 'PARTIAL'` was removed in v3.4 — Rule 4's numerical D1/D5 discount above
+  // already lowered the aggregate; the standard threshold check (line above)
+  // now demotes to PARTIAL or FAIL naturally when warranted.
 
   // ── Rule 6 — composite_gaming_d1_d5_below_minimum ───────────────────────────
   // G-D from [[bagelcode-scoring-ratchet-frontier-2026-05-02]] §7 P1.

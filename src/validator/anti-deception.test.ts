@@ -69,7 +69,12 @@ describe('anti-deception validator', () => {
     expect(result.scores.D4?.score).toBe(2);
   });
 
-  it('Rule 4: same-provider verifier records self_bias_risk + downgrades PASS → PARTIAL (G-A)', () => {
+  it('Rule 4: same-provider verifier discounts D1 + D5 by 0.15 + records both violation tags', () => {
+    // [[bagelcode-same-provider-discount-2026-05-03]] — Stureborg EMNLP 2024
+    // §4.2 measured +14-22% PASS inflation when verifier shares provider with
+    // builder. We replace v3.3's binary verdict downgrade with a numerical
+    // discount on D1 (spec_fit) + D5 (quality) — the LLM-judged dims where
+    // the bias concentrates per Rubric-Anchored Judging (NeurIPS 2025).
     const result = checkAntiDeception({
       judgeScore: judgeScore({ metadata: { provider: 'openai' } }),
       qaResult: { exec_exit_code: 0 },
@@ -77,10 +82,62 @@ describe('anti-deception validator', () => {
       builderProvider: 'openai',
     });
     expect(result.violations).toContain('self_bias_risk_same_provider');
+    expect(result.violations).toContain('self_bias_score_discounted');
+    // Default judgeScore: D1=5, D5=4 → after 0.15 discount: D1=4.25, D5=3.4.
+    expect(result.scores.D1?.score).toBeCloseTo(4.25, 5);
+    expect(result.scores.D5?.score).toBeCloseTo(3.4, 5);
+    // D2/D6 (qa-check) and D4 (reducer-auto) are immune.
+    expect(result.scores.D2?.score).toBe(5);
+    expect(result.scores.D4?.score).toBe(5);
+    expect(result.scores.D6?.score).toBe(5);
+  });
+
+  it('Rule 4: discounted aggregate triggers natural threshold demotion when it drops below 24', () => {
+    // Edge-of-PASS case: raw 24/30 PASS · same-provider. After 0.15 discount
+    // on D1+D5, combineAggregate splits D3/D5 at (LLM+auto)/2 — recomputed
+    // aggregate falls below 24 threshold, demoting to PARTIAL via the
+    // standard floor (line 142). The v3.3 explicit PASS → PARTIAL gate is
+    // gone; the discount + threshold combo replaces it.
+    const result = checkAntiDeception({
+      judgeScore: judgeScore({
+        metadata: { provider: 'openai' },
+        scores: {
+          D1: { score: 5, source: 'verifier-llm' },
+          D2: { score: 4, source: 'qa-check-effect' },
+          D3: { score: 3, source: 'verifier-llm', semantic: 3 },
+          D4: { score: 4, source: 'reducer-auto' },
+          D5: { score: 4, source: 'verifier-llm', quality: 4 },
+          D6: { score: 4, source: 'qa-check-effect' },
+          aggregate: 24,
+          verdict: 'PASS',
+        },
+      }),
+      qaResult: { exec_exit_code: 0 },
+      autoScores: { D3_auto: 3, D4: 4, D5_auto: 4 },
+      builderProvider: 'openai',
+    });
+    expect(result.violations).toContain('self_bias_score_discounted');
+    expect(result.scores.aggregate).toBeLessThan(24);
     expect(result.scores.verdict).toBe('PARTIAL');
   });
 
-  it('Rule 4: cross-provider PASS unchanged (verifier ≠ builder provider)', () => {
+  it('Rule 4: same-provider PASS that survives the threshold floor stays PASS', () => {
+    // Raw 28/30 PASS · same-provider with D1=5 D5=4 → discount drops D1 to
+    // 4.25 + D5 to 3.4. Aggregate via combineAggregate = 4.25 + 5 + (4+4)/2 +
+    // 5 + (3.4+4)/2 + 5 = 26.95. Above 24 threshold → PASS holds. The
+    // discount made the score honest but didn't artificially demote.
+    const result = checkAntiDeception({
+      judgeScore: judgeScore({ metadata: { provider: 'openai' } }),
+      qaResult: { exec_exit_code: 0 },
+      autoScores: { D3_auto: 4, D4: 5, D5_auto: 4 },
+      builderProvider: 'openai',
+    });
+    expect(result.violations).toContain('self_bias_risk_same_provider');
+    expect(result.scores.aggregate).toBeGreaterThanOrEqual(24);
+    expect(result.scores.verdict).toBe('PASS');
+  });
+
+  it('Rule 4: cross-provider PASS unchanged (no discount, no violations)', () => {
     const result = checkAntiDeception({
       judgeScore: judgeScore({ metadata: { provider: 'google' } }),
       qaResult: { exec_exit_code: 0 },
@@ -88,10 +145,13 @@ describe('anti-deception validator', () => {
       builderProvider: 'openai',
     });
     expect(result.violations).not.toContain('self_bias_risk_same_provider');
+    expect(result.violations).not.toContain('self_bias_score_discounted');
+    expect(result.scores.D1?.score).toBe(5);
+    expect(result.scores.D5?.score).toBe(4);
     expect(result.scores.verdict).toBe('PASS');
   });
 
-  it('Rule 4: same-provider FAIL stays FAIL (downgrade only applies to PASS)', () => {
+  it('Rule 4: same-provider FAIL stays FAIL — discount applies but verdict already failing', () => {
     const result = checkAntiDeception({
       judgeScore: judgeScore({
         metadata: { provider: 'openai' },
@@ -110,28 +170,9 @@ describe('anti-deception validator', () => {
       builderProvider: 'openai',
     });
     expect(result.violations).toContain('self_bias_risk_same_provider');
+    expect(result.scores.D1?.score).toBeCloseTo(0.85, 5);
+    expect(result.scores.D5?.score).toBeCloseTo(0.85, 5);
     expect(result.scores.verdict).toBe('FAIL');
-  });
-
-  it('Rule 4: same-provider PARTIAL stays PARTIAL (idempotent with floor downgrade)', () => {
-    const result = checkAntiDeception({
-      judgeScore: judgeScore({
-        metadata: { provider: 'openai' },
-        scores: {
-          D1: { score: 3, source: 'verifier-llm' },
-          D2: { score: 4, source: 'qa-check-effect' },
-          D3: { score: 3, source: 'verifier-llm', semantic: 3 },
-          D4: { score: 4, source: 'reducer-auto' },
-          D5: { score: 3, source: 'verifier-llm', quality: 3 },
-          D6: { score: 4, source: 'qa-check-effect' },
-          verdict: 'PARTIAL',
-        },
-      }),
-      qaResult: { exec_exit_code: 0 },
-      autoScores: { D3_auto: 3, D4: 4, D5_auto: 3 },
-      builderProvider: 'openai',
-    });
-    expect(result.scores.verdict).toBe('PARTIAL');
   });
 
   it('D3/D5 split: aggregate uses combined (verifier llm + reducer auto) avg', () => {
