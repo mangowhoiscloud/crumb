@@ -1,7 +1,7 @@
 /**
- * Loose Message shape used by the dashboard.
+ * Loose Message shape used by the studio.
  *
- * The dashboard package is intentionally decoupled from `crumb` core types so
+ * The studio package is intentionally decoupled from `crumb` core types so
  * the two can version independently. We only depend on the *protocol surface*
  * documented in protocol/schemas/message.schema.json — not the TS types in
  * src/protocol/types.ts. Any field here is best-effort.

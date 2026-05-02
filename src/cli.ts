@@ -353,7 +353,7 @@ export interface FilterTranscriptOpts {
  *
  * AGENTS.md "Don't" rule: raw chain-of-thought lives in `kind=agent.thought_summary`
  * with `metadata.visibility="private"` only. The default tail filter strips those
- * so downstream actors (verifier, dashboard, evaluators) never see the implementer's
+ * so downstream actors (verifier, studio, evaluators) never see the implementer's
  * private deliberation. Use `--all` for replay / debugging.
  */
 export function filterTranscriptLine(line: string, opts: FilterTranscriptOpts = {}): string | null {

@@ -27,5 +27,5 @@
       }
     }
   ],
-  "ignorePatterns": ["dist", "node_modules", "sessions", "wiki", "raw", "packages/dashboard/dist"]
+  "ignorePatterns": ["dist", "node_modules", "sessions", "wiki", "raw", "packages/studio/dist"]
 }

@@ -377,7 +377,7 @@ es.addEventListener('heartbeat', () => {});
 es.onerror = () => {
   // EventSource auto-reconnects; surface a soft hint via the title.
   document.title = 'Crumb · Live (reconnecting…)';
-  setTimeout(() => { document.title = 'Crumb · Live Dashboard'; }, 2000);
+  setTimeout(() => { document.title = 'Crumb · Live Studio'; }, 2000);
 };
 
 fetch('/api/sessions').then(r => r.json()).then(payload => {
@@ -1313,7 +1313,7 @@ setActiveView = function(view) {
   if (view === 'output') refreshOutputTab();
 };
 
-// ─── v3.5 Dashboard hardening: resize, dismiss, resume, transcript ───────
+// ─── v3.5 Studio hardening: resize, dismiss, resume, transcript ───────
 
 // (1) Draggable pane resize. Persists widths in localStorage so a refresh
 // keeps the user's chosen layout.
@@ -1500,7 +1500,7 @@ selectSession = function(id) {
 // describing one assistant turn step (text / tool_use / tool_result / system /
 // result). Codex and Gemini emit similar shapes for their tool-call narratives.
 // This parser turns each line into one or more rendered "bubbles" using the
-// same ⏺ / ⎿ / ✓ glyphs the user sees inside Claude Code so the dashboard
+// same ⏺ / ⎿ / ✓ glyphs the user sees inside Claude Code so the studio
 // live exec feed reads as a faithful mirror of what the agent is doing.
 //
 // Convention:

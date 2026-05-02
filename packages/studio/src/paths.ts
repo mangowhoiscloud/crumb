@@ -1,8 +1,8 @@
 /**
- * Path resolution for the dashboard package.
+ * Path resolution for the studio package.
  *
  * Decoupled from `crumb` core: we re-derive the same defaults instead of
- * importing src/paths.ts so the dashboard remains a standalone package.
+ * importing src/paths.ts so the studio remains a standalone package.
  *
  * Single-home (legacy):
  *   - CRUMB_HOME env var → override
@@ -12,7 +12,7 @@
  *   - CRUMB_HOMES (path-list-separated) takes precedence over CRUMB_HOME.
  *   - The CLI also accepts repeatable `--home <path>` flags.
  *   - All discovered homes are watched in parallel; sessions from any home
- *     show up in the same dashboard. Project-id collisions across homes are
+ *     show up in the same studio. Project-id collisions across homes are
  *     disambiguated by `transcript_path` in the API response.
  */
 
@@ -63,7 +63,7 @@ function dedupe(xs: string[]): string[] {
  *   2. flat legacy layout (pre-v0.3.1 + dev `<repo>/sessions/<ulid>/`):
  *        `<home>/sessions/<ulid>/transcript.jsonl`
  *
- * Both layouts are watched simultaneously so a single dashboard instance
+ * Both layouts are watched simultaneously so a single studio instance
  * surfaces every session on the host without forcing the user to migrate
  * old sessions into the projects/ tree.
  */

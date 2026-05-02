@@ -242,10 +242,10 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
       const idleTimeoutMs = timers.idleMs;
 
       // v0.3.1 ArgoCD-style logs — persist full stdout / stderr to disk under
-      // <session>/agent-workspace/<actor>/spawn-<ts>.log so the dashboard's
+      // <session>/agent-workspace/<actor>/spawn-<ts>.log so the studio's
       // log viewer can tail it. The transcript-side `kind=note` summary
       // remains a 4KB preview; the full stream lives on disk and is offered
-      // via the dashboard's GET /api/sessions/:id/logs/:actor stream + snapshot
+      // via the studio's GET /api/sessions/:id/logs/:actor stream + snapshot
       // endpoints. Best-effort: a write failure must NOT break the spawn.
       const logTs = new Date().toISOString().replace(/[:.]/g, '-');
       const logPath = resolve(
@@ -326,7 +326,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
       // Always append agent.stop so observers know the turn ended.
       // v0.3.0 — token usage / cost / model from the adapter's parsed output
       // (Anthropic stream-json `result` event, OpenAI Codex `usage`, etc.)
-      // get folded into metadata here so the dashboard surfaces real numbers
+      // get folded into metadata here so the studio surfaces real numbers
       // instead of zeros. Adapters that can't recover usage (text mode / mock)
       // simply omit the field.
       const usage = result.usage ?? {};

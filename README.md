@@ -89,26 +89,26 @@ jq -r '"\(.kind)\t\(.from)"' \
 crumb replay <ulid>                               # re-derive state deterministically
 ```
 
-## Live dashboard (browser console)
+## Live studio (browser console)
 
-The dashboard is a single-binary Node HTTP + SSE server. **Default port `7321`,
+The studio is a single-binary Node HTTP + SSE server. **Default port `7321`,
 bound to `127.0.0.1` only**, so a fresh checkout → fresh browser tab works
 without firewall prompts on macOS / Windows. Cross-platform (chokidar with
 WSL/NFS polling fallback, no platform-specific syscalls).
 
 ```bash
 # After `npm install && npm run build` (Quickstart step), start it:
-npx crumb-dashboard                  # http://127.0.0.1:7321/  (auto-opens browser)
-npx crumb-dashboard --no-open        # headless / SSH / CI    (just print the URL)
-npx crumb-dashboard --port 8080      # alternate port
-npx crumb-dashboard --bind 0.0.0.0   # expose on LAN / SSH tunnel (firewall prompt)
+npx crumb-studio                  # http://127.0.0.1:7321/  (auto-opens browser)
+npx crumb-studio --no-open        # headless / SSH / CI    (just print the URL)
+npx crumb-studio --port 8080      # alternate port
+npx crumb-studio --bind 0.0.0.0   # expose on LAN / SSH tunnel (firewall prompt)
 ```
 
 Once it's up, the browser surfaces:
 
 | View | What it shows |
 |---|---|
-| **Sidebar (left)** | Project-grouped session list. ＋ button starts a new `crumb run` (goal + preset form). Hover any session row → × dismisses it from the dashboard (transcript on disk untouched). |
+| **Sidebar (left)** | Project-grouped session list. ＋ button starts a new `crumb run` (goal + preset form). Hover any session row → × dismisses it from the studio (transcript on disk untouched). |
 | **Header strip** | D1–D6 source-of-truth scorecard, always visible, updates per `kind=judge.score`. |
 | **Pipeline tab** | 9-actor DAG topology (lime pulse on the active actor, lavender ripple "weaving" each transcript event sender → next-likely target) + per-actor swimlane chip timeline. |
 | **Logs tab** (ArgoCD-inspired) | Per-actor live tail of `<session>/agent-workspace/<actor>/spawn-*.log` (full stdout / stderr from every adapter spawn). Filter / follow / clear / copy. DAG node click jumps here. |
@@ -137,7 +137,7 @@ Cross-platform env knobs:
 | `crumb config <자연어>` | Preset recommendation from natural-language description |
 | `crumb debug <session-id\|dir>` | F1-F7 routing fault diagnosis from a transcript |
 | `crumb ls` | List `sessions/` with event counts |
-| `npx crumb-dashboard [--port 7321] [--bind 127.0.0.1] [--no-open]` | Live observability dashboard (HTTP + SSE) — see "Live dashboard" section above |
+| `npx crumb-studio [--port 7321] [--bind 127.0.0.1] [--no-open]` | Live observability studio (HTTP + SSE) — see "Live studio" section above |
 
 ## Architecture (v0.1, high level)
 

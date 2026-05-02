@@ -36,7 +36,7 @@
     "packages/*"
   ],
   "scripts": {
-    "inline-dashboard-client": "npm run inline-client --workspace=@crumb/dashboard --if-present",
+    "inline-studio-client": "npm run inline-client --workspace=@crumb/studio --if-present",
     "build": "tsc && npm run build --workspaces --if-present",
     "typecheck": "tsc --noEmit && npm run typecheck --workspaces --if-present",
     "lint": "eslint . --ext .ts",
@@ -45,7 +45,7 @@
     "lint:all": "npm run lint && npm run lint:knip && npm run lint:deps",
     "format:check": "prettier --check \"src/**/*.ts\" \"packages/*/src/**/*.ts\" \"protocol/schemas/**/*.json\" \"package.json\" \"tsconfig.json\"",
     "format": "prettier --write \"src/**/*.ts\" \"packages/*/src/**/*.ts\" \"protocol/schemas/**/*.json\" \"package.json\" \"tsconfig.json\"",
-    "pretest": "npm run inline-dashboard-client",
+    "pretest": "npm run inline-studio-client",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "dev": "tsx src/index.ts",

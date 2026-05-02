@@ -1,7 +1,7 @@
 ---
 title: 베이글코드 과제 — Frontier Observability / Managed Agent / OTel 표준 사료
 category: references
-tags: [bagelcode, observability, dashboard, otel, managed-agent, frontier, 2026, vertex, anthropic-console, agentops]
+tags: [bagelcode, observability, studio, otel, managed-agent, frontier, 2026, vertex, anthropic-console, agentops]
 sources:
   - "Anthropic Claude Managed Agents (2026-04-08 launch)"
   - "Google Vertex AI Agent Builder / Gemini Enterprise (Cloud Next 2026)"
@@ -30,7 +30,7 @@ updated: 2026-05-02
 
 | 항목 | 값 |
 |---|---|
-| Console | https://console.anthropic.com/dashboard |
+| Console | https://console.anthropic.com/studio |
 | Workbench | https://platform.claude.com/workbench |
 | Observability | timeline UI, **각 tool call 클릭 → arguments / responses** |
 | **Replay** | run modifications + replay → regression debug |
@@ -49,7 +49,7 @@ updated: 2026-05-02
 | 항목 | 값 |
 |---|---|
 | 신명 | Gemini Enterprise Agent Platform (← Vertex AI Agent Builder rebrand) |
-| Dashboard | **token consumption / latency / error rates / tool calls** 4-차원 |
+| Studio | **token consumption / latency / error rates / tool calls** 4-차원 |
 | **Unified Trace Viewer** | agent reasoning paths debugging |
 | Auto-raters | multi-turn quality 측정 |
 | Online evaluation | live traffic |
@@ -104,7 +104,7 @@ URL: https://github.com/traceloop/openllmetry
 ### 2C. Langfuse (Clickhouse-acquired 2026-01)
 
 - 완전 OSS + self-host
-- "**lacks native HITL** (annotation queues, review dashboards), so ops teams build those layers themselves"
+- "**lacks native HITL** (annotation queues, review studios), so ops teams build those layers themselves"
 
 → 표준 OSS 도 HITL 은 자체 구축. 우리 자체 TUI 정당화.
 
@@ -199,7 +199,7 @@ URL: https://github.com/VoltAgent/awesome-ai-agent-papers
 
 ---
 
-## 5. 5 Frontier Dashboard 의 공통 차원
+## 5. 5 Frontier Studio 의 공통 차원
 
 ```
 모든 frontier (Vertex / Anthropic / AgentOps / Phoenix / Langfuse) 
@@ -234,7 +234,7 @@ URL: https://github.com/VoltAgent/awesome-ai-agent-papers
 | gVisor sandbox + `/workspace` RW + `/source` RO | `--dangerously-skip-permissions` + cwd sandbox + `--add-dir` |
 | network default-deny | adapter subprocess env sanitization |
 
-### Google Vertex 의 5 차원 → Crumb dashboard
+### Google Vertex 의 5 차원 → Crumb studio
 
 | Vertex | Crumb |
 |---|---|
@@ -275,7 +275,7 @@ URL: https://github.com/VoltAgent/awesome-ai-agent-papers
 
 ### 평가자 메시지 (README 한 단락)
 
-> "Crumb 의 observability 는 자체 구축 (transcript.jsonl + blessed TUI + summary.html), Bagelcode 의 OSS 자체 호스팅 패턴 (Metabase / Superset / DataHub) 정합. 동시에 schema 는 **OpenTelemetry GenAI Semantic Conventions** (Datadog / Google Vertex / OpenLLMetry / Phoenix 모두 호환) 와 alias — 자체 구축이지만 표준 호환. `crumb export --format otel-jsonl` 로 어느 platform 이든 마이그레이션 가능. 5 frontier dashboard 의 5 공통 차원 (token / latency / error / tool / cost) 모두 cover."
+> "Crumb 의 observability 는 자체 구축 (transcript.jsonl + blessed TUI + summary.html), Bagelcode 의 OSS 자체 호스팅 패턴 (Metabase / Superset / DataHub) 정합. 동시에 schema 는 **OpenTelemetry GenAI Semantic Conventions** (Datadog / Google Vertex / OpenLLMetry / Phoenix 모두 호환) 와 alias — 자체 구축이지만 표준 호환. `crumb export --format otel-jsonl` 로 어느 platform 이든 마이그레이션 가능. 5 frontier studio 의 5 공통 차원 (token / latency / error / tool / cost) 모두 cover."
 
 → **자체 구축의 정당화 + 표준 호환 + 향후 path = 한 단락에 압축**.
 
@@ -284,10 +284,10 @@ URL: https://github.com/VoltAgent/awesome-ai-agent-papers
 ## 1차 사료 (15 links)
 
 ### 빅테크 platform
-- [Anthropic Claude Console Dashboard](https://console.anthropic.com/dashboard)
+- [Anthropic Claude Console Studio](https://console.anthropic.com/studio)
 - [Anthropic Workbench](https://platform.claude.com/workbench)
 - [Anthropic Managed Agents launch (SiliconANGLE 2026-04-08)](https://siliconangle.com/2026/04/08/anthropic-launches-claude-managed-agents-speed-ai-agent-development/)
-- [Anthropic Managed Agents Dashboard guide (MindStudio)](https://www.mindstudio.ai/blog/claude-managed-agents-dashboard-guide)
+- [Anthropic Managed Agents Studio guide (MindStudio)](https://www.mindstudio.ai/blog/claude-managed-agents-dashboard-guide)
 - [Google Vertex AI Agent Builder docs](https://docs.cloud.google.com/agent-builder/overview)
 - [Google Vertex observability (VentureBeat)](https://venturebeat.com/ai/the-agent-builder-arms-race-continues-as-google-cloud-pushes-deeper-into)
 - [Gemini Enterprise Agent Platform (Cloud Next 2026, SiliconANGLE)](https://siliconangle.com/2026/04/22/google-brings-agentic-development-optimization-governance-one-roof-gemini-enterprise-agent-platform/)
@@ -318,4 +318,4 @@ URL: https://github.com/VoltAgent/awesome-ai-agent-papers
 - [[bagelcode-production-cases-2026]] — sister: 실 production 사례
 - [[bagelcode-fault-tolerance-design]] — gVisor / circuit breaker 패턴
 - [[bagelcode-transcripts-schema]] — OTel alias 적용 대상
-- [[bagelcode-rubric-scoring]] — 5 차원 dashboard 차원과 정합
+- [[bagelcode-rubric-scoring]] — 5 차원 studio 차원과 정합

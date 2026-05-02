@@ -15,7 +15,7 @@
  *
  * Header carries: verdict pill, goal, preset, wall, cost, cross_provider, score-history MiniSpark (W6).
  *
- * See [[bagelcode-system-architecture-v0.1]] §10 (4 surface, Kiki dashboard mapping).
+ * See [[bagelcode-system-architecture-v0.1]] §10 (4 surface, Kiki studio mapping).
  */
 
 import type { Actor, Message, Verdict } from '../protocol/types.js';

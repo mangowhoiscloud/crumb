@@ -1,7 +1,7 @@
 ---
 title: Crumb 시스템 구조 v0.1 — Multi-host × (harness × provider × model) tuple + 3-layer scoring
 category: concepts
-tags: [bagelcode, crumb, system-architecture, v0.1, multi-host, harness-tuple, ambient-fallback, scoring, dashboard, observability, frontier-convergence, 2026]
+tags: [bagelcode, crumb, system-architecture, v0.1, multi-host, harness-tuple, ambient-fallback, scoring, studio, observability, frontier-convergence, 2026]
 sources:
   - "[[bagelcode-host-harness-decision]]"
   - "[[bagelcode-system-architecture]] (v2, replaced)"
@@ -17,7 +17,7 @@ sources:
   - "https://github.com/microsoft/autogen (57.6k)"
   - "https://github.com/paperclipai/paperclip (61.4k)"
   - "https://aclanthology.org/2025.findings-acl.1327/ — CourtEval ACL 2025"
-  - "Kiki dashboard pattern (~/workspace/Kiki/app/dashboard)"
+  - "Kiki studio pattern (~/workspace/Kiki/app/studio)"
 summary: >-
   Crumb 의 v0.1 canonical 시스템 구조. Multi-host 4 entry (Claude Code + Codex CLI + Gemini CLI + headless),
   (harness × provider × model) 3-tuple actor binding, ambient harness fallback, 3-layer scoring (reducer +
@@ -604,7 +604,7 @@ After scoreHistory variance <1.0 over 2 rounds → next=done (adaptive_stop)
 모든 event 가 한 곳: sessions/<ulid>/transcript.jsonl
   ↓
 producers: actor (subagent), dispatcher (effect), validator, system
-consumers: reducer, observer, dashboard, replay, OTel exporter
+consumers: reducer, observer, studio, replay, OTel exporter
 ```
 
 → **별도 message broker 없음 (Kafka/Redis/NATS X)**. fs append-only + ULID 정렬 + ajv validation 만으로 충분. [[bagelcode-paperclip-vs-alternatives]] §"자체 구현" 의 핵심.
@@ -626,7 +626,7 @@ consumers: reducer, observer, dashboard, replay, OTel exporter
 | **reducer (live)** | chokidar fs.watch + tail | ~10ms |
 | **reducer (replay)** | fs.readFile + parse | one-shot |
 | **observer (web)** | SSE wrapping fs.watch | ~50ms |
-| **dashboard (정적)** | summary.html post-session OR live polling | snapshot OR ~1s |
+| **studio (정적)** | summary.html post-session OR live polling | snapshot OR ~1s |
 | **OTel exporter** | `crumb export --format otel-jsonl` | post-session |
 
 → **single-writer / multi-reader 모델**. TranscriptWriter 가 Promise chain 으로 직렬화 = race 없음. ^[inferred]
@@ -644,9 +644,9 @@ consumers: reducer, observer, dashboard, replay, OTel exporter
 | **live web observer (P1)** | `crumb observe sessions/<id>` → localhost:8080 | live SSE | 0 (로컬) |
 | **diagram-dashboard (P1)** | Excalidraw-style 시각화 (Kiki `app/diagram-dashboard/` 차용 — 외부 자산) | 정적 (vite build) | 0 |
 
-### 10.2 Kiki 차용 매핑 (`~/workspace/Kiki/app/dashboard` 참고)
+### 10.2 Kiki 차용 매핑 (`~/workspace/Kiki/app/studio` 참고)
 
-| Kiki dashboard | Crumb 매핑 |
+| Kiki studio | Crumb 매핑 |
 |---|---|
 | `agent-activity-dashboard.html` (single HTML, fs/SSE 기반 transcript live tail) | `sessions/<id>/live-activity.html` (transcript fs.watch + colored timeline) |
 | `token-dashboard.html` (cost/cache 실시간) | `sessions/<id>/token-dashboard.html` (per-actor cost + cache hit ratio + budget guardrails 시각화) |
@@ -775,6 +775,6 @@ After /crumb debug          → coordinator → fault-detector → kind=note
 - [[bagelcode-fault-tolerance-design]] — F1-F5 (본 페이지 §8.2 가 F6-F7 추가)
 - [[bagelcode-observability-frontier-2026]] — OTel GenAI alias
 - [[bagelcode-xml-frontier-2026]] — adapter 별 envelope format (XML / Markdown)
-- [[bagelcode-budget-guardrails]] — token 예산 + cost dashboard
-- `~/workspace/Kiki/app/dashboard/` — 정적 HTML hub 패턴 (참고 자산)
+- [[bagelcode-budget-guardrails]] — token 예산 + cost studio
+- `~/workspace/Kiki/app/studio/` — 정적 HTML hub 패턴 (참고 자산)
 - `agents/coordinator.md` / `agents/{builder,verifier,planner-lead,builder-fallback}.md` — sandwich body 1차 source

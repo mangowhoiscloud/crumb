@@ -18,14 +18,14 @@ export function openBrowser(url: string, opts: { autoOpen?: boolean } = {}): voi
   const want = opts.autoOpen ?? process.env.CRUMB_NO_OPEN !== '1';
   if (!want) {
     // eslint-disable-next-line no-console
-    console.log(`crumb dashboard: ${url}`);
+    console.log(`crumb studio: ${url}`);
     return;
   }
 
   const cmd = chooseCommand();
   if (!cmd) {
     // eslint-disable-next-line no-console
-    console.log(`crumb dashboard: open ${url} in your browser`);
+    console.log(`crumb studio: open ${url} in your browser`);
     return;
   }
 
@@ -37,7 +37,7 @@ export function openBrowser(url: string, opts: { autoOpen?: boolean } = {}): voi
     child.unref();
   } catch {
     // eslint-disable-next-line no-console
-    console.log(`crumb dashboard: open ${url} in your browser`);
+    console.log(`crumb studio: open ${url} in your browser`);
   }
 }
 

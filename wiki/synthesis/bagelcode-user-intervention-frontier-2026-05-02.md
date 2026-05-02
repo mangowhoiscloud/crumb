@@ -145,7 +145,7 @@ Crumb User Intervention v0.2.0
 남은 P1 후속 (별도 PR — 본 PR 아님):
 - G2 — headless inbox.txt watcher (`src/inbox/`)
 - G4 — `agents/<actor>.local.md` (gitignored override) + `data.sandwich_append`
-- G7 — observation 보강 (per-actor progress / token cost / dashboards 연계, S13)
+- G7 — observation 보강 (per-actor progress / token cost / studios 연계, S13)
 - entry MD 자연어 parsing (TUI / SKILL.md 의 `@actor` mention 자동 변환 → user.intervene data.target_actor)
 
 ---
@@ -157,7 +157,7 @@ Crumb User Intervention v0.2.0
 | 메일 키워드 | Crumb v0.2.0 충족 |
 |---|---|
 | "사용자가 ... **개입**" | 5 user.* events × 6 data fields (target_actor / goto / swap / reset_circuit / actor / sandwich_append) |
-| "**관찰**" | transcript JSONL (39 kind) + TUI live + summary.html + replay deterministic + OTel exporter + (S13 dashboards) |
+| "**관찰**" | transcript JSONL (39 kind) + TUI live + summary.html + replay deterministic + OTel exporter + (S13 studios) |
 | 자연어 surface | TUI slash commands + Claude Code skill / Codex agent / Gemini extension 4 entry |
 
 ---
@@ -169,7 +169,7 @@ Crumb User Intervention v0.2.0
 | TUI 가 새 data 필드 (target_actor / goto / swap / ...) 입력 path 미구현 | 중 | 중 | 별도 PR (entry MD parsing + TUI slash extension) |
 | envelope 이 target_actor 명시된 fact 만 그 actor 에게 보여주는 filter 없음 | 낮음 | 낮음 | task_ledger.facts 가 자동 carry, P1 후속 envelope filter |
 | inbox.txt headless path 미구현 | 낮음 | 중 (headless demo 시) | G2 별도 PR |
-| dashboards (S13) 별도 세션 진행 중 | — | — | 별도 세션 결과 통합 |
+| studios (S13) 별도 세션 진행 중 | — | — | 별도 세션 결과 통합 |
 
 ---
 

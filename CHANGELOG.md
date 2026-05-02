@@ -4,6 +4,27 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Rename `dashboard` → `studio` (web console; user directive) (2026-05-03)
+
+The local web UI is a control surface (spawn / intervene / swap), not just a passive dashboard. User picked the **Studio** naming after surveying Supabase Studio (renamed from Dashboard 2024 Q3) / Sanity Studio / Convex Studio precedent. This PR is a single atomic rename so future PR-pkg-2 (separate `@crumb/studio` publish) can build on the right names.
+
+Sentinel-protected sed (`/tmp/dashboard-to-studio.sh`) renamed across 45 files:
+
+- **Package**: `@crumb/dashboard` → `@crumb/studio`. Directory: `packages/dashboard/` → `packages/studio/`.
+- **Bin**: `crumb-dashboard` → `crumb-studio`.
+- **Source files**: `dashboard.{html,css,js}` → `studio.{html,css,js}`, `dashboard-html.ts` → `studio-html.ts`. Generated artifact: `dashboard-html.generated.ts` → `studio-html.generated.ts` (gitignore updated).
+- **Constants**: `DASHBOARD_HTML` → `STUDIO_HTML`. Identifiers: `Dashboard*` → `Studio*` (`DashboardServer`, `DashboardServerOptions`, `DashboardMessage`, `startDashboardServer`).
+- **Root scripts**: `inline-dashboard-client` → `inline-studio-client` (root `package.json` workspace forwarder).
+
+Intentionally **NOT renamed** (external references, protected by sentinels):
+- `agent-activity-dashboard` / `token-dashboard` / `diagram-dashboard` — Kiki-internal page names referenced from `wiki/concepts/bagelcode-system-architecture-v0.1.md`.
+- `anthropic-managed-agents-dashboard-guide` / `claude-managed-agents-dashboard-guide` — MindStudio blog URLs in `wiki/references/bagelcode-observability-frontier-2026.md`.
+
+Verification:
+- `npm run lint && typecheck && format:check && test && build` — all green; **421/421 specs pass**.
+- Live smoke: `node packages/studio/dist/cli.js --port 7321 --no-open` boots; `/api/health` returns 5 sessions; `/api/doctor` enumerates claude/codex/gemini-cli adapters as before. End-to-end browser → server → file-tail SSE flow unchanged.
+- Wiki/docs grep audit: 7 remaining `dashboard` mentions are all intentional external refs.
+
 ### Changed — Wiki concepts KO → EN, batch 1 of N (PR-C-3) (2026-05-03)
 
 Continues the KO→EN sweep. Wiki is the largest tranche (~33k KO chars across 31+ files); this PR ships the heaviest single concepts file.
@@ -74,7 +95,7 @@ Files renamed (wiki):
 
 All wikilinks remapped via in-place perl. 311+ inline mentions of `v3.x` across 67 files converted; 0 `\bv3\.[0-5]\b` and 0 `\bv3\b` patterns remain (verified via grep). Phaser `3.80` and Gemini `3.1` mentions are unaffected (regex used `\bv` prefix).
 
-`package.json` + `packages/dashboard/package.json` `version` bumped `0.1.0` → `0.4.0`. CHANGELOG `[Unreleased]` capped with `[0.4.0] - 2026-05-03` release header.
+`package.json` + `packages/studio/package.json` `version` bumped `0.1.0` → `0.4.0`. CHANGELOG `[Unreleased]` capped with `[0.4.0] - 2026-05-03` release header.
 
 ### Changed — Sandwich KO → EN translation pass (PR-C-1) (2026-05-03)
 
@@ -154,30 +175,30 @@ Per-spawn wall-clock + idle timeouts and session wall-clock budget were hard-cod
 - Defaults preserved when env vars are unset/invalid (`Number(undefined) || default`).
 - Tests already pass `perSpawnTimeoutMs` / `perSpawnIdleTimeoutMs` per `DispatcherDeps` so no test changes needed; sweep 421/421 green.
 
-### Added — Dashboard bootstrap state classifier + adapter status sidebar + new-session preset chips (2026-05-03)
+### Added — Studio bootstrap state classifier + adapter status sidebar + new-session preset chips (2026-05-03)
 
-Dashboard had two startup gaps and one UX gap. (1) On boot it surfaced every transcript with no liveness signal — the user couldn't tell at a glance which sessions were running, idle, or abandoned. (2) Adapter availability (Claude Code installed? Codex authenticated? Gemini CLI on PATH?) was invisible in the UI; users only learned via failed spawn attempts. (3) Session creation offered a flat preset dropdown with no signal of which presets were even runnable on the current machine. User feedback: "지금 대시보드 시작할 때 현재 열린 세션들 연결하도록 하는 헬스체크 혹은 부트스트랩 넣으려면 어떻게 해? ... [claude code] [Opus 4.7] 이런식으로 현재 지원하는 옵션들을 드러내게 해. 활성=초록 원, 비활성=회색."
+Studio had two startup gaps and one UX gap. (1) On boot it surfaced every transcript with no liveness signal — the user couldn't tell at a glance which sessions were running, idle, or abandoned. (2) Adapter availability (Claude Code installed? Codex authenticated? Gemini CLI on PATH?) was invisible in the UI; users only learned via failed spawn attempts. (3) Session creation offered a flat preset dropdown with no signal of which presets were even runnable on the current machine. User feedback: "지금 대시보드 시작할 때 현재 열린 세션들 연결하도록 하는 헬스체크 혹은 부트스트랩 넣으려면 어떻게 해? ... [claude code] [Opus 4.7] 이런식으로 현재 지원하는 옵션들을 드러내게 해. 활성=초록 원, 비활성=회색."
 
-**Bootstrap state classifier** (`packages/dashboard/src/bootstrap.ts`)
+**Bootstrap state classifier** (`packages/studio/src/bootstrap.ts`)
 
 - Pure-function `classifyFromMtime(mtime, history, now)` + thin `classifySessionState(path, history)` wrapper that pays a single `stat` syscall. Pattern lifted from VS Code's workspaceStorage (mtime + meta scan, no daemon) + Kubernetes init-container vs liveness-probe split.
 - States: `live` (mtime < 10s), `idle` (< 5min), `interrupted` (< 1d), `abandoned` (≥ 1d), `terminal` (any `kind=done` event present, regardless of mtime). `done_reason` extracted from `done.data.reason` or `done.body` for the sidebar tooltip.
 - 9 unit tests (`bootstrap.test.ts`): each state boundary + clock-skew (future mtime) + empty history + done.body fallback + last_event_kind/actor preservation.
 
-**Adapter probe** (`packages/dashboard/src/doctor.ts`)
+**Adapter probe** (`packages/studio/src/doctor.ts`)
 
 - Lightweight standalone version of `crumb doctor` — no cross-package import. PATH lookup via `which <bin>` + best-effort `--version` (1.5s timeout, SIGKILL on timeout). 5 adapters catalogued: `claude-local`, `codex-local`, `gemini-cli-local`, `gemini-sdk` (env-var keyed), `mock` (always available).
 - Auth state semantics: `true` = confirmed (SDK env-var or mock), `null` = installed but not probed (binary present; auth probe would risk surfacing login prompts), `false` = binary missing. UI maps `null` → "installed" amber pill, leaves "auth ✓" for confirmed cases.
 - 5 unit tests (`doctor.test.ts`): mock always-on, full catalogue, gemini-sdk env-var toggle, install/auth hint presence, missing-binary→authenticated=false invariant.
 
-**New HTTP endpoints** (`packages/dashboard/src/server.ts`)
+**New HTTP endpoints** (`packages/studio/src/server.ts`)
 
 - `GET /api/health` — bootstrap summary: `{ ok, watcher_paths_tracked, sessions: { total, by_state: {...} } }`. Lifts the K8s readiness probe pattern: separates one-shot startup data from the periodic `/api/sessions` polling.
 - `GET /api/doctor` — adapter probe matrix.
 - `GET /api/sessions` extended — each session now carries `state`, `last_activity_at`, `done_reason` fields. Server-side sort by `last_activity_at` DESC turns the sidebar into a recently-active feed without client-side resort.
 - `SessionWatcher.classifiedSnapshot()` — async snapshot variant that runs the classifier per session. Sync `snapshot()` kept for SSE replay where the extra stat would multiply latency.
 
-**UI** (`packages/dashboard/src/client/dashboard.{html,css,js}`)
+**UI** (`packages/studio/src/client/studio.{html,css,js}`)
 
 - **Sidebar Adapter Status section** (above Sessions) — one row per adapter with state-aware dot: lime (●) for active, amber for `installed-but-auth-unknown`, gray (○) for missing. `version` (or first model) shown in monospace meta line. Pill text: `auth ✓` / `installed` / `missing`. `↻` button re-probes.
 - **Per-session sidebar dots** state-classed: `state-live` (lime + glow), `state-idle` (amber), `state-interrupted` (audit-fg pink + ⏸ suffix), `state-abandoned` (gray, 0.55 opacity), `state-terminal` (ink-subtle, 0.78 opacity). Hover surfaces full state + `done_reason`.
@@ -187,7 +208,7 @@ Dashboard had two startup gaps and one UX gap. (1) On boot it surfaced every tra
 
 **Verification**: 14 new unit tests (9 bootstrap + 5 doctor) on top of 398 → 412/412 sweep green; live API smoke confirmed all 3 endpoints + state field on `/api/sessions`.
 
-### Changed — Dashboard DAG re-grounded against `src/reducer/index.ts` (Phase zones + 6 typed edges + done terminal) (2026-05-03)
+### Changed — Studio DAG re-grounded against `src/reducer/index.ts` (Phase zones + 6 typed edges + done terminal) (2026-05-03)
 
 The Pipeline DAG drew a `verifier → coordinator → builder-fallback` arc through a coordinator routing node, plus a `verifier → validator` edge, neither of which exist in the actual reducer. User feedback: "지금 이 DAG 모양은 실제 절차에 맞는거야? 코드베이스로 그라운딩하고 좀 디벨롭할 사안 찾을 순 없나?" — every edge is now grounded against a specific `src/reducer/index.ts` line.
 
@@ -218,13 +239,13 @@ User feedback: opening a multi-file Crumb-generated `index.html` directly with `
 
 This codifies the diagnose-and-fix sequence that arose when the user reported "고양이 퍼즐이 지금 로딩중으로 나와" — the multi-file game's ES modules silently failed under `file://`. With the skill, future "이전 게임 열어줘" requests will short-circuit to the right protocol automatically.
 
-### Added — Dashboard IDE-style grep highlight + ↑↓ nav across Logs / Transcript / Live feed (2026-05-03)
+### Added — Studio IDE-style grep highlight + ↑↓ nav across Logs / Transcript / Live feed (2026-05-03)
 
-The dashboard's text panels supported a substring filter that highlighted whole matching lines in faint blue (logs only), filtered entries (transcript), or had no search at all (live execution feed). User feedback: "grep 했을 때 해당되는 패턴 주황색으로 표시하고 위아래로 조작 가능(IDE처럼)하게 세팅이 아직 안되었거든." — they wanted the inline-substring orange highlight + IDE-style match navigation present in every modern editor.
+The studio's text panels supported a substring filter that highlighted whole matching lines in faint blue (logs only), filtered entries (transcript), or had no search at all (live execution feed). User feedback: "grep 했을 때 해당되는 패턴 주황색으로 표시하고 위아래로 조작 가능(IDE처럼)하게 세팅이 아직 안되었거든." — they wanted the inline-substring orange highlight + IDE-style match navigation present in every modern editor.
 
-- **`mark.grep-hit` substring highlight** in `dashboard.css` — translucent 32% orange normal state, full `--accent-grep` (#ff9f1c) with deeper `--accent-grep-active` (#ff5e00) border on the current match. New tokens `--accent-grep` + `--accent-grep-active` are visually distinct from `--warn` peach and `--accent-warm` gold (already taken by stream-json `⏺/✓`).
+- **`mark.grep-hit` substring highlight** in `studio.css` — translucent 32% orange normal state, full `--accent-grep` (#ff9f1c) with deeper `--accent-grep-active` (#ff5e00) border on the current match. New tokens `--accent-grep` + `--accent-grep-active` are visually distinct from `--warn` peach and `--accent-warm` gold (already taken by stream-json `⏺/✓`).
 - **Shared `.grep-controls`** — `count / total` (e.g. `3 / 17`, orange when hits > 0, dim when no query) + `↑ ↓` nav buttons, disabled when no matches.
-- **Per-panel grep state** in `dashboard.js` — `grepState = { logs, transcript, feed }` with `query` + `cursor` preserved across re-renders (streaming content doesn't reset nav position).
+- **Per-panel grep state** in `studio.js` — `grepState = { logs, transcript, feed }` with `query` + `cursor` preserved across re-renders (streaming content doesn't reset nav position).
 - **Helpers**: `highlightHTML(text, query)` (HTML-escapes then wraps case-insensitive substring matches with `<mark>`, regex meta chars escaped via `escapeRegExp`), `refreshGrepNav()` (re-collects `mark.grep-hit` after each render, syncs counter + active class), `gotoGrepMatch(panel, dir)` (mod-N cursor advance + `scrollIntoView({block:'center'})`), `bindGrepInput()` (input event → `onChange`; Enter = next, Shift+Enter = prev, Esc = clear+blur).
 - **Logs panel**: substring `<mark>` replaces the old whole-line `.match` blue background. Matching lines now also get a faint orange `.has-match` row tint for at-a-glance scanning.
 - **Transcript panel**: render switched from `textContent` to `innerHTML` (still inside `<pre>` so whitespace preserved) so the pretty-printed JSON layout keeps formatting while inline matches are markable. Entry-level filtering (only matching events shown) is preserved on top of substring highlight.
@@ -232,11 +253,11 @@ The dashboard's text panels supported a substring filter that highlighted whole 
 - **Tests** — `escapeRegExp` + `highlightHTML` verified via 6 unit cases (case-insensitive multi-match, HTML escape `<div>`, regex meta `.*+?` literal match, empty query, single-space query). Full sweep 342/342 green.
 - Verified server-side: served HTML contains all 43 grep identifiers; build artifact bumped 95781 → 103212 bytes.
 
-### Added — Dashboard live exec feed: Claude-Code-style stream-json narrative (2026-05-03)
+### Added — Studio live exec feed: Claude-Code-style stream-json narrative (2026-05-03)
 
-The per-session live execution feed (above the chat input) was dumping spawn-log stream-json as raw text. User feedback: "이건 세션 내 채팅 입력창 위에 붙어있어야 해" — the user wants the same `⏺` / `⎿` / `✓` narrative bubbles they see inside Claude Code, faithfully mirrored in the dashboard so they can watch what the agent is doing without context-switching to the terminal.
+The per-session live execution feed (above the chat input) was dumping spawn-log stream-json as raw text. User feedback: "이건 세션 내 채팅 입력창 위에 붙어있어야 해" — the user wants the same `⏺` / `⎿` / `✓` narrative bubbles they see inside Claude Code, faithfully mirrored in the studio so they can watch what the agent is doing without context-switching to the terminal.
 
-- **`renderStreamJsonLine()` parser** in `dashboard.js` — turns each spawn-log line (Claude CLI stream-json shape: `{type: 'assistant'|'user'|'system'|'result', ...}`) into one or more rendered bubbles:
+- **`renderStreamJsonLine()` parser** in `studio.js` — turns each spawn-log line (Claude CLI stream-json shape: `{type: 'assistant'|'user'|'system'|'result', ...}`) into one or more rendered bubbles:
   - `type=assistant` content blocks → `⏺ <text>` (assistant text), `⏺ ToolName(summary)` (tool_use), `· (thinking)` (extended thinking)
   - `type=user` tool_result → `⎿ <preview>` (collapsed) with `is_error` upgrading to `tool-error` style
   - `type=system subtype=task_started|task_notification` → `⎿ Async <desc> started|completed|killed`
@@ -246,7 +267,7 @@ The per-session live execution feed (above the chat input) was dumping spawn-log
   - `type=rate_limit_event` → silent (noise)
 - **Tool-call summarizers** — domain-specific input summary per tool: `Bash` shows the command first 90 chars, `Read/Write/Edit` shows file_path, `Grep/Glob` shows pattern (+ optional path), `Task/Agent` shows description + subagent_type, `TodoWrite` shows the in-progress todo or count, `WebSearch/WebFetch` shows query/url. Generic JSON-truncated fallback for unknown tools.
 - **Tool-result summarizer** — flattens array/object content to a single line, collapses whitespace, truncates to 180 chars (240 for errors so context isn't lost on failures).
-- **CSS for the new kindClasses** in `dashboard.css`:
+- **CSS for the new kindClasses** in `studio.css`:
   - `kind-assistant-text` — full ink color, weight 500, white-space: pre-wrap (assistant text often spans multiple paragraphs)
   - `kind-tool-call` — accent-warm color, monospace, slight transparency (so it visually stands as "agent action")
   - `kind-tool-result` — muted ink, 16 px left padding, smaller font (78% opacity, indented under its call)
@@ -256,20 +277,20 @@ The per-session live execution feed (above the chat input) was dumping spawn-log
 - **`FEED_MAX_LINES` bumped 800 → 2000** because stream-json rendering produces 3-5× line density vs raw transcript events. With 2000 lines × ~40 chars/line the DOM stays under ~80 KB which is well within smooth-scroll budget.
 - **Pre-check optimization** — `renderStreamJsonLine` returns null fast for non-JSON lines (charCode 123 check) so the chunk handler falls through to raw rendering without paying JSON.parse cost on plain log output.
 
-The same convention now powers both the Claude Code terminal view and the dashboard exec feed — when the agent is running, the user can watch the same `⏺ Bash(npm test)` / `⎿ 342 passed` / `✓ turn complete · 4280 out · $0.42 · 18s` narrative whether they look at the terminal or the browser. No code changes outside `packages/dashboard/src/client/`. 342/342 tests passing, lint clean, build clean.
+The same convention now powers both the Claude Code terminal view and the studio exec feed — when the agent is running, the user can watch the same `⏺ Bash(npm test)` / `⎿ 342 passed` / `✓ turn complete · 4280 out · $0.42 · 18s` narrative whether they look at the terminal or the browser. No code changes outside `packages/studio/src/client/`. 342/342 tests passing, lint clean, build clean.
 
-### Added — Dashboard hardening: resizable panes / click-outside / Resume / Transcript viewer / coordinator visibility (2026-05-03)
+### Added — Studio hardening: resizable panes / click-outside / Resume / Transcript viewer / coordinator visibility (2026-05-03)
 
-Six interactive-quality fixes to `packages/dashboard/`:
+Six interactive-quality fixes to `packages/studio/`:
 
 - **Resizable session + detail panes.** Both side panes now have draggable split bars (Mac/Windows-feel `col-resize` cursor). Width is persisted in `localStorage` (`crumb.sessions-w` / `crumb.detail-w`) so a refresh keeps the user's layout. Bounds clamped (sessions 160–560 px, detail 280–800 px). The grid-template uses CSS variables (`--sessions-w`, `--detail-w`) and the body grid gains a 4 px handle column. Touch (passive: false on `touchmove`) and mouse both wired.
 - **Click-outside-to-close detail pane.** Right-side detail aside dismisses on any `mousedown` outside its bounds, with two opt-outs: clicks on `[data-evt-id]` swimlane rows (which re-open detail with a new event) and clicks on the pane's own resize handle.
 - **Resume button.** New CTA in the view-tabs row. Surfaces only when the last actor event was an `error` or a timeout-tagged `agent.stop` (regex `timed out|exit=[1-9]`) and no healthy follow-up event landed since. On click, posts `/redo @<actor> resume after timeout/error` to the inbox endpoint — the existing inbox parser turns that into a `kind=user.intervene data.action="redo" target_actor=<actor>` event, which the reducer routes back into the dispatcher's normal spawn loop.
 - **Transcript viewer tab.** New `Transcript` tab next to Pipeline / Logs / Output. Pretty-printed JSONL with substring filter, copy-all button, live event count. Re-renders on `append` SSE events while the tab is active.
-- **Coordinator visibility (root-cause + fix).** The user reported the coordinator pane appears silent during normal routing. Investigation: `src/dispatcher/live.ts` only emits `from=coordinator` events on `rollback` / `stop` / `done` effects (lines 320 / 332 / 341 / 347) — by design, since the coordinator is host-inline (v0.1 invariant 9, depth=1) and doesn't run as a subprocess that emits `agent.wake` / `agent.stop`. Routing decisions surface as `from=system kind=note body="dispatch.spawn → ..."`. The dashboard fix attributes those system spawn-notes to the coordinator lane in the live execution feed (`→ route: spawn(<actor>) via <adapter> [host-inline routing]`), so the lane no longer reads as silent. The underlying invariant is preserved.
+- **Coordinator visibility (root-cause + fix).** The user reported the coordinator pane appears silent during normal routing. Investigation: `src/dispatcher/live.ts` only emits `from=coordinator` events on `rollback` / `stop` / `done` effects (lines 320 / 332 / 341 / 347) — by design, since the coordinator is host-inline (v0.1 invariant 9, depth=1) and doesn't run as a subprocess that emits `agent.wake` / `agent.stop`. Routing decisions surface as `from=system kind=note body="dispatch.spawn → ..."`. The studio fix attributes those system spawn-notes to the coordinator lane in the live execution feed (`→ route: spawn(<actor>) via <adapter> [host-inline routing]`), so the lane no longer reads as silent. The underlying invariant is preserved.
 - **Resume button + transcript viewer wired into the existing SSE handlers** so they self-update on every appended event.
 
-Test plan: lint clean (0 errors, 26 informational sonarjs warnings), typecheck clean, format clean, **342/342 tests passing**, build inlined the new client (78991 bytes) into `dashboard-html.generated.ts`. No code changes outside `packages/dashboard/src/client/{dashboard.html, dashboard.css, dashboard.js}`. The dashboard pretest hook re-inlines automatically; CI ratchet preserved.
+Test plan: lint clean (0 errors, 26 informational sonarjs warnings), typecheck clean, format clean, **342/342 tests passing**, build inlined the new client (78991 bytes) into `studio-html.generated.ts`. No code changes outside `packages/studio/src/client/{studio.html, studio.css, studio.js}`. The studio pretest hook re-inlines automatically; CI ratchet preserved.
 
 ### Added — `package.json` `files` allowlist for `npm i -g` distribution (PR-1) (2026-05-03)
 
@@ -288,16 +309,16 @@ This is **PR-1 of 5** in the install/update/uninstall track. Next:
 - **PR-4** — `crumb update` (sandwich/preset cache refresh, config preserved)
 - **PR-5** — `crumb uninstall` (host registration removed, `--purge` for user data)
 
-### Added — Dashboard multi-home support (`--home <path>` repeatable + `CRUMB_HOMES` env) (2026-05-02)
+### Added — Studio multi-home support (`--home <path>` repeatable + `CRUMB_HOMES` env) (2026-05-02)
 
-The dashboard could only watch a single Crumb home (default `~/.crumb`), so test sessions under `/tmp/crumb-test-home/` and production sessions under `~/.crumb/` couldn't appear together. Now one dashboard instance aggregates from any number of homes.
+The studio could only watch a single Crumb home (default `~/.crumb`), so test sessions under `/tmp/crumb-test-home/` and production sessions under `~/.crumb/` couldn't appear together. Now one studio instance aggregates from any number of homes.
 
-- **`packages/dashboard/src/paths.ts`** — `getCrumbHomes()` reads `CRUMB_HOMES` (path-list separated, dedupes preserving order) → falls through to `CRUMB_HOME` → falls through to `$HOME/.crumb`. New `defaultTranscriptGlobs(): string[]` mirrors the single-home `defaultTranscriptGlob()` for chokidar's array-of-globs API. `crumbHomeFromPath(path)` is now pure path-string extraction (`lastIndexOf('/projects/')`) — no env lookup, so it works regardless of how the watcher was configured.
-- **`packages/dashboard/src/watcher.ts`** — `WatcherOptions.globs?: string[]` joins legacy `glob?: string`. Watcher precedence: explicit `globs` array → legacy single `glob` → multi-home default. Snapshot entries now include `crumb_home` so the API consumer can disambiguate cross-home project-id collisions.
-- **`packages/dashboard/src/cli.ts`** — `--home <path>` flag, repeatable. CLI passes through to `globs`. Help banner updated with examples; resolution order documented (`--home` > `CRUMB_HOMES` > `CRUMB_HOME` > default).
-- **`packages/dashboard/src/server.ts`** — `DashboardServerOptions.globs?: string[]` plumbed through. `/api/sessions` response includes `crumb_home` per session.
-- **Tests**: 27/27 dashboard specs pass (no test additions; existing watcher specs cover both single-glob and array-glob paths via chokidar's union behavior).
-- Verified end-to-end: `crumb-dashboard --home ~/.crumb --home /tmp/crumb-real-home` returns 2 sessions with distinct `crumb_home` fields ("고양이 퍼즐 게임" 13 events from `~/.crumb`; "30초 색깔 매칭 게임" 32 events from `/tmp/crumb-real-home`).
+- **`packages/studio/src/paths.ts`** — `getCrumbHomes()` reads `CRUMB_HOMES` (path-list separated, dedupes preserving order) → falls through to `CRUMB_HOME` → falls through to `$HOME/.crumb`. New `defaultTranscriptGlobs(): string[]` mirrors the single-home `defaultTranscriptGlob()` for chokidar's array-of-globs API. `crumbHomeFromPath(path)` is now pure path-string extraction (`lastIndexOf('/projects/')`) — no env lookup, so it works regardless of how the watcher was configured.
+- **`packages/studio/src/watcher.ts`** — `WatcherOptions.globs?: string[]` joins legacy `glob?: string`. Watcher precedence: explicit `globs` array → legacy single `glob` → multi-home default. Snapshot entries now include `crumb_home` so the API consumer can disambiguate cross-home project-id collisions.
+- **`packages/studio/src/cli.ts`** — `--home <path>` flag, repeatable. CLI passes through to `globs`. Help banner updated with examples; resolution order documented (`--home` > `CRUMB_HOMES` > `CRUMB_HOME` > default).
+- **`packages/studio/src/server.ts`** — `DashboardServerOptions.globs?: string[]` plumbed through. `/api/sessions` response includes `crumb_home` per session.
+- **Tests**: 27/27 studio specs pass (no test additions; existing watcher specs cover both single-glob and array-glob paths via chokidar's union behavior).
+- Verified end-to-end: `crumb-studio --home ~/.crumb --home /tmp/crumb-real-home` returns 2 sessions with distinct `crumb_home` fields ("고양이 퍼즐 게임" 13 events from `~/.crumb`; "30초 색깔 매칭 게임" 32 events from `/tmp/crumb-real-home`).
 
 ### Fixed — Real subprocess RCA cluster: researcher EISDIR + chain drain + repo auto-detect (v0.3.1) (2026-05-02)
 
@@ -369,7 +390,7 @@ Real findings surfaced and fixed in the same PR:
 - **Circular dependency `src/config/model-config.ts ↔ src/dispatcher/preset-loader.ts`** — preset-loader had duplicate `Harness`/`Provider` type declarations identical to those in `src/protocol/types.ts`. Removed duplicates, made preset-loader import + re-export from the canonical location. Cycle broken; 56 modules / 187 deps cruised, 0 violations.
 - **Unused `validateMessage` async function** removed from `src/protocol/validate.ts` — only `validateMessageSync` had real consumers (`src/transcript/writer.ts`).
 - **Unused `ActorName` type** removed from `src/config/model-config.ts` — derived type with zero downstream consumers; the `ACTORS` const is what the TUI iterates over.
-- **Unused root `chokidar` dependency** moved out — only `packages/dashboard` consumes chokidar (its own package.json already has it).
+- **Unused root `chokidar` dependency** moved out — only `packages/studio` consumes chokidar (its own package.json already has it).
 - **Unlisted `zod` dependency** added to `package.json` — was being imported as a transitive of `@modelcontextprotocol/sdk`, now declared explicitly.
 
 Reducer single-file design preserved with inline justification: per LongCodeBench (arXiv 2505.07897) + Karpathy nanochat / microgpt evidence, splitting an 18-case 650-line reducer into 18 files would convert single-file fan-out cost into 18-file fan-out cost. The `// eslint-disable-next-line sonarjs/cognitive-complexity` annotation on `reduce()` cites both wiki pages so future contributors (human or LLM) understand the deliberate exception.
@@ -660,7 +681,7 @@ Per-actor model + effort tuning, per-provider activation toggle, and `/model` na
 ### Fixed — Schema drift (2026-05-02)
 
 - `protocol/schemas/message.schema.json`: `kind` description "39 kinds" → "40 kinds (4 system + 11 workflow + 5 dialogue + 5 step + 5 user + 3 handoff + 7 meta)". Top-level description also updated to clarify "11 fields" refers to identification/routing/classification only.
-- `wiki/concepts/bagelcode-system-architecture-v0.1.md`: §3.3 header "39 kind 어휘" → "40 kind 어휘"; "artifact / meta (6)" → "(7)" (counts 7 entries: artifact.created/ack/error/audit/tool.call/tool.result/hook); architecture diagram "39 kind × 11 field" → "40 kind × 11 field"; §10.2 Kiki dashboard mapping similarly updated.
+- `wiki/concepts/bagelcode-system-architecture-v0.1.md`: §3.3 header "39 kind 어휘" → "40 kind 어휘"; "artifact / meta (6)" → "(7)" (counts 7 entries: artifact.created/ack/error/audit/tool.call/tool.result/hook); architecture diagram "39 kind × 11 field" → "40 kind × 11 field"; §10.2 Kiki studio mapping similarly updated.
 - `src/helpers/explain.ts` jsdoc "39 kinds × 11 fields" → "40 kinds × 11 identification fields". `KIND_REGISTRY` already had 40 entries from prior session — only doc string was stale.
 
 ### Fixed — Coordinator race conditions (2026-05-02)

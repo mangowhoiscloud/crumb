@@ -118,7 +118,7 @@ describe('toOtelSpan', () => {
     expect(span.attributes['gen_ai.tool.call.output']).toContain('"ok":true');
   });
 
-  it('kind=error sets error.type for dashboard error-rate metrics', () => {
+  it('kind=error sets error.type for studio error-rate metrics', () => {
     const err: Message = {
       id: '01J9X4ER',
       ts: '2026-05-02T12:05:00.000Z',
