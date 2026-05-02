@@ -31,15 +31,20 @@ import { combineAggregate, type AutoScores } from '../state/scorer.js';
 
 /**
  * Same-provider self-bias numerical discount factor for Rule 4. Applied to
- * D1 (spec_fit) and D5 (quality) — the LLM-judged qualitative dims where
- * Stureborg EMNLP 2024 §4.2 measured +14-22% PASS-rate inflation when the
- * verifier shares the provider with the builder. 0.15 is the conservative
- * midpoint of that 14-22% range, accounting for the prompt-mitigation 50%
- * coverage from Anthropic Hybrid Normalization 2026.
+ * D1 (spec_fit), D3 (schema/observability LLM half), and D5 (quality) — the
+ * LLM-judged qualitative dims where Stureborg EMNLP 2024 §4.2 measured
+ * +14-22% PASS-rate inflation when the verifier shares the provider with
+ * the builder. 0.15 is the conservative midpoint of that 14-22% range,
+ * accounting for the prompt-mitigation 50% coverage from Anthropic Hybrid
+ * Normalization 2026.
  *
  * D2 (qa-check exec) / D6 (qa-check portability) / D4 (reducer-auto budget)
- * are deterministic and immune. D3 (LLM+auto split via combineDimScore) is
- * P2 — discounting the combined value would over-correct the auto half.
+ * are deterministic and immune. D3 / D5 are split LLM/auto via
+ * combineDimScore in src/state/scorer.ts, which averages scores.D{3,5}.score
+ * (the verifier's raw LLM-emitted value) with autoScores.D{3,5}_auto. So
+ * discounting scores.D{3,5}.score before that combine is mathematically
+ * equivalent to discounting only the LLM half — exactly the symmetric
+ * treatment we want.
  *
  * See [[bagelcode-same-provider-discount-2026-05-03]] for the full rationale.
  */
@@ -118,20 +123,21 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
   // binary PASS → PARTIAL gate collapsed dynamic range and treated a
   // measured continuous bias as a discrete action.
   //
-  // New behavior: discount D1 (spec_fit) and D5 (quality) — the LLM-judged
-  // qualitative dims where same-provider bias concentrates per Rubric-
-  // Anchored Judging (NeurIPS 2025) — by SAME_PROVIDER_DISCOUNT (0.15,
-  // Stureborg midpoint, conservative). D2/D6 (qa-check ground truth) and
-  // D4 (reducer-auto) are immune. Aggregate is recomputed below; standard
-  // verdict thresholds (≥24=PASS, 18-23=PARTIAL, <18=FAIL) re-fire
+  // New behavior: discount D1 (spec_fit), D3 (schema), and D5 (quality) —
+  // the LLM-judged qualitative dims where same-provider bias concentrates
+  // per Rubric-Anchored Judging (NeurIPS 2025) — by SAME_PROVIDER_DISCOUNT
+  // (0.15, Stureborg midpoint, conservative). D2/D6 (qa-check ground truth)
+  // and D4 (reducer-auto) are immune. Aggregate is recomputed below;
+  // standard verdict thresholds (≥24=PASS, 18-23=PARTIAL, <18=FAIL) re-fire
   // naturally — no special PASS demotion. Anthropic Hybrid Normalization
   // 2026: prompt mitigation reaches ~50% effect reduction; numerical
   // correction is the residual half.
   //
-  // D3 is split LLM/auto via combineDimScore — its LLM half is also biased
-  // but the reducer doesn't preserve raw inputs separately. Discounting the
-  // already-combined D3 would over-correct the auto half. P2 deferred until
-  // the reducer carries raw LLM/auto inputs.
+  // D3 / D5 are split LLM/auto via combineDimScore (src/state/scorer.ts),
+  // which averages scores.D{3,5}.score (the verifier's raw LLM-emitted
+  // value) with autoScores.D{3,5}_auto. Discounting scores.D{3,5}.score
+  // here, before that combine runs, is mathematically equivalent to
+  // discounting only the LLM half — the auto half stays untouched.
   const verifierProvider = input.judgeScore.metadata?.provider;
   const sameProvider = Boolean(
     verifierProvider && input.builderProvider && verifierProvider === input.builderProvider,
@@ -145,6 +151,13 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
         scores.D1.source,
       );
     }
+    if (scores.D3) {
+      scores.D3 = forceScore(
+        scores.D3,
+        scores.D3.score * (1 - SAME_PROVIDER_DISCOUNT),
+        scores.D3.source,
+      );
+    }
     if (scores.D5) {
       scores.D5 = forceScore(
         scores.D5,
@@ -152,7 +165,7 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
         scores.D5.source,
       );
     }
-    if (scores.D1 || scores.D5) {
+    if (scores.D1 || scores.D3 || scores.D5) {
       violations.push('self_bias_score_discounted');
     }
   }
