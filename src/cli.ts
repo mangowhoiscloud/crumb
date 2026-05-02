@@ -30,6 +30,7 @@ import {
   getSessionsDir,
   resolveSessionDir as resolveStoredSession,
 } from './paths.js';
+import { newMeta, readMeta, updateMeta, writeMeta } from './session/meta.js';
 import type { DraftMessage } from './protocol/types.js';
 
 interface ParsedArgs {
@@ -73,6 +74,7 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
   const sessionDir = await ensureSessionRoot(cwd, sessionId);
   const adapterOverride = args.flags.get('adapter');
   const presetName = args.flags.get('preset');
+  const label = args.flags.get('label');
   const idleTimeoutMs = Number(args.flags.get('idle-timeout') ?? 60_000);
 
   // eslint-disable-next-line no-console
@@ -84,20 +86,44 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
   // eslint-disable-next-line no-console
   console.log(`[crumb] adapter=${adapterOverride ?? '(preset or ambient)'} repo=${repoRoot}`);
 
-  const { state } = await runSession({
-    goal,
-    sessionDir,
-    sessionId,
-    repoRoot,
-    adapterOverride,
-    presetName,
-    idleTimeoutMs,
-  });
+  // v3.3: write meta.json on start. If --session refers to an existing meta we
+  // patch its status; otherwise create a fresh one. This makes resume + ls O(1).
+  const existingMeta = await readMeta(sessionDir);
+  if (existingMeta) {
+    await updateMeta(sessionDir, { status: 'running' });
+  } else {
+    await writeMeta(sessionDir, newMeta({ sessionId, goal, preset: presetName, label }));
+  }
 
-  // eslint-disable-next-line no-console
-  console.log(`[crumb] done. score_history=${state.progress_ledger.score_history.length} entries`);
-  // eslint-disable-next-line no-console
-  console.log(`[crumb] transcript: ${resolve(sessionDir, 'transcript.jsonl')}`);
+  try {
+    const { state } = await runSession({
+      goal,
+      sessionDir,
+      sessionId,
+      repoRoot,
+      adapterOverride,
+      presetName,
+      idleTimeoutMs,
+    });
+
+    await updateMeta(sessionDir, {
+      status: state.done ? 'done' : 'paused',
+      ended_at: new Date().toISOString(),
+    });
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `[crumb] done. score_history=${state.progress_ledger.score_history.length} entries`,
+    );
+    // eslint-disable-next-line no-console
+    console.log(`[crumb] transcript: ${resolve(sessionDir, 'transcript.jsonl')}`);
+  } catch (err) {
+    await updateMeta(sessionDir, {
+      status: 'error',
+      ended_at: new Date().toISOString(),
+    });
+    throw err;
+  }
 }
 
 async function cmdEvent(): Promise<void> {
@@ -322,20 +348,32 @@ async function cmdExport(args: ParsedArgs): Promise<void> {
 }
 
 /**
- * `crumb init` — multi-host entry verifier (Spec-kit `specify init` pattern).
+ * `crumb init` — multi-host entry verifier + project pin.
  *
- * Subcommands:
+ * Default mode: Spec-kit `specify init` pattern — verify universal identity
+ * (CRUMB.md / AGENTS.md) + each host entry (.claude/skills/crumb,
+ * .codex/agents/crumb.toml, .gemini/extensions/crumb).
+ *
  *   crumb init                       same as --check (verify all)
  *   crumb init --check               verify universal identity + every host entry
  *   crumb init --host <name>         scope to one of: claude | codex | gemini
  *   crumb init --format json         JSON output (default: human-readable)
  *
- * Distinct from `crumb doctor`: `init` only checks repo files
- * (CRUMB.md / AGENTS.md / host entries); `doctor` checks runtime readiness
- * (CLI binaries on PATH, OAuth, adapter health).
+ * Project pin mode (v3.3): pin the cwd to a stable ULID so renames/moves
+ * preserve project identity. Writes <cwd>/.crumb/project.toml with a fresh
+ * ULID; subsequent `crumb run` resolves via the pin instead of sha256(cwd).
+ *
+ *   crumb init --pin [--label "<name>"]   write <cwd>/.crumb/project.toml
+ *
+ * Distinct from `crumb doctor`: `init` only checks repo files; `doctor`
+ * checks runtime readiness (CLI binaries on PATH, OAuth, adapter health).
  */
 async function cmdInit(args: ParsedArgs): Promise<void> {
   const cwd = args.flags.get('root') ?? process.cwd();
+  if (args.flags.has('pin')) {
+    await writeProjectPin(cwd, args.flags.get('label'));
+    return;
+  }
   const hostRaw = args.flags.get('host');
   const formatRaw = args.flags.get('format') ?? 'human';
   if (formatRaw !== 'human' && formatRaw !== 'json') {
@@ -356,6 +394,46 @@ async function cmdInit(args: ParsedArgs): Promise<void> {
   if (!result.ok) {
     process.exitCode = 1;
   }
+}
+
+async function writeProjectPin(cwd: string, label?: string): Promise<void> {
+  const { mkdir, writeFile } = await import('node:fs/promises');
+  const { existsSync } = await import('node:fs');
+  const { PROJECT_PIN_DIR, PROJECT_PIN_FILE, resolveProjectId } = await import('./paths.js');
+  const pinDir = resolve(cwd, PROJECT_PIN_DIR);
+  const pinPath = resolve(pinDir, PROJECT_PIN_FILE);
+  if (existsSync(pinPath)) {
+    const existing = await resolveProjectId(cwd);
+    // eslint-disable-next-line no-console
+    console.log(`[crumb init] project already pinned: ${existing}`);
+    // eslint-disable-next-line no-console
+    console.log(`[crumb init] pin file: ${pinPath}`);
+    return;
+  }
+  await mkdir(pinDir, { recursive: true });
+  const id = ulid();
+  const lines = [
+    '# Crumb project pin (v3.3+).',
+    '# This file pins the project id for ~/.crumb/projects/<id>/ so that renaming',
+    '# or moving the cwd preserves project identity. Without this file the project',
+    '# id is derived from sha256(canonical(cwd))[:16] (ambient mode).',
+    '',
+    `id = "${id}"`,
+    `cwd = "${cwd}"`,
+    `created_at = "${new Date().toISOString()}"`,
+  ];
+  if (label) lines.push(`label = "${label}"`);
+  await writeFile(pinPath, lines.join('\n') + '\n', 'utf8');
+  // eslint-disable-next-line no-console
+  console.log(`[crumb init] pinned ${cwd}`);
+  // eslint-disable-next-line no-console
+  console.log(`[crumb init]   project_id = ${id}`);
+  if (label) {
+    // eslint-disable-next-line no-console
+    console.log(`[crumb init]   label      = ${label}`);
+  }
+  // eslint-disable-next-line no-console
+  console.log(`[crumb init]   pin file   = ${pinPath}`);
 }
 
 /**
@@ -388,7 +466,7 @@ async function cmdLs(args: ParsedArgs): Promise<void> {
   // v3.3: list sessions in this project (~/.crumb/projects/<id>/sessions/).
   // Legacy <cwd>/sessions/ is also surfaced with a marker until `crumb migrate`.
   const dir = await getSessionsDir(cwd);
-  const entries: { id: string; events: number; size: number; legacy: boolean }[] = [];
+  const entries: SessionListing[] = [];
   await collectListing(dir, false, entries);
   const legacyDir = resolve(cwd, 'sessions');
   if (existsSync(legacyDir)) {
@@ -399,18 +477,25 @@ async function cmdLs(args: ParsedArgs): Promise<void> {
     console.log(`(no sessions yet at ${dir})`);
     return;
   }
-  for (const { id, events, size, legacy } of entries) {
+  for (const { id, events, size, legacy, status, goal } of entries) {
     const tag = legacy ? '  [legacy]' : '';
+    const statusTag = status ? `  [${status}]` : '';
+    const goalTag = goal ? `  ${truncate(goal, 60)}` : '';
     // eslint-disable-next-line no-console
-    console.log(`${id}  ${events} events  ${size}B${tag}`);
+    console.log(`${id}  ${events} events  ${size}B${statusTag}${tag}${goalTag}`);
   }
 }
 
-async function collectListing(
-  dir: string,
-  legacy: boolean,
-  out: { id: string; events: number; size: number; legacy: boolean }[],
-): Promise<void> {
+interface SessionListing {
+  id: string;
+  events: number;
+  size: number;
+  legacy: boolean;
+  status?: string;
+  goal?: string;
+}
+
+async function collectListing(dir: string, legacy: boolean, out: SessionListing[]): Promise<void> {
   let names: string[] = [];
   try {
     names = await readdir(dir);
@@ -418,16 +503,28 @@ async function collectListing(
     return;
   }
   for (const e of names) {
-    const t = resolve(dir, e, 'transcript.jsonl');
+    const sessionPath = resolve(dir, e);
+    const t = resolve(sessionPath, 'transcript.jsonl');
+    let entry: SessionListing = { id: e, events: 0, size: 0, legacy };
     try {
       const s = await stat(t);
       const buf = await readFile(t, 'utf8');
       const lines = buf.split('\n').filter((l) => l.trim().length > 0);
-      out.push({ id: e, events: lines.length, size: s.size, legacy });
+      entry = { ...entry, events: lines.length, size: s.size };
     } catch {
-      out.push({ id: e, events: 0, size: 0, legacy });
+      // transcript missing — keep zeros
     }
+    const meta = await readMeta(sessionPath);
+    if (meta) {
+      entry.status = meta.status;
+      entry.goal = meta.goal;
+    }
+    out.push(entry);
   }
+}
+
+function truncate(s: string, n: number): string {
+  return s.length <= n ? s : s.slice(0, n - 1) + '…';
 }
 
 async function readStdin(): Promise<string> {
@@ -459,7 +556,10 @@ Usage:
                                           # verify CRUMB.md/AGENTS.md + host entries
                                           # (.claude/skills/crumb, .codex/agents, .gemini/extensions/crumb)
                                           # distinct from doctor — init is repo files; doctor is runtime
-  crumb ls                                 # list sessions/
+  crumb init --pin [--label "<name>"]      # pin cwd to a stable ULID (writes <cwd>/.crumb/project.toml)
+                                          # so renames/moves preserve project identity
+  crumb ls                                 # list current project's sessions
+                                          # (~/.crumb/projects/<id>/sessions/, plus legacy <cwd>/sessions/ marked [legacy])
 
 Flags (run):
   --preset <name>     load .crumb/presets/<name>.toml. e.g. bagelcode-cross-3way / mock /

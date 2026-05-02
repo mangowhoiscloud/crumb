@@ -4,6 +4,17 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — Session lifecycle (meta.json) + project pin (`crumb init --pin`) — v3.3 Phase 2a (2026-05-02)
+
+Session lifecycle becomes O(1) inspectable without scanning the transcript head, and projects can survive cwd renames. Builds on Phase 1's `~/.crumb/projects/<id>/` storage hierarchy.
+
+- **`src/session/meta.ts`** (90 LOC, 8/8 vitest specs) — `meta.json` writer/reader. Schema v1: `{ session_id, status: running|paused|done|error|killed, started_at, ended_at?, goal?, preset?, parent_session_id?, fork_event_id?, label? }`. **meta.json is a cache** — losing it doesn't break replay (state derives from transcript). It exists for fast lifecycle lookup by `crumb ls` and forthcoming `crumb resume` / `crumb fork`.
+- **`crumb run` writes meta.json** at session start (status=running), updates on completion (status=done | paused based on `state.done`, fills `ended_at`), updates on exception (status=error). Idempotent on re-run with same `--session <id>` — flips existing meta back to running rather than overwriting.
+- **`crumb init --pin [--label "<name>"]`** — pins the cwd to a fresh ULID written to `<cwd>/.crumb/project.toml`. Subsequent `crumb run` from this cwd (or any cwd that contains the same pin file) resolves to the same `~/.crumb/projects/<ULID>/` regardless of directory rename. Without `--pin`, `crumb init` keeps its existing multi-host entry verifier behavior. Idempotent — re-running on a pinned cwd reports the existing project_id and exits.
+- **`crumb ls` enriched**: shows `[status]` tag (running/paused/done/error/killed) and a truncated goal alongside event count + size. Works for both new sessions (with meta.json) and legacy sessions (falls back to `[legacy]` tag without status).
+- **`crumb run --label "<name>"`** new flag — passes through to `meta.json.label` for human-readable session labeling.
+- **Test**: 197/197 (was 189; +8 meta specs). Mock e2e verified — `crumb init --pin` writes a TOML pin file, `crumb run` from that cwd resolves to the pinned ULID's project dir, meta.json lifecycle full (started_at + ended_at + status=done), `crumb ls` shows status tag.
+
 ### Added — Session storage hierarchy v3.3: `~/.crumb/projects/<id>/{sessions,versions}/` (2026-05-02)
 
 Sessions move out of `<cwd>/sessions/` into a per-user, per-project global store. Project-first hierarchy modeled on **v0.dev (Project → Chat → Version)** + **Cline (`tasks/` vs `checkpoints/` filesystem split)**, with project-id derived from `sha256(canonical(cwd))[:16]` (Cursor's `workspaceStorage` pattern, avoiding Claude Code's lossy dash-encoding). Schema additions are additive — existing transcripts replay unchanged; legacy `<cwd>/sessions/` still resolves via fallback until `crumb migrate` (Phase 3).
