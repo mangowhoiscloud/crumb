@@ -24,7 +24,7 @@ import { tail, readAll } from '../transcript/reader.js';
 import { getTranscriptWriter } from '../transcript/writer.js';
 import { dispatch, type DispatcherDeps } from '../dispatcher/live.js';
 import { loadPresetWithConfig, type PresetSpec } from '../dispatcher/preset-loader.js';
-import { AdapterRegistry } from '../adapters/types.js';
+import { AdapterRegistry, type Adapter } from '../adapters/types.js';
 import { ClaudeLocalAdapter } from '../adapters/claude-local.js';
 import { CodexLocalAdapter } from '../adapters/codex-local.js';
 import { GeminiLocalAdapter } from '../adapters/gemini-local.js';
@@ -68,6 +68,13 @@ export interface RunOptions {
    * each tick is non-trivial and 1Hz polling is cheap enough.
    */
   watchdogTickMs?: number;
+  /**
+   * Test-only escape hatch — extra adapters registered after the four built-in
+   * ones (claude-local, codex-local, gemini-local, mock). An adapter with a
+   * duplicate id overwrites the built-in. Used by wall-clock budget tests to
+   * register a hanging stub the mock adapter cannot impersonate.
+   */
+  extraAdapters?: Adapter[];
 }
 
 const WALL_CLOCK_HOOK_MS_DEFAULT = 24 * 60 * 1000; // 24 min
@@ -95,6 +102,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
   registry.register(new CodexLocalAdapter());
   registry.register(new GeminiLocalAdapter());
   registry.register(new MockAdapter());
+  for (const a of opts.extraAdapters ?? []) registry.register(a);
 
   // Preset 로딩 — 사용자 명시 시만. ambient/binding 결정은 사용자 통제권.
   // .crumb/config.toml override 도 함께 적용 (provider 활성화 + per-actor effort/model).

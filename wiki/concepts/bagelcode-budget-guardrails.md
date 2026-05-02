@@ -122,20 +122,26 @@ AXIS 3: Cost-budget
 
 ## 구현 우선순위
 
-### P0 — 제출 전 반드시 (≈ 1.5h)
+### P0 — 제출 전 반드시 (≈ 1.5h) — **shipped 2026-05-02 (feat/v3.2-budget-ratchet)**
 
 폭주 case 자체를 schema 수준에서 차단:
 
-| # | 가드레일 | 비용 | 정당성 |
-|---|---|---|---|
-| 1 | `respec_count ≤ 3` → `done(too_many_respec)` | ~10 LoC + 1 spec | FAIL→rollback 무한 루프가 가장 큰 비용 위험 |
-| 2 | `session_wall_clock ≤ 30min` watchdog | ~15 LoC + 1 spec | 평가자 데모 길이 cap |
-| 3 | `per_spawn_timeout ≤ 5min` (SIGTERM) | ~20 LoC adapter 수정 | subprocess hang 방어 |
-| 4 | `tokens_total ≤ 50K` → `hook(token_budget)` | ~15 LoC + 1 spec | metadata 누적 → 임계값 비교 |
+| # | 가드레일 | 상태 | 구현 위치 | 정당성 |
+|---|---|---|---|---|
+| 1 | `respec_count ≤ 3` → `done(too_many_respec)` | ✅ shipped | `src/reducer/index.ts` §RESPEC_MAX | FAIL→rollback 무한 루프가 가장 큰 비용 위험 |
+| 2 | `session_wall_clock ≤ 30min` watchdog | ✅ shipped | `src/loop/coordinator.ts` §WALL_CLOCK_HARD_MS_DEFAULT (24min hook + 30min done) | 평가자 데모 길이 cap |
+| 3 | `per_spawn_timeout ≤ 5min` (SIGTERM) | ✅ shipped | `src/dispatcher/live.ts` §PER_SPAWN_TIMEOUT_MS + `SpawnRequest.signal` (4 adapters wired) | subprocess hang 방어 |
+| 4 | `tokens_total ≤ 50K` → `hook(token_budget)` | ✅ shipped | `src/reducer/index.ts` §TOKEN_BUDGET_HOOK / §TOKEN_BUDGET_HARD (40K hook + 50K done) | metadata 누적 → 임계값 비교 |
+| 5 | `verify_count ≤ 5` → `done(too_many_verify)` | ✅ shipped (promoted P1→P0) | `src/reducer/index.ts` §VERIFY_MAX | 사용자 lock: "루프 과도하게 안 돌게" |
+
+### Autoresearch P4 — keep/revert ratchet — **shipped 2026-05-02**
+
+- `RATCHET_REGRESSION_THRESHOLD = 2` aggregate-point regression → `done(ratchet_revert)`. Tracks `max_aggregate_so_far` + `max_aggregate_msg_id`. Prevents unbounded score-oscillation loops.
+- Reference: autoresearch (Karpathy P4) "modify → eval → keep/revert" pattern.
 
 ### P1 — 가능하면 (sprint 내)
 
-- `verify_count ≤ 5` → hook(partial)
+- ~~`verify_count ≤ 5` → hook(partial)~~ → P0로 승격됨 (위 #5).
 - `rollback_count ≤ 2` → done(rollback_exhausted)
 - `phase_budget` audit
 - `cache_read_ratio` advisory metric

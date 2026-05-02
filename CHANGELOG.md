@@ -152,6 +152,23 @@ Three concurrency defects surfaced by an end-to-end audit of `src/loop/coordinat
 
 102 tests pass (was 93). All four fixes are determinism-preserving — no clock or randomness introduced; replay over the same transcript still yields identical state.
 
+### Added — v3.2 Budget guardrails + autoresearch ratchet (2026-05-02)
+
+Five P0 hard caps and one autoresearch-style keep/revert ratchet — closes the "what stops the loop" gap surfaced by `wiki/concepts/bagelcode-budget-guardrails.md`. All caps are determinism-preserving (replay over the same transcript yields identical state).
+
+- **`respec_count ≤ 3`** (`src/reducer/index.ts` §RESPEC_MAX) — `kind=spec.update` increments; cap → `done(too_many_respec)`. Initial spec is the first try, not a respec.
+- **`verify_count ≤ 5`** (`src/reducer/index.ts` §VERIFY_MAX) — `kind=judge.score` increments (NOT `verify.result`, which is the legacy alias the verifier emits alongside; counting both halves the cap). Cap → `done(too_many_verify)`. **Promoted P1 → P0** per the user's "루프 과도하게 안 돌게" lock.
+- **`tokens_total`** (`src/reducer/index.ts` §TOKEN_BUDGET_HOOK / §TOKEN_BUDGET_HARD) — sums `metadata.tokens_in + tokens_out` across every event. 40K crossing → `hook(token_budget)` (transition guard via prev/next compare); 50K → `done(token_exhausted)`. Counts on every kind, not just LLM events — covers system messages too.
+- **`per_spawn_timeout ≤ 5min`** (`src/dispatcher/live.ts` §PER_SPAWN_TIMEOUT_MS, autoresearch P3) — `AbortController` + `setTimeout` in the dispatcher; `SpawnRequest.signal` threaded through to all 4 adapters (claude-local / codex-local / gemini-local / mock). Live adapters wire signal → `child.kill('SIGTERM')`; mock checks `signal.aborted` between canned steps. On timeout: `kind=error` with `body="per_spawn_timeout: ..."` and `data.reason="per_spawn_timeout"`. Reducer's existing error branch trips `circuit_breaker.consecutive_failures`.
+- **`session_wall_clock`** (`src/loop/coordinator.ts` §WALL_CLOCK_HOOK_MS_DEFAULT / §WALL_CLOCK_HARD_MS_DEFAULT, autoresearch P3) — coordinator's setInterval watchdog tracks `Date.now() - Date.parse(state.progress_ledger.session_started_at)`. 24min crossing → `hook(time_budget)` (one-shot via `timeBudgetHookFired` boolean); 30min → `state.done = true`, drain `processing` chain, dispatch `done(wall_clock_exhausted)`.
+- **Autoresearch P4 keep/revert ratchet** (`src/reducer/index.ts` §RATCHET_REGRESSION_THRESHOLD) — tracks `max_aggregate_so_far` + `max_aggregate_msg_id` across every `judge.score`. A drop of ≥ 2 aggregate points triggers `done(ratchet_revert)`. Prevents unbounded score-oscillation loops where the verifier swings between PASS/PARTIAL on minor refactors.
+
+State extensions (`src/state/types.ts ProgressLedger`): `respec_count`, `verify_count`, `session_token_total`, `session_started_at`, `per_spawn_started_at`, `max_aggregate_so_far`, `max_aggregate_msg_id`. All zero/empty in `initialState` so existing tests pass without churn.
+
+`design/DESIGN.md` (Phaser 3.80 + ≤60KB envelope) was promoted to `agents/specialists/game-stack-constraint.md` so the planner's step.design now inline-reads 4 specialists (concept-designer / researcher / visual-designer / game-stack-constraint) and builder/builder-fallback read the envelope from the same agents/specialists/ tree as everything else.
+
+`RunOptions` adds `wallClockHookMs / wallClockHardMs / watchdogTickMs / perSpawnTimeoutMs / extraAdapters?` for tests and ops overrides; defaults match the wiki budget table.
+
 ### Added — v3.1 Multi-host harness pivot (2026-05-02)
 
 Universal identity layer + sandwich Markdown unification + multi-host entry verifier. Closes the "host-aware control harness" loop opened by v3.
