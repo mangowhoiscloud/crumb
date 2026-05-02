@@ -118,6 +118,28 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
       });
       const adapter = deps.registry.get(adapterId);
 
+      // v3.3+ observability — record dispatcher's intent BEFORE invoking adapter.
+      // Lets us distinguish "dispatcher never reached spawn" from "adapter ran but
+      // produced no output". Marked private + deterministic so anti-deception/
+      // verifier ignore it but `crumb debug` can read it.
+      await deps.writer.append({
+        session_id: deps.sessionId,
+        from: 'system',
+        kind: 'note',
+        body: `dispatch.spawn → actor=${effect.actor} adapter=${adapterId} sandwich=${sandwichPath}`,
+        data: {
+          actor: effect.actor,
+          adapter: adapterId,
+          sandwich_path: sandwichPath,
+          has_prompt: Boolean(effect.prompt && effect.prompt.length > 0),
+        },
+        metadata: {
+          visibility: 'private',
+          deterministic: true,
+          tool: 'dispatch-pre-spawn@v1',
+        },
+      });
+
       // v3.2 per_spawn_timeout: AbortController fires SIGTERM via the adapter's
       // signal handler. The Promise.race pattern is unnecessary here — the
       // adapter's own close handler resolves once SIGTERM lands, and we read
@@ -145,6 +167,36 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
       }
 
       const timedOut = controller.signal.aborted;
+
+      // v3.3+ observability — always capture truncated stdout/stderr as
+      // kind=note so an exit-0-but-silent spawn (planner-lead emits no
+      // transcript events) is still diagnosable. Without this, exit=0 with
+      // empty stdout looks identical to exit=0 with a successful run.
+      // Marked visibility=private + deterministic so verifiers/anti-deception
+      // ignore it, but observers + `crumb debug` can read it.
+      const stdoutPreview = (result.stdout ?? '').slice(0, 4000);
+      const stderrPreview = (result.stderr ?? '').slice(0, 4000);
+      if (stdoutPreview.length > 0 || stderrPreview.length > 0) {
+        await deps.writer.append({
+          session_id: deps.sessionId,
+          from: effect.actor,
+          kind: 'note',
+          body: `adapter ${adapterId} streams (exit=${result.exitCode}, ${result.durationMs}ms)`,
+          data: {
+            adapter: adapterId,
+            stdout_truncated: stdoutPreview,
+            stderr_truncated: stderrPreview,
+            stdout_full_length: result.stdout?.length ?? 0,
+            stderr_full_length: result.stderr?.length ?? 0,
+          },
+          metadata: {
+            visibility: 'private',
+            deterministic: true,
+            tool: `${adapterId}-stream@v1`,
+          },
+        });
+      }
+
       // Surface non-zero exit as kind=error so the reducer can trip the breaker.
       // Timeout is a special case: clearer body + structured data so observers
       // and the verifier can distinguish stalled spawn from genuine CLI failure.

@@ -157,7 +157,7 @@ async function cmdEvent(): Promise<void> {
 async function cmdReplay(args: ParsedArgs): Promise<void> {
   const target = args.positional[0] ?? args.flags.get('session-dir');
   if (!target) throw new Error('replay <session-id|dir> required');
-  const cwd = args.flags.get('root') ?? process.cwd();
+  const cwd = process.cwd();
   const sessionDir = await resolveStoredSession(target, cwd);
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
   const events = await readAll(transcriptPath);
@@ -198,7 +198,7 @@ async function cmdReplay(args: ParsedArgs): Promise<void> {
 async function cmdResume(args: ParsedArgs): Promise<void> {
   const target = args.positional[0];
   if (!target) throw new Error('resume requires a session id or session-dir as positional arg');
-  const cwd = args.flags.get('root') ?? process.cwd();
+  const cwd = process.cwd();
   // Accept either a full path or a bare session id (ULID).
   const sessionDir = await resolveStoredSession(target, cwd);
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
@@ -286,7 +286,7 @@ async function cmdDebug(args: ParsedArgs): Promise<void> {
   // v3 S12: /crumb debug — F1-F7 routing 장애 진단.
   const target = args.positional[0];
   if (!target) throw new Error('debug requires a session id or session-dir');
-  const cwd = args.flags.get('root') ?? process.cwd();
+  const cwd = process.cwd();
   const sessionDir = await resolveStoredSession(target, cwd);
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
   const events = await readAll(transcriptPath);
@@ -301,7 +301,7 @@ async function cmdDebug(args: ParsedArgs): Promise<void> {
 async function cmdStatus(args: ParsedArgs): Promise<void> {
   const target = args.positional[0];
   if (!target) throw new Error('status requires a session id or session-dir');
-  const cwd = args.flags.get('root') ?? process.cwd();
+  const cwd = process.cwd();
   const sessionDir = await resolveStoredSession(target, cwd);
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
   const events = await readAll(transcriptPath);
@@ -323,7 +323,7 @@ async function cmdExplain(args: ParsedArgs): Promise<void> {
 async function cmdSuggest(args: ParsedArgs): Promise<void> {
   const target = args.positional[0];
   if (!target) throw new Error('suggest requires a session id or session-dir');
-  const cwd = args.flags.get('root') ?? process.cwd();
+  const cwd = process.cwd();
   const sessionDir = await resolveStoredSession(target, cwd);
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
   const events = await readAll(transcriptPath);
@@ -337,7 +337,7 @@ async function cmdSuggest(args: ParsedArgs): Promise<void> {
 async function cmdTui(args: ParsedArgs): Promise<void> {
   const target = args.positional[0];
   if (!target) throw new Error('tui <session-id|dir> required');
-  const cwd = args.flags.get('root') ?? process.cwd();
+  const cwd = process.cwd();
   const sessionDir = await resolveStoredSession(target, cwd);
   const { runTui } = await import('./tui/app.js');
   await runTui({ sessionDir });
@@ -346,7 +346,7 @@ async function cmdTui(args: ParsedArgs): Promise<void> {
 async function cmdExport(args: ParsedArgs): Promise<void> {
   const target = args.positional[0];
   if (!target) throw new Error('export <session-id|dir> required');
-  const cwd = args.flags.get('root') ?? process.cwd();
+  const cwd = process.cwd();
   const sessionDir = await resolveStoredSession(target, cwd);
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
   const events = await readAll(transcriptPath);
@@ -382,9 +382,11 @@ async function cmdExport(args: ParsedArgs): Promise<void> {
  * checks runtime readiness (CLI binaries on PATH, OAuth, adapter health).
  */
 async function cmdInit(args: ParsedArgs): Promise<void> {
+  // --root: repo path for entry verification (CRUMB.md / AGENTS.md / host entries).
+  // For --pin: cwd is process.cwd() (pinning targets the user's actual location).
   const cwd = args.flags.get('root') ?? process.cwd();
   if (args.flags.has('pin')) {
-    await writeProjectPin(cwd, args.flags.get('label'));
+    await writeProjectPin(process.cwd(), args.flags.get('label'));
     return;
   }
   const hostRaw = args.flags.get('host');
@@ -460,6 +462,7 @@ async function writeProjectPin(cwd: string, label?: string): Promise<void> {
  *   crumb model --apply "<NL instruction>"   apply natural-language change ("verifier 모델을 gemini-2.5-pro 로")
  */
 async function cmdModel(args: ParsedArgs): Promise<void> {
+  // --root: repo path that holds .crumb/config.toml. Default process.cwd().
   const cwd = args.flags.get('root') ?? process.cwd();
   const { runModelTui, applyNlInstruction, showConfig } = await import('./tui/model-edit.js');
   if (args.flags.has('show')) {
@@ -474,8 +477,8 @@ async function cmdModel(args: ParsedArgs): Promise<void> {
   await runModelTui({ repoRoot: cwd });
 }
 
-async function cmdLs(args: ParsedArgs): Promise<void> {
-  const cwd = args.flags.get('root') ?? process.cwd();
+async function cmdLs(_args: ParsedArgs): Promise<void> {
+  const cwd = process.cwd();
   // v3.3: list sessions in this project (~/.crumb/projects/<id>/sessions/).
   // Legacy <cwd>/sessions/ is also surfaced with a marker until `crumb migrate`.
   const dir = await getSessionsDir(cwd);
@@ -547,7 +550,7 @@ function truncate(s: string, n: number): string {
  * can resolve manually.
  */
 async function cmdMigrate(args: ParsedArgs): Promise<void> {
-  const cwd = args.flags.get('root') ?? process.cwd();
+  const cwd = process.cwd();
   const dryRun = args.flags.has('dry-run');
   const r = await migrateLegacySessions({ cwd, dryRun });
   // eslint-disable-next-line no-console
@@ -570,7 +573,7 @@ async function cmdCopyArtifacts(args: ParsedArgs): Promise<void> {
   if (!target) throw new Error('copy-artifacts <session-id|vN> required');
   const dest = args.flags.get('to');
   if (!dest) throw new Error('--to <dest> required');
-  const cwd = args.flags.get('root') ?? process.cwd();
+  const cwd = process.cwd();
 
   const isVersion = /^v\d+/.test(target);
   let srcDir: string;
@@ -619,7 +622,7 @@ async function cmdCopyArtifacts(args: ParsedArgs): Promise<void> {
 async function cmdRelease(args: ParsedArgs): Promise<void> {
   const target = args.positional[0];
   if (!target) throw new Error('release requires a session id or session-dir');
-  const cwd = args.flags.get('root') ?? process.cwd();
+  const cwd = process.cwd();
   const sessionDir = await resolveStoredSession(target, cwd);
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');
   const events = await readAll(transcriptPath);
@@ -705,8 +708,8 @@ async function cmdRelease(args: ParsedArgs): Promise<void> {
 }
 
 /** `crumb versions` — list all versions in the current project, oldest first. */
-async function cmdVersions(args: ParsedArgs): Promise<void> {
-  const cwd = args.flags.get('root') ?? process.cwd();
+async function cmdVersions(_args: ParsedArgs): Promise<void> {
+  const cwd = process.cwd();
   const versionsDir = await getVersionsDir(cwd);
   const all = await readAllManifests(versionsDir);
   if (all.length === 0) {

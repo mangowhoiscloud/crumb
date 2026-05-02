@@ -61,10 +61,12 @@ export class GeminiLocalAdapter implements Adapter {
     // Most reducer spawn effects omit `prompt` because the actor's job is fully
     // described by the sandwich. Fall back to a generic kickoff so empty
     // prompts don't crash the spawn (CLIs reject empty `-p ""`).
+    // See claude-local.ts for why a generic kickoff causes "awaiting input"
+    // stalls — keep the action-oriented variant.
     const promptText =
       req.prompt && req.prompt.trim().length > 0
         ? req.prompt
-        : 'Continue your role per the system prompt.';
+        : 'Begin your turn now. Read $CRUMB_TRANSCRIPT_PATH for full context (latest goal, spec, qa.result, etc.) and execute the next step per the system prompt. Do not wait for additional input.';
     const args = [
       '-p',
       promptText,

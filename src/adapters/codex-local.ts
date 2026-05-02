@@ -46,11 +46,12 @@ export class CodexLocalAdapter implements Adapter {
     const promptText =
       req.prompt && req.prompt.trim().length > 0
         ? req.prompt
-        : 'Continue your role per the system prompt.';
+        : 'Begin your turn now. Read $CRUMB_TRANSCRIPT_PATH for full context (latest goal, spec, qa.result, etc.) and execute the next step per the system prompt. Do not wait for additional input.';
     const args = [
       'exec',
       '--cd',
       req.sessionDir,
+      '--skip-git-repo-check', // session dirs aren't git repos; codex refuses without this
       '--full-auto', // skip confirmation prompts
       promptText, // positional, always last
     ];

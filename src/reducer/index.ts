@@ -87,6 +87,12 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         type: 'spawn',
         actor: 'planner-lead',
         adapter: 'claude-local',
+        // Pass the goal as the kickoff prompt. Without it, the adapter
+        // falls back to a generic "continue" message and Claude sometimes
+        // responds "awaiting goal input" instead of acting on the transcript.
+        // Observed: run 01KQMCCR6M emitted only stdout="Planner-lead spawn
+        // ready. Awaiting kind=goal" and exited 0 in 12s with no events.
+        prompt: `User goal: ${event.body ?? ''}\n\nBegin your turn now per the system prompt — read $CRUMB_TRANSCRIPT_PATH for full context and execute step 1 (Socratic round).`,
         sandwich_appends: collectSandwichAppends(next, 'planner-lead'),
       });
       break;
