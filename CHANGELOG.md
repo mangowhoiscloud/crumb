@@ -4,6 +4,17 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — G4 sandwich override pipeline (2026-05-02)
+
+Closes the v3.2 G4 gap from the user-intervention frontier matrix: a user mid-session can persistently augment any actor's system prompt without restarting (LangGraph `Command(update={...})` pattern, 53/60 frontier score; Codex `APPEND_SYSTEM.md` 38/60 inspires the file-based local override surface).
+
+- **`kind=user.intervene` with `data.sandwich_append`** records a fact of category `'sandwich_append'`. Optional `data.target_actor` scopes the append to a single actor; absent target broadcasts to every spawn. Stored as a fact, so replay reconstructs identical assemblies.
+- **`SpawnEffect.sandwich_appends: { source_id; text }[]`** — every spawn carries the matching append list collected by the reducer's new `collectSandwichAppends()` helper. 7 emit sites updated (goal, spec, qa.result, verify FAIL → fallback, user.veto, user.intervene goto, user.resume queued).
+- **Dispatcher `assembleSandwich()`** — concatenates base `agents/<actor>.md` + per-machine `agents/<actor>.local.md` (when present) + runtime appends into `sessions/<id>/agent-workspace/<actor>/sandwich.assembled.md` and points the adapter at that path. When there are no local files and no appends, returns the base path unchanged (no FS write — preserves v3.1 behavior for sessions that don't exercise the override surface).
+- **`agents/*.local.md` gitignored** — per-machine, never committed. Pattern adapted from Codex CLI `APPEND_SYSTEM.md`.
+- **Tests**: 5 reducer specs (fact creation, target scoping, scope isolation, untargeted broadcast, append accumulation) + 4 dispatcher specs (passthrough, base+appends assembly, local file inclusion, base→local→append ordering). Suite total 163/163 (was 144).
+- **Mail requirement #2 (사용자가 협업 과정에 개입)** coverage rises from G3-only routing (`target_actor` / `goto`) to full runtime sandwich rewriting. PR #14.
+
 ### Added — Model + Provider config UI (2026-05-02)
 
 Per-actor model + effort tuning, per-provider activation toggle, and `/model` natural-language interface. All 3 hosts (Claude Code / Codex CLI / Gemini CLI) get the same surface via the MCP `crumb_model` tool.
