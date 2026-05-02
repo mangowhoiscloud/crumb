@@ -36,7 +36,9 @@ export interface DashboardServer {
 export interface DashboardServerOptions {
   port?: number;
   bind?: string; // '127.0.0.1' (default) or '0.0.0.0'
-  glob?: string; // override transcript glob (test fixture)
+  glob?: string; // legacy single-home glob (test fixture)
+  /** v3.4: multi-home transcript globs. Takes precedence over `glob`. */
+  globs?: string[];
   pollInterval?: number;
 }
 
@@ -48,6 +50,7 @@ export async function startDashboardServer(
 
   const bus = new EventBus();
   const watcher = new SessionWatcher(bus, {
+    ...(opts.globs !== undefined ? { globs: opts.globs } : {}),
     ...(opts.glob !== undefined ? { glob: opts.glob } : {}),
     ...(opts.pollInterval !== undefined ? { pollInterval: opts.pollInterval } : {}),
   });
@@ -93,31 +96,34 @@ function serveHtml(res: http.ServerResponse): void {
 
 function serveSessions(res: http.ServerResponse, watcher: SessionWatcher): void {
   const snapshot = watcher.snapshot();
-  const sessions = snapshot.map(({ session_id, project_id, transcript_path, history }) => {
-    const metrics = computeMetrics(history);
-    let goal: string | null = null;
-    let preset: string | null = null;
-    const actorsSeen = new Set<string>();
-    for (const m of history) {
-      if (m.kind === 'goal' && !goal) goal = m.body ?? null;
-      if (m.kind === 'session.start' && !preset) {
-        const data = (m.data ?? {}) as Record<string, unknown>;
-        if (typeof data.preset === 'string') preset = data.preset;
+  const sessions = snapshot.map(
+    ({ session_id, project_id, crumb_home, transcript_path, history }) => {
+      const metrics = computeMetrics(history);
+      let goal: string | null = null;
+      let preset: string | null = null;
+      const actorsSeen = new Set<string>();
+      for (const m of history) {
+        if (m.kind === 'goal' && !goal) goal = m.body ?? null;
+        if (m.kind === 'session.start' && !preset) {
+          const data = (m.data ?? {}) as Record<string, unknown>;
+          if (typeof data.preset === 'string') preset = data.preset;
+        }
+        // Track actors that actually ran so the dashboard can offer sandwich previews.
+        if (m.kind === 'agent.wake' && m.from) actorsSeen.add(m.from);
       }
-      // Track actors that actually ran so the dashboard can offer sandwich previews.
-      if (m.kind === 'agent.wake' && m.from) actorsSeen.add(m.from);
-    }
-    return {
-      session_id,
-      project_id,
-      transcript_path,
-      goal,
-      preset,
-      metrics,
-      actors: [...actorsSeen],
-      history,
-    };
-  });
+      return {
+        session_id,
+        project_id,
+        crumb_home,
+        transcript_path,
+        goal,
+        preset,
+        metrics,
+        actors: [...actorsSeen],
+        history,
+      };
+    },
+  );
   res.setHeader('content-type', 'application/json');
   res.setHeader('cache-control', 'no-cache');
   res.end(JSON.stringify({ sessions }));
