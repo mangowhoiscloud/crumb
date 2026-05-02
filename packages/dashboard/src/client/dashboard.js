@@ -18,6 +18,77 @@ function escapeHTML(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+function escapeRegExp(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+// IDE-style grep: escape `text` to HTML, then wrap each case-insensitive substring
+// match of `query` with <mark class="grep-hit"> for orange-highlight + nav.
+function highlightHTML(text, query) {
+  const safe = escapeHTML(text);
+  if (!query) return safe;
+  const safeQuery = escapeHTML(query);
+  if (!safeQuery) return safe;
+  const re = new RegExp(escapeRegExp(safeQuery), 'gi');
+  return safe.replace(re, m => '<mark class="grep-hit">' + m + '</mark>');
+}
+
+// Per-panel grep state. cursor is preserved across re-renders so streaming
+// content doesn't reset the user's nav position.
+const grepState = {
+  logs:       { query: '', cursor: 0 },
+  transcript: { query: '', cursor: 0 },
+  feed:       { query: '', cursor: 0 },
+};
+
+function refreshGrepNav(panelKey, rootEl, countEl, prevBtn, nextBtn, opts = {}) {
+  const state = grepState[panelKey];
+  const hits = rootEl ? Array.from(rootEl.querySelectorAll('mark.grep-hit')) : [];
+  state.matches = hits;
+  hits.forEach(h => h.classList.remove('active'));
+  const total = hits.length;
+  if (countEl) {
+    countEl.classList.toggle('has-hits', total > 0);
+    countEl.classList.toggle('no-hits', !!state.query && total === 0);
+    countEl.textContent = !state.query
+      ? '—'
+      : (total === 0 ? '0 / 0' : ((state.cursor % total) + 1) + ' / ' + total);
+  }
+  if (prevBtn) prevBtn.disabled = total === 0;
+  if (nextBtn) nextBtn.disabled = total === 0;
+  if (total === 0) { state.cursor = 0; return; }
+  if (state.cursor < 0 || state.cursor >= total) state.cursor = 0;
+  hits[state.cursor].classList.add('active');
+  if (opts.scroll) hits[state.cursor].scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+function gotoGrepMatch(panelKey, dir, countEl) {
+  const state = grepState[panelKey];
+  if (!state.matches || state.matches.length === 0) return;
+  state.matches[state.cursor]?.classList.remove('active');
+  state.cursor = (state.cursor + dir + state.matches.length) % state.matches.length;
+  const el = state.matches[state.cursor];
+  el.classList.add('active');
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  if (countEl) countEl.textContent = (state.cursor + 1) + ' / ' + state.matches.length;
+}
+function bindGrepInput(inputEl, prevBtn, nextBtn, panelKey, onChange) {
+  if (!inputEl) return;
+  inputEl.addEventListener('input', () => {
+    grepState[panelKey].query = inputEl.value.trim();
+    grepState[panelKey].cursor = 0;
+    onChange();
+  });
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.shiftKey) prevBtn?.click(); else nextBtn?.click();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      inputEl.value = '';
+      grepState[panelKey].query = '';
+      grepState[panelKey].cursor = 0;
+      onChange();
+      inputEl.blur();
+    }
+  });
+}
 function formatTokens(n) { return n >= 1000 ? (n/1000).toFixed(1) + 'k' : String(n ?? 0); }
 function formatPct(r) { return Math.round((r ?? 0) * 100) + '%'; }
 function formatCost(n) { return '$' + (n ?? 0).toFixed(3); }
@@ -673,7 +744,7 @@ function closeLogStream() {
 }
 
 function renderLogContent() {
-  const filter = ($('logs-filter').value || '').trim().toLowerCase();
+  const query = grepState.logs.query;
   const lines = [];
   let inStderr = false;
   for (const entry of logBuffer) {
@@ -690,19 +761,23 @@ function renderLogContent() {
     }
   }
   const visible = lines.slice(-4000); // cap DOM cost; full log lives on disk.
+  const qLower = query.toLowerCase();
   const html = visible.map(l => {
     const cls = ['log-line'];
     if (l.kind === 'stderr') cls.push('stderr');
     if (l.kind === 'section') cls.push('section');
-    if (filter && l.text.toLowerCase().includes(filter)) cls.push('match');
-    return '<div class="' + cls.join(' ') + '">' + escapeHTML(l.text) + '</div>';
+    if (query && l.text.toLowerCase().includes(qLower)) cls.push('has-match');
+    return '<div class="' + cls.join(' ') + '">' + highlightHTML(l.text, query) + '</div>';
   }).join('');
   const root = $('logs-content');
   root.innerHTML = html || '<div class="logs-empty">no output yet</div>';
   if ($('logs-follow').checked) root.scrollTop = root.scrollHeight;
+  refreshGrepNav('logs', root, $('logs-grep-count'), $('logs-grep-prev'), $('logs-grep-next'));
 }
 
-$('logs-filter').addEventListener('input', () => renderLogContent());
+bindGrepInput($('logs-filter'), $('logs-grep-prev'), $('logs-grep-next'), 'logs', renderLogContent);
+$('logs-grep-prev').addEventListener('click', () => gotoGrepMatch('logs', -1, $('logs-grep-count')));
+$('logs-grep-next').addEventListener('click', () => gotoGrepMatch('logs',  1, $('logs-grep-count')));
 $('logs-clear').addEventListener('click', () => {
   logBuffer.length = 0;
   renderLogContent();
@@ -761,13 +836,35 @@ function appendFeedLine(meta) {
   actorSpan.textContent = meta.actor || '';
   const bodySpan = document.createElement('span');
   bodySpan.className = 'feed-body';
-  bodySpan.textContent = meta.body || '';
+  bodySpan.dataset.raw = meta.body || '';
+  if (grepState.feed.query) {
+    bodySpan.innerHTML = highlightHTML(meta.body || '', grepState.feed.query);
+  } else {
+    bodySpan.textContent = meta.body || '';
+  }
   div.appendChild(tsSpan);
   div.appendChild(actorSpan);
   div.appendChild(bodySpan);
   root.appendChild(div);
   while (root.childNodes.length > FEED_MAX_LINES) root.removeChild(root.firstChild);
   root.scrollTop = root.scrollHeight;
+  // Re-collect matches so the counter reflects the newly-streamed line. Keep cursor in place.
+  if (grepState.feed.query) {
+    refreshGrepNav('feed', root, $('console-feed-grep-count'), $('console-feed-grep-prev'), $('console-feed-grep-next'));
+  }
+}
+
+// Re-highlight every existing feed line (called when the grep query changes).
+function rehighlightFeed() {
+  const root = $('console-feed-body');
+  if (!root) return;
+  const q = grepState.feed.query;
+  for (const body of root.querySelectorAll('.feed-body')) {
+    const raw = body.dataset.raw ?? body.textContent ?? '';
+    if (q) body.innerHTML = highlightHTML(raw, q);
+    else body.textContent = raw;
+  }
+  refreshGrepNav('feed', root, $('console-feed-grep-count'), $('console-feed-grep-prev'), $('console-feed-grep-next'), { scroll: !!q });
 }
 
 function classifyKindForFeed(kind) {
@@ -807,7 +904,12 @@ $('console-feed-pause').addEventListener('click', () => {
 });
 $('console-feed-clear').addEventListener('click', () => {
   $('console-feed-body').innerHTML = '';
+  refreshGrepNav('feed', $('console-feed-body'), $('console-feed-grep-count'), $('console-feed-grep-prev'), $('console-feed-grep-next'));
 });
+
+bindGrepInput($('console-feed-grep'), $('console-feed-grep-prev'), $('console-feed-grep-next'), 'feed', rehighlightFeed);
+$('console-feed-grep-prev')?.addEventListener('click', () => gotoGrepMatch('feed', -1, $('console-feed-grep-count')));
+$('console-feed-grep-next')?.addEventListener('click', () => gotoGrepMatch('feed',  1, $('console-feed-grep-count')));
 
 // Wire the existing append SSE handler to also push to the feed.
 es.addEventListener('append', e => {
@@ -1230,18 +1332,24 @@ function renderTranscriptView() {
   if (!root) return;
   if (!activeSession) { root.textContent = '(no session selected)'; return; }
   const arr = eventCache.get(activeSession) || [];
-  const filter = ($('transcript-filter')?.value || '').toLowerCase();
+  const query = grepState.transcript.query;
+  const qLower = query.toLowerCase();
   const pretty = $('transcript-pretty')?.checked ?? true;
   const lines = arr
     .filter(e => {
-      if (!filter) return true;
-      return JSON.stringify(e).toLowerCase().includes(filter);
+      if (!query) return true;
+      return JSON.stringify(e).toLowerCase().includes(qLower);
     })
     .map(e => pretty ? JSON.stringify(e, null, 2) : JSON.stringify(e));
-  root.textContent = lines.join('\n\n');
+  const joined = lines.join('\n\n');
+  // <pre> preserves whitespace, so innerHTML keeps the pretty layout while letting us inline-mark matches.
+  root.innerHTML = highlightHTML(joined, query);
   $('transcript-status').textContent = `${arr.length} events · showing ${lines.length}`;
+  refreshGrepNav('transcript', root, $('transcript-grep-count'), $('transcript-grep-prev'), $('transcript-grep-next'));
 }
-$('transcript-filter')?.addEventListener('input', renderTranscriptView);
+bindGrepInput($('transcript-filter'), $('transcript-grep-prev'), $('transcript-grep-next'), 'transcript', renderTranscriptView);
+$('transcript-grep-prev')?.addEventListener('click', () => gotoGrepMatch('transcript', -1, $('transcript-grep-count')));
+$('transcript-grep-next')?.addEventListener('click', () => gotoGrepMatch('transcript',  1, $('transcript-grep-count')));
 $('transcript-pretty')?.addEventListener('change', renderTranscriptView);
 $('transcript-copy')?.addEventListener('click', () => {
   navigator.clipboard?.writeText($('transcript-content').textContent || '');

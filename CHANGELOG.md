@@ -4,15 +4,19 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
-### Fixed — Dashboard discovers legacy flat-layout sessions (2026-05-03)
+### Added — Dashboard IDE-style grep highlight + ↑↓ nav across Logs / Transcript / Live feed (2026-05-03)
 
-Dashboard launched with `CRUMB_HOME=$HOME/workspace/crumb` reported "No sessions yet" even though two sessions existed at `~/workspace/crumb/sessions/<ulid>/transcript.jsonl`. The watcher glob only matched the v3.4 project-scoped layout `<home>/projects/*/sessions/*/transcript.jsonl`, so any home that still had a flat `sessions/` directory (legacy home prior to v3.4 OR a dev `<repo>/sessions/` checkout) was silently skipped.
+The dashboard's text panels supported a substring filter that highlighted whole matching lines in faint blue (logs only), filtered entries (transcript), or had no search at all (live execution feed). User feedback: "grep 했을 때 해당되는 패턴 주황색으로 표시하고 위아래로 조작 가능(IDE처럼)하게 세팅이 아직 안되었거든." — they wanted the inline-substring orange highlight + IDE-style match navigation present in every modern editor.
 
-- **`packages/dashboard/src/paths.ts`** — each home now contributes TWO globs: project-scoped (`<home>/projects/*/sessions/*/transcript.jsonl`) AND flat legacy (`<home>/sessions/*/transcript.jsonl`). `defaultTranscriptGlobs(): string[]` flat-maps both per active home so a single dashboard surfaces every session on the host without forcing migration.
-- **`crumbHomeFromPath()` extended** — falls back to `lastIndexOf('/sessions/')` when `/projects/` is absent so it correctly identifies the home for flat-layout transcripts.
-- **`projectIdFromPath()` extended** — returns synthetic id `'(legacy)'` for flat sessions so they group together in the API response instead of colliding with empty-string projects from genuinely malformed paths.
-- **Tests** — `paths.test.ts` adds 5 specs for the legacy layout (sessionId, projectId='(legacy)', crumbHome extraction) + 2 specs for `defaultTranscriptGlobs()` confirming both globs emitted per home (single-home + multi-home cases). 10/10 paths specs pass; 347/347 sweep green.
-- Verified end-to-end: `CRUMB_HOMES=$HOME/.crumb:$HOME/workspace/crumb crumb-dashboard` returns 7 sessions (5 project-scoped from `~/.crumb` + 2 flat legacy from `~/workspace/crumb/sessions/`).
+- **`mark.grep-hit` substring highlight** in `dashboard.css` — translucent 32% orange normal state, full `--accent-grep` (#ff9f1c) with deeper `--accent-grep-active` (#ff5e00) border on the current match. New tokens `--accent-grep` + `--accent-grep-active` are visually distinct from `--warn` peach and `--accent-warm` gold (already taken by stream-json `⏺/✓`).
+- **Shared `.grep-controls`** — `count / total` (e.g. `3 / 17`, orange when hits > 0, dim when no query) + `↑ ↓` nav buttons, disabled when no matches.
+- **Per-panel grep state** in `dashboard.js` — `grepState = { logs, transcript, feed }` with `query` + `cursor` preserved across re-renders (streaming content doesn't reset nav position).
+- **Helpers**: `highlightHTML(text, query)` (HTML-escapes then wraps case-insensitive substring matches with `<mark>`, regex meta chars escaped via `escapeRegExp`), `refreshGrepNav()` (re-collects `mark.grep-hit` after each render, syncs counter + active class), `gotoGrepMatch(panel, dir)` (mod-N cursor advance + `scrollIntoView({block:'center'})`), `bindGrepInput()` (input event → `onChange`; Enter = next, Shift+Enter = prev, Esc = clear+blur).
+- **Logs panel**: substring `<mark>` replaces the old whole-line `.match` blue background. Matching lines now also get a faint orange `.has-match` row tint for at-a-glance scanning.
+- **Transcript panel**: render switched from `textContent` to `innerHTML` (still inside `<pre>` so whitespace preserved) so the pretty-printed JSON layout keeps formatting while inline matches are markable. Entry-level filtering (only matching events shown) is preserved on top of substring highlight.
+- **Live execution feed**: new search input added to the toolbar (was pause/clear only). Each `appendFeedLine` records the raw text on `bodySpan.dataset.raw` so `rehighlightFeed()` can rebuild highlight on query change without reparsing the stream-json again.
+- **Tests** — `escapeRegExp` + `highlightHTML` verified via 6 unit cases (case-insensitive multi-match, HTML escape `<div>`, regex meta `.*+?` literal match, empty query, single-space query). Full sweep 342/342 green.
+- Verified server-side: served HTML contains all 43 grep identifiers; build artifact bumped 95781 → 103212 bytes.
 
 ### Added — Dashboard live exec feed: Claude-Code-style stream-json narrative (2026-05-03)
 
