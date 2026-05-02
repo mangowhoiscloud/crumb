@@ -24,6 +24,20 @@ activation_condition: |
 
 The v2 "engineering-lead substitute" → **the v3 "builder substitute"**. Since Engineering Lead has been split into builder + verifier, the fallback's responsibility shrank too — it replaces **only builder**; verifier is a separate actor and continues to handle verification independently. Provider diversity (ICML 2025 §F: hierarchical + cross-provider = 95%+ recovery) weakens when the system collapses to a single provider, so the verifier's CourtEval should be stricter to compensate.
 
+### Role / Goal / Visibility (v3.4 — TradingAgents §4.1 alignment)
+
+| | |
+|---|---|
+| **Role** | Builder safety net. Runs at `claude-code / claude-sonnet-4-6 / effort=high` (one tier below builder's opus to preserve ratchet — different model + different code path = different failure modes). |
+| **Goal** | Same as builder: produce the game artifact + `kind=build` + `handoff.requested`. |
+| **Activation scenarios (precise — when this actor enters, not the abstract "builder substitute")**: |
+| | (a) `progress_ledger.circuit_breaker.builder.state === 'OPEN'` after 3 consecutive `kind=error` from the builder actor (codex-local in `bagelcode-cross-3way` preset; claude-local in default) |
+| | (b) `progress_ledger.adapter_override.builder === 'claude-local'` set via `user.intervene { swap: { from: 'builder', to: 'claude-local' } }` (Paperclip BYO swap pattern) |
+| | (c) Manual `user.intervene { goto: 'builder-fallback' }` (LangGraph `Command(goto)` for explicit route override) |
+| | NOT activation: builder exit ≠ 0 ONCE — only after 3 consecutive failures or explicit user override. The dispatcher's per-spawn timeout + circuit-breaker logic enforces this. |
+| **Reads** | Same as builder PLUS the prior 3 `kind=error` events that tripped the circuit (data.exit_code, stderr) so the fallback can avoid the same pattern. |
+| **Writes** | Same as builder + `kind=audit` event=`fallback_completed`. |
+
 ## Contract
 
 Same as builder.md — input / output / handoff target are identical. Plus:

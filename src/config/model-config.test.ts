@@ -26,13 +26,15 @@ afterEach(() => {
 });
 
 describe('defaultConfig', () => {
-  it('v3.4 — every actor seeds to ambient (claude-code) with effort=high', () => {
+  it('v3.4 — coordinator is quick-think (haiku/low); deep-think actors stay opus/high', () => {
     const c = defaultConfig();
     expect(c.defaults.effort).toBe('high');
-    // Every actor seeds to claude-code so a fresh checkout is single-auth;
-    // cross-provider runs come via `--preset bagelcode-cross-3way` or NL
-    // `crumb model` overrides.
-    for (const actor of ['coordinator', 'planner-lead', 'builder', 'verifier'] as const) {
+    // Coordinator routes — TradingAgents §4.3 quick-think split.
+    expect(c.actors.coordinator?.harness).toBe('claude-code');
+    expect(c.actors.coordinator?.model).toBe('claude-haiku-4-5');
+    expect(c.actors.coordinator?.effort).toBe('low');
+    // Deep-think actors keep opus + effort=high.
+    for (const actor of ['planner-lead', 'builder', 'verifier'] as const) {
       expect(c.actors[actor]?.harness).toBe('claude-code');
       expect(c.actors[actor]?.model).toBe('claude-opus-4-7');
       expect(c.actors[actor]?.effort).toBe('high');
@@ -146,26 +148,24 @@ describe('formatConfig', () => {
 // extended thinking per Snell ICLR 2025) to effort=high. Backing: wiki/synthesis/
 // bagelcode-scoring-ratchet-frontier-2026-05-02.md §7 P0-1.
 describe('committed .crumb/config.toml', () => {
-  it('v3.4 — every actor seeds to claude-code with effort=high', () => {
+  it('v3.4 — coordinator is quick-think (low); deep-think actors are high', () => {
     const repoRoot = join(import.meta.dirname, '..', '..');
     const live = loadConfig(repoRoot);
     expect(live.defaults.effort).toBe('high');
-    for (const name of ['coordinator', 'planner-lead', 'builder', 'verifier'] as const) {
+    expect(live.actors.coordinator?.harness).toBe('claude-code');
+    expect(live.actors.coordinator?.effort).toBe('low');
+    for (const name of ['planner-lead', 'builder', 'verifier'] as const) {
       expect(live.actors[name]?.effort).toBe('high');
       expect(live.actors[name]?.harness).toBe('claude-code');
     }
   });
 
-  it('all 5 actors carry effort=high (no silent low/med drift)', () => {
+  it('deep-think actors carry effort=high (no silent low/med drift); coordinator opt-out is intentional', () => {
     const repoRoot = join(import.meta.dirname, '..', '..');
     const live = loadConfig(repoRoot);
-    for (const name of [
-      'coordinator',
-      'planner-lead',
-      'builder',
-      'verifier',
-      'builder-fallback',
-    ] as const) {
+    // Coordinator's `low` is the v3.4 quick-think router decision (see test
+    // above); guarding the rest prevents accidental drift.
+    for (const name of ['planner-lead', 'builder', 'verifier', 'builder-fallback'] as const) {
       expect(live.actors[name]?.effort).toBe('high');
     }
   });

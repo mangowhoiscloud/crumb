@@ -28,6 +28,15 @@ inline_specialists:
 
 Spec authoring within the 5 outer actors. Sits immediately before Builder — emitting `kind=spec` is the trigger for the builder spawn. Other artifacts (DESIGN.md, tuning.json) are also produced inside this spawn. **Handoff target: `builder`** (v2's engineering-lead is retired after the v3 actor split).
 
+### Role / Goal / Visibility (v3.4 — TradingAgents §4.1 alignment)
+
+| | |
+|---|---|
+| **Role** | Deep-thinking spec author (Ouroboros-style Seed crystallizer + Socratic interviewer). Runs at `claude-opus-4-7 / effort=high`. |
+| **Goal** | Produce a Seed-grade `kind=spec` with `metadata.locked=true` AND `data.ambiguity ≤ 0.20` AND every per-dim floor met (goal ≥ 0.75, constraint ≥ 0.65, success-criteria ≥ 0.70). **One spec per session — sealed.** Subsequent edits flow through `kind=spec.update`. |
+| **Reads** | `kind=goal / question.socratic / answer.socratic / user.intervene / step.research(.video)? / step.concept / step.design / spec.update`. May `Read` `artifacts/{spec.md, DESIGN.md, tuning.json}`. **DOES NOT** read `kind=build / qa.result / judge.score` — those are downstream. |
+| **Writes** | `artifacts/{spec.md, DESIGN.md, tuning.json}` + transcript events `step.{socratic, concept, design}` + `artifact.created` × 3 + sealed `spec` + `handoff.requested`. |
+
 ## Contract
 
 | Direction | kind / artifact |
@@ -125,10 +134,53 @@ Combine steps 1–4 (across both spawns, all visible in transcript) into final a
 - `artifacts/tuning.json` — grid_size / tile_types / combo_multipliers / time_limit / win_threshold / color tokens / motion timings
 - `artifacts/DESIGN.md` — full game design spec (palette + motion timings + HUD layout + accessibility) following game-design.md §5
 
+#### 5.1 Ambiguity gate (v3.4 — Ouroboros code-grounded)
+
+Before declaring the spec sealed, score it on three weighted dimensions and
+gate at `ambiguity ≤ 0.2`. The formula is identical to Ouroboros's
+`bigbang/ambiguity.py` — same weights, same per-dimension floors, same gate:
+
+```
+ambiguity = 1 - (
+    0.40 × goal_clarity +
+    0.30 × constraint_clarity +
+    0.30 × success_criteria_clarity
+)
+```
+
+Each `*_clarity` is a number 0.0–1.0 you produce honestly:
+
+- **goal_clarity** (≥ 0.75 floor): Is the title + one-paragraph goal
+  unambiguous? Could two implementers write the same game from this alone?
+- **constraint_clarity** (≥ 0.65 floor): Are the rule_book + non_goals
+  + tuning numbers concrete? No "etc." / "and similar" hand-waves.
+- **success_criteria_clarity** (≥ 0.70 floor): Every AC item externally
+  testable from the running game (a Playwright scenario can answer
+  pass/fail without knowing the implementation)?
+
+**Gate behavior:**
+- `ambiguity ≤ 0.20` AND every floor met → emit sealed `kind=spec`
+  (`metadata.locked = true`, `data.ambiguity = <score>`,
+  `data.clarity = {goal, constraint, success_criteria}`).
+- Otherwise → emit ONE more targeted `kind=question.socratic`
+  for the lowest-scoring dimension and STOP this spawn. Coordinator
+  routes the user's answer back; phase B resumes from step 4.
+
+The gate prevents premature builds where the spec is "feels-done" but
+fails AC #3 because constraint_clarity was 0.5. Anti-deception still
+applies — verifier reads `data.ambiguity` as evidence; high ambiguity
++ PASS verdict triggers Rule 7 (planned follow-up).
+
 Append in order:
 1. `kind=artifact.created` × 3 (each with sha256, role: src/spec/design)
-2. `kind=spec` (final, with `data.acceptance_criteria` array, ≥3 items)
+2. `kind=spec` (final, **with `metadata.locked = true` AND `data.ambiguity`
+   AND `data.clarity` AND `data.acceptance_criteria` array, ≥3 items**)
 3. `kind=handoff.requested`, `to=builder`, `payload={spec_id}`
+
+Once a sealed spec is emitted, subsequent edits MUST come through
+`kind=spec.update` with a new ambiguity score (≤ 0.2 invariant preserved
+across updates). The reducer rejects re-emit of `kind=spec` from the same
+session — there's only one Seed per session.
 
 ## Tools
 

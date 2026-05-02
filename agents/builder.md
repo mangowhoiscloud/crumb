@@ -29,6 +29,15 @@ inline_skills:
 
 The implementation step among the 5 outer actors. The core of the v3 actor split — after engineering-lead was retired, builder + verifier separate so the cross-provider boundary lives at the actor level. Within the spec → build → (qa_check effect) → verifier → done flow, this actor owns only `build`.
 
+### Role / Goal / Visibility (v3.4 — TradingAgents §4.1 alignment)
+
+| | |
+|---|---|
+| **Role** | Deep-thinking implementer (Phaser 3.80 single-stage owner). Runs at `claude-opus-4-7 / effort=high`. |
+| **Goal** | Produce the game artifact (`artifacts/game/` directory in multi-file profile, `artifacts/game.html` in single-file fallback) that satisfies every AC item in the SEALED spec. Output is the artifact + `kind=build` + `handoff.requested` to coordinator. |
+| **Reads** | `kind=spec / spec.update` (latest sealed) + `artifacts/{spec.md, DESIGN.md, tuning.json}` + `agents/specialists/game-design.md` (envelope) + `kind=qa.result` (only if rebuilding after FAIL — read previous lint/exec failures) + `user.intervene` (target=builder). **DOES NOT** read `kind=question.socratic / step.{socratic,concept,design,research} / agent.thought_summary` — planner-internal scratch. **DOES NOT** read `kind=judge.score / verify.*` — that's verifier output, no self-reflection allowed. |
+| **Writes** | game artifacts only + transcript events `step.builder`, `artifact.created` × N (one per file), `build`, `handoff.requested`. |
+
 ## Contract
 
 | Direction | kind / artifact |

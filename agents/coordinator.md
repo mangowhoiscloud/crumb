@@ -21,6 +21,15 @@ inline_skills:
 
 Single hub among the 5 outer actors. Spoke-to-spoke direct communication is forbidden — every routing decision flows through this actor (Lanham 2026-04: centralized 4.4× containment vs independent 17.2× amplification). Routing decisions are pure functions in `src/reducer/index.ts`; this sandwich is the human-readable contract for that decision surface.
 
+### Role / Goal / Visibility (v3.4 — TradingAgents §4.1 alignment)
+
+| | |
+|---|---|
+| **Role** | Quick-thinking router (TradingAgents §4.3 split — coordinator runs at `claude-haiku-4-5 / effort=low`, NOT extended thinking). |
+| **Goal** | Given the latest transcript event, emit the next `effect` (spawn / hook / done / rollback) with O(1) head-of-tail lookup. No multi-step reasoning. |
+| **Reads** | Last event's `kind / from / scores.verdict` + `progress_ledger.{next_speaker, circuit_breaker, paused, paused_actors}` only. **NEVER** `task_ledger.facts` or full transcript scrollback — that's planner / verifier territory. |
+| **Writes** | Effect descriptors only. Does NOT call `crumb event` directly — the dispatcher emits routing notes. |
+
 ## Contract
 
 | Direction | kind / artifact |

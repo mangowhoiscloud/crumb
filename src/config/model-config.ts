@@ -143,7 +143,11 @@ export function defaultConfig(): ModelConfig {
   return {
     defaults: { effort: 'high' },
     actors: {
-      coordinator: { harness: 'claude-code', model: 'claude-opus-4-7', effort: 'high' },
+      // v3.4 — coordinator is a quick-thinking router (TradingAgents §4.3
+      // split: routing = quick model, deep reasoning = deep model). Hub-
+      // Ledger-Spoke decisions are 1–2 turn transcript-head lookups;
+      // extended thinking adds latency without raising routing quality.
+      coordinator: { harness: 'claude-code', model: 'claude-haiku-4-5', effort: 'low' },
       'planner-lead': { harness: 'claude-code', model: 'claude-opus-4-7', effort: 'high' },
       builder: { harness: 'claude-code', model: 'claude-opus-4-7', effort: 'high' },
       verifier: { harness: 'claude-code', model: 'claude-opus-4-7', effort: 'high' },
