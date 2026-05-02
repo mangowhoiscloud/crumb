@@ -4,6 +4,23 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — `crumb_run` + `crumb_intervene` MCP write tools + 7 Claude Code slash commands + 2 hooks (2026-05-03)
+
+The MCP server registered 8 read-only `crumb_<verb>` tools (status / suggest / doctor / config / explain / debug / export / model). Spawning a session or intervening on one still required dropping to the CLI. Claude Code users had to context-switch between the natural-language skill and the terminal for any control-plane action. This PR adds the two write tools that close that loop, plus 7 user-facing slash commands and 2 SessionStart/Stop hooks so the host harness surfaces in-flight sessions automatically.
+
+- **`src/mcp-write-tools.ts` (NEW, 248 lines)** — `crumb_run({ goal, preset?, label?, root? })` spawns `crumb run` as a detached subprocess, writes a `crumb.log`, returns `{ session_id, log_path, pid }`. `crumb_intervene({ session, action, body?, target_actor?, swap_to? })` writes one inbox-grammar line to `<session>/inbox.txt` (action ∈ approve / veto / pause / resume / redo / goto / append / swap / note / mention).
+- **`src/mcp-server.ts`** — registers the 2 new tools; doc comment now reads "10 helpers" (was 8). `resolveCrumbCommand(repoRoot)` honors `CRUMB_BIN` env override → falls through to local `dist/index.js` → falls through to `npx tsx src/index.ts`. `buildInboxLine()` constructs the grammar line from structured args (Zod-validated).
+- **`src/mcp-server.test.ts`** — adds smoke specs for both write tools (mocked subprocess + inbox.txt fixture).
+- **`.claude/commands/crumb-{approve,cancel,pause,redo,resume,veto,watch}.md` (NEW)** — 7 slash commands. Each is a thin one-line invocation of the matching MCP intervene action so the user can type `/crumb-veto reason` instead of free-text mention.
+- **`.claude/hooks/session-start.cjs` (NEW)** — on Claude Code start, scans `~/.crumb/projects/*/sessions/*/transcript.jsonl`, surfaces in-flight sessions in the system prompt so the next user turn can route to status / suggest BEFORE spawning a new run.
+- **`.claude/hooks/stop.cjs` (NEW)** — on Claude Code stop, detects `kind=done` events that landed in the last 30s and surfaces the verdict + cost summary as the final user-visible line.
+- **`.claude/settings.json` (NEW)** — host harness allowlist for the 10 MCP tools + 7 slash commands + 2 hooks. Single source of truth for what Claude Code can invoke without per-call permission prompts.
+- **`.claude/skills/crumb/SKILL.md`** — `allowed-tools` frontmatter expanded with all 10 `mcp__crumb__crumb_*` tools (was `Bash Task Read Write Edit Glob Grep` only). `when_to_use` extended with mid-flight follow-up triggers ("지금 어디까지 갔어?", "이거 끝났어?", "what's the status?") that route to `crumb_status` / `crumb_suggest` instead of spawning a new run.
+
+**Verification**: 421/421 sweep green; lint+typecheck+format clean; build inlines and CI ratchet preserved.
+
+**Recovered from `feat/claude-code-usability` branch (2 unmerged commits, 30+ behind main) + `stash@{4}` (skill+test residue)** during the post-PR-#84 stash audit. The branch was abandoned mid-rebase when main moved on; cherry-picking onto a fresh branch from current main was the cleaner path.
+
 ### Added — `CRUMB_PER_SPAWN_TIMEOUT_MS` / `CRUMB_PER_SPAWN_IDLE_MS` / `CRUMB_WALL_CLOCK_HOOK_MS` / `CRUMB_WALL_CLOCK_HARD_MS` env knobs (2026-05-03)
 
 Per-spawn wall-clock + idle timeouts and session wall-clock budget were hard-coded constants. Tests, CI smoke runs, and long debugging sessions had to either monkey-patch the dispatcher or wait the full 15-minute ceiling. All four are now env-overridable while keeping the same defaults.
