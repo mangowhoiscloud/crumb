@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -37,7 +37,7 @@ describe('session lease', () => {
   it('reclaims a stale lease pointing to a dead PID', () => {
     // PID 1 always exists on Unix, but PID 2^31-1 generally does not.
     const fakePid = 2_000_000_000;
-    require('node:fs').writeFileSync(
+    writeFileSync(
       leasePath(dir),
       JSON.stringify({ pid: fakePid, startedAt: new Date().toISOString() }),
     );
@@ -54,7 +54,7 @@ describe('session lease', () => {
   });
 
   it('releaseLease ignores when the lease is held by someone else', () => {
-    require('node:fs').writeFileSync(
+    writeFileSync(
       leasePath(dir),
       JSON.stringify({ pid: 1, startedAt: new Date().toISOString() }),
     );
