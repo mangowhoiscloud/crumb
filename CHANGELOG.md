@@ -4,6 +4,27 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Fixed — Coordinator immediate-wake: decouple reduce from dispatch in event chain (2026-05-03)
+
+Session `01KQNAK1CXTBDEBX2WP2QQK891` (레바의 모험 버서커, 레바의 모험 버서커) hit `wall_clock_exhausted` twice with `2 builds vs 0 qa.results`. Root cause was structural in `src/loop/coordinator.ts:267 onMessage`:
+
+```
+processing = processing.then(async () => { ... await dispatch(eff) ... })
+```
+
+— every event reduce + dispatch was serialized behind every prior dispatch. `dispatch(spawn)` awaits `adapter.spawn()` which only resolves on **subprocess exit**. So when builder wrote its terminal `build` event mid-spawn, the tail picked it up but `onMessage(build)` couldn't fire reduce → `qa_check` effect until the builder subprocess fully exited (often minutes later, sometimes never if the wall-clock cap killed it first). User feedback: "다음 에이전트로 넘겼을 때 대상 에이전트를 즉시 깨우고 전달해서 진행이 됐으면 해."
+
+**Fix** — reduce and dispatch decoupled:
+
+- `reduceQueue: Message[]` + `reducing: boolean` flag — reducer runs synchronously in-order in `drainReduce()` so state stays consistent and replay-deterministic (AGENTS.md invariant #1/#2).
+- Effects from each event dispatch as a fire-and-forget IIFE: `void (async () => { for (const eff of effects) await dispatch(eff, deps); })().catch(fail)`. Effects within a single event remain sequential so order-sensitive reducer cases like `judge.score FAIL → [append(audit), spawn(builder-fallback)]` preserve their audit-then-spawn ordering.
+- `pendingItems` now counts in-flight async dispatches (was: queued chain items). Idle watchdog still gates `finish()` on `pendingItems === 0` so a long verifier spawn doesn't get terminated mid-flight.
+- `processing` chain variable removed; the wall-clock watchdog's `processing.finally(...)` replaced with direct dispatch `done(wall_clock_exhausted)` since `state.done` mutation now causes `drainReduce` to exit the loop without further reduce.
+
+**Effect on real session pipelines**: when builder writes `build`, tail picks it up → reduce fires immediately → `qa_check` effect dispatches Playwright **in parallel with** the builder subprocess still cleaning up. qa-runner emits `qa.result` → reduce → spawn verifier — all without waiting for the prior actor's exit. Pipeline latency between actor handoffs collapses from `O(subprocess_exit_time + cli_cold_start)` to `O(cli_cold_start)`.
+
+**Tests** — `src/loop/coordinator.test.ts` adds a `v0.4 immediate-wake — reduce/dispatch decoupling` suite with a `SlowSpawnAdapter` that emits its terminal event quickly but lingers 800ms before resolving. Asserts that the next actor's spawn starts within 600ms of the prior actor's terminal event — would have failed under the old chain. 6/6 loop specs + 429/429 sweep green.
+
 ### Added / Fixed — studio adapter wiring + pre-spawn doctor + cache ratio fix (PR-E) (2026-05-03)
 
 Live debugging session `01KQNAK1CXTBDEBX2WP2QQK891` surfaced three interlocking bugs where the studio "create session" form was silently dropping the user's adapter pick, the dispatcher was spawning known-broken adapters (codex exit=1 within 3s, three times in a row), and the studio's cache hit rate rendered as `4553319%`.

@@ -200,16 +200,29 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
     return effects.map((e) => (e.type === 'spawn' ? { ...e, adapter: opts.adapterOverride! } : e));
   };
 
-  let processing: Promise<void> = Promise.resolve();
-  // v0.3.1: pendingItems counts onMessage chain handlers that have been queued
-  // but not yet fully resolved (including their awaited dispatch effects).
-  // The idle-timeout watchdog must not call finish() while pendingItems > 0,
-  // otherwise a long-running dispatch (e.g. planner-spawn for 7min) would
-  // settle the OLD `processing` reference but leave queued downstream items
-  // (handoff.requested(researcher).reduce → dispatch(spawn-researcher)) unrun
-  // before resolveOuter fires and the process exits. Observed: session
-  // 01KQMFWA exited at agent.stop+7ms with state.done=false and 0 researcher
-  // events despite handoff.requested being recorded.
+  // v0.4 immediate-wake: reduce + dispatch decoupled.
+  //   • reduceQueue is processed in-order, synchronously, so reducer state stays
+  //     consistent and replay-deterministic (AGENTS.md invariant #1/#2).
+  //   • Effects from each event are dispatched asynchronously (fire-and-forget),
+  //     letting the next event get reduced + dispatched WITHOUT waiting for the
+  //     prior spawn's subprocess to exit.
+  //   • Effects within a single event remain sequential — reducer cases like
+  //     judge.score FAIL emit `[append(audit), spawn(builder-fallback)]` where
+  //     the audit append must land before the fallback spawn reads transcript.
+  //
+  // Why this matters: previously `processing = processing.then(...)` serialized
+  // the entire pipeline behind every spawn dispatch, which awaited subprocess
+  // exit. Builder writing `build` mid-spawn → tail reads it → onMessage queues
+  // the chain item → chain item BLOCKS until builder spawn fully resolves
+  // (subprocess exit, possibly minutes later). qa_check effect from reduce(build)
+  // never dispatched in time. Observed in session 01KQNAK1 (build at 38:45,
+  // wall_clock_exhausted at 39:11 — qa_check never ran, 0 qa.results vs 2 builds).
+  let reducing = false;
+  const reduceQueue: Message[] = [];
+  // pendingItems counts in-flight async dispatches (post-reduce). The idle
+  // watchdog must not finish() while pendingItems > 0; otherwise a long
+  // background spawn (e.g. verifier 7min) would let the watchdog terminate
+  // the session before its terminal event lands.
   let pendingItems = 0;
   let lastEventAt = Date.now();
   const idleMs = opts.idleTimeoutMs ?? 60_000;
@@ -264,24 +277,44 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
       rejectOuter(err);
     };
 
+    const drainReduce = (): void => {
+      if (reducing) return;
+      reducing = true;
+      try {
+        while (reduceQueue.length > 0 && !state.done) {
+          const msg = reduceQueue.shift()!;
+          const { state: nextState, effects } = reduce(state, msg);
+          state = nextState;
+          const effList = applyOverride(effects);
+          if (effList.length === 0) {
+            if (state.done) finish({ state });
+            continue;
+          }
+          // Dispatch this event's effects sequentially (audit-append must
+          // precede fallback-spawn; build emit must precede qa_check etc.)
+          // but fire async so the next event's reduce + dispatch can start
+          // immediately — that's the immediate-wake guarantee.
+          pendingItems += 1;
+          void (async () => {
+            try {
+              for (const eff of effList) {
+                await dispatch(eff, deps);
+              }
+            } finally {
+              pendingItems -= 1;
+              if (state.done) finish({ state });
+            }
+          })().catch(fail);
+        }
+      } finally {
+        reducing = false;
+      }
+    };
+
     const onMessage = (msg: Message): void => {
       lastEventAt = Date.now();
-      pendingItems += 1;
-      processing = processing
-        .then(async () => {
-          try {
-            if (state.done) return; // ignore events after terminal state
-            const { state: nextState, effects } = reduce(state, msg);
-            state = nextState;
-            for (const eff of applyOverride(effects)) {
-              await dispatch(eff, deps);
-            }
-            if (state.done) finish({ state });
-          } finally {
-            pendingItems -= 1;
-          }
-        })
-        .catch(fail);
+      reduceQueue.push(msg);
+      drainReduce();
     };
 
     // Watchdog: idle timeout + v0.2.0 wall-clock budget guardrail.
@@ -304,15 +337,13 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
         const elapsed = Date.now() - Date.parse(startedAt);
         if (elapsed >= wallClockHardMs) {
           clearInterval(watchdog);
-          // Append done + session.end via dispatch; force state.done so any
-          // in-flight processing chain stops accepting new events.
+          // Force state.done so drainReduce stops accepting new events; any
+          // in-flight async dispatches will continue to completion (their
+          // finally blocks decrement pendingItems and may attempt finish(),
+          // which is idempotent via `resolved` guard).
           state = { ...state, done: true };
-          void processing
-            .finally(() =>
-              dispatch({ type: 'done', reason: 'wall_clock_exhausted' }, deps).then(() =>
-                finish({ state }),
-              ),
-            )
+          void dispatch({ type: 'done', reason: 'wall_clock_exhausted' }, deps)
+            .then(() => finish({ state }))
             .catch(fail);
           return;
         }

@@ -233,3 +233,108 @@ describe('runSession wall_clock budget', () => {
     if (done) expect(done.body).not.toBe('wall_clock_exhausted');
   }, 10_000);
 });
+
+/**
+ * v0.4 immediate-wake regression guard.
+ *
+ * The chain reduce + dispatch must be DECOUPLED — reducer runs synchronously
+ * in-order so state is consistent, but each event's effects fire async so a
+ * long-running prior spawn does not block the next event from being reduced
+ * + dispatched.
+ *
+ * This test pins the property by registering a SlowSpawnAdapter that emits
+ * its terminal event quickly but takes a long time to "exit". With the old
+ * `processing.then(await dispatch)` chain, a follow-up event from the same
+ * subprocess would wait for the prior spawn to fully resolve before its
+ * reducer runs. With the new design, the follow-up event reduces immediately.
+ */
+class SlowSpawnAdapter implements Adapter {
+  readonly id = 'slow-spawn';
+  // ms to delay the spawn promise resolution AFTER terminal event is emitted.
+  // Tests pass small values to avoid 30s waits.
+  constructor(
+    private readonly emitFn: (sessionId: string, transcriptPath: string) => Promise<void>,
+    private readonly postEmitDelayMs: number,
+  ) {}
+  async health(): Promise<{ ok: boolean }> {
+    return { ok: true };
+  }
+  async spawn(req: SpawnRequest): Promise<SpawnResult> {
+    const start = Date.now();
+    // Emit terminal event quickly (mimics a real agent finishing its turn).
+    await this.emitFn(req.sessionId, req.transcriptPath);
+    // Linger before resolving — old chain waited for THIS to finish before
+    // reducing the just-emitted terminal event. New chain doesn't wait.
+    await new Promise<void>((r) => setTimeout(r, this.postEmitDelayMs));
+    return { exitCode: 0, stdout: '', stderr: '', durationMs: Date.now() - start };
+  }
+}
+
+describe('v0.4 immediate-wake — reduce/dispatch decoupling', () => {
+  it('reduces terminal events while prior spawn is still in flight', async () => {
+    _resetWriterRegistryForTests();
+    const { sessionDir, transcriptPath, repoRoot } = await makeSession();
+    const sessionId = 'sess-immediate-wake-1';
+
+    // Track when each spawn STARTS — the second spawn should start before the
+    // first spawn fully resolves (postEmitDelayMs has not yet elapsed).
+    const spawnStartTimes: Record<string, number> = {};
+
+    // planner-lead emits `spec` quickly, then lingers 800ms before exit.
+    const plannerAdapter = new SlowSpawnAdapter(async (sid, path) => {
+      spawnStartTimes['planner-lead'] = Date.now();
+      const w = new TranscriptWriter({ path, sessionId: sid });
+      await w.append({
+        session_id: sid,
+        from: 'planner-lead',
+        kind: 'spec',
+        data: { acceptance_criteria: ['ac1'] },
+      });
+    }, 800);
+
+    // builder is dispatched after spec → should start IMMEDIATELY after spec
+    // is reduced, NOT after planner-lead spawn fully exits.
+    const builderAdapter = new SlowSpawnAdapter(async (sid, path) => {
+      spawnStartTimes['builder'] = Date.now();
+      const w = new TranscriptWriter({ path, sessionId: sid });
+      await w.append({
+        session_id: sid,
+        from: 'builder',
+        kind: 'build',
+        body: 'stub build',
+      });
+    }, 100);
+
+    // Single adapter routes by actor — override 'mock' so every spawn is
+    // forced through this stub regardless of reducer pickAdapter defaults.
+    class RouterAdapter implements Adapter {
+      readonly id = 'mock';
+      async health(): Promise<{ ok: boolean }> {
+        return { ok: true };
+      }
+      async spawn(req: SpawnRequest): Promise<SpawnResult> {
+        if (req.actor === 'planner-lead') return plannerAdapter.spawn(req);
+        if (req.actor === 'builder') return builderAdapter.spawn(req);
+        return { exitCode: 0, stdout: '', stderr: '', durationMs: 0 };
+      }
+    }
+
+    await runSession({
+      goal: 'immediate-wake regression test',
+      sessionDir,
+      sessionId,
+      repoRoot,
+      adapterOverride: 'mock',
+      idleTimeoutMs: 500,
+      extraAdapters: [new RouterAdapter()],
+    });
+
+    // Both spawns must have happened.
+    expect(spawnStartTimes['planner-lead']).toBeDefined();
+    expect(spawnStartTimes['builder']).toBeDefined();
+    // Builder must start within 600ms of planner-lead — well before
+    // planner's 800ms post-emit delay would let the old chain unblock.
+    const gap = spawnStartTimes['builder']! - spawnStartTimes['planner-lead']!;
+    expect(gap).toBeLessThan(600);
+  }, 15_000);
+});
