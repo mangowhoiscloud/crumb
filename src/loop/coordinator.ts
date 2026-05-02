@@ -46,7 +46,32 @@ export interface RunOptions {
   presetName?: string;
   /** How long to wait after the last event before declaring stuck. ms. */
   idleTimeoutMs?: number;
+  /**
+   * v3.2 wall-clock budget (autoresearch P3). Soft hook fires once when the
+   * session crosses `wallClockHookMs` of elapsed wall time; hard cap fires
+   * `done(wall_clock_exhausted)` at `wallClockHardMs`. Both are measured from
+   * the first session.start event's `ts` (deterministic) and compared against
+   * Date.now() inside the watchdog (non-deterministic, watchdog-only — does
+   * not affect replay determinism). Defaults: 24min hook, 30min hard.
+   */
+  wallClockHookMs?: number;
+  wallClockHardMs?: number;
+  /**
+   * Per-spawn timeout override (ms). Forwarded to DispatcherDeps. See
+   * src/dispatcher/live.ts §PER_SPAWN_TIMEOUT_MS. Default 5min.
+   */
+  perSpawnTimeoutMs?: number;
+  /**
+   * Watchdog tick interval (ms). Production default 1000 — tests pass small
+   * values to exercise wall-clock budget exhaustion without waiting whole
+   * seconds. Don't reduce in production; the hooks/dispatch chain inside
+   * each tick is non-trivial and 1Hz polling is cheap enough.
+   */
+  watchdogTickMs?: number;
 }
+
+const WALL_CLOCK_HOOK_MS_DEFAULT = 24 * 60 * 1000; // 24 min
+const WALL_CLOCK_HARD_MS_DEFAULT = 30 * 60 * 1000; // 30 min
 
 export async function runSession(opts: RunOptions): Promise<{ state: CrumbState }> {
   await mkdir(opts.sessionDir, { recursive: true });
@@ -115,6 +140,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
     repoRoot: opts.repoRoot,
     preset,
     providersEnabled,
+    perSpawnTimeoutMs: opts.perSpawnTimeoutMs,
     onHook: async (kind, body) => {
       // eslint-disable-next-line no-console
       console.log(`[hook:${kind}] ${body}`);
@@ -233,18 +259,68 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
         .catch(fail);
     };
 
-    // Idle watchdog — if no events arrive within idleMs and we're not done, stop.
+    // Watchdog: idle timeout + v3.2 wall-clock budget guardrail.
+    // Wall-clock is measured from state.progress_ledger.session_started_at
+    // (the deterministic ts of the first session.start event); the watchdog
+    // checks against Date.now() so the timing is real wall-clock, not
+    // transcript clock.
+    const wallClockHookMs = opts.wallClockHookMs ?? WALL_CLOCK_HOOK_MS_DEFAULT;
+    const wallClockHardMs = opts.wallClockHardMs ?? WALL_CLOCK_HARD_MS_DEFAULT;
+    let timeBudgetHookFired = false;
     const watchdog = setInterval(() => {
       if (resolved) {
         clearInterval(watchdog);
         return;
       }
+
+      // Wall-clock budget — only meaningful once session.start has been reduced.
+      const startedAt = state.progress_ledger.session_started_at;
+      if (startedAt) {
+        const elapsed = Date.now() - Date.parse(startedAt);
+        if (elapsed >= wallClockHardMs) {
+          clearInterval(watchdog);
+          // Append done + session.end via dispatch; force state.done so any
+          // in-flight processing chain stops accepting new events.
+          state = { ...state, done: true };
+          void processing
+            .finally(() =>
+              dispatch({ type: 'done', reason: 'wall_clock_exhausted' }, deps).then(() =>
+                finish({ state }),
+              ),
+            )
+            .catch(fail);
+          return;
+        }
+        if (!timeBudgetHookFired && elapsed >= wallClockHookMs) {
+          timeBudgetHookFired = true;
+          // Fire-and-forget — hook is a notification, the session continues.
+          void dispatch(
+            {
+              type: 'hook',
+              kind: 'time_budget',
+              body: `session wall-clock ${Math.floor(elapsed / 1000)}s crossed ${Math.floor(
+                wallClockHookMs / 1000,
+              )}s (hard cap ${Math.floor(wallClockHardMs / 1000)}s)`,
+              data: {
+                elapsed_ms: elapsed,
+                threshold_ms: wallClockHookMs,
+                hard_cap_ms: wallClockHardMs,
+              },
+            },
+            deps,
+          ).catch((err) => {
+            // eslint-disable-next-line no-console
+            console.error('[crumb] time_budget hook dispatch failed:', err);
+          });
+        }
+      }
+
       if (Date.now() - lastEventAt > idleMs) {
         clearInterval(watchdog);
         // Drain pending then finish with whatever state we have.
         processing.finally(() => finish({ state }));
       }
-    }, 1000);
+    }, opts.watchdogTickMs ?? 1000);
 
     // v3.2 G2 — headless inbox.txt watcher. User can append slash-commands /
     // free text to sessions/<id>/inbox.txt without needing the TUI; lines are
