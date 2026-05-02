@@ -82,14 +82,22 @@ const MAX_OWN_CODE_BYTES = 60_000;
 /**
  * Run the deterministic check. Pure function of (artifact path) → result.
  *
- * Mock-mode: if path doesn't exist OR ends with `.mock.html`, returns deterministic
- * pass result (used by mock adapter and CI fixtures).
+ * Mock fixtures (path ending in `.mock.html`) return deterministic PASS.
+ *
+ * **Missing artifact is NOT a fixture — it's a builder failure.** v3.4 splits
+ * the two cases that used to share a fall-through: a real builder spawn that
+ * crashed before writing any file must NOT be rewarded with a fake PASS,
+ * because the verifier reads `qa.result.exec_exit_code` as D2 ground truth
+ * and a phantom 0 would force D2=5 + verdict=PASS through anti-deception
+ * Rules 1–2. Now: missing artifact returns `exec_exit_code=1 + lint_passed=false
+ * + lint_findings=['artifact_missing: ...']` so D2 collapses to 0 and the
+ * audit trail surfaces the real failure mode.
  */
 export async function runQaCheck(artifactPath: string): Promise<QaResult> {
   const start = Date.now();
 
-  // Mock fallback for fixtures / missing artifacts (deterministic for CI)
-  if (artifactPath.endsWith('.mock.html') || !existsSync(artifactPath)) {
+  // Mock fixture path — deterministic PASS (CI / mock adapter only).
+  if (artifactPath.endsWith('.mock.html')) {
     return {
       lint_passed: true,
       exec_exit_code: 0,
@@ -100,6 +108,22 @@ export async function runQaCheck(artifactPath: string): Promise<QaResult> {
       cross_browser_smoke: 'skipped',
       loc_own_bytes: 0,
       lint_findings: [],
+    };
+  }
+
+  // Real builder run — missing artifact = builder failure, NOT a fixture.
+  // Surface it as a hard FAIL so anti-deception D2/D6 force D2=0.
+  if (!existsSync(artifactPath)) {
+    return {
+      lint_passed: false,
+      exec_exit_code: 1,
+      phaser_loaded: false,
+      first_interaction: 'fail',
+      artifact_sha256: '',
+      runtime_ms: Date.now() - start,
+      cross_browser_smoke: 'fail',
+      loc_own_bytes: 0,
+      lint_findings: [`artifact_missing: ${artifactPath} not written by builder`],
     };
   }
 

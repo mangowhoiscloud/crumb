@@ -181,6 +181,67 @@ describeServer('dashboard server', () => {
     }
   });
 
+  it('POST /api/sessions/:id/inbox appends to <session>/inbox.txt', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'crumb-dash-'));
+    const sessionDir = join(home, 'projects', 'p1', 'sessions', 'sess-IN');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(join(sessionDir, 'transcript.jsonl'), '', 'utf8');
+    const glob = posix.join(
+      home.split(sep).join('/'),
+      'projects',
+      '*',
+      'sessions',
+      '*',
+      'transcript.jsonl',
+    );
+    const server = await startDashboardServer({
+      port: 0,
+      bind: '127.0.0.1',
+      glob,
+      pollInterval: 50,
+    });
+    try {
+      await new Promise((r) => setTimeout(r, 200));
+      const res = await fetch(server.url + 'api/sessions/sess-IN/inbox', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ line: '/goto verifier check D5' }),
+      });
+      expect(res.status).toBe(202);
+      const body = (await res.json()) as { ok: boolean; line: string };
+      expect(body.ok).toBe(true);
+      expect(body.line).toBe('/goto verifier check D5');
+      const { readFile: readF } = await import('node:fs/promises');
+      const inbox = await readF(join(sessionDir, 'inbox.txt'), 'utf8');
+      expect(inbox).toContain('/goto verifier check D5');
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('POST /api/sessions/:id/inbox rejects unknown session', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'crumb-dash-'));
+    const glob = posix.join(
+      home.split(sep).join('/'),
+      'projects',
+      '*',
+      'sessions',
+      '*',
+      'transcript.jsonl',
+    );
+    const server = await startDashboardServer({ port: 0, bind: '127.0.0.1', glob });
+    try {
+      const res = await fetch(server.url + 'api/sessions/nope/inbox', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ line: 'hello' }),
+      });
+      expect(res.status).toBe(404);
+    } finally {
+      await server.close();
+    }
+  });
+
   it('rejects sandwich requests with traversal in actor name', async () => {
     const home = await mkdtemp(join(tmpdir(), 'crumb-dash-'));
     const sessionDir = join(home, 'projects', 'p1', 'sessions', 'sess-T');

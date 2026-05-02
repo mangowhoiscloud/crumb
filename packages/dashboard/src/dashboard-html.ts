@@ -154,6 +154,124 @@ header.summary .goal {
 .pill.err { background: rgba(250, 127, 170, 0.18); color: var(--audit-fg); }
 .pill.muted { background: var(--surface-2); color: var(--ink-subtle); }
 
+/* v3.4 Console mode — DAG topology + weaving + console input */
+section.dag {
+  border-bottom: 1px solid var(--hairline);
+  background: var(--surface-1);
+  padding: 12px 16px 8px;
+}
+section.dag h2 {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  color: var(--ink-subtle);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.dag-svg {
+  width: 100%;
+  height: 180px;
+  display: block;
+}
+.dag-node circle {
+  fill: var(--surface-2);
+  stroke: var(--hairline-strong);
+  stroke-width: 1.5;
+  transition: fill 200ms ease, stroke 200ms ease;
+}
+.dag-node.active circle {
+  fill: var(--lime);
+  stroke: var(--lime);
+  filter: drop-shadow(0 0 6px var(--lime));
+}
+.dag-node.recent circle {
+  stroke: var(--primary);
+  stroke-width: 2;
+}
+.dag-node text {
+  font-size: 9px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  fill: var(--ink-muted);
+  text-anchor: middle;
+}
+.dag-node.active text { fill: var(--canvas); font-weight: 600; }
+.dag-edge {
+  fill: none;
+  stroke: var(--hairline);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+.dag-ripple {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 2;
+  opacity: 0;
+  pointer-events: none;
+}
+@keyframes ripple-flow {
+  0%   { opacity: 0; stroke-dasharray: 0 200; }
+  20%  { opacity: 1; }
+  100% { opacity: 0; stroke-dasharray: 200 0; }
+}
+.dag-ripple.flow { animation: ripple-flow 1500ms ease-out; }
+
+section.console-input {
+  border-top: 1px solid var(--hairline);
+  background: var(--surface-1);
+  padding: 10px 16px 14px;
+}
+.console-row {
+  display: flex; gap: 8px; align-items: center;
+}
+.console-row input[type="text"] {
+  flex: 1;
+  background: var(--canvas);
+  color: var(--ink);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  padding: 8px 12px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 13px;
+  outline: none;
+}
+.console-row input[type="text"]:focus { border-color: var(--primary); }
+.console-row button {
+  background: var(--primary);
+  color: var(--ink);
+  border: none;
+  border-radius: var(--r-md);
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.console-row button:hover { background: var(--primary-hover); }
+.console-row button:disabled { opacity: 0.4; cursor: not-allowed; }
+.console-hints {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  margin-top: 6px;
+}
+.console-hints button {
+  background: var(--surface-2);
+  color: var(--ink-muted);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 3px 8px;
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  cursor: pointer;
+}
+.console-hints button:hover { border-color: var(--primary); color: var(--ink); }
+.console-feedback {
+  font-size: 11px;
+  color: var(--ink-subtle);
+  margin-top: 6px;
+  font-family: ui-monospace, monospace;
+  min-height: 14px;
+}
+.console-feedback.ok { color: #5fcb7e; }
+.console-feedback.err { color: var(--audit-fg); }
+
 section.swimlane {
   flex: 1; min-height: 0; overflow: auto;
   padding: 16px 0 24px;
@@ -326,24 +444,51 @@ section.scorecard {
 
   <div id="audit-banner"></div>
 
+  <section class="dag" id="dag-section">
+    <h2>Pipeline DAG · weaving</h2>
+    <svg class="dag-svg" id="dag-svg" viewBox="0 0 720 180" preserveAspectRatio="xMidYMid meet"></svg>
+  </section>
+
   <section class="swimlane" id="swimlane">
     <div class="empty" id="swim-empty">Waiting for events…</div>
   </section>
 
   <section class="scorecard" id="scorecard"></section>
+
+  <section class="console-input" id="console-section">
+    <div class="console-row">
+      <input type="text" id="console-line" placeholder="Type a slash command or @actor mention — e.g. /goto verifier, @builder use red palette, /pause" autocomplete="off" disabled>
+      <button id="console-send" disabled>Send</button>
+    </div>
+    <div class="console-hints" id="console-hints"></div>
+    <div class="console-feedback" id="console-feedback"></div>
+  </section>
 </main>
 
 <aside class="detail" id="detail">
   <button class="close" id="detail-close" aria-label="Close detail">×</button>
   <h3 id="detail-title">Event detail</h3>
+  <div id="detail-pipeline-pos" style="font-size:11px;color:var(--ink-subtle);margin-bottom:8px;font-family:ui-monospace,monospace;"></div>
+  <div id="detail-nav" style="display:flex;gap:6px;margin-bottom:8px;">
+    <button id="detail-prev" style="background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);padding:3px 10px;border-radius:var(--r-sm);font-size:11px;cursor:pointer;">↑ parent</button>
+    <button id="detail-next" style="background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);padding:3px 10px;border-radius:var(--r-sm);font-size:11px;cursor:pointer;">↓ children</button>
+  </div>
   <pre id="detail-meta"></pre>
   <h3>Body</h3>
   <pre id="detail-body"></pre>
   <h3>Data</h3>
   <pre id="detail-data"></pre>
+  <h3>Conversation thread (parent → this → children)</h3>
+  <div id="detail-thread" style="font-size:11px;font-family:ui-monospace,monospace;max-height:200px;overflow:auto;border:1px solid var(--hairline);border-radius:var(--r-md);padding:8px;background:var(--canvas);"></div>
   <h3>Sandwich preview</h3>
   <div id="sandwich-actor-bar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
   <pre id="sandwich-content" style="display:none;max-height:360px;overflow:auto;"></pre>
+  <h3>Send message to this actor</h3>
+  <div style="display:flex;gap:6px;">
+    <input type="text" id="detail-msg" placeholder="@actor or /command or text" style="flex:1;background:var(--canvas);color:var(--ink);border:1px solid var(--hairline);border-radius:var(--r-md);padding:6px 10px;font-family:ui-monospace,monospace;font-size:12px;outline:none;">
+    <button id="detail-msg-send" style="background:var(--primary);color:var(--ink);border:none;border-radius:var(--r-md);padding:6px 12px;font-size:11px;cursor:pointer;">Send</button>
+  </div>
+  <div id="detail-msg-feedback" style="font-size:10px;color:var(--ink-subtle);margin-top:4px;font-family:ui-monospace,monospace;min-height:12px;"></div>
 </aside>
 
 <script>
@@ -642,6 +787,247 @@ fetch('/api/sessions').then(r => r.json()).then(payload => {
   if (!activeSession && payload.sessions?.[0]) selectSession(payload.sessions[0].session_id);
   else renderSessionList();
 }).catch(() => {});
+
+// ─── v3.4 Console — DAG topology + weaving ────────────────────────────────
+
+// 9-actor pipeline DAG. Edges encode the canonical reducer routing flow.
+// Coordinates are laid out by hand in 720×180 SVG space.
+const DAG_NODES = {
+  user:               { x: 60,  y: 90,  label: 'user' },
+  coordinator:        { x: 160, y: 90,  label: 'coord' },
+  'planner-lead':     { x: 260, y: 40,  label: 'planner' },
+  researcher:         { x: 360, y: 40,  label: 'research' },
+  builder:            { x: 460, y: 40,  label: 'builder' },
+  'builder-fallback': { x: 460, y: 130, label: 'fallback' },
+  system:             { x: 560, y: 90,  label: 'qa-check' },
+  verifier:           { x: 640, y: 90,  label: 'verifier' },
+  validator:          { x: 320, y: 140, label: 'validator' },
+};
+const DAG_EDGES = [
+  ['user','coordinator'],
+  ['coordinator','planner-lead'],
+  ['planner-lead','researcher'],
+  ['researcher','planner-lead'],
+  ['planner-lead','builder'],
+  ['builder','system'],
+  ['system','verifier'],
+  ['verifier','coordinator'],
+  ['coordinator','builder-fallback'],
+  ['builder-fallback','system'],
+  ['verifier','validator'],
+];
+
+function renderDag() {
+  const svg = $('dag-svg');
+  if (!svg) return;
+  // Build edges first (under nodes).
+  const edgesSvg = DAG_EDGES.map(([from, to]) => {
+    const a = DAG_NODES[from], b = DAG_NODES[to];
+    if (!a || !b) return '';
+    return '<path class="dag-edge" d="M' + a.x + ',' + a.y + ' L' + b.x + ',' + b.y + '" />';
+  }).join('');
+  const events = activeSession ? (eventCache.get(activeSession) ?? []) : [];
+  const lastEvt = events[events.length - 1];
+  const lastActor = lastEvt?.from;
+  const recentActors = new Set(events.slice(-8).map(e => e.from));
+  const nodesSvg = Object.entries(DAG_NODES).map(([actor, n]) => {
+    const cls = ['dag-node'];
+    if (lastActor === actor) cls.push('active');
+    else if (recentActors.has(actor)) cls.push('recent');
+    return '<g class="' + cls.join(' ') + '" data-actor="' + actor + '">' +
+      '<circle cx="' + n.x + '" cy="' + n.y + '" r="22" />' +
+      '<text x="' + n.x + '" y="' + (n.y + 3) + '">' + escapeHTML(n.label) + '</text>' +
+    '</g>';
+  }).join('');
+  // Container for ripple overlays — appended/removed dynamically.
+  svg.innerHTML = '<g id="dag-edges">' + edgesSvg + '</g>' +
+                  '<g id="dag-ripples"></g>' +
+                  '<g id="dag-nodes">' + nodesSvg + '</g>';
+}
+
+// Pipeline position narrative — 'where am I in the DAG' for the detail panel.
+function pipelinePositionFor(evt) {
+  const order = ['session.start','goal','question.socratic','answer.socratic','step.socratic',
+    'step.concept','handoff.requested','step.research.video','step.research','step.design',
+    'spec','build','qa.result','step.judge','judge.score','verify.result','done'];
+  const i = order.indexOf(evt.kind);
+  const phase = i < 0 ? 'meta'
+    : i <= 4  ? 'PHASE A — Socratic & Concept'
+    : i <= 7  ? 'PHASE A → B — Researcher'
+    : i <= 9  ? 'PHASE B — Design & Synth'
+    : i === 10 ? 'PHASE B → C — Spec sealed'
+    : i === 11 ? 'PHASE C — Build'
+    : i === 12 ? 'PHASE C → D — QA ground truth'
+    : i <= 14 ? 'PHASE D — Verifier (CourtEval)'
+    :           'PHASE D → done';
+  return phase + ' · ' + evt.from + '/' + evt.kind;
+}
+
+// Trigger a one-shot weaving ripple when an event flows from one actor to
+// another. Animates the dashed edge for 1.5s then removes the overlay.
+function rippleEdge(fromActor, toActor) {
+  const a = DAG_NODES[fromActor], b = DAG_NODES[toActor];
+  if (!a || !b) return;
+  const ripples = document.getElementById('dag-ripples');
+  if (!ripples) return;
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('class', 'dag-ripple flow');
+  path.setAttribute('d', 'M' + a.x + ',' + a.y + ' L' + b.x + ',' + b.y);
+  ripples.appendChild(path);
+  setTimeout(() => path.remove(), 1500);
+}
+
+// Weaving orchestrator — observe each new event and ripple from sender to
+// the next-likely target. The map encodes "after kind X, the next message
+// usually goes to actor Y" — derived from the reducer's switch/case.
+const WEAVE_TARGET = {
+  'goal':              'coordinator',
+  'session.start':     null,
+  'question.socratic': 'user',
+  'answer.socratic':   'planner-lead',
+  'spec':              'builder',
+  'build':             'system',         // qa-check effect
+  'qa.result':         'verifier',
+  'judge.score':       'coordinator',
+  'verify.result':     'coordinator',
+  'handoff.requested': null,             // payload.to drives it
+  'step.research.video': null,
+};
+function weaveOnAppend(msg) {
+  const target = msg.kind === 'handoff.requested'
+    ? (msg.to || msg.data?.to || null)
+    : WEAVE_TARGET[msg.kind];
+  if (target && DAG_NODES[target]) rippleEdge(msg.from, target);
+  renderDag();
+}
+
+// ─── v3.4 Console input — POST /api/sessions/:id/inbox ────────────────────
+
+function setConsoleEnabled(enabled) {
+  $('console-line').disabled = !enabled;
+  $('console-send').disabled = !enabled;
+}
+
+function renderConsoleHints() {
+  const hints = ['/approve','/veto rebuild','/pause','/resume','/goto verifier','@builder use red palette','/note <text>','/redo'];
+  const root = $('console-hints');
+  root.innerHTML = hints.map(h =>
+    '<button data-line="' + escapeHTML(h) + '">' + escapeHTML(h) + '</button>'
+  ).join('');
+  root.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $('console-line').value = btn.dataset.line;
+      $('console-line').focus();
+    });
+  });
+}
+
+async function sendInboxLine(sessionId, line, feedbackEl) {
+  if (!line || line.trim().length === 0) return;
+  feedbackEl.textContent = 'sending…';
+  feedbackEl.className = 'console-feedback';
+  try {
+    const res = await fetch('/api/sessions/' + encodeURIComponent(sessionId) + '/inbox', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ line }),
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      feedbackEl.textContent = '✗ ' + res.status + ': ' + txt.slice(0, 200);
+      feedbackEl.className = 'console-feedback err';
+      return;
+    }
+    feedbackEl.textContent = '✓ queued — watcher will surface the resulting event in the swimlane shortly';
+    feedbackEl.className = 'console-feedback ok';
+  } catch (err) {
+    feedbackEl.textContent = '✗ ' + err.message;
+    feedbackEl.className = 'console-feedback err';
+  }
+}
+
+$('console-send').addEventListener('click', () => {
+  if (!activeSession) return;
+  const line = $('console-line').value;
+  sendInboxLine(activeSession, line, $('console-feedback'));
+  $('console-line').value = '';
+});
+$('console-line').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    $('console-send').click();
+  }
+});
+renderConsoleHints();
+
+// Per-actor mini-console inside the detail panel.
+$('detail-msg-send').addEventListener('click', () => {
+  if (!activeSession) return;
+  const evt = currentDetailEvent;
+  if (!evt) return;
+  let line = $('detail-msg').value.trim();
+  if (!line) return;
+  // If the user didn't already prefix with @actor or /, mention this actor.
+  if (!/^[@/]/.test(line)) line = '@' + evt.from + ' ' + line;
+  sendInboxLine(activeSession, line, $('detail-msg-feedback'));
+  $('detail-msg').value = '';
+});
+$('detail-msg').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    $('detail-msg-send').click();
+  }
+});
+
+// Detail navigation — parent chain + children list.
+let currentDetailEvent = null;
+const _origShowDetail = showDetail;
+showDetail = function(id) {
+  _origShowDetail(id);
+  if (!activeSession) return;
+  const events = eventCache.get(activeSession) ?? [];
+  const evt = events.find(e => e.id === id);
+  if (!evt) return;
+  currentDetailEvent = evt;
+  $('detail-pipeline-pos').textContent = '◇ ' + pipelinePositionFor(evt);
+  // Thread: parent → this → children
+  const parent = evt.parent_event_id ? events.find(e => e.id === evt.parent_event_id) : null;
+  const children = events.filter(e => e.parent_event_id === evt.id);
+  const lines = [];
+  if (parent) lines.push('↑ parent: ' + parent.from + ' / ' + parent.kind + ' — ' + (parent.body || '').slice(0, 80));
+  lines.push('● this  : ' + evt.from + ' / ' + evt.kind + ' — ' + (evt.body || '').slice(0, 80));
+  for (const c of children) lines.push('↓ child : ' + c.from + ' / ' + c.kind + ' — ' + (c.body || '').slice(0, 80));
+  $('detail-thread').innerHTML = lines.map(l => '<div>' + escapeHTML(l) + '</div>').join('');
+  $('detail-prev').disabled = !parent;
+  $('detail-next').disabled = children.length === 0;
+  $('detail-prev').onclick = () => parent && showDetail(parent.id);
+  $('detail-next').onclick = () => children[0] && showDetail(children[0].id);
+};
+
+// Hook DAG re-render + weaving into the existing append handler. The original
+// es.addEventListener('append', …) above pushes events; we add a parallel
+// listener since EventSource supports multiple handlers per event type.
+es.addEventListener('append', e => {
+  const d = JSON.parse(e.data);
+  if (d.session_id === activeSession) {
+    weaveOnAppend(d.msg);
+  }
+});
+es.addEventListener('session_start', e => {
+  const d = JSON.parse(e.data);
+  if (d.session_id === activeSession) renderDag();
+});
+
+// On session select, also reflect into DAG + console enable.
+const _origSelectSession = selectSession;
+selectSession = function(id) {
+  _origSelectSession(id);
+  setConsoleEnabled(Boolean(id));
+  renderDag();
+};
+
+// Initial DAG render after first paint.
+setTimeout(renderDag, 0);
 
 </script>
 </body>
