@@ -31,6 +31,7 @@ import { GeminiLocalAdapter } from '../adapters/gemini-local.js';
 import { MockAdapter } from '../adapters/mock.js';
 import { renderSummary } from '../summary/render.js';
 import { serialize as serializeExport } from '../exporter/otel.js';
+import { startInboxWatcher, type InboxWatcherHandle } from '../inbox/watcher.js';
 import type { Effect } from '../effects/types.js';
 import type { Message } from '../protocol/types.js';
 
@@ -153,6 +154,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
 
   return new Promise<{ state: CrumbState }>((resolveOuter, rejectOuter) => {
     let handle: { close: () => void } | null = null;
+    let inboxHandle: InboxWatcherHandle | null = null;
     let resolved = false;
 
     const emitSummary = async (final: CrumbState): Promise<void> => {
@@ -187,6 +189,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
       if (resolved) return;
       resolved = true;
       handle?.close();
+      inboxHandle?.stop();
       // Emit summary + exports asynchronously; resolve outer promise after.
       void emitSummary(result.state).then(() => resolveOuter(result));
     };
@@ -195,6 +198,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
       if (resolved) return;
       resolved = true;
       handle?.close();
+      inboxHandle?.stop();
       rejectOuter(err);
     };
 
@@ -225,6 +229,20 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
         processing.finally(() => finish({ state }));
       }
     }, 1000);
+
+    // v3.2 G2 — headless inbox.txt watcher. User can append slash-commands /
+    // free text to sessions/<id>/inbox.txt without needing the TUI; lines are
+    // parsed and appended to the transcript like any other user.* event.
+    const inboxPath = resolve(opts.sessionDir, 'inbox.txt');
+    inboxHandle = startInboxWatcher({
+      inboxPath,
+      sessionId: opts.sessionId,
+      writer,
+      onError: (err) => {
+        // eslint-disable-next-line no-console
+        console.error('[crumb] inbox watcher error:', err.message);
+      },
+    });
 
     tail(transcriptPath, onMessage, { fromOffset: 0 })
       .then((h) => {
