@@ -9,6 +9,7 @@ import { resolve as resolvePath } from 'node:path';
 
 import type { QaCheckEffect } from '../effects/types.js';
 import { runQaCheck } from '../effects/qa-check.js';
+import type { ACPredicateItem } from '../effects/qa-interactive.js';
 import type { TranscriptWriter } from '../transcript/writer.js';
 
 export interface QaRunnerDeps {
@@ -17,13 +18,60 @@ export interface QaRunnerDeps {
   sessionDir: string;
 }
 
+/**
+ * Hard timeout on `runQaCheck` so a hung Playwright (chromium zombie / network
+ * hang / service-worker bootstrap stall) cannot stall the entire pipeline.
+ *
+ * Without this, session 01KQNAK1 saw 2 builds → 0 qa.results: builder finished,
+ * runQaCheck started Playwright, Playwright never returned, the dispatcher's
+ * `await runQaCheckEffect` hung indefinitely, no qa.result event was emitted,
+ * the verifier was never spawned, and the wall-clock cap eventually killed the
+ * session. This timeout converts a hang into a deterministic FAIL qa.result so
+ * the verifier still gets D2 ground truth and the pipeline keeps moving.
+ *
+ * Default 120s = 2× the per-step Playwright internal timeouts (5s nav + 5s
+ * canvas + 5s scene-running + 1.5s console + 5s offline-reload + cross-browser
+ * pass + smoke iframe = ~30-90s total budget). Env override:
+ * `CRUMB_QA_CHECK_TIMEOUT_MS` for CI smoke runs (drop to 30s) or debugging
+ * (raise to 5min).
+ */
+const QA_CHECK_TIMEOUT_MS = Number(process.env.CRUMB_QA_CHECK_TIMEOUT_MS) || 120_000;
+
+class QaCheckTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`qa-check exceeded ${timeoutMs}ms wall-clock — Playwright likely hung`);
+    this.name = 'QaCheckTimeoutError';
+  }
+}
+
+async function runQaCheckWithTimeout(
+  artifactPath: string,
+  acPredicates: ACPredicateItem[],
+  timeoutMs: number,
+): Promise<Awaited<ReturnType<typeof runQaCheck>>> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    const work = runQaCheck(artifactPath, acPredicates);
+    const sentinel = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new QaCheckTimeoutError(timeoutMs)), timeoutMs);
+    });
+    return await Promise.race([work, sentinel]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 /** Resolve a QaCheckEffect: run check, append kind=qa.result. Always emits, even on error. */
 export async function runQaCheckEffect(effect: QaCheckEffect, deps: QaRunnerDeps): Promise<void> {
   const artifactPath = resolvePath(deps.sessionDir, effect.artifact);
 
   let result;
   try {
-    result = await runQaCheck(artifactPath, effect.ac_predicates ?? []);
+    result = await runQaCheckWithTimeout(
+      artifactPath,
+      effect.ac_predicates ?? [],
+      QA_CHECK_TIMEOUT_MS,
+    );
   } catch (err) {
     // Even hard failures must produce a qa.result so the verifier can read D2.
     await deps.writer.append({
