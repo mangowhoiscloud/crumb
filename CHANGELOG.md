@@ -4,6 +4,20 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Dashboard DAG re-grounded against `src/reducer/index.ts` (Phase zones + 6 typed edges + done terminal) (2026-05-03)
+
+The Pipeline DAG drew a `verifier → coordinator → builder-fallback` arc through a coordinator routing node, plus a `verifier → validator` edge, neither of which exist in the actual reducer. User feedback: "지금 이 DAG 모양은 실제 절차에 맞는거야? 코드베이스로 그라운딩하고 좀 디벨롭할 사안 찾을 순 없나?" — every edge is now grounded against a specific `src/reducer/index.ts` line.
+
+- **Removed gaslit edges**:
+  - `verifier → coordinator → builder-fallback`: coordinator is host-inline (Hub-Ledger-Spoke per `wiki/concepts/bagelcode-orchestration-topology.md`); the reducer spawns builder-fallback **directly** when `judge.score` is FAIL+breaker_OPEN (line 300). No coordinator intermediation.
+  - `verifier → validator` as a routing edge: validator emits `kind=audit` only when anti-deception violations fire (reducer line 226). It's a **conditional side-effect**, not a routing handoff — now drawn as a dotted pink edge, marked off-graph at the bottom-right.
+- **Added missing edges** — `verifier → planner-lead` (FAIL+breaker_CLOSED rollback, line 309); `verifier → done` (PASS terminal, line 288); `user → {planner, builder, verifier}` direct intervene (`user.veto` line 322 + `user.intervene(goto=X)` line 396).
+- **`done` terminal node** at (770, 100) — fills lime + glow when any `kind=done` event arrives.
+- **6 edge type vocabulary** (palette aligned with `skills/mermaid-diagrams/SKILL.md`): `handoff` indigo solid (8 edges), `rollback` amber dashed (curves up), `fallback` red dashed (curves down), `terminal` green solid, `audit` pink dotted, `intervene` gray dotted.
+- **Phase A·B / C / D background zones** drawn as translucent SVG rects.
+- **`WEAVE_TARGET` map expanded** — `step.research → planner-lead` resume (line 546). New `weaveTargetForVerdict()` branches by verdict (PASS→done, FAIL+(builder-error≥3)→fallback, FAIL→planner). `edgePath()` curves rollback up-over and fallback down-under.
+- SVG viewBox widened 720×180 → 820×215.
+
 ### Added — Dashboard IDE-style grep highlight + ↑↓ nav across Logs / Transcript / Live feed (2026-05-03)
 
 The dashboard's text panels supported a substring filter that highlighted whole matching lines in faint blue (logs only), filtered entries (transcript), or had no search at all (live execution feed). User feedback: "grep 했을 때 해당되는 패턴 주황색으로 표시하고 위아래로 조작 가능(IDE처럼)하게 세팅이 아직 안되었거든." — they wanted the inline-substring orange highlight + IDE-style match navigation present in every modern editor.
