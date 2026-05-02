@@ -197,7 +197,7 @@ view refresh pattern (2024-2025 leaderboard hot-row mitigation).
 
 | Forbidden | Reason |
 |---|---|
-| ❌ npm bundlers (webpack / vite / parcel / esbuild) | produces output that needs `npm install` to evaluate; defeats "README대로 실행" |
+| ❌ npm bundlers (webpack / vite / parcel / esbuild) | produces output that needs `npm install` to evaluate; defeats "run as the README says" |
 | ❌ native engine output (Unity / Godot / Unreal binaries) | not portable, not LLM-emit-able in plain text |
 | ❌ Three.js / Babylon | outside the casual mobile envelope |
 | ❌ external asset URLs except embedded `data:` URIs and the Phaser CDN | breaks offline run |

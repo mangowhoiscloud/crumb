@@ -4,6 +4,23 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Sandwich KO → EN translation pass (PR-C-1) (2026-05-03)
+
+User directive: convert all `*.md` to English. Sandwiches first because they are runtime LLM context (read on every spawn). The audit identified 8 sandwich files under `agents/` totalling ~600 KO chars — far less than expected because most prose is already EN since the v3.4 multi-host pivot.
+
+Translated:
+- `agents/specialists/game-design.md` §2 forbidden table — `"README대로 실행"` → `"run as the README says"`.
+- `agents/specialists/concept-designer.md` — Royal Match pattern comment, anti-pattern bagelcode reference, "차용 룰" section header, gamestudio mapping see-also link.
+- `agents/specialists/visual-designer.md` — gamestudio mapping see-also link.
+- `agents/planner-lead.md` socratic ambiguity triggers — restructured to list KO + EN trigger groups separately (KO group preserved verbatim because it activates Korean user input recognition; EN group expanded with `"X or Y"`, `"should I..."`, `"which one"`, `"recommend"`, `"help me decide"`).
+
+Intentionally retained KO (trigger phrases — translating would break LLM activation):
+- `agents/specialists/game-design.md` §1.2 leaderboard markers: `"랭킹"` / `"점수 저장"` / `"기록"` / `"하이스코어"` (Korean pitch input → activates postgres profile).
+- `agents/planner-lead.md` socratic KO triggers: `"어떤 X 로 할까"` / `"고민 중"` / `"결정해줘"` / `"추천해줘"` (Korean ambiguity in user goal → activates socratic round).
+- All `.claude/skills/*/SKILL.md` `description` + `when_to_use` frontmatter (separate PR-C-2).
+
+After this PR the sandwich body prose is fully EN; the only KO that ships into runtime context is intentional trigger keywords. PR-C-2 (skills) + PR-C-3..N (wiki) follow.
+
 ### Added — `crumb_run` + `crumb_intervene` MCP write tools + 7 Claude Code slash commands + 2 hooks (2026-05-03)
 
 The MCP server registered 8 read-only `crumb_<verb>` tools (status / suggest / doctor / config / explain / debug / export / model). Spawning a session or intervening on one still required dropping to the CLI. Claude Code users had to context-switch between the natural-language skill and the terminal for any control-plane action. This PR adds the two write tools that close that loop, plus 7 user-facing slash commands and 2 SessionStart/Stop hooks so the host harness surfaces in-flight sessions automatically.

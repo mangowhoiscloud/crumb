@@ -38,7 +38,7 @@ combo_rule:
   visual_feedback_ms: 80
 
 difficulty_curve:
-  early_game_seconds: 10  # "free win" period (Royal Match 패턴)
+  early_game_seconds: 10  # "free win" period (Royal Match pattern)
   mid_game_difficulty: linear  # constant ramp
   late_game_strategy: time_pressure  # not piece scarcity
 ```
@@ -48,11 +48,11 @@ difficulty_curve:
 | Anti-pattern | Reason |
 |---|---|
 | Adding 5+ unique mechanics | Casual mobile games succeed with 1 binding constraint (BigDevSoon Void Balls "7-color palette") |
-| "Permadeath roguelite for casual user" | Genre mismatch — bagelcode 신작팀 = mobile casual |
+| "Permadeath roguelite for casual user" | Genre mismatch — Bagelcode new-IP team = mobile casual |
 | Time limit > 90s default | Mobile session length = 30-60s |
 | Real-time multiplayer | Out of scope for prototype |
 
-## Royal Match / Two Dots / Candy Crush 차용 룰 (mobile match-3 reference)
+## Borrowed rules from Royal Match / Two Dots / Candy Crush (mobile match-3 reference)
 
 - **First 5 levels = free wins** (player retention, Royal Match)
 - **Combo cascades > base match** (positive feedback loop)
@@ -91,7 +91,7 @@ data={core_mechanic, win_condition, lose_condition, combo_rule}
 ## See also
 
 - [[bagelcode-mobile-game-tech-2026]] — Phaser HTML5 reference patterns
-- [[bagelcode-gamestudio-subagents-2026]] §10 — gamestudio sr_game_designer 매핑
+- [[bagelcode-gamestudio-subagents-2026]] §10 — gamestudio sr_game_designer mapping
 - `agents/researcher.md` — successor actor (v3.3 promoted from specialist; market reference + video evidence)
 - `agents/specialists/visual-designer.md` — sister specialist (color/UX)
 - `agents/specialists/game-design.md` — binding envelope + DESIGN.md synth format
