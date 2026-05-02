@@ -186,6 +186,19 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         idleMs: deps.perSpawnIdleTimeoutMs ?? PER_SPAWN_IDLE_TIMEOUT_MS,
       });
 
+      // v3.4 cross_provider wiring (AGENTS.md §136). Resolve the latest build
+      // event's provider when spawning the verifier so `crumb event` can stamp
+      // metadata.cross_provider on the judge.score it emits. Without this, the
+      // anti-deception Rule 4 self-bias check still works (it compares
+      // metadata.provider on judge.score vs. build event), but
+      // tui/format.ts:43 / helpers/status.ts:144 / exporter/otel.ts:66 all
+      // read metadata.cross_provider directly and fall back to "⚠" when
+      // undefined — every real session showed a bogus same-provider warning.
+      const builderProvider =
+        effect.actor === 'verifier'
+          ? await readLatestBuildProvider(deps.transcriptPath)
+          : undefined;
+
       let result;
       try {
         result = await adapter.spawn({
@@ -203,6 +216,8 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
           effort: binding?.effort,
           signal: timers.controller.signal,
           onStdoutActivity: timers.onStdoutActivity,
+          provider: binding?.provider,
+          ...(builderProvider ? { builderProvider } : {}),
         });
       } finally {
         timers.cleanup();
@@ -444,6 +459,36 @@ function setupSpawnTimers(opts: { wallClockMs: number; idleMs: number }): SpawnT
     if (idleTimer) clearTimeout(idleTimer);
   };
   return handles;
+}
+
+/**
+ * v3.4 — scan the transcript for the latest `kind=build` event and return its
+ * `metadata.provider`. Used by the verifier spawn path so `crumb event` can
+ * stamp `metadata.cross_provider` on judge.score (AGENTS.md §136). Returns
+ * `undefined` if no build event yet, or if the build event omitted provider
+ * (which is itself a separate gap — AGENTS.md §135 invariant — outside this
+ * PR's scope).
+ */
+export async function readLatestBuildProvider(transcriptPath: string): Promise<string | undefined> {
+  if (!existsSync(transcriptPath)) return undefined;
+  const raw = await readFile(transcriptPath, 'utf-8');
+  const lines = raw.split('\n');
+  // Walk backwards for the latest build event.
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].trim();
+    if (line.length === 0) continue;
+    let evt: { kind?: string; metadata?: { provider?: string } } | null = null;
+    try {
+      evt = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (evt && evt.kind === 'build') {
+      const p = evt.metadata?.provider;
+      return typeof p === 'string' && p.length > 0 ? p : undefined;
+    }
+  }
+  return undefined;
 }
 
 const LENGTH_CONTEXT_ARTIFACTS = ['spec.md', 'DESIGN.md', 'tuning.json', 'game.html'] as const;
