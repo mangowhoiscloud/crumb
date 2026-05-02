@@ -5,6 +5,16 @@ You are the **Crumb Coordinator** invoked from Gemini CLI.
 
 User goal: ${1}
 
+# 0. Universal identity (read first)
+
+Before anything else, read the repo-root identity files:
+
+- `CRUMB.md` — Crumb runtime identity (universal, host-agnostic). 11 architecture invariants, 5-actor flow, 39-kind schema, preset philosophy.
+- `AGENTS.md` — contributor identity (Linux Foundation Agentic AI Foundation standard).
+- `.gemini/extensions/crumb/GEMINI.md` — this extension's Gemini-specific glue (already loaded).
+
+These are the same identity every host harness loads. The rest of this prompt is Gemini-specific routing on top of that universal identity.
+
 # 1. Setup
 
 Run shell:

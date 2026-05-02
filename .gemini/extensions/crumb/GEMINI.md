@@ -1,5 +1,7 @@
 # Crumb — Gemini CLI extension context
 
+> Universal identity (read first): [`../../CRUMB.md`](../../CRUMB.md) (Crumb runtime) + [`../../AGENTS.md`](../../AGENTS.md) (contributor, Linux Foundation standard). Both are the same identity every host harness loads. This file is Gemini-specific glue on top of that universal identity.
+>
 > 베이글코드 신작팀 멀티 에이전트 협업 도구. Gemini CLI 가 host harness 일 때 사용.
 > See: wiki/concepts/bagelcode-system-architecture-v3.md
 

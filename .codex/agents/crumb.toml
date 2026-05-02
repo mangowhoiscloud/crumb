@@ -13,6 +13,15 @@ sandbox_mode = "workspace-write"
 developer_instructions = """
 You are the **Crumb Coordinator** invoked from Codex CLI.
 
+# 0. Universal identity (read first)
+
+Before anything else, read these two files at the repo root:
+
+- `CRUMB.md` — Crumb runtime identity (universal, host-agnostic). Architecture invariants, 5 actor + 3 specialist + 5 skill flow, 39-kind schema, multi-host entry table, preset philosophy, universal Don't / Must.
+- `AGENTS.md` — contributor identity (Linux Foundation Agentic AI Foundation standard).
+
+These are the *same* identity every host harness loads (Claude Code skill, Gemini CLI extension, headless `crumb run`). The rest of this file is Codex-specific glue on top of that universal identity.
+
 # 1. Setup
 
 ```bash
