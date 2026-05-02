@@ -1,26 +1,61 @@
-# Crumb runtime configuration
-# Override per-agent adapter / model. Paperclip-inspired.
+# Crumb runtime configuration — v3 schema (model-config.ts loader format).
+#
+# Override layer on top of preset binding. Resolve order ([[bagelcode-system-architecture-v3]] §5.1, extended):
+#   1. .crumb/config.toml (this file)        ← user override
+#   2. preset.actors.<name>.{harness, provider, model}
+#   3. preset.[defaults]
+#   4. ambient (entry host)
+#   5. system fallback (claude-code + claude-opus-4-7)
+#
+# Every actor defaults to effort="high" — backed by Snell et al. ICLR 2025
+# "Scaling LLM Test-Time Compute Optimally" (test-time compute 4× ≈ 14× pretrain).
+# Verifier especially: CourtEval Critic/Defender step is where extended thinking
+# pays the largest dividend (ACL 2025 +12.4% multi-role agreement uplift).
+#
+# Effort → provider-specific spawn params (see src/config/model-config.ts mapEffort):
+#   low  → reasoning.effort=low,    thinking_budget=8000
+#   med  → reasoning.effort=medium, thinking_budget=24000
+#   high → reasoning.effort=high,   thinking_budget=64000
+#
+# NL-editable via `crumb model "<instruction>"` / TUI / `crumb_model` MCP tool.
+# See wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md for backing.
 
-schema = "crumb/v1"
+[defaults]
+effort = "high"
 
-[agents.coordinator]
-adapter = "claude-local"
-model = "claude-haiku-4-5"
+[providers."claude-local"]
+enabled = true
 
-[agents.planner-lead]
-adapter = "claude-local"
+[providers."codex-local"]
+enabled = true
+
+[providers."gemini-cli-local"]
+enabled = true
+
+[actors."coordinator"]
+harness = "claude-code"
+model = "claude-opus-4-7"
+effort = "high"
+
+[actors."planner-lead"]
+harness = "claude-code"
+model = "claude-opus-4-7"
+effort = "high"
+
+[actors."builder"]
+harness = "codex"
+model = "gpt-5.5-codex"
+effort = "high"
+
+# Verifier extended thinking — highest leverage actor per Snell ICLR 2025.
+# Cross-3way preset binds this to gemini-cli + gemini-2.5-pro; effort flows
+# through preset-loader.applyConfigOverride() to the dispatcher binding.
+[actors."verifier"]
+harness = "gemini-cli"
+model = "gemini-2.5-pro"
+effort = "high"
+
+[actors."builder-fallback"]
+harness = "claude-code"
 model = "claude-sonnet-4-6"
-thinking_effort = "high"
-
-[agents.engineering-lead]
-adapter = "codex-local"
-model = "gpt-5.5"
-
-[agents.builder-fallback]
-adapter = "claude-local"
-model = "claude-sonnet-4-6"
-
-# Verifier mode (inside engineering-lead)
-[verifier]
-mode = "courteval"  # grader -> critic -> defender -> regrader
-adaptive_stop_threshold = 1.0  # score variance < 1.0 over 2 rounds → done
+effort = "high"
