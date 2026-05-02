@@ -69,7 +69,7 @@ describe('anti-deception validator', () => {
     expect(result.scores.D4?.score).toBe(2);
   });
 
-  it('Rule 4: same-provider verifier raises self_bias_risk warn', () => {
+  it('Rule 4: same-provider verifier records self_bias_risk + downgrades PASS → PARTIAL (G-A)', () => {
     const result = checkAntiDeception({
       judgeScore: judgeScore({ metadata: { provider: 'openai' } }),
       qaResult: { exec_exit_code: 0 },
@@ -77,6 +77,61 @@ describe('anti-deception validator', () => {
       builderProvider: 'openai',
     });
     expect(result.violations).toContain('self_bias_risk_same_provider');
+    expect(result.scores.verdict).toBe('PARTIAL');
+  });
+
+  it('Rule 4: cross-provider PASS unchanged (verifier ≠ builder provider)', () => {
+    const result = checkAntiDeception({
+      judgeScore: judgeScore({ metadata: { provider: 'google' } }),
+      qaResult: { exec_exit_code: 0 },
+      autoScores: { D3_auto: 4, D4: 5, D5_auto: 4 },
+      builderProvider: 'openai',
+    });
+    expect(result.violations).not.toContain('self_bias_risk_same_provider');
+    expect(result.scores.verdict).toBe('PASS');
+  });
+
+  it('Rule 4: same-provider FAIL stays FAIL (downgrade only applies to PASS)', () => {
+    const result = checkAntiDeception({
+      judgeScore: judgeScore({
+        metadata: { provider: 'openai' },
+        scores: {
+          D1: { score: 1, source: 'verifier-llm' },
+          D2: { score: 5, source: 'qa-check-effect' },
+          D3: { score: 1, source: 'verifier-llm', semantic: 1 },
+          D4: { score: 5, source: 'reducer-auto' },
+          D5: { score: 1, source: 'verifier-llm', quality: 1 },
+          D6: { score: 5, source: 'qa-check-effect' },
+          verdict: 'FAIL',
+        },
+      }),
+      qaResult: { exec_exit_code: 0 },
+      autoScores: { D3_auto: 1, D4: 5, D5_auto: 1 },
+      builderProvider: 'openai',
+    });
+    expect(result.violations).toContain('self_bias_risk_same_provider');
+    expect(result.scores.verdict).toBe('FAIL');
+  });
+
+  it('Rule 4: same-provider PARTIAL stays PARTIAL (idempotent with floor downgrade)', () => {
+    const result = checkAntiDeception({
+      judgeScore: judgeScore({
+        metadata: { provider: 'openai' },
+        scores: {
+          D1: { score: 3, source: 'verifier-llm' },
+          D2: { score: 4, source: 'qa-check-effect' },
+          D3: { score: 3, source: 'verifier-llm', semantic: 3 },
+          D4: { score: 4, source: 'reducer-auto' },
+          D5: { score: 3, source: 'verifier-llm', quality: 3 },
+          D6: { score: 4, source: 'qa-check-effect' },
+          verdict: 'PARTIAL',
+        },
+      }),
+      qaResult: { exec_exit_code: 0 },
+      autoScores: { D3_auto: 3, D4: 4, D5_auto: 3 },
+      builderProvider: 'openai',
+    });
+    expect(result.scores.verdict).toBe('PARTIAL');
   });
 
   it('D3/D5 split: aggregate uses combined (verifier llm + reducer auto) avg', () => {

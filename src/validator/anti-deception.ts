@@ -96,9 +96,23 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
   }
 
   // ── Rule 4 — self_bias_risk_same_provider ──────────────────────────────────
-  // Warn-only (does not force-correct).
+  // Verdict-downgrade enforcement (G-A from
+  // [[bagelcode-scoring-ratchet-frontier-2026-05-02]] §7 P1).
+  //
+  // Stureborg et al. EMNLP 2024 measured PASS-rate inflation of +14-22% when
+  // builder and verifier share the same provider. Prior behavior was warn-only
+  // (record violation, don't act). New behavior: demote PASS → PARTIAL so the
+  // user must explicitly approve via `kind=user.approve` (G1 surface).
+  // FAIL/REJECT/PARTIAL are unchanged — self-bias matters when the judge is
+  // letting the builder's work through, not when it's already saying no.
+  //
+  // The verdict downgrade is applied below alongside the aggregate-floor
+  // recomputation so the violation list and the verdict update atomically.
   const verifierProvider = input.judgeScore.metadata?.provider;
-  if (verifierProvider && input.builderProvider && verifierProvider === input.builderProvider) {
+  const sameProvider = Boolean(
+    verifierProvider && input.builderProvider && verifierProvider === input.builderProvider,
+  );
+  if (sameProvider) {
     violations.push('self_bias_risk_same_provider');
   }
 
@@ -126,6 +140,14 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
     ? combineAggregate(scores, input.autoScores)
     : sumDimsAsIs(scores);
   if (scores.verdict === 'PASS' && (scores.aggregate ?? 0) < 24) scores.verdict = 'PARTIAL';
+
+  // G-A — Rule 4 verdict downgrade. Applied AFTER the aggregate-floor check so
+  // a PASS that was already demoted to PARTIAL by the floor stays PARTIAL
+  // (idempotent) and a PASS that survives the floor still gets demoted on
+  // self-bias. Order matters: floor first, then bias.
+  if (sameProvider && scores.verdict === 'PASS') {
+    scores.verdict = 'PARTIAL';
+  }
 
   scores.audit_violations = violations;
   return { scores, violations };
