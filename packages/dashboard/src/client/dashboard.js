@@ -321,61 +321,126 @@ fetch('/api/sessions').then(r => r.json()).then(payload => {
   else renderSessionList();
 }).catch(() => {});
 
-// ─── v3.4 Console — DAG topology + weaving ────────────────────────────────
-
-// 9-actor pipeline DAG. Edges encode the canonical reducer routing flow.
-// Coordinates are laid out by hand in 720×180 SVG space.
+// ─── v3.5 Console — DAG topology + weaving ────────────────────────────────
+//
+// 9-actor pipeline DAG, grounded against src/reducer/index.ts:
+//   goal → spawn planner-lead                              (line 100)
+//   spec → spawn builder                                   (line 137)
+//   build → qa_check effect                                (line 158)
+//   qa.result → spawn verifier                             (line 182)
+//   judge.score PASS → done(verdict_pass)                  (line 288)
+//   judge.score FAIL+breaker_OPEN  → spawn builder-fallback (line 300)
+//   judge.score FAIL+breaker_CLOSED → rollback planner-lead (line 309)
+//   handoff.requested(researcher) → spawn researcher       (line 528)
+//   step.research → spawn planner-lead (resume phase B)    (line 546)
+//   anti-deception violation → append kind=audit (validator) (line 226)
+//
+// Edge type vocabulary (visual semantics aligned with mermaid-diagrams skill):
+//   handoff   indigo solid — standard reducer-driven spawn
+//   rollback  amber dashed — verifier FAIL → planner respec
+//   fallback  red dashed   — verifier FAIL + breaker OPEN → builder-fallback
+//   terminal  green solid  — verifier PASS → done
+//   audit     pink dotted  — anti-deception side-effect (conditional, not routing)
+//   intervene gray dotted  — user.veto / user.intervene direct jump
 const DAG_NODES = {
-  user:               { x: 60,  y: 90,  label: 'user' },
-  coordinator:        { x: 160, y: 90,  label: 'coord' },
-  'planner-lead':     { x: 260, y: 40,  label: 'planner' },
-  researcher:         { x: 360, y: 40,  label: 'research' },
-  builder:            { x: 460, y: 40,  label: 'builder' },
-  'builder-fallback': { x: 460, y: 130, label: 'fallback' },
-  system:             { x: 560, y: 90,  label: 'qa-check' },
-  verifier:           { x: 640, y: 90,  label: 'verifier' },
-  validator:          { x: 320, y: 140, label: 'validator' },
+  user:               { x: 50,  y: 100, label: 'user',     phase: null },
+  coordinator:        { x: 140, y: 100, label: 'coord',    phase: null },
+  'planner-lead':     { x: 250, y: 50,  label: 'planner',  phase: 'A' },
+  researcher:         { x: 360, y: 50,  label: 'research', phase: 'A' },
+  builder:            { x: 470, y: 50,  label: 'builder',  phase: 'C' },
+  'builder-fallback': { x: 470, y: 155, label: 'fallback', phase: 'C' },
+  system:             { x: 580, y: 100, label: 'qa-check', phase: 'C' },
+  verifier:           { x: 680, y: 100, label: 'verifier', phase: 'D' },
+  done:               { x: 770, y: 100, label: 'done',     phase: 'D' },
+  validator:          { x: 680, y: 175, label: 'validator',phase: null },
 };
+
+// Phase background zones — Phase A (planner+researcher = Socratic+Concept,
+// Researcher, Design+Synth), Phase C (builder+qa-check = Build+QA), Phase D
+// (verifier+done = Verify+Terminal). Phase B is folded into A's planner since
+// planner-lead handles A's Socratic AND B's Design+Synth (two-phase spawn).
+const DAG_PHASES = [
+  { id: 'A', label: 'Phase A·B — Spec',  x: 200, y: 10, w: 220, h: 80 },
+  { id: 'C', label: 'Phase C — Build/QA', x: 425, y: 10, w: 195, h: 195 },
+  { id: 'D', label: 'Phase D — Verify',   x: 625, y: 10, w: 175, h: 195 },
+];
+
 const DAG_EDGES = [
-  ['user','coordinator'],
-  ['coordinator','planner-lead'],
-  ['planner-lead','researcher'],
-  ['researcher','planner-lead'],
-  ['planner-lead','builder'],
-  ['builder','system'],
-  ['system','verifier'],
-  ['verifier','coordinator'],
-  ['coordinator','builder-fallback'],
-  ['builder-fallback','system'],
-  ['verifier','validator'],
+  // handoff (standard reducer spawn flow)
+  ['user',             'coordinator',      'handoff'],
+  ['coordinator',      'planner-lead',     'handoff'],
+  ['planner-lead',     'researcher',       'handoff'],
+  ['researcher',       'planner-lead',     'handoff'],
+  ['planner-lead',     'builder',          'handoff'],
+  ['builder',          'system',           'handoff'],
+  ['system',           'verifier',         'handoff'],
+  ['builder-fallback', 'system',           'handoff'],
+  // rollback (FAIL + breaker_CLOSED → planner respec, line 309)
+  ['verifier',         'planner-lead',     'rollback'],
+  // fallback (FAIL + breaker_OPEN → builder-fallback direct, line 300)
+  ['verifier',         'builder-fallback', 'fallback'],
+  // terminal (PASS → done, line 288)
+  ['verifier',         'done',             'terminal'],
+  // audit (anti-deception side-effect, conditional — line 226)
+  ['verifier',         'validator',        'audit'],
+  // intervene (user.veto / user.intervene goto=X, lines 322 + 396)
+  ['user',             'planner-lead',     'intervene'],
+  ['user',             'builder',          'intervene'],
+  ['user',             'verifier',         'intervene'],
 ];
 
 function renderDag() {
   const svg = $('dag-svg');
   if (!svg) return;
-  // Build edges first (under nodes).
-  const edgesSvg = DAG_EDGES.map(([from, to]) => {
+  // Phase zone rects (under everything)
+  const zonesSvg = DAG_PHASES.map(p =>
+    '<g class="dag-phase phase-' + p.id + '">' +
+      '<rect x="' + p.x + '" y="' + p.y + '" width="' + p.w + '" height="' + p.h + '" rx="8" />' +
+      '<text x="' + (p.x + 8) + '" y="' + (p.y + 14) + '" class="phase-label">' + escapeHTML(p.label) + '</text>' +
+    '</g>'
+  ).join('');
+  // Edges (typed) — paths use slight curves where they would overlap straight neighbors.
+  const edgesSvg = DAG_EDGES.map(([from, to, type]) => {
     const a = DAG_NODES[from], b = DAG_NODES[to];
     if (!a || !b) return '';
-    return '<path class="dag-edge" d="M' + a.x + ',' + a.y + ' L' + b.x + ',' + b.y + '" />';
+    return '<path class="dag-edge edge-' + type + '" d="' + edgePath(a, b, from, to) + '" />';
   }).join('');
   const events = activeSession ? (eventCache.get(activeSession) ?? []) : [];
   const lastEvt = events[events.length - 1];
   const lastActor = lastEvt?.from;
   const recentActors = new Set(events.slice(-8).map(e => e.from));
+  const isDone = events.some(e => e.kind === 'done');
   const nodesSvg = Object.entries(DAG_NODES).map(([actor, n]) => {
-    const cls = ['dag-node'];
+    const cls = ['dag-node', 'node-' + actor.replace(/[^a-z]/gi, '-')];
     if (lastActor === actor) cls.push('active');
     else if (recentActors.has(actor)) cls.push('recent');
+    if (actor === 'done' && isDone) cls.push('active');
     return '<g class="' + cls.join(' ') + '" data-actor="' + actor + '">' +
       '<circle cx="' + n.x + '" cy="' + n.y + '" r="22" />' +
       '<text x="' + n.x + '" y="' + (n.y + 3) + '">' + escapeHTML(n.label) + '</text>' +
     '</g>';
   }).join('');
-  // Container for ripple overlays — appended/removed dynamically.
-  svg.innerHTML = '<g id="dag-edges">' + edgesSvg + '</g>' +
+  svg.innerHTML = '<g id="dag-zones">' + zonesSvg + '</g>' +
+                  '<g id="dag-edges">' + edgesSvg + '</g>' +
                   '<g id="dag-ripples"></g>' +
                   '<g id="dag-nodes">' + nodesSvg + '</g>';
+}
+
+// Most edges are straight lines between node centers; the verifier→planner
+// rollback would overlap the planner→builder→system→verifier arc, so we curve
+// it upward over the top. Same for verifier→fallback (curves down).
+function edgePath(a, b, from, to) {
+  if (from === 'verifier' && to === 'planner-lead') {
+    // Curve up & over the top
+    const cx = (a.x + b.x) / 2, cy = Math.min(a.y, b.y) - 40;
+    return 'M' + a.x + ',' + a.y + ' Q' + cx + ',' + cy + ' ' + b.x + ',' + b.y;
+  }
+  if (from === 'verifier' && to === 'builder-fallback') {
+    // Curve down under the bottom
+    const cx = (a.x + b.x) / 2, cy = Math.max(a.y, b.y) + 30;
+    return 'M' + a.x + ',' + a.y + ' Q' + cx + ',' + cy + ' ' + b.x + ',' + b.y;
+  }
+  return 'M' + a.x + ',' + a.y + ' L' + b.x + ',' + b.y;
 }
 
 // Pipeline position narrative — 'where am I in the DAG' for the detail panel.
@@ -405,7 +470,7 @@ function rippleEdge(fromActor, toActor) {
   if (!ripples) return;
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   path.setAttribute('class', 'dag-ripple flow');
-  path.setAttribute('d', 'M' + a.x + ',' + a.y + ' L' + b.x + ',' + b.y);
+  path.setAttribute('d', edgePath(a, b, fromActor, toActor));
   ripples.appendChild(path);
   setTimeout(() => path.remove(), 1500);
 }
@@ -414,22 +479,45 @@ function rippleEdge(fromActor, toActor) {
 // the next-likely target. The map encodes "after kind X, the next message
 // usually goes to actor Y" — derived from the reducer's switch/case.
 const WEAVE_TARGET = {
-  'goal':              'coordinator',
-  'session.start':     null,
-  'question.socratic': 'user',
-  'answer.socratic':   'planner-lead',
-  'spec':              'builder',
-  'build':             'system',         // qa-check effect
-  'qa.result':         'verifier',
-  'judge.score':       'coordinator',
-  'verify.result':     'coordinator',
-  'handoff.requested': null,             // payload.to drives it
-  'step.research.video': null,
+  'goal':                'coordinator',
+  'session.start':       null,
+  'question.socratic':   'user',
+  'answer.socratic':     'planner-lead',
+  'spec':                'builder',
+  'spec.update':         'builder',
+  'build':               'system',         // qa-check effect (line 158)
+  'qa.result':           'verifier',       // line 182
+  'step.research':       'planner-lead',   // line 546 — researcher → resume planner
+  'step.research.video': null,             // intermediate, no routing
+  'handoff.requested':   null,             // payload.to drives it (researcher path: line 528)
+  'audit':               null,             // validator side-effect, no onward routing
 };
+// Verdict-based branching for verify.result / judge.score. PASS → done,
+// FAIL/REJECT splits on circuit breaker state at the time of emission. We
+// can't read state from the reducer here, but we can fall back to the
+// most-likely path (rollback to planner) when breaker info isn't visible.
+function weaveTargetForVerdict(msg) {
+  const verdict = msg.scores?.verdict ?? msg.data?.verdict;
+  if (verdict === 'PASS') return 'done';
+  if (verdict === 'PARTIAL') return null; // user-confirm hook, no spawn
+  if (verdict === 'FAIL' || verdict === 'REJECT') {
+    // Heuristic: if the active session has accumulated ≥3 builder errors, the
+    // breaker is OPEN → fallback. Otherwise rollback to planner.
+    const events = activeSession ? (eventCache.get(activeSession) ?? []) : [];
+    const builderErrors = events.filter(e => e.from === 'builder' && e.kind === 'error').length;
+    return builderErrors >= 3 ? 'builder-fallback' : 'planner-lead';
+  }
+  return null;
+}
 function weaveOnAppend(msg) {
-  const target = msg.kind === 'handoff.requested'
-    ? (msg.to || msg.data?.to || null)
-    : WEAVE_TARGET[msg.kind];
+  let target;
+  if (msg.kind === 'handoff.requested') {
+    target = msg.to || msg.data?.to || null;
+  } else if (msg.kind === 'verify.result' || msg.kind === 'judge.score') {
+    target = weaveTargetForVerdict(msg);
+  } else {
+    target = WEAVE_TARGET[msg.kind];
+  }
   if (target && DAG_NODES[target]) rippleEdge(msg.from, target);
   renderDag();
 }

@@ -213,8 +213,25 @@ section.dag h2 {
 }
 .dag-svg {
   width: 100%;
-  height: 180px;
+  height: 215px;
   display: block;
+}
+/* Phase background zones — translucent so node/edge contrast stays high */
+.dag-phase rect {
+  fill: rgba(94, 106, 210, 0.04);   /* indigo wash matching --primary */
+  stroke: rgba(94, 106, 210, 0.18);
+  stroke-width: 0.5;
+  stroke-dasharray: 4 3;
+}
+.dag-phase.phase-A rect { fill: rgba(124, 58, 237, 0.04); stroke: rgba(124, 58, 237, 0.20); }  /* violet — Spec */
+.dag-phase.phase-C rect { fill: rgba(202, 138, 4, 0.04);  stroke: rgba(202, 138, 4, 0.22); }   /* amber — Build/QA */
+.dag-phase.phase-D rect { fill: rgba(22, 163, 74, 0.04);  stroke: rgba(22, 163, 74, 0.22); }   /* green — Verify */
+.dag-phase .phase-label {
+  font-size: 8px;
+  font-family: ui-monospace, monospace;
+  fill: var(--ink-tertiary);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
 }
 .dag-node circle {
   fill: var(--surface-2);
@@ -240,9 +257,36 @@ section.dag h2 {
 .dag-node.active text { fill: var(--canvas); font-weight: 600; }
 .dag-edge {
   fill: none;
-  stroke: var(--hairline);
-  stroke-width: 1;
+  stroke-width: 1.2;
+}
+/* Typed edges — semantics match src/reducer/index.ts spawn / rollback / done flows */
+.dag-edge.edge-handoff   { stroke: var(--primary); stroke-dasharray: none; opacity: 0.7; }
+.dag-edge.edge-rollback  { stroke: #d97706; stroke-dasharray: 5 3; opacity: 0.85; }   /* amber */
+.dag-edge.edge-fallback  { stroke: #dc2626; stroke-dasharray: 5 3; opacity: 0.85; }   /* red */
+.dag-edge.edge-terminal  { stroke: var(--lime); stroke-dasharray: none; stroke-width: 1.6; opacity: 0.9; }
+.dag-edge.edge-audit     { stroke: var(--audit-fg); stroke-dasharray: 1 3; opacity: 0.6; }   /* dotted pink */
+.dag-edge.edge-intervene { stroke: var(--ink-tertiary); stroke-dasharray: 1 3; opacity: 0.4; }
+/* Done node styling — square-ish badge, green when terminal */
+.dag-node.node-done circle {
+  rx: 6; ry: 6;
+  fill: var(--surface-2);
+  stroke: var(--lime);
+  stroke-width: 1.5;
   stroke-dasharray: 2 2;
+  opacity: 0.6;
+}
+.dag-node.node-done.active circle {
+  fill: var(--lime);
+  stroke: var(--lime);
+  filter: drop-shadow(0 0 8px var(--lime));
+  stroke-dasharray: none;
+  opacity: 1;
+}
+/* Validator off-graph — pink rim to signal audit/side-effect, no fill highlight */
+.dag-node.node-validator circle {
+  stroke: var(--audit-fg);
+  stroke-dasharray: 2 2;
+  opacity: 0.55;
 }
 .dag-ripple {
   fill: none;

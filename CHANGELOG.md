@@ -4,6 +4,28 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Dashboard DAG re-grounded against `src/reducer/index.ts` (Phase zones + 6 typed edges + done terminal) (2026-05-03)
+
+The Pipeline DAG drew a `verifier → coordinator → builder-fallback` arc through a coordinator routing node, plus a `verifier → validator` edge, neither of which exist in the actual reducer. User feedback: "지금 이 DAG 모양은 실제 절차에 맞는거야? 코드베이스로 그라운딩하고 좀 디벨롭할 사안 찾을 순 없나?" — every edge is now grounded against a specific `src/reducer/index.ts` line.
+
+- **Removed gaslit edges**:
+  - `verifier → coordinator → builder-fallback`: coordinator is host-inline (Hub-Ledger-Spoke per `wiki/concepts/bagelcode-orchestration-topology.md`); the reducer spawns builder-fallback **directly** when `judge.score` is FAIL+breaker_OPEN (line 300). No coordinator intermediation.
+  - `verifier → validator` as a routing edge: validator emits `kind=audit` only when anti-deception violations fire (reducer line 226). It's a **conditional side-effect**, not a routing handoff — now drawn as a dotted pink edge, marked off-graph at the bottom-right.
+- **Added missing edges** — `verifier → planner-lead` (FAIL+breaker_CLOSED rollback, line 309, **most common failure path**); `verifier → done` (PASS terminal, line 288); `user → {planner, builder, verifier}` direct intervene (`user.veto` line 322 + `user.intervene(goto=X)` line 396).
+- **`done` terminal node** at (770, 100) — square-ish dashed badge in default state, fills lime + glow when any `kind=done` event arrives (any of 7 reasons: `verdict_pass`, `too_many_respec`, `too_many_verify`, `ratchet_revert`, `adaptive_stop`, `token_exhausted`, `wall_clock_exhausted`, `user_approve_partial`).
+- **6 edge type vocabulary** with visual semantics (palette aligned with `skills/mermaid-diagrams/SKILL.md`):
+  - `handoff` indigo solid — standard reducer-driven spawn (8 edges)
+  - `rollback` amber dashed — `verifier → planner-lead` curves up over the top
+  - `fallback` red dashed — `verifier → builder-fallback` curves down
+  - `terminal` green solid — `verifier → done` PASS path
+  - `audit` pink dotted — `verifier ⇢ validator` conditional side-effect
+  - `intervene` gray dotted — `user ⇢ {planner, builder, verifier}` direct jump
+- **Phase background zones** — Phase A·B (planner+researcher, violet wash), Phase C (builder+qa-check, amber wash), Phase D (verifier+done, green wash) drawn as translucent SVG rects under nodes/edges, label in upper-left corner.
+- **`WEAVE_TARGET` map expanded** — adds `step.research` (researcher → resume planner, line 546), `spec.update`, `audit` (no onward routing). New `weaveTargetForVerdict()` branches `verify.result` / `judge.score` ripples by verdict: PASS → done, FAIL+(builder-error-count ≥ 3) → fallback, FAIL → planner.
+- **`edgePath()` curving** — `verifier → planner-lead` (rollback) curves up & over; `verifier → builder-fallback` (fallback) curves down & under; the rest stay straight. Same curving applies to ripple animations via `rippleEdge`.
+- **SVG viewBox** widened 720×180 → 820×215 to accommodate done terminal + Phase zone labels.
+- Verified server-side: served HTML contains 14 typed-edge / phase-zone / done-node / validator markers; dashboard CI sweep 341/342 (1 flaky `inbox/watcher.test.ts` chokidar polling test, unrelated to client-only changes — passes in isolation).
+
 ### Added — Dashboard live exec feed: Claude-Code-style stream-json narrative (2026-05-03)
 
 The per-session live execution feed (above the chat input) was dumping spawn-log stream-json as raw text. User feedback: "이건 세션 내 채팅 입력창 위에 붙어있어야 해" — the user wants the same `⏺` / `⎿` / `✓` narrative bubbles they see inside Claude Code, faithfully mirrored in the dashboard so they can watch what the agent is doing without context-switching to the terminal.
