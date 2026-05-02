@@ -4,6 +4,16 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — Scoring + ratchet frontier survey (2026-05-02)
+
+`wiki/synthesis/bagelcode-scoring-ratchet-frontier-2026-05-02.md` ingested. Frontier verdict on whether the multi-agent "scoring + ratchet" pattern (verifier produces D1-D6 → iterate until PASS or variance-based adaptive_stop) actually raises quality, and what 2026 alternatives exist.
+
+- **Validity evidence** (CourtEval ACL 2025 +12.4%, Reflexion HumanEval +11pp, Self-Refine HumanEval +8.7pp, Khan NeurIPS 2025 multi-agent debate +8.7%, Arena-Hard ρ=0.89 vs human votes).
+- **Failure modes with magnitudes** — position bias 65-75% (Wang IJCNLP-AACL 2025), self-preference +6% (Panickssery NeurIPS 2024), sycophancy 47-58% (Sharma ICLR 2024), Goodhart divergence after round 4 (Eisenstein DeepMind 2024), same-provider verifier inflation +14-22% (Stureborg EMNLP 2024).
+- **2026 frontier convergence** on deterministic gate + verifier test-time compute. Multi-agent debate / PRM / self-refine retreating in production (AutoGen 0.4 single-agent first / Cognition Devin "Don't Build Multi-Agents" Jun 2025 / DeepSeek-R1 PRM polished → rule-based reward / SWE-bench top10 all exec-based).
+- **Crumb alignment matrix** — defends ~60-70% of 2026 failure modes (qa_check D2/D6 ground truth + CourtEval intra-debate + variance adaptive_stop + append-only ULID); exposed gaps: verifier self-bias enforcement (G-A), Goodhart drift cap (G-B), length normalization (G-C), composite gaming (G-D), Playwright optional → required (G-E).
+- **P0 recommendations queued for follow-up PRs**: (1) verifier extended thinking default high in presets, (2) Playwright smoke run mandatory in qa-runner.
+
 ### Fixed — Adapter empty-prompt crash blocks every real subprocess run (2026-05-02)
 
 Discovered while smoke-testing v3.3 against `--preset solo`: every real subprocess spawn died on the first actor with `error: Input must be provided either through stdin or as a prompt argument when using --print` (claude-local exit 1 in 3.7s). Root cause: most reducer spawn effects (goal → planner-lead, spec → builder, qa.result → verifier, fallback → builder-fallback) intentionally omit `prompt` because the actor's job is fully described by the sandwich — but the adapters then forwarded `req.prompt ?? ''` to the host CLI, and `claude -p ""` / `gemini -p ""` reject empty input. Codex's `exec --prompt <text>` was conditionally appended, so codex sat waiting on stdin instead of crashing.
