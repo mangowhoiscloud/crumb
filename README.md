@@ -80,11 +80,47 @@ crumb copy-artifacts v1 --to ./demo
 ## Inspect a session
 
 ```bash
-ls sessions/                                          # one ULID-named directory
-jq -r '"\(.kind)\t\(.from)"' sessions/<id>/transcript.jsonl
-open sessions/<id>/index.html                          # post-session HTML summary
-npx tsx src/index.ts replay sessions/<id>              # re-derive state deterministically
+crumb ls                                          # list every session under ~/.crumb/projects/*/sessions/
+jq -r '"\(.kind)\t\(.from)"' \
+  ~/.crumb/projects/<project-id>/sessions/<ulid>/transcript.jsonl
+crumb replay <ulid>                               # re-derive state deterministically
 ```
+
+## Live dashboard (browser console)
+
+The dashboard is a single-binary Node HTTP + SSE server. **Default port `7321`,
+bound to `127.0.0.1` only**, so a fresh checkout → fresh browser tab works
+without firewall prompts on macOS / Windows. Cross-platform (chokidar with
+WSL/NFS polling fallback, no platform-specific syscalls).
+
+```bash
+# After `npm install && npm run build` (Quickstart step), start it:
+npx crumb-dashboard                  # http://127.0.0.1:7321/  (auto-opens browser)
+npx crumb-dashboard --no-open        # headless / SSH / CI    (just print the URL)
+npx crumb-dashboard --port 8080      # alternate port
+npx crumb-dashboard --bind 0.0.0.0   # expose on LAN / SSH tunnel (firewall prompt)
+```
+
+Once it's up, the browser surfaces:
+
+| View | What it shows |
+|---|---|
+| **Sidebar (left)** | Project-grouped session list. ＋ button starts a new `crumb run` (goal + preset form). Hover any session row → × dismisses it from the dashboard (transcript on disk untouched). |
+| **Header strip** | D1–D6 source-of-truth scorecard, always visible, updates per `kind=judge.score`. |
+| **Pipeline tab** | 9-actor DAG topology (lime pulse on the active actor, lavender ripple "weaving" each transcript event sender → next-likely target) + per-actor swimlane chip timeline. |
+| **Logs tab** (ArgoCD-inspired) | Per-actor live tail of `<session>/agent-workspace/<actor>/spawn-*.log` (full stdout / stderr from every adapter spawn). Filter / follow / clear / copy. DAG node click jumps here. |
+| **Output tab** | Sandboxed iframe live-rendering `artifacts/game/index.html` (multi-file profile) or `artifacts/game.html` (single-file fallback). Reload + open-in-new-tab. Playable in-place. |
+| **Live execution feed** (above input) | Terminal-style stream of every transcript event for the active session **and** every chunk of every actor's spawn log. Color-coded by kind class. |
+| **Console input** (bottom) | Slash commands (`/approve` `/veto <reason>` `/pause [@actor]` `/goto <actor>` `/note <text>`), `@actor` mentions, plain-text user.intervene. **`/crumb <goal>`** spawns a brand-new session. |
+| **Detail panel** (right, click an event) | Pipeline-position narrative ("PHASE B → C — Spec sealed"), parent → this → children thread, sandwich preview per actor, per-actor mini-console. |
+
+Cross-platform env knobs:
+
+| Variable | Effect |
+|---|---|
+| `CRUMB_HOME` | Override `~/.crumb` (sandbox / CI / multi-user setups) |
+| `CRUMB_POLL=1` | Force chokidar polling (WSL2 / Docker / NFS / SMB) |
+| `CRUMB_NO_OPEN=1` | Don't auto-launch a browser (equivalent to `--no-open`) |
 
 ## CLI
 
@@ -98,6 +134,7 @@ npx tsx src/index.ts replay sessions/<id>              # re-derive state determi
 | `crumb config <자연어>` | Preset recommendation from natural-language description |
 | `crumb debug <session-id\|dir>` | F1-F7 routing fault diagnosis from a transcript |
 | `crumb ls` | List `sessions/` with event counts |
+| `npx crumb-dashboard [--port 7321] [--bind 127.0.0.1] [--no-open]` | Live observability dashboard (HTTP + SSE) — see "Live dashboard" section above |
 
 ## Architecture (v3, high level)
 

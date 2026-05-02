@@ -144,21 +144,31 @@ Preset files live at `.crumb/presets/*.toml`. Run `crumb doctor` to see which pr
 npm install
 npm run build
 
+# 0. One-time PATH setup (after `npm install && npm run build` above)
+npm link            # registers `crumb` and `crumb-dashboard` on PATH
+                    # (or: npm i -g .  — same effect)
+
 # A. Natural language (Claude Code skill — recommended)
 $ claude
 > /crumb 60초 매치-3 콤보 보너스 게임 만들어줘
 
 # B. Headless / CI / no auth (mock adapter, deterministic, ~1s)
-npx tsx src/index.ts run \
-  --goal "60초 매치-3 콤보 보너스" \
-  --adapter mock --idle-timeout 5000
+crumb run --goal "60초 매치-3 콤보 보너스" --adapter mock --idle-timeout 5000
 
 # C. Real run via preset (user picks the binding)
 claude login    # Anthropic Claude Max
 codex login     # OpenAI Codex Plus (optional)
 gemini login    # Google Gemini Advanced (optional)
-npx tsx src/index.ts run --goal "..." --preset bagelcode-cross-3way
+crumb run --goal "..." --preset bagelcode-cross-3way
+
+# D. Live dashboard (browser console)
+npx crumb-dashboard               # http://127.0.0.1:7321/  (auto-opens browser)
 ```
+
+> Pre-link / dev-mode equivalents: every `crumb …` line above is interchangeable
+> with `npx tsx src/index.ts …` from inside the repo root, and
+> `npx crumb-dashboard …` is interchangeable with
+> `node packages/dashboard/dist/cli.js …` after a build.
 
 `provider × harness × model` decisions stay with the user. Crumb never forces a default; if no preset is given, every actor follows the entry host (ambient fallback).
 
@@ -174,31 +184,39 @@ npx tsx src/index.ts run --goal "..." --preset bagelcode-cross-3way
 
 ### How to run a session
 
+The bin entries (`crumb`, `crumb-dashboard`) are wired in `package.json` and
+become available on PATH after `npm link` (or `npm i -g .`). Both forms are
+equivalent — the global form is what users see, the `npx tsx` / `node dist/`
+form is what the AGENTS.md and source comments reference for in-repo dev.
+
 ```bash
 # Mock adapter — deterministic demo, no API/subscription cost
-npx tsx src/index.ts run --goal "your game pitch" --adapter mock --idle-timeout 5000
+crumb run --goal "your game pitch" --adapter mock --idle-timeout 5000
 
 # Real run — pick a preset, or omit for ambient (entry host follows)
-npx tsx src/index.ts run --goal "your game pitch" --preset bagelcode-cross-3way
+crumb run --goal "your game pitch" --preset bagelcode-cross-3way
 
 # Resume a mid-flight session (re-derive state + surface continuation command)
-npx tsx src/index.ts resume <session-id>
+crumb resume <session-id>
 
 # Replay deterministically — proves state is fully derivable from transcript
-npx tsx src/index.ts replay sessions/<session-id>/
+crumb replay <session-id>
 
 # Diagnose a stuck session
-npx tsx src/index.ts debug <session-id>
+crumb debug <session-id>
 
 # List sessions and adapter / host OAuth health
-npx tsx src/index.ts ls
-npx tsx src/index.ts doctor
+crumb ls
+crumb doctor
 
 # Recommend a preset from natural-language environment description
-npx tsx src/index.ts config "Codex 만 인증된 환경에서 단일 host 데모"
+crumb config "Codex 만 인증된 환경에서 단일 host 데모"
+
+# Live dashboard (browser console — single-binary HTTP + SSE on 127.0.0.1:7321)
+npx crumb-dashboard
 
 # Observation: tail the transcript while a session runs
-tail -f sessions/<session-id>/transcript.jsonl | jq -r '
+tail -f ~/.crumb/projects/<project-id>/sessions/<session-id>/transcript.jsonl | jq -r '
   select(.kind | IN("goal","spec","build","qa.result","judge.score","done","error","handoff.requested")) |
   "[\(.ts | split("T")[1] | split(".")[0])] \(.from)\t\(.kind)\t\(.body // "")"
 '
