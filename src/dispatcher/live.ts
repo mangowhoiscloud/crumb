@@ -161,6 +161,12 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
           sandwichPath,
           transcriptPath: deps.transcriptPath,
           prompt: effect.prompt,
+          // Pass binding's model + effort through to adapters that support them.
+          // codex-local consumes both (--model + -c model_reasoning_effort=...);
+          // claude-local / gemini-local accept the fields but cannot pass them
+          // to the underlying CLI (API-only) — informational only.
+          model: binding?.model,
+          effort: binding?.effort,
           signal: controller.signal,
         });
       } finally {
