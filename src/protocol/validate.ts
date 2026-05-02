@@ -41,14 +41,7 @@ async function buildValidator(): Promise<(msg: unknown) => msg is Message> {
   }) as (msg: unknown) => msg is Message;
 }
 
-/** Validate a single message. Throws ValidationError on failure. */
-export async function validateMessage(msg: unknown): Promise<Message> {
-  if (!cachedValidator) cachedValidator = await buildValidator();
-  cachedValidator(msg);
-  return msg as Message;
-}
-
-/** Synchronous variant — caller must have called `prepareValidator()` first. */
+/** Synchronous validate — caller must have called `prepareValidator()` first. */
 export function validateMessageSync(msg: unknown): Message {
   if (!cachedValidator) {
     throw new Error('validator not initialized; call prepareValidator() first');

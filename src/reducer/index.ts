@@ -30,6 +30,14 @@ export interface ReduceResult {
   effects: Effect[];
 }
 
+// Single-file reducer is intentional. 2026 frontier evidence (LongCodeBench
+// arXiv 2505.07897 + Karpathy nanochat / microgpt) shows that a coherent long
+// single file outperforms equivalent functionality split across many small
+// files for LLM editing accuracy — the cost is fan-out, not LoC. Splitting the
+// 18-case switch into 18 files would convert single-file fan-out cost into
+// 18-file fan-out cost. See wiki/synthesis/bagelcode-user-intervention-frontier-2026-05-02.md
+// + wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md §5.
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export function reduce(state: CrumbState, event: Message): ReduceResult {
   // Mutate a shallow clone — every nested update copies what it touches.
   const next: CrumbState = {

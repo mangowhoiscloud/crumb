@@ -13,20 +13,13 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve as resolvePath, join as joinPath } from 'node:path';
 import { parse as parseToml } from '@iarna/toml';
+import type { Harness, Provider } from '../protocol/types.js';
 
-/** Supported harness types per v3 §5.2 9-cell matrix. v3.3 added gemini-sdk for the researcher actor's video understanding path. */
-export type Harness =
-  | 'claude-code'
-  | 'codex'
-  | 'gemini-cli'
-  | 'gemini-sdk'
-  | 'anthropic-sdk'
-  | 'openai-sdk'
-  | 'google-sdk'
-  | 'mock'
-  | 'none';
-
-export type Provider = 'anthropic' | 'openai' | 'google' | 'none';
+// Re-export so existing importers (tui/model-edit, dispatcher/live, helpers/config)
+// keep working without churn. Canonical definitions live in protocol/types.ts —
+// the duplicate previously declared here is what created the dispatcher↔config
+// cycle dep-cruiser caught.
+export type { Harness, Provider };
 
 export interface ActorBinding {
   /** Actor name (coordinator | planner-lead | builder | verifier | builder-fallback). */

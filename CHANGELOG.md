@@ -4,6 +4,25 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — Lint pipeline strengthening: knip + dependency-cruiser + sonarjs (2026-05-02)
+
+Three OSS tools added to the verify gate, each backed by 2026 frontier evidence on what specifically makes a TypeScript codebase easier or harder for long-context coding LLMs to navigate. Synthesis page: `wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md`'s sister architectural recommendations (PR-A audit follow-up).
+
+- **knip** (dead code + unused exports + unlisted deps) — `.knip.json` workspace-aware config, `npm run lint:knip` script, new `Knip (dead code)` CI job. Rationale: ICST 2026 (arXiv 2504.04372, 750K fault-localization tasks × 9 LLMs) found dead-code injection drops debugging accuracy to **18.5%** — worse than misleading variable names alone (28.7%). LLMs can't tell unused functions are unused; they spend attention on them.
+- **dependency-cruiser** (architecture invariants) — `.dependency-cruiser.cjs` encoding 4 forbidden rules: `no-circular`, `reducer-purity`, `state-purity`, `protocol-types-purity`. New `Dep-cruiser` CI job. Rationale: MSR '26 *Beyond the Prompt* (arXiv 2512.18925, 401 OSS repos) showed statically-typed projects with strong layer constraints need significantly less prompt-context (cursor rules) — type system + enforced architecture together do prompt-engineering work for free.
+- **eslint-plugin-sonarjs** (`cognitive-complexity: 20`, `no-identical-functions`, `no-duplicate-string@5`) — wired into existing `.eslintrc.json`. Test files excluded (fixtures legitimately repeat literals). Rationale: cognitive complexity (nested-control penalty) is a better LLM context-hop proxy than McCabe cyclomatic — paper ranks it the strongest predictor of edit-success collapse on long-method tasks.
+
+Real findings surfaced and fixed in the same PR:
+- **Circular dependency `src/config/model-config.ts ↔ src/dispatcher/preset-loader.ts`** — preset-loader had duplicate `Harness`/`Provider` type declarations identical to those in `src/protocol/types.ts`. Removed duplicates, made preset-loader import + re-export from the canonical location. Cycle broken; 56 modules / 187 deps cruised, 0 violations.
+- **Unused `validateMessage` async function** removed from `src/protocol/validate.ts` — only `validateMessageSync` had real consumers (`src/transcript/writer.ts`).
+- **Unused `ActorName` type** removed from `src/config/model-config.ts` — derived type with zero downstream consumers; the `ACTORS` const is what the TUI iterates over.
+- **Unused root `chokidar` dependency** moved out — only `packages/dashboard` consumes chokidar (its own package.json already has it).
+- **Unlisted `zod` dependency** added to `package.json` — was being imported as a transitive of `@modelcontextprotocol/sdk`, now declared explicitly.
+
+Reducer single-file design preserved with inline justification: per LongCodeBench (arXiv 2505.07897) + Karpathy nanochat / microgpt evidence, splitting an 18-case 650-line reducer into 18 files would convert single-file fan-out cost into 18-file fan-out cost. The `// eslint-disable-next-line sonarjs/cognitive-complexity` annotation on `reduce()` cites both wiki pages so future contributors (human or LLM) understand the deliberate exception.
+
+CLAUDE.md verify gate updated to include the three new lint stages, with citations to the underlying papers so the rationale is durable.
+
 ### Changed — researcher actor: real text research replaces v3.3 stub (v3.4) (2026-05-02)
 
 The v3.3 researcher had two paths: video → real Gemini SDK, no-video → **empty stub** (`reference_games: []`, `design_lessons: []`). Verifier saw the stub but downstream planner-lead phase B got nothing. Now the no-video path runs a real LLM-driven text research turn.
