@@ -50,12 +50,15 @@ export function buildAdapterEnv(req: SpawnRequest): NodeJS.ProcessEnv {
     CRUMB_SESSION_ID: req.sessionId,
     CRUMB_SESSION_DIR: req.sessionDir,
     CRUMB_ACTOR: req.actor,
-    // v3.4: forward binding's provider so `crumb event` can stamp
-    // metadata.provider on actor-emitted events. CRUMB_BUILDER_PROVIDER is set
-    // only when spawning the verifier (dispatcher resolves it from the latest
-    // build event's metadata.provider) so cross_provider can be computed
+    // v3.4: forward binding's harness/provider/model so `crumb event` can
+    // stamp metadata.harness/provider/model on actor-emitted events
+    // (AGENTS.md §135 invariant). CRUMB_BUILDER_PROVIDER is set only when
+    // spawning the verifier (dispatcher resolves it from the latest build
+    // event's metadata.provider) so cross_provider can be computed
     // server-side without trusting the LLM to declare it.
+    ...(req.harness ? { CRUMB_HARNESS: req.harness } : {}),
     ...(req.provider ? { CRUMB_PROVIDER: req.provider } : {}),
+    ...(req.model ? { CRUMB_MODEL: req.model } : {}),
     ...(req.builderProvider ? { CRUMB_BUILDER_PROVIDER: req.builderProvider } : {}),
   };
 }

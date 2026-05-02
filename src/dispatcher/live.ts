@@ -217,6 +217,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
           signal: timers.controller.signal,
           onStdoutActivity: timers.onStdoutActivity,
           provider: binding?.provider,
+          harness: binding?.harness,
           ...(builderProvider ? { builderProvider } : {}),
         });
       } finally {
