@@ -1,5 +1,5 @@
 /**
- * Anti-deception validator — 4 rules enforcing scoring ground-truth integrity.
+ * Anti-deception validator — 5 rules enforcing scoring ground-truth integrity.
  *
  * Frontier backbone:
  *   - NeurIPS 2024 self-bias linear correlation (cross-provider mitigation)
@@ -15,7 +15,15 @@
  * src/state/scorer.ts merges the two in code — no merged number for an LLM to
  * inflate.
  *
- * See [[bagelcode-system-architecture-v3]] §7.3 + [[bagelcode-llm-judge-frontier-2026]] R3-R5.
+ * Rule 5 (v3.3) — researcher_video_evidence_missing — fires when the
+ * researcher actor produced video evidence (≥1 kind=step.research.video event
+ * exists for this session) but the verifier's D5 quality score is high (≥ 4)
+ * with an empty evidence array. Same firewall pattern as Rule 1
+ * (verify_pass_without_exec_zero) for D2 — high score requires citing the
+ * deterministic ground truth.
+ *
+ * See [[bagelcode-system-architecture-v3]] §7.3 + [[bagelcode-llm-judge-frontier-2026]] R3-R5
+ *  + agents/specialists/game-design.md §3 (video evidence schema) + §4 (synth schema).
  */
 
 import type { Message, Scores, ScoreDimension } from '../protocol/types.js';
@@ -31,6 +39,13 @@ export interface AntiDeceptionInput {
   qaResult: QaResultLike | null; // latest kind=qa.result event's data field (null if missing)
   autoScores: AutoScores; // Layer 1 reducer auto
   builderProvider?: string | null; // metadata.provider on the build event
+  /**
+   * v3.3 — IDs of `kind=step.research.video` events that the researcher actor
+   * emitted earlier in this session. When non-empty, Rule 5 enforces that
+   * D5.evidence cites at least one of these IDs (otherwise the verifier is
+   * claiming high quality without citing the deterministic ground truth).
+   */
+  researchVideoEvidenceIds?: string[];
 }
 
 export interface AntiDeceptionOutput {
@@ -79,7 +94,20 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
     violations.push('self_bias_risk_same_provider');
   }
 
-  // (Rule 5 removed when D3/D5 split — see file header comment.)
+  // ── Rule 5 (v3.3) — researcher_video_evidence_missing ──────────────────────
+  // If the researcher emitted ≥1 step.research.video events but the verifier's
+  // D5 (intervention/quality) is ≥ 4 with no D5.evidence citing those events,
+  // force D5=0 + violation. Mirrors Rule 1's pattern for D2: high score
+  // requires citing the deterministic ground truth.
+  const evidenceIds = input.researchVideoEvidenceIds ?? [];
+  if (evidenceIds.length > 0 && scores.D5 && scores.D5.score >= 4) {
+    const cited = scores.D5.evidence ?? [];
+    const validCitation = cited.some((id) => evidenceIds.includes(id));
+    if (!validCitation) {
+      violations.push('researcher_video_evidence_missing');
+      scores.D5 = forceScore(scores.D5, 0, scores.D5.source);
+    }
+  }
 
   // Recompute aggregate after force-corrections using the deterministic combine
   // rule for D3/D5 (avg of verifier-llm component + reducer-auto component).

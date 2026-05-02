@@ -170,7 +170,7 @@
         "audit_violations": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "anti-deception violations: verify_pass_without_exec_zero | verifier_overrode_d2_ground_truth | verifier_overrode_d4_ground_truth | self_bias_risk_same_provider"
+          "description": "anti-deception violations: verify_pass_without_exec_zero | verifier_overrode_d2_ground_truth | verifier_overrode_d4_ground_truth | self_bias_risk_same_provider | researcher_video_evidence_missing"
         },
         "goal_completion": { "type": "number", "minimum": 0, "maximum": 5, "deprecated": true },
         "collaboration": { "type": "number", "minimum": 0, "maximum": 5, "deprecated": true },
