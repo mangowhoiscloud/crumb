@@ -115,6 +115,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         appends: effect.sandwich_appends ?? [],
         sessionDir: deps.sessionDir,
         actor: effect.actor,
+        repoRoot: deps.repoRoot,
       });
       const adapter = deps.registry.get(adapterId);
 
@@ -299,28 +300,56 @@ interface AssembleArgs {
   appends: NonNullable<SpawnEffect['sandwich_appends']>;
   sessionDir: string;
   actor: Actor;
+  /** Repo root for resolving agents/_event-protocol.md (v3.3+ injection). */
+  repoRoot: string;
 }
+
+/** Actors that emit transcript events via the `crumb event` CLI helper. */
+const EMITTING_ACTORS: ReadonlySet<Actor> = new Set([
+  'planner-lead',
+  'builder',
+  'verifier',
+  'builder-fallback',
+  'researcher',
+]);
 
 /**
  * v3.2 G4 — assemble per-spawn sandwich from base + per-machine local override
- * + runtime sandwich_appends. Writes the result under the session's
- * agent-workspace so observers / replay can audit exactly what each spawn saw.
+ * + runtime sandwich_appends.
  *
- * When there is no local override file and no runtime appends, the base path is
- * returned unchanged (no filesystem write) — this preserves the v3.1 behavior
- * for sessions that don't exercise the override surface.
+ * v3.3+ — also injects `agents/_event-protocol.md` for any actor that emits
+ * transcript events. The standalone protocol file documents the `crumb event`
+ * Bash heredoc pattern; without inlining it into the sandwich, Claude/Codex
+ * tend to PRINT JSON to stdout instead of invoking the CLI (observed: run
+ * 01KQMCSC, planner-lead exit 0 in 41s with stdout containing valid JSON
+ * blocks but zero transcript events). Verifier + coordinator already had
+ * 1-line mentions of `crumb event`; planner-lead / builder / builder-fallback
+ * / researcher had zero. This fix makes the protocol always available.
+ *
+ * Writes the result under the session's agent-workspace so observers / replay
+ * can audit exactly what each spawn saw.
  */
 async function assembleSandwich(args: AssembleArgs): Promise<string> {
-  const { baseSandwichPath, appends, sessionDir, actor } = args;
+  const { baseSandwichPath, appends, sessionDir, actor, repoRoot } = args;
   const localPath = baseSandwichPath.replace(/\.md$/, '.local.md');
+  const eventProtocolPath = resolve(repoRoot, 'agents', '_event-protocol.md');
   const hasBase = baseSandwichPath !== '' && existsSync(baseSandwichPath);
   const hasLocal = baseSandwichPath !== '' && existsSync(localPath);
-  if (!hasLocal && appends.length === 0) {
+  const needsEventProtocol = EMITTING_ACTORS.has(actor) && existsSync(eventProtocolPath);
+  // Skip assembly only when nothing additive applies (no local override, no
+  // runtime appends, and this actor doesn't need the event protocol injection).
+  if (!hasLocal && appends.length === 0 && !needsEventProtocol) {
     return baseSandwichPath;
   }
   const parts: string[] = [];
   if (hasBase) {
     parts.push(await readFile(baseSandwichPath, 'utf-8'));
+  }
+  if (needsEventProtocol) {
+    const protocol = await readFile(eventProtocolPath, 'utf-8');
+    parts.push(
+      `<!-- begin event protocol (agents/_event-protocol.md) -->\n${protocol}\n<!-- end event protocol -->`,
+    );
   }
   if (hasLocal) {
     const localContent = await readFile(localPath, 'utf-8');
