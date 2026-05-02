@@ -4,6 +4,21 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — Schema ↔ TypeScript parity test + Karpathy abstraction rule (2026-05-02)
+
+Closes the last item from PR-A's audit punch list (`wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md` §10 P0): drift risk between `protocol/schemas/message.schema.json` (the JSON Schema source-of-truth for ajv runtime validation) and `src/protocol/types.ts` (the TypeScript Kind union). Both are hand-maintained twins; without an enforced check, a new `kind` could land in one without the other.
+
+- **`src/protocol/parity.test.ts`** (NEW, +2 specs) — three layers of protection:
+  - `satisfies readonly Kind[]` ensures every entry in the test's runtime mirror is a valid `Kind` (compile error otherwise).
+  - `Exclude<Kind, (typeof TS_KINDS)[number]> extends never` ensures every `Kind` is in the mirror (compile error otherwise).
+  - Runtime `expect(SCHEMA_KINDS).toEqual(TS_KINDS)` ensures the schema enum and the TS mirror are equal sets.
+
+  If a future PR adds a new kind to one of the three sources without updating the others, exactly one of these three checks fires. Suite: 321/321 (was 319 + 2).
+
+- **`CLAUDE.md` "No new abstraction unless 2+ call sites exist"** — encodes Karpathy's 2026-01 pitfall #2 ("LLMs really like to bloat abstractions and APIs") as a project-level coding standard, with citation to SWE-Bench Pro (arXiv 2509.16941) showing files-touched scales 11× from Easy → Hard task difficulty. Each speculative helper is a permanent tax on coordinated changes. The rule cites the reducer single-file design and the `_shared.ts` 3-way adapter dedup as examples of the right cut: real fan-in (3 callers, same lifecycle), not lexical similarity.
+
+Note on the audit's "P0 effort tuning asymmetry" (gemini-local missing `req.effort`): re-read of `src/adapters/types.ts:18-35` showed this is **intentional and already documented** — gemini-cli's `-p` flag does not expose thinking budget (API-only via `thinking_config`), same as `claude -p` and extended thinking budget_tokens. The field is informational on those adapters until SDK adapters land. Not a gap; the documentation does the work the audit wanted a code change to do.
+
 ### Refactored — Adapter 3-way dedup: extract `_shared.ts` lifecycle helpers (2026-05-02)
 
 `src/adapters/{claude,codex,gemini}-local.ts` were 95% structurally identical: same health-check spawn pattern, same env construction, same AbortSignal wiring, same default-prompt string. jscpd had flagged 414 duplicated lines / 2.92% across the three files. PR-A audit (`wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md` §10 punch list P1) called this out.

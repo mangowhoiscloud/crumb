@@ -55,6 +55,10 @@ These skills cover the engineering side: branching + CI ratchet, change-tracking
 
 Reply in **Korean** for design discussion, research summaries, and brainstorming. **English** for code, comments, schema fields, commit messages, and PR descriptions (the repo is public-facing for the Bagelcode hiring panel and future contributors).
 
+## No new abstraction unless 2+ call sites exist
+
+Karpathy 2026-01 pitfall #2: "LLMs really like to bloat abstractions and APIs." Inline first; extract on real duplication; never speculative. A helper that exists for 1 caller is a refactor liability — it adds a cross-file hop without paying the LLM-readability dividend that fan-in justifies. SWE-Bench Pro (arXiv 2509.16941) shows files-touched scales 11× from Easy → Hard task difficulty, so each extracted helper is a permanent tax on every coordinated change. Only extract when you have ≥ 2 real call sites and the duplication is structural (same lifecycle, same error handling, same shape) — not just lexical (same words). The reducer's 18-case switch and `_shared.ts` adapter helpers are examples of the right cut: 18 cases share state mutation, 3 adapters share spawn lifecycle.
+
 ## Verify gate (Pre-PR Quality Gate)
 
 ```bash
