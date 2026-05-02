@@ -11,6 +11,7 @@ import type { Actor } from '../protocol/types.js';
 import type { TranscriptWriter } from '../transcript/writer.js';
 import type { AdapterRegistry } from '../adapters/types.js';
 import { runQaCheckEffect } from './qa-runner.js';
+import type { Harness, PresetSpec } from './preset-loader.js';
 
 export interface DispatcherDeps {
   writer: TranscriptWriter;
@@ -20,6 +21,12 @@ export interface DispatcherDeps {
   transcriptPath: string;
   /** Path to repo root — used to resolve agents/<actor>.md sandwiches. */
   repoRoot: string;
+  /**
+   * Optional preset binding. When present, preset.actors[<actor>] overrides both
+   * `effect.adapter` (via harness→adapter mapping) and the default sandwich path.
+   * Actors not declared in the preset fall back to `effect.adapter` + ACTOR_TO_SANDWICH.
+   */
+  preset?: PresetSpec;
   /** Bridge: hook effects surface as user prompts (TUI/CLI). */
   onHook?: (kind: string, body: string, data?: Record<string, unknown>) => Promise<void>;
 }
@@ -32,13 +39,34 @@ const ACTOR_TO_SANDWICH: Partial<Record<Actor, string>> = {
   coordinator: 'agents/coordinator.md',
 };
 
+/** Harness → adapter id mapping for preset bindings. SDK harnesses fall back to local CLI for now. */
+const HARNESS_TO_ADAPTER: Record<Harness, string> = {
+  'claude-code': 'claude-local',
+  codex: 'codex-local',
+  'gemini-cli': 'gemini-local',
+  'anthropic-sdk': 'claude-local',
+  'openai-sdk': 'codex-local',
+  'google-sdk': 'gemini-local',
+  mock: 'mock',
+  none: 'mock',
+};
+
 export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<void> {
   switch (effect.type) {
     case 'spawn': {
+      // Preset binding: when the user has declared this actor in the active preset,
+      // use the binding's sandwich + harness→adapter. Otherwise fall back to the
+      // reducer-supplied effect.adapter and the default ACTOR_TO_SANDWICH mapping.
+      const binding = deps.preset?.actors[effect.actor];
+      const adapterId = binding
+        ? (HARNESS_TO_ADAPTER[binding.harness] ?? effect.adapter)
+        : effect.adapter;
       const sandwichPath = effect.sandwich_path
         ? resolve(deps.repoRoot, effect.sandwich_path)
-        : resolve(deps.repoRoot, ACTOR_TO_SANDWICH[effect.actor] ?? '');
-      const adapter = deps.registry.get(effect.adapter);
+        : binding?.sandwich
+          ? resolve(deps.repoRoot, binding.sandwich)
+          : resolve(deps.repoRoot, ACTOR_TO_SANDWICH[effect.actor] ?? '');
+      const adapter = deps.registry.get(adapterId);
       const result = await adapter.spawn({
         actor: effect.actor,
         sessionId: deps.sessionId,
@@ -53,7 +81,7 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
           session_id: deps.sessionId,
           from: effect.actor,
           kind: 'error',
-          body: `adapter ${effect.adapter} exited ${result.exitCode}`,
+          body: `adapter ${adapterId} exited ${result.exitCode}`,
           data: { stderr: result.stderr.slice(0, 2000) },
         });
       }

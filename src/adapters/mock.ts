@@ -159,7 +159,11 @@ async function writeVerifierSequence(
     { kind: 'step.judge' as const, step: 'grader' as const, body: 'initial D1-D6 grading' },
     { kind: 'step.judge' as const, step: 'critic' as const, body: 'challenge D1 spec_fit' },
     { kind: 'step.judge' as const, step: 'defender' as const, body: 'rebuttal: AC v1 scope' },
-    { kind: 'step.judge' as const, step: 'regrader' as const, body: 'final scores after CourtEval' },
+    {
+      kind: 'step.judge' as const,
+      step: 'regrader' as const,
+      body: 'final scores after CourtEval',
+    },
   ]) {
     await writer.append({
       session_id: req.sessionId,
