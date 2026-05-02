@@ -28,6 +28,11 @@ Thumbs.db
 # user config (project-level config.toml is committed; user override is not)
 .crumb/config.local.toml
 
+# v3.2 G4 — per-machine sandwich overrides. Base agents/<actor>.md is committed;
+# agents/<actor>.local.md is a local-only addendum the dispatcher concatenates
+# during assembly (sessions/<id>/agent-workspace/<actor>/sandwich.assembled.md).
+agents/*.local.md
+
 # Maintainer-only operational skills (mirrored from ~/workspace/mango-wiki/.skills/).
 # The committed skills/ bundle is what evaluators see; .skills/ is local working tooling.
 .skills/

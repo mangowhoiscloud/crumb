@@ -12,7 +12,13 @@ import type { Actor, Message, Verdict } from '../protocol/types.js';
 export interface TaskFact {
   source_id: string; // message id that produced this fact
   text: string; // human-readable
-  category: 'goal' | 'spec' | 'constraint' | 'feedback' | 'note';
+  category: 'goal' | 'spec' | 'constraint' | 'feedback' | 'note' | 'sandwich_append';
+  /**
+   * v3.2 G4 — when category is 'sandwich_append', optional actor scoping.
+   * If set, the override applies only to spawns of that actor; otherwise the
+   * append applies to every spawned actor in the session.
+   */
+  target_actor?: Actor;
 }
 
 export interface TaskLedger {
