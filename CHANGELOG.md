@@ -46,6 +46,17 @@ Sessions move out of `<cwd>/sessions/` into a per-user, per-project global store
 - **Deferred to Phase 2** (next PR): `meta.json` per session + reducer-derived `run_id`/`turn_id`, `crumb init --pin` (writes `<cwd>/.crumb/project.toml`), `crumb release <ulid> [--as vN] [--label X]` (immutable milestone + manifest.toml), `crumb versions` (parent-chain listing), `crumb fork <ulid> --at <event-id>` (pointer-only fork via `kind=session.forked`), `crumb export <ulid|vN> --to <dest>` (artifact copy, no link).
 - **Deferred to Phase 3**: `crumb migrate` to relocate legacy `<cwd>/sessions/` into `~/.crumb/projects/<id>/sessions/`. Idempotent.
 
+### Changed — Entry-MD user-intervention guidance (2026-05-02)
+
+Closes the audit's punch-list item #3-#4 ("Entry MD natural-language parsing" + "Coordinator sandwich lacks user.* dispatch guidance"). Every host entry and the coordinator sandwich now document the same 3-surface × 6-data-field user-intervention contract in one voice. Mail requirement #2 (사용자가 협업 과정에 개입) end-to-end coverage: reducer + dispatcher (G1-G6 + G4) → TUI/inbox/JSON event surfaces (PR #16) → host-entry guidance (this PR).
+
+- **`agents/coordinator.md`** — Routing Rules table expanded from 2 user.* entries to 12 (5 user.intervene `data.*` branches + 4 user.pause/resume branches + user.approve + user.veto). Task Ledger Rules updated for the `sandwich_append` fact category. New "User-intervention surfaces" reminder names the 3 modalities (TUI / inbox.txt / `crumb event` JSON shell) and confirms they all write the same JSONL line.
+- **`.claude/skills/crumb/SKILL.md`** §4 — single JSON example replaced with full 3-surface guide + 6-row `data` field semantics table + frontier matrix references.
+- **`.codex/agents/crumb.toml`** §6 — 3-line bullet list replaced with full surface comparison; Codex shell environment gets `inbox.txt` as the 1순위 surface.
+- **`.gemini/extensions/crumb/commands/crumb.toml`** §4 + **`.gemini/extensions/crumb/GEMINI.md`** "사용자 개입" — same expansion adapted to Gemini CLI's verifier-multimodal seat.
+- Frontier alignment: LangGraph `Command(goto/update={...})` 53/60 + Paperclip BYO swap 38/60 + Codex `APPEND_SYSTEM.md` 38/60. Backing: `wiki/synthesis/bagelcode-user-intervention-frontier-2026-05-02.md`.
+- PR #18.
+
 ### Changed — TUI slash bar unifies grammar with inbox parser (2026-05-02)
 
 Audit after PR #14 found the TUI was a second-class intervention surface: `handleCommand` mapped 7/11 slash commands and dropped every `data` field on the floor (`target_actor` / `goto` / `swap` / `reset_circuit` / `actor` / `sandwich_append`). G1-G6 + G4 all worked through `inbox.txt` but were invisible to TUI users.
