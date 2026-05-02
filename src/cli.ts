@@ -12,6 +12,7 @@
  */
 
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { ulid } from 'ulid';
@@ -74,12 +75,48 @@ function parseArgs(argv: string[]): ParsedArgs {
   return { command: command ?? 'help', flags, positional };
 }
 
+/**
+ * v3.4: locate the repo root by walking up from THIS module's location until a
+ * marker (`AGENTS.md` + `agents/` dir) is found. Resolves both `npm link`
+ * symlinks and `npm i -g` global installs to the actual repo, so `crumb run`
+ * works from any cwd without `--root` (Bagelcode reviewer expectation:
+ * clone → npm install → crumb run with no host-specific paths).
+ */
+function inferRepoRoot(): string | null {
+  // import.meta.url resolves to dist/cli.js (after build) or src/cli.ts (tsx);
+  // either way the repo root is 2 levels up.
+  let dir: string;
+  try {
+    const here = fileURLToPath(import.meta.url); // .../dist/cli.js or .../src/cli.ts
+    dir = resolve(here, '..', '..');
+  } catch {
+    dir = resolve(process.argv[1] ?? '', '..', '..');
+  }
+  for (let i = 0; i < 8; i++) {
+    if (existsSync(resolve(dir, 'AGENTS.md')) && existsSync(resolve(dir, 'agents'))) {
+      return dir;
+    }
+    const parent = resolve(dir, '..');
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
 async function cmdRun(args: ParsedArgs): Promise<void> {
   const goal = args.flags.get('goal');
   if (!goal) throw new Error('--goal required');
   const sessionId = args.flags.get('session') ?? ulid();
   const cwd = process.cwd();
-  const repoRoot = args.flags.get('root') ?? cwd;
+  // v3.4: auto-detect repo root from the running script so `crumb` works from
+  // any cwd without `--root` (Bagelcode reviewer expectation: clone → npm
+  // install → crumb run, no host-specific paths). Fallback chain:
+  //   1. --root flag (explicit)
+  //   2. CRUMB_REPO_ROOT env (CI / packaged shim)
+  //   3. inferred from dist/ install location (npm link / npm i -g) walking up
+  //      until a CRUMB.md or AGENTS.md is found
+  //   4. cwd (legacy fallback)
+  const repoRoot = args.flags.get('root') ?? process.env.CRUMB_REPO_ROOT ?? inferRepoRoot() ?? cwd;
   // v3.3: sessions live under ~/.crumb/projects/<id>/sessions/<ulid>/.
   // The cwd determines project id (sha256 ambient or pinned via .crumb/project.toml).
   await ensureCrumbHome();
@@ -89,6 +126,10 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
   const presetName = args.flags.get('preset');
   const label = args.flags.get('label');
   const idleTimeoutMs = Number(args.flags.get('idle-timeout') ?? 60_000);
+  // v3.4: per-spawn timeout flag (override 10-min default for slow Claude wakes
+  // or fast mock runs). Default `undefined` → dispatcher's PER_SPAWN_TIMEOUT_MS.
+  const perSpawnTimeoutFlag = args.flags.get('per-spawn-timeout');
+  const perSpawnTimeoutMs = perSpawnTimeoutFlag ? Number(perSpawnTimeoutFlag) : undefined;
 
   // eslint-disable-next-line no-console
   console.log(`[crumb] session=${sessionId} dir=${sessionDir}`);
@@ -117,6 +158,7 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
       adapterOverride,
       presetName,
       idleTimeoutMs,
+      perSpawnTimeoutMs,
     });
 
     await updateMeta(sessionDir, {

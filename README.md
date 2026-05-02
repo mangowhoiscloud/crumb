@@ -28,7 +28,17 @@ Built for the [Bagelcode 신작팀 AI 개발자 과제 전형](https://career.ba
 
 ## Quickstart
 
-Three entry points — pick by environment:
+**One-time setup** (any machine, any cwd thereafter):
+
+```bash
+git clone https://github.com/mangowhoiscloud/crumb.git
+cd crumb
+npm install
+npm run build
+npm link            # registers `crumb` on PATH (or: npm i -g .)
+```
+
+After that, `crumb` works from **any directory** — repo-root and preset paths are auto-detected from the install location (`--root` flag remains as escape hatch).
 
 ### A. Natural language (Claude Code user — recommended)
 
@@ -37,35 +47,32 @@ $ claude
 > /crumb 60초 매치-3 콤보 보너스 게임 만들어줘
 ```
 
-The `.claude/skills/crumb/SKILL.md` skill hands the pitch to the headless `crumb run` and streams transcript events back. Natural-language interventions ("이 부분 다르게", "콤보 보너스 좀 더 짧게") flow back as `kind=user.intervene` events.
+The `.claude/skills/crumb/SKILL.md` skill hands the pitch to headless `crumb run` and streams transcript events back. Natural-language interventions ("이 부분 다르게", "콤보 보너스 좀 더 짧게") flow back as `kind=user.intervene` events.
 
-### B. Headless / CI / no auth
+### B. Mock adapter (no auth, deterministic)
 
 ```bash
-git clone https://github.com/mangowhoiscloud/crumb.git
-cd crumb
-npm install
-npm run build
-
-npx tsx src/index.ts run \
-  --goal "60-second match-3 with combo bonus" \
-  --adapter mock --idle-timeout 5000
+crumb run --goal "60-second match-3 with combo bonus" --adapter mock --idle-timeout 5000
 ```
 
-`mock` adapter is deterministic — guaranteed to work with zero auth. The session ends with a **26-event v3 flow**: `session.start → goal → planner-lead (5 step + spec + handoff) → builder (artifact + build + handoff) → qa.result (system, deterministic ground truth) → verifier (4 step.judge inline + judge.score aggregate=28/30 PASS + handoff) → done → session.end`. Replay yields the identical state.
+Guaranteed to work with zero auth. Session ends with a **26-event v3 flow**: `session.start → goal → planner-lead (5 step + spec + handoff) → builder (artifact + build + handoff) → qa.result (system, deterministic ground truth) → verifier (4 step.judge inline + judge.score aggregate=28/30 PASS + handoff) → done → session.end`. Replay yields identical state.
 
-### C. Real agents via preset (user picks the binding)
+### C. Real agents via preset
 
 ```bash
-# Authenticate first — pick whichever you have:
+# Authenticate (any subset of these you have):
 claude login           # Anthropic Claude Max
 codex login            # OpenAI Codex Plus
 gemini login           # Google Gemini Advanced
 
-# Then pick a preset:
-npx tsx src/index.ts run \
-  --goal "60-second match-3 with combo bonus" \
-  --preset bagelcode-cross-3way
+# Pin the project + run from any dir:
+mkdir -p ~/projects/match3 && cd ~/projects/match3
+crumb init --pin --label "match3"
+crumb run --goal "60-second match-3 with combo bonus" --preset solo
+
+# Promote the result + export to a checkable folder:
+crumb release <session-ulid> --as v1 --label "demo"
+crumb copy-artifacts v1 --to ./demo
 ```
 
 `provider × harness × model` decisions stay in **the user's hands** — Crumb never forces a default. Run `crumb doctor` to see which presets your environment can actually run.

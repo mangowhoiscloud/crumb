@@ -4,6 +4,18 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Fixed — Real subprocess RCA cluster: researcher EISDIR + chain drain + repo auto-detect (v3.4) (2026-05-02)
+
+Five issues from end-to-end smoke testing v3.4 researcher refactor with `--preset solo` real Claude subprocess. Each fix landed against a specific stack-trace or transcript observability finding.
+
+- **`src/dispatcher/live.ts`** — researcher missing from `ACTOR_TO_SANDWICH`. Without an entry, `baseSandwichPath` fell back to `''` → `resolve(repoRoot, '')` = repoRoot (a directory) → `readFile` EISDIR. Stack from session 01KQMGNW: `assembleSandwich → readFileHandle EISDIR`. Added `researcher: 'agents/researcher.md'`.
+- **`src/dispatcher/live.ts`** — `PER_SPAWN_TIMEOUT_MS` bumped 5min → 10min. Claude wake alone takes ~3:30 for the 15KB sandwich (researcher.md + injected `_event-protocol.md` + skills); 5min was too tight to clear Phase A's 4 steps.
+- **`src/cli.ts`** — new `--per-spawn-timeout <ms>` flag plumbed to `runSession({ perSpawnTimeoutMs })`.
+- **`src/cli.ts`** — `inferRepoRoot()` auto-detects repo from `import.meta.url` (walks up from `dist/cli.js` looking for `AGENTS.md` + `agents/`). After `npm link` / `npm i -g`, `crumb run` works from any cwd without `--root`. Resolution order: `--root` → `CRUMB_REPO_ROOT` env → `inferRepoRoot()` → `process.cwd()`.
+- **`src/loop/coordinator.ts`** — chain drain race fix. Watchdog's `processing.finally(() => finish())` attached to a *snapshot* of the chain; subsequent extensions during a long-running spawn (planner 7min) didn't extend it. `finish()` fired right after planner returned, queued `handoff.requested(researcher) → dispatch(spawn researcher)` never ran. Observed: session 01KQMFWA ended at agent.stop+7ms, state.done=false, 0 researcher events. Fix: `pendingItems` counter (++ in `onMessage`, -- in handler `finally`). Watchdog only fires `finish` when idle AND `pendingItems === 0`.
+- **`src/index.ts`** — fatal handler prints `err.stack` (was just `err.message`).
+- **`README.md`** — quickstart simplified. After one-time `npm install && npm run build && npm link`, `crumb` works from any cwd. Removed `npx tsx src/index.ts ...` form. Added full submission flow (`init --pin → run --preset solo → release → copy-artifacts`) as §C example.
+
 ### Added — Schema ↔ TypeScript parity test + Karpathy abstraction rule (2026-05-02)
 
 Closes the last item from PR-A's audit punch list (`wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md` §10 P0): drift risk between `protocol/schemas/message.schema.json` (the JSON Schema source-of-truth for ajv runtime validation) and `src/protocol/types.ts` (the TypeScript Kind union). Both are hand-maintained twins; without an enforced check, a new `kind` could land in one without the other.
