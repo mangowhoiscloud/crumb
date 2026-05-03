@@ -1,5 +1,5 @@
 ---
-title: 베이글코드 신작팀 페르소나 — 채용 톤 종합
+title: Bagelcode New-Title Team Persona — Recruitment-Tone Synthesis
 category: synthesis
 tags: [bagelcode, team-profile, recruitment, ai-first, persona]
 sources:
@@ -10,87 +10,87 @@ created: 2026-05-01
 updated: 2026-05-01
 ---
 
-# 베이글코드 신작팀 — 페르소나 종합
+# Bagelcode New-Title Team — Persona Synthesis
 
-> 채용 메일 + 블로그 2건에서 추출한 **팀의 문화·기술·평가 톤 종합**. 과제 방향 잡기 전 합의해야 할 가설.
+> **Synthesis of the team's culture, technology, and evaluation tone** extracted from the recruitment mail + 2 blog posts. A hypothesis to align on before settling the task direction.
 
-## 회사 — 한 줄
+## Company — one line
 
-소셜카지노/캐주얼 게임 글로벌 운영사. 1만+ 테이블, 1천+ 대시보드를 굴리는 **데이터·AI 중심 조직**. 현재 AI-First 문화가 전사로 침투 중.
+A global operator of social-casino / casual games. A **data- and AI-centric organization** running 10,000+ tables and 1,000+ dashboards. AI-First culture is currently propagating company-wide.
 
-## 신작팀 = 모바일 캐주얼팀의 신작 라인
+## New-title team = the new line within the Mobile Casual team
 
-채용 메일에서 직접:
+Direct quote from the recruitment mail:
 
-- "베이글코드 모바일 캐주얼팀은 AI 에이전트를 제품 제작의 핵심 도구로 사용"
-- "기획자는 에이전트에게 게임을 만들게 한다"
-- "엔지니어는 에이전트의 능력을 확장한다"
+- *"베이글코드 모바일 캐주얼팀은 AI 에이전트를 제품 제작의 핵심 도구로 사용"* (The Bagelcode Mobile Casual team uses AI agents as the core tool for product creation)
+- *"기획자는 에이전트에게 게임을 만들게 한다"* (Planners have agents build games)
+- *"엔지니어는 에이전트의 능력을 확장한다"* (Engineers extend agents' capabilities)
 
-→ **두 직군이 같은 에이전트 도구 위에 서 있음.** AI 개발자 = 기획자가 쓸 도구를 만드는 사람.
+→ **Both job families stand on the same agent toolset.** AI engineer = the person who builds the tools planners will use.
 
-## 사용 도구 — verbatim
+## Tools used — verbatim
 
-> "Claude Code, Codex, Gemini CLI 등 다양한 에이전트를 동시에 사용"
+> *"Claude Code, Codex, Gemini CLI 등 다양한 에이전트를 동시에 사용"* (Concurrent use of multiple agents including Claude Code, Codex, Gemini CLI)
 
-→ **벤더 lock-in을 의도적으로 피함.** 멀티 모델 / 멀티 코딩 에이전트 동시 운영.
-→ 함의: 과제 솔루션도 한 모델/한 에이전트에 종속되면 마이너스. **adapter 추상화**가 자연스러운 가산점.
+→ **Deliberately avoiding vendor lock-in.** Multi-model / multi-coding-agent concurrent operation.
+→ Implication: a task solution tied to one model/one agent is a minus. **Adapter abstraction** is a natural plus.
 
-## 페인포인트 — verbatim
+## Pain point — verbatim
 
-> "이들 간의 협업이 점점 중요해지고 있습니다"
+> *"이들 간의 협업이 점점 중요해지고 있습니다"* (Collaboration between them is becoming increasingly important)
 
-→ **현재 진행형 문제.** 베이글코드 신작팀 자신이 멀티 에이전트 협업을 풀고 있는 중. 과제는 **연구 문제 그 자체** — 정답이 없으므로 베이글코드 톤에 맞는 발상이 평가 우위.
+→ **An ongoing problem.** The Bagelcode new-title team itself is in the middle of solving multi-agent collaboration. The task is **the research problem itself** — there's no right answer, so ideas tuned to Bagelcode's tone gain an evaluation edge.
 
-## 기술 신호 (블로그에서 종합)
+## Technical signals (synthesized from the blog)
 
-| 신호 | 근거 |
+| Signal | Evidence |
 |---|---|
-| Slack을 사용자 인터페이스 1순위로 | DAVIS = Slack봇, AI Help for Beginner 채널, AI뉴스 슬랙봇 |
-| 매니지드 위임에 거리낌 없음 | DAVIS 가 자체 RAG → Genie API 로 갈아탐 |
-| 메타데이터 코드화 | dbt YAML, MCP 인스트럭션, "AI 재사용 위한 문서화" |
-| 짧은 사이클 + 자율 채택 | BagelJam:Dev 2일 해커톤, TODOS 3일 빌드, "강요가 아니라 스며든 변화" |
-| 설계 기준이 사람 → 에이전트로 이동 | "예쁘게 만드는 데 시간 안 들임", CLI/MCP 우선 |
-| Router 패턴 선호 | DAVIS Agent Router 2단 라우팅 |
+| Slack as the #1 user interface | DAVIS = Slack bot, AI Help for Beginner channel, AI news Slack bot |
+| No hesitation about managed delegation | DAVIS migrated from in-house RAG → Genie API |
+| Codifying metadata | dbt YAML, MCP instructions, "documentation for AI reuse" |
+| Short cycles + voluntary adoption | BagelJam:Dev 2-day hackathon, TODOS 3-day build, "permeating change, not coercion" |
+| Design baseline shifting from human → agent | "Don't spend time on prettying up", CLI/MCP first |
+| Preference for the Router pattern | DAVIS Agent Router 2-stage routing |
 
-## 문화 신호
+## Cultural signals
 
-- **자율성 ≫ 강제성** — TODOS 인용 "각 팀이 직접 하는 게 최고"
-- **실용 ≫ 화려함** — AI-First 블로그 "AI 친화적이면 굳이 예쁘게 만들 필요 없음"
-- **컨텍스트 공유 ≫ 명령** — 5원칙 1번
-- **반복 패턴은 즉시 구조화** — 5원칙 4번 "스킬/룰 생성"
+- **Autonomy ≫ coercion** — TODOS quote: "each team doing it themselves is best"
+- **Practical ≫ flashy** — AI-First blog: "if it's AI-friendly, no need to make it pretty"
+- **Context sharing ≫ commands** — Principle #1
+- **Structure repeated patterns immediately** — Principle #4 "skill/rule creation"
 
-## 베이글코드가 말하는 좋은 후보 (메일 + 블로그 종합)
+## What Bagelcode considers a good candidate (mail + blog synthesis)
 
-1. **3일 안에 prototype 깎는 사람** (TODOS 3일, BagelJam:Dev 2일)
-2. **에이전트도 사람도 쓸 수 있는 인터페이스를 설계할 수 있는 사람**
-3. **인스트럭션 (.md)을 코드만큼 다룰 줄 아는 사람** — 메일이 ".md 포함" 직접 요구
-4. **멀티 모델/멀티 에이전트를 자연스럽게 다루는 사람** — Claude/Codex/Gemini 셋 다 언급
-5. **기획-엔지니어 양면 사고가 되는 사람** — 메일 "기획 역량 기대"
-6. **README가 동작하는 결과물을 내는 사람** — 자명함, 못 지키면 즉시 컷
+1. **Someone who can carve a prototype in 3 days** (TODOS 3 days, BagelJam:Dev 2 days)
+2. **Someone who can design interfaces usable by both agents and humans**
+3. **Someone who treats instructions (.md) as code** — the mail explicitly requires ".md included"
+4. **Someone who handles multi-model/multi-agent naturally** — Claude/Codex/Gemini all mentioned
+5. **Someone with both planner-engineer thinking** — mail: *"기획 역량 기대"* (planning capability expected)
+6. **Someone who delivers a working README** — self-evident; failure is an instant cut
 
-## 가설로 둘 것 (확인 필요)
+## Open hypotheses (need confirmation)
 
-- [ ] 신작팀 규모 / 보고 구조 — 공고 본문 확보 후 보강 ([[bagelcode-job-posting-208045]])
-- [ ] 기술 스택 (백엔드 / 모바일 / 게임 엔진) — 공고 미확보
-- [ ] 게임 장르 ('모바일 캐주얼' 외 세부) — 공고 미확보
-- [ ] 어떤 모델을 디폴트로 쓰는지 — 블로그에서 Claude 비중 높아 보이지만 공식 X
+- [ ] New-title team size / reporting structure — augment after obtaining the posting body ([[bagelcode-job-posting-208045]])
+- [ ] Tech stack (backend / mobile / game engine) — posting not yet obtained
+- [ ] Game genre (beyond "mobile casual") — posting not yet obtained
+- [ ] Default model — blog suggests heavy Claude usage but not officially confirmed
 
-## 평가 우선순위 추정
+## Estimated evaluation priority
 
-높음 → 낮음:
+High → low:
 
-1. **README 즉시 동작** (실패 시 즉시 컷)
-2. **두 에이전트가 의미 있는 메시지를 주고받음** (트리비얼 echo X)
-3. **사용자 개입/관찰의 명료함** (관찰 가능 + 끼어들기 가능)
-4. **`.md` 인스트럭션의 품질** — sandwich, skill 패턴 보이면 가산점
-5. **세션 로그/녹화의 가독성** — "이 사람이 어떻게 에이전트와 일하는지" 노출
-6. **독창성** — "독창적인 아이디어" 명시
-7. **확장 가능성** — 한 번 데모로 끝나지 않게 보일 것
+1. **README runs immediately** (instant cut on failure)
+2. **Two agents exchange meaningful messages** (no trivial echo)
+3. **Clarity of user intervention/observation** (observable + interruptible)
+4. **Quality of `.md` instructions** — sandwich, skill patterns visible = bonus
+5. **Readability of session log/recording** — exposes "how this person works with agents"
+6. **Originality** — the mail explicitly states "독창적인 아이디어" (original ideas)
+7. **Extensibility** — should not look like a one-shot demo
 
 ## See also
 
-- [[bagelcode]] — 프로젝트 허브
-- [[bagelcode-recruitment-task]] — 메일 원문
+- [[bagelcode]] — project hub
+- [[bagelcode-recruitment-task]] — original mail
 - [[bagelcode-davis-system]] / [[bagelcode-ai-first-culture]]
-- [[bagelcode-task-direction]] — 위 신호를 받아 과제 컨셉으로 잇는 페이지
-- [[bagelcode-kiki-leverage]] — 가져올 자산
+- [[bagelcode-task-direction]] — page that ties the signals above into a task concept
+- [[bagelcode-kiki-leverage]] — assets to bring in

@@ -1,5 +1,5 @@
 ---
-title: 베이글코드 과제 — 4-actor 결정의 5 frontier 근거 + TradingAgents 정합
+title: Bagelcode task — 5 frontier rationales for the 4-actor decision + TradingAgents alignment
 category: synthesis
 tags: [bagelcode, rationale, frontier, tradingagents, paperclip, superpowers, anthropic, lanham, mit, shopify]
 sources:
@@ -12,39 +12,39 @@ created: 2026-05-02
 updated: 2026-05-02
 ---
 
-# Crumb 4-actor 의 5 frontier 근거 + TradingAgents 정합
+# 5 frontier rationales for Crumb's 4-actor design + TradingAgents alignment
 
-> **목적**: README positioning 한 단락의 5 claim 을 깊이 분해. 각 claim 의 (a) 무슨 일이 있었나 (b) 왜 교훈인가 (c) Crumb 흡수 방식 (d) 코드 영향. + **TradingAgents §4 가 어떻게 같은 문제를 다뤘는지** 정합 매핑.
+> **Goal**: Decompose the 5 claims of the README positioning paragraph in depth. For each claim: (a) what happened (b) why it is a lesson (c) how Crumb absorbs it (d) code impact. Plus an alignment mapping showing **how TradingAgents §4 addressed the same problems**.
 
 ---
 
-## Part 1 — 5 frontier claim 분해
+## Part 1 — Decomposition of 5 frontier claims
 
-### Claim 1 — Paperclip 5-deep 계층 + 35% skill bloat
+### Claim 1 — Paperclip 5-deep hierarchy + 35% skill bloat
 
-**(a) 무슨 일이 있었나** (Issue #3438, 2026)
+**(a) What happened** (Issue #3438, 2026)
 
 ```
-Paperclip 표준 셋업: CEO → CTO → Founding Engineer → QA → UX (5-deep, 8-agent)
+Paperclip standard setup: CEO → CTO → Founding Engineer → QA → UX (5-deep, 8-agent)
 
-매 heartbeat 마다:
-  paperclip skill = 단일 390-line markdown
-  → 8개 agent 모두에게 context 로 로드
+Every heartbeat:
+  paperclip skill = a single 390-line markdown
+  → loaded as context into all 8 agents
   → 137 lines (~35%) = "CEO/admin-only workflow"
-  → 8-agent × heartbeat = ~21K tokens 매번 낭비
+  → 8-agent × heartbeat = ~21K tokens wasted every time
 ```
 
 verbatim (Issue #3438):
 > "describes workflows only the CEO/admin can act on... ~21K tokens of context per heartbeat round spent on instructions non-admin agents can never execute."
 
-**(b) 교훈**: 계층 깊이 ≠ 표현력. 모든 agent 가 모든 instruction 받음 = 35% 낭비.
+**(b) Lesson**: hierarchy depth ≠ expressiveness. Every agent receiving every instruction = 35% waste.
 
-**(c) Crumb 흡수**:
+**(c) Crumb absorption**:
 - 5-deep × 8-agent → **2-deep × 4-actor**
-- 단일 paperclip skill → **per-actor sandwich §2**
-- admin/worker 혼재 → **admin 없음 (사용자 직접)**
+- Single paperclip skill → **per-actor sandwich §2**
+- Mixed admin/worker → **no admin (the user acts directly)**
 
-**(d) 코드 영향**:
+**(d) Code impact**:
 ```
 agents/
 ├── coordinator.md  routing + ledger
@@ -53,32 +53,32 @@ agents/
 └── verifier.md     verification
 ```
 
-토큰: Paperclip ~50K/heartbeat → Crumb ~12K/turn (cache 후 ~5K). **-75% 절감**.
+Tokens: Paperclip ~50K/heartbeat → Crumb ~12K/turn (~5K after cache). **-75% reduction**.
 
 ---
 
 ### Claim 2 — obra/superpowers TDD Iron Law
 
-**(a) 무슨 일이 있었나** (89K stars, 2026-01-15 Anthropic marketplace 채택)
+**(a) What happened** (89K stars, adopted into the Anthropic marketplace 2026-01-15)
 
-obra/superpowers 의 7-phase: Brainstorm → Design → Plan → Subagent execution → Review → Merge → Ship
+obra/superpowers' 7-phase: Brainstorm → Design → Plan → Subagent execution → Review → Merge → Ship
 
 verbatim (TDD Iron Law):
 > "**NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST**"
 
-**(b) 교훈**: LLM 의 anti-deception 문제 — "PASS" 라고 거짓말함. test 가 fail 하는 걸 확인한 후에만 production code = LLM 거짓말 차단.
+**(b) Lesson**: LLM anti-deception problem — they lie by saying "PASS". Production code only after the test is confirmed to fail = blocks LLM lying.
 
-**(c) Crumb 흡수**:
-- 7-phase → **4-step 으로 압축**
-- Iron Law → **Verifier 의 schema 단계 강제**
-- Anti-deception 5 룰:
-  1. PASS 인데 `exec.exit_code` 없음 → D2 = 0 강제
-  2. PASS 인데 `criteria` 배열 없음 → D1 = 0 강제
-  3. Spec 의 AC 비어있음 → D1 = 0 강제
-  4. build 한다는데 `artifacts` 0개 → D2 = 0 강제
-  5. user.veto 후 그대로 done → 전체 0 강제
+**(c) Crumb absorption**:
+- 7-phase → **compressed to 4-step**
+- Iron Law → **enforced at the verifier's schema stage**
+- 5 anti-deception rules:
+  1. PASS but no `exec.exit_code` → force D2 = 0
+  2. PASS but no `criteria` array → force D1 = 0
+  3. AC empty in spec → force D1 = 0
+  4. Claims to build but `artifacts` is empty → force D2 = 0
+  5. done as-is after user.veto → force everything to 0
 
-**(d) 코드 영향**:
+**(d) Code impact**:
 ```typescript
 // validator/anti-deception.ts
 export function enforceAntiDeception(msg: VerifyResult) {
@@ -90,36 +90,36 @@ export function enforceAntiDeception(msg: VerifyResult) {
 }
 ```
 
-→ **superpowers 의 7 phase 안전성을 5 schema rule 로 압축**. turn 절약 + 안전성 유지.
+→ **superpowers' 7-phase safety compressed into 5 schema rules**. Saves turns while preserving safety.
 
 ---
 
 ### Claim 3 — Anthropic 'wrong tradeoff'
 
-**(a) 무슨 일이 있었나** (Sonnet 4.6 release notes, 2026-03)
+**(a) What happened** (Sonnet 4.6 release notes, 2026-03)
 
 ```
-2026-03 변경:
+2026-03 change:
   Claude Code default reasoning effort: high → medium
-  의도: latency 절감 + rate limit 효율
+  Intent: latency reduction + rate limit efficiency
 
-사용자 피드백:
-  "complex code quality 가 떨어졌다"
-  "agent 가 단순 솔루션만 내놓는다"
+User feedback:
+  "complex code quality dropped"
+  "the agent only proposes simple solutions"
 
-Anthropic 응답:
+Anthropic response:
   "We've identified that this was the wrong tradeoff."
-  → 다시 user-controllable 강화
+  → reinforced user-controllable again
 ```
 
-**(b) 교훈**: Tradeoff 를 platform 일방 결정 X. 사용자마다 quality vs latency 비중 다름. **명시 선택권 노출이 platform 의 의무**.
+**(b) Lesson**: tradeoffs should not be unilaterally decided by the platform. Quality vs latency weights differ per user. **Exposing explicit choice is the platform's duty**.
 
-**(c) Crumb 흡수**:
-- 3 preset (`solo` / `standard` / `parallel`)
-- ENV 변수 모델 swap (`CRUMB_MODEL_*`)
+**(c) Crumb absorption**:
+- 3 presets (`solo` / `standard` / `parallel`)
+- ENV-variable model swap (`CRUMB_MODEL_*`)
 - thinking_effort per-agent
 
-**(d) 코드 영향**:
+**(d) Code impact**:
 ```toml
 # .crumb/config.toml — user-editable
 [agents.planner]
@@ -135,35 +135,35 @@ thinking_effort = "medium"
 
 ### Claim 4 — Lanham/Google 'centralized 4.4× containment'
 
-**(a) 무슨 일이 있었나** (Google 2026 study, Lanham 2026-04 인용)
+**(a) What happened** (Google 2026 study, cited in Lanham 2026-04)
 
 ```
-실험: 150+ tasks × 5 popular MAS frameworks
+Experiment: 150+ tasks × 5 popular MAS frameworks
 
-결과:
+Result:
   Independent agents (mesh, peer-to-peer)
     → error 17.2× amplification
-  Centralized supervisor (Hub-Spoke 변형)
+  Centralized supervisor (Hub-Spoke variant)
     → error 4.4× containment
   
 Sequential planning: every multi-agent variant -39 ~ -70%
 ```
 
-**(b) 교훈**: topology 가 error blast radius 결정. **4 배 차이 = production 운영 가능 여부**.
+**(b) Lesson**: topology determines error blast radius. **A 4× difference = the line between viable and non-viable production**.
 
-**(c) Crumb 흡수**:
-- Mesh / independent broadcasting → ❌ 채택 X
-- **Hub-Ledger-Spoke** (centralized routing only via Coordinator) → ✅ 채택
-- Spoke 끼리 직접 호출 X → 거짓 전파 경로 차단
+**(c) Crumb absorption**:
+- Mesh / independent broadcasting → ❌ not adopted
+- **Hub-Ledger-Spoke** (centralized routing only via Coordinator) → ✅ adopted
+- No direct spoke-to-spoke calls → false-propagation paths blocked
 
-**(d) 코드 영향**:
+**(d) Code impact**:
 ```typescript
 // coordinator.ts — single point of containment
 class Coordinator {
-  // 모든 routing 권한, validator 통과 후만 다음 spoke
+  // All routing authority; only after validator pass does the next spoke fire.
 }
 
-// adapters/base.ts — spoke 권한 제한
+// adapters/base.ts — restrict spoke privileges
 interface AgentAdapter {
   // can: transcript.read, artifacts.read/write
   // cannot: spawn other adapter (Coordinator only)
@@ -172,37 +172,37 @@ interface AgentAdapter {
 
 ---
 
-### Claim 5 — MIT 결정 이론 'short relay 22.5%'
+### Claim 5 — MIT decision theory 'short relay 22.5%'
 
-**(a) 무슨 일이 있었나** (MIT 결정 이론, Lanham 2026-04 인용)
+**(a) What happened** (MIT decision theory, cited in Lanham 2026-04)
 
 ```
-실험 (GPT-4):
-  같은 task 를 N stage relay 로
+Experiment (GPT-4):
+  Same task in an N-stage relay
 
-결과:
+Result:
   1 stage:  90.7%
   2 stage:  41.2%   (-49.5%p)
   5 stage:  22.5%   (-68.2%p)
 
-이론 (Bayesian):
+Theory (Bayesian):
   "without new exogenous signals, any delegated acyclic network 
    is decision-theoretically dominated by a centralized Bayes 
    decision maker"
 ```
 
-**(b) 교훈**: 새 정보 없이 단계만 늘리면 정확도 폭락. **PDCA 5 stage = 22.5% 영역**.
+**(b) Lesson**: with no new information, adding stages collapses accuracy. **PDCA's 5 stages = the 22.5% zone**.
 
-**(c) Crumb 흡수**:
-- old PDCA (Plan→Design→Do→Check→Act) → 폐기
-- **new short chain**: goal → spec → build → verify → done (4 actor)
-- progress-ledger 의 stage 개념 없음, dynamic next_speaker
+**(c) Crumb absorption**:
+- old PDCA (Plan→Design→Do→Check→Act) → discarded
+- **new short chain**: goal → spec → build → verify → done (4 actors)
+- progress-ledger has no stage concept; dynamic next_speaker
 
-**(d) 코드 영향**:
+**(d) Code impact**:
 ```typescript
-// progress-ledger.ts — stage 없음
+// progress-ledger.ts — no stage
 interface ProgressLedger {
-  step: number;          // counter 만
+  step: number;          // counter only
   next_speaker: ActorId; // dynamic
 }
 
@@ -225,97 +225,97 @@ function computeNext(transcript: Message[]): ActorId {
 verbatim:
 > "Avoid multi-agent architectures early. Tool complexity already made a single-agent system hard enough to reason about; adding more agents too early multiplies prompts, traces, and failure surfaces before it multiplies value."
 
-→ Crumb 흡수: `--solo` 가 default, `--standard`/`--parallel` 명시 opt-in.
+→ Crumb absorption: `--solo` is default; `--standard`/`--parallel` are explicit opt-ins.
 
 ---
 
-## Part 2 — TradingAgents 가 같은 문제를 어떻게 다뤘나 (정합 매핑)
+## Part 2 — How TradingAgents addressed the same problems (alignment mapping)
 
-> [[bagelcode-tradingagents-paper]] (arXiv 2412.20138, Tauric Research/UCLA/MIT) 가 우리 1차 학술 근거.
-> 5 frontier claim 중 어디까지 다뤘는지 표.
+> [[bagelcode-tradingagents-paper]] (arXiv 2412.20138, Tauric Research/UCLA/MIT) is our primary academic backing.
+> A table of which of the 5 frontier claims it addresses.
 
-### 매핑 표
+### Mapping table
 
 ```
 ┌────────────────┬──────────────────────────────┬───────────────────────────┐
-│ 5 claim         │  TradingAgents 의 응답           │  Crumb 가 추가한 layer        │
+│ 5 claim         │  TradingAgents response          │  Layer Crumb adds          │
 ├────────────────┼──────────────────────────────┼───────────────────────────┤
-│ 1. Skill bloat   │  ✅ 직접 다룸                    │  ⊕ 운영 spec 추가            │
+│ 1. Skill bloat   │  ✅ addressed directly          │  ⊕ adds operational spec  │
 │   (Paperclip)   │  §4.1 "each role only extracts │  per-actor sandwich §2     │
-│                 │   or queries the necessary    │  (학술 → 운영 instantiation) │
-│                 │   information"                  │                            │
-│                 │  → role-based separation 학술  │                            │
-│                 │   적 선언                        │                            │
+│                 │   or queries the necessary    │  (academic → operational    │
+│                 │   information"                  │   instantiation)            │
+│                 │  → academic declaration of      │                            │
+│                 │   role-based separation         │                            │
 ├────────────────┼──────────────────────────────┼───────────────────────────┤
-│ 2. TDD Iron Law │  ⚠ 부분적                       │  ⊕ Verifier exec + 5 룰   │
+│ 2. TDD Iron Law │  ⚠ partial                      │  ⊕ Verifier exec + 5 rules │
 │   (superpowers) │  §4.2 multi-stage validation:  │  validator/anti-deception │
-│                 │  Risk Mgmt Team debate +        │  schema 단계 enforcement   │
+│                 │  Risk Mgmt Team debate +        │  schema-stage enforcement  │
 │                 │  Fund Manager final approval    │                            │
 │                 │  §6.1.4: "detailed reasoning,  │                            │
 │                 │   tool usage, grounding         │                            │
 │                 │   evidence"                     │                            │
-│                 │  → verification-first 발상은    │                            │
-│                 │   있지만 schema 강제 X         │                            │
+│                 │  → has the verification-first   │                            │
+│                 │   idea but no schema enforcement│                            │
 ├────────────────┼──────────────────────────────┼───────────────────────────┤
-│ 3. Wrong tradeoff│  ✅ 직접 다룸                    │  ⊕ user-facing preset    │
+│ 3. Wrong tradeoff│  ✅ addressed directly          │  ⊕ user-facing preset    │
 │   (Anthropic)    │  §4.3 Quick (gpt-4o-mini) vs  │  .crumb/config.toml +    │
 │                 │   Deep (o1-preview) split       │  --preset solo/standard/.. │
 │                 │  "researchers can effortlessly  │  ENV CRUMB_MODEL_*        │
 │                 │   replace the model with any   │                            │
 │                 │   locally hosted or API-       │                            │
 │                 │   accessible alternatives"     │                            │
-│                 │  → model trade-off 노출의       │                            │
-│                 │   학술적 정당화                  │                            │
+│                 │  → academic justification of    │                            │
+│                 │   exposing model trade-offs     │                            │
 ├────────────────┼──────────────────────────────┼───────────────────────────┤
-│ 4. Centralized   │  ✅✅ 직접 다룸 (가장 강함)     │  ⊕ 정량 데이터 보강       │
-│   containment    │  §4.1 "structured                │  Lanham 2026 의 4.4× /   │
-│   (Lanham)       │   communication protocol"       │  17.2× 데이터 추가 인용    │
-│                 │  Fund Manager final centralized │  (TradingAgents 는 정량   │
-│                 │   decision                      │   분석 없이 정성적 정당화) │
-│                 │  Risk Mgmt 의 facilitator 가   │                            │
-│                 │   debate 결론 환원               │                            │
-│                 │  → centralized supervisor 패턴 │                            │
-│                 │   정확히 채택                    │                            │
+│ 4. Centralized   │  ✅✅ addressed directly        │  ⊕ quantitative data add  │
+│   containment    │  §4.1 "structured                │  cites Lanham 2026's      │
+│   (Lanham)       │   communication protocol"       │  4.4× / 17.2× data        │
+│                 │  Fund Manager final centralized │  (TradingAgents lacks      │
+│                 │   decision                      │   quantitative analysis,    │
+│                 │  Risk Mgmt facilitator distills │   only qualitative justify) │
+│                 │   the debate conclusion         │                            │
+│                 │  → adopts the centralized       │                            │
+│                 │   supervisor pattern exactly    │                            │
 ├────────────────┼──────────────────────────────┼───────────────────────────┤
-│ 5. MIT short     │  ✅ 직접 다룸 (telephone game)  │  ⊕ MIT 정량 데이터 추가   │
-│   relay 22.5%    │  §4.1 verbatim:                  │  90.7% → 22.5% 회귀        │
-│                 │  "pure natural language          │  TradingAgents 는 정성적   │
-│                 │   communication can resemble a   │   "telephone effect" 만   │
-│                 │   **game of telephone**—over    │   언급, MIT 정량 데이터    │
-│                 │   multiple iterations, initial   │   없음                     │
+│ 5. MIT short     │  ✅ addressed directly (telephone game)  │  ⊕ MIT quantitative data add │
+│   relay 22.5%    │  §4.1 verbatim:                  │  90.7% → 22.5% regression │
+│                 │  "pure natural language          │  TradingAgents only mentions │
+│                 │   communication can resemble a   │   the qualitative          │
+│                 │   **game of telephone**—over    │   "telephone effect", no   │
+│                 │   multiple iterations, initial   │   MIT quantitative data    │
 │                 │   information may be forgotten   │                            │
 │                 │   or distorted"                  │                            │
-│                 │  → 같은 문제 인식, 해법 = 5     │                            │
-│                 │   structured documents           │                            │
+│                 │  → same problem framing,        │                            │
+│                 │   solution = 5 structured docs   │                            │
 └────────────────┴──────────────────────────────┴───────────────────────────┘
 ```
 
-→ **TradingAgents 가 5 claim 중 4 개 직접 다룸. Crumb 는 학술 prior 위에 운영 layer 추가**.
+→ **TradingAgents addresses 4 of the 5 claims directly. Crumb adds an operational layer on top of that academic prior**.
 
 ---
 
-## Part 3 — TradingAgents 가 다루지 못한 5 영역 (Crumb 가 추가)
+## Part 3 — 5 areas TradingAgents could not cover (added by Crumb)
 
 ```
-TradingAgents 는 학술 prototype                Crumb 가 추가
+TradingAgents is an academic prototype          Crumb adds
 ─────────────────────────────                  ──────────────
 
-1. ❌ 운영 차원 token efficiency               ⊕ 12-rule efficiency 룰
-   (kiki/Paperclip 의 21K 낭비 같은            (sandwich cache + transcript pull
-    실 운영 데이터 분석 없음)                    + artifact ref + Plan Cache)
+1. ❌ Operational token efficiency             ⊕ 12-rule efficiency rules
+   (no real operational data analysis like       (sandwich cache + transcript pull
+    kiki/Paperclip's 21K waste)                + artifact ref + Plan Cache)
 
 2. ❌ Anti-deception schema enforcement       ⊕ validator/anti-deception.ts
-   (의도는 있지만 코드 단계 강제 없음)         5 schema 룰 (D1=0, D2=0 강제)
+   (intent exists but no code-level enforcement) 5 schema rules (force D1=0, D2=0)
 
 3. ❌ Cross-provider verification              ⊕ Builder=Codex / Verifier=Claude
-   (single provider 가정, OpenAI 만)           (다른 model architecture)
+   (single-provider assumption, OpenAI only)   (different model architectures)
 
-4. ❌ Fault tolerance 시스템                  ⊕ F1-F5 + circuit breaker
-   (adapter 장애 / 환경 변화 / stuck         + capability probe + stuck escalation
-    escalation 부재)                          + ALAS local compensation
+4. ❌ Fault-tolerance system                  ⊕ F1-F5 + circuit breaker
+   (missing adapter failure / env change /    + capability probe + stuck escalation
+    stuck escalation)                          + ALAS local compensation
 
-5. ❌ User intervention surface                ⊕ TUI 5 surface
-   (학술 prototype, HITL 부재)                (slash + free-text + 4 hook + 
+5. ❌ User-intervention surface                ⊕ TUI 5 surfaces
+   (academic prototype, no HITL)              (slash + free-text + 4 hooks + 
                                               inbox.txt + SIGINT)
 ```
 
@@ -323,10 +323,10 @@ TradingAgents 는 학술 prototype                Crumb 가 추가
 
 ---
 
-## Part 4 — 한 단락 + 학술 backing 명시 (README 강화)
+## Part 4 — One paragraph + explicit academic backing (README reinforcement)
 
 ```markdown
-## Why 4 actors? (TradingAgents §4 + 5 frontier 데이터 종합)
+## Why 4 actors? (TradingAgents §4 + 5 frontier data composite)
 
 Crumb's 4-actor structure is grounded in TradingAgents (arXiv 2412.20138, 
 Xiao et al., UCLA + MIT + Tauric Research) §4 communication protocol and 
@@ -371,18 +371,18 @@ backing + Paperclip Issue #3438 operational lessons + superpowers TDD discipline
 + Anthropic UX feedback = 4-actor minimal viable orchestration.
 ```
 
-→ **academic backing + production lessons 모두 한 단락에 압축**. 평가자에게 신뢰성 압도적.
+→ **academic backing + production lessons compressed into a single paragraph**. Overwhelming credibility for evaluators.
 
 ---
 
-## Part 5 — 정합 시각화
+## Part 5 — Alignment visualization
 
 ```
 ═══════════════════════════════════════════════════════════════════════════
-                    Crumb 의 design pedigree
+                    Crumb's design pedigree
 ═══════════════════════════════════════════════════════════════════════════
 
-  TradingAgents §4 (학술 foundation)
+  TradingAgents §4 (academic foundation)
        ▾
   ┌─────────────────────────────────────────────────┐
   │  Communication Protocol                            │
@@ -393,24 +393,24 @@ backing + Paperclip Issue #3438 operational lessons + superpowers TDD discipline
   │   ▸ ReAct prompting                                │
   └─────────────────────────────────────────────────┘
        ▾
-       ▾  + Lanham 2026-04 정량 데이터 (4.4× / 17.2×)
-       ▾  + MIT 결정 이론 (90.7% → 22.5%)
-       ▾  + Paperclip Issue #3438 (35% bloat / 21K 낭비)
-       ▾  + Anthropic 2026-03 ("wrong tradeoff" 인정)
+       ▾  + Lanham 2026-04 quantitative data (4.4× / 17.2×)
+       ▾  + MIT decision theory (90.7% → 22.5%)
+       ▾  + Paperclip Issue #3438 (35% bloat / 21K waste)
+       ▾  + Anthropic 2026-03 ("wrong tradeoff" admission)
        ▾  + obra/superpowers (TDD Iron Law, 89K stars)
        ▾  + Shopify (avoid multi-agent early)
        ▾
   ┌─────────────────────────────────────────────────┐
   │  Crumb 4-actor minimal viable orchestration       │
   │                                                   │
-  │   ▸ 4 actor (vs 8+ Paperclip)                    │
+  │   ▸ 4 actors (vs 8+ Paperclip)                   │
   │   ▸ Hub-Ledger-Spoke (centralized)               │
   │   ▸ XML sandwich (Anthropic native)              │
   │   ▸ JSONL transcript (single SoT)                │
   │   ▸ per-actor sandwich §2 (no admin bloat)       │
   │   ▸ Verifier exec + anti-deception 5 rules        │
-  │   ▸ user-controllable 3 preset + ENV swap        │
-  │   ▸ TUI 4 pane + 4 hook + slash command           │
+  │   ▸ user-controllable 3 presets + ENV swap       │
+  │   ▸ TUI 4 panes + 4 hooks + slash command         │
   │   ▸ F1-F5 fault tolerance                         │
   │   ▸ OTel GenAI alias (export ready)              │
   └─────────────────────────────────────────────────┘
@@ -421,10 +421,10 @@ backing + Paperclip Issue #3438 operational lessons + superpowers TDD discipline
 ## See also
 
 - [[bagelcode]] / [[bagelcode-task-direction]]
-- [[bagelcode-tradingagents-paper]] — 1차 학술 근거 (§4 communication protocol)
-- [[bagelcode-orchestration-topology]] — Hub-Ledger-Spoke 결정
-- [[bagelcode-frontier-orchestration-2026]] — 11 frontier 사료
+- [[bagelcode-tradingagents-paper]] — primary academic backing (§4 communication protocol)
+- [[bagelcode-orchestration-topology]] — Hub-Ledger-Spoke decision
+- [[bagelcode-frontier-orchestration-2026]] — 11 frontier source documents
 - [[bagelcode-production-cases-2026]] — Lanham 2026-04 + Meta + Shopify
-- [[bagelcode-rubric-scoring]] — D1-D5 anti-deception 룰
+- [[bagelcode-rubric-scoring]] — D1-D5 anti-deception rules
 - [[bagelcode-fault-tolerance-design]] — F1-F5 mitigation
-- [[bagelcode-paperclip-vs-alternatives]] — Paperclip 차용 vs 자체 구현
+- [[bagelcode-paperclip-vs-alternatives]] — Paperclip adoption vs in-house implementation

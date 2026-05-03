@@ -12,24 +12,24 @@ related:
 
 # Same-provider self-bias — verdict gate → numerical discount on D1/D5
 
-> **질문**: same-provider verifier 가 같은 builder 의 산출물을 채점할 때 +14~22% PASS 인플레이션이 발생한다 (Stureborg EMNLP 2024). 현재 Crumb 의 anti-deception Rule 4 는 binary verdict downgrade (PASS → PARTIAL) 만 적용. 이게 충분한가, 아니면 score 자체에 numerical discount 를 적용해야 하나?
+> **Question**: When a same-provider verifier scores the output of the same builder, +14~22% PASS inflation occurs (Stureborg EMNLP 2024). Crumb's current anti-deception Rule 4 only applies a binary verdict downgrade (PASS → PARTIAL). Is this enough, or should a numerical discount be applied to the score itself?
 >
-> **결론**: **numerical discount 채택**. binary gate 는 dynamic range 를 collapse 시키고 evidence-quantitative 한 mitigation 을 binary action 으로 변환해 정보 손실 발생. D1+D5 (LLM-judged 차원) 에 한해 0.15 discount factor 를 적용, D2/D6 (deterministic ground truth) 와 D4 (reducer-auto) 는 면역. PASS → PARTIAL 명시적 강등은 제거하고 standard threshold (≥24 PASS / 18-23 PARTIAL / <18 FAIL) 가 자연스럽게 재발화하도록 둠.
+> **Conclusion**: **Adopt a numerical discount**. A binary gate collapses dynamic range and converts an evidence-quantitative mitigation into a binary action, causing information loss. Apply a 0.15 discount factor only to D1+D5 (LLM-judged dimensions); D2/D6 (deterministic ground truth) and D4 (reducer-auto) are immune. Remove the explicit PASS → PARTIAL downgrade and let the standard threshold (≥24 PASS / 18-23 PARTIAL / <18 FAIL) re-fire naturally.
 
 ---
 
 ## 0. TL;DR
 
-- **이전**: `Rule 4 self_bias_risk_same_provider` 은 violation tag 추가 + verdict 가 PASS 면 PARTIAL 로 강등 (binary).
-- **이후**: D1 (spec_fit) · D3 (schema/observability LLM 절반) · D5 (quality) 를 `score × (1 − 0.15)` 로 깎음. aggregate 재계산. verdict 은 standard threshold 로 자연스럽게 결정. 추가 violation tag `self_bias_score_discounted` 기록.
-- **Scope**: D2 (qa-check exec) · D6 (qa-check portability) · D4 (reducer-auto budget) 는 면역. D3/D5 는 LLM+auto split 이지만 verifier 가 emit 하는 건 raw LLM-judged `scores.D{3,5}.score` 이고, `combineDimScore` 가 그 값과 `autoScores.D{3,5}_auto` 를 평균. 따라서 combine 전에 `scores.D{3,5}.score` 만 깎는 건 LLM 절반만 깎는 것과 수학적으로 동일 — auto 절반은 그대로 보존.
-- **factor 0.15**: Stureborg EMNLP 2024 의 +14~22% inflation 범위의 보수적 midpoint. 정밀화는 frontier 데이터 축적 후 P1.
+- **Before**: `Rule 4 self_bias_risk_same_provider` added a violation tag and downgraded the verdict from PASS to PARTIAL (binary).
+- **After**: D1 (spec_fit) · D3 (the LLM half of schema/observability) · D5 (quality) are reduced by `score × (1 − 0.15)`. Aggregate is recomputed. The verdict is determined naturally by the standard threshold. An additional `self_bias_score_discounted` violation tag is recorded.
+- **Scope**: D2 (qa-check exec) · D6 (qa-check portability) · D4 (reducer-auto budget) are immune. D3/D5 are LLM+auto splits, but what the verifier emits is the raw LLM-judged `scores.D{3,5}.score`, and `combineDimScore` averages that with `autoScores.D{3,5}_auto`. Therefore reducing only `scores.D{3,5}.score` before combine is mathematically equivalent to discounting only the LLM half — the auto half is preserved.
+- **factor 0.15**: A conservative midpoint of the +14~22% inflation range from Stureborg EMNLP 2024. Refinement is P1 after frontier data accumulates.
 
 ---
 
-## 1. 문제 — 기존 binary gate 의 한계
+## 1. Problem — limits of the existing binary gate
 
-### 1.1 현재 동작 (`src/validator/anti-deception.ts:111-117, 148-150`)
+### 1.1 Current behavior (`src/validator/anti-deception.ts:111-117, 148-150`)
 
 ```ts
 const sameProvider = Boolean(
@@ -38,70 +38,70 @@ const sameProvider = Boolean(
 if (sameProvider) {
   violations.push('self_bias_risk_same_provider');
 }
-// ... 후략 ...
+// ... later ...
 if (sameProvider && scores.verdict === 'PASS') {
   scores.verdict = 'PARTIAL';
 }
 ```
 
-### 1.2 4 가지 한계
+### 1.2 Four limitations
 
-1. **Dynamic range collapse**. 27/30 PASS 와 19/30 PARTIAL 이 둘 다 PARTIAL 로 표시 → score_history 의 ratchet (max_aggregate_so_far) 이 과대 평가 (27 로 기록되지만 실은 inflation 보정 후 23 즈음).
-2. **Evidence 무시**. 측정된 inflation 은 +14~22% 의 **연속적 수치**. 이를 binary action (PASS↔PARTIAL) 으로 환원하면 측정의 정밀도가 절반 이상 손실.
-3. **D2/D6 도 같이 강등**. binary gate 는 verdict 단위. PASS 가 PARTIAL 이 되면 D2=5 / D6=5 (qa-check ground truth) 도 같이 표시상 절하 — deterministic 신호의 신뢰성 훼손.
-4. **PARTIAL hook 이 사용자 대기 비용 추가**. binary 강등은 hook(partial) 발화 → `runSession` 이 사용자 응답 대기 (architecture v0.2.0 G1). same-provider 한 가지 사실만으로 매 verdict 마다 사용자가 confirm/veto 클릭하는 cognitive load 가 frontier 표준에 비해 과함.
+1. **Dynamic range collapse**. Both 27/30 PASS and 19/30 PARTIAL are displayed as PARTIAL → score_history's ratchet (max_aggregate_so_far) is overestimated (recorded as 27 but actually around 23 after inflation correction).
+2. **Ignoring evidence**. The measured inflation is a **continuous value** of +14~22%. Reducing this to a binary action (PASS↔PARTIAL) loses more than half of the measurement precision.
+3. **D2/D6 are downgraded too**. The binary gate operates at the verdict level. When PASS becomes PARTIAL, D2=5 / D6=5 (qa-check ground truth) are also nominally devalued — undermining the credibility of the deterministic signal.
+4. **PARTIAL hook adds user wait cost**. The binary downgrade fires the hook(partial) → `runSession` waits for a user response (architecture v0.2.0 G1). Forcing the user to confirm/veto on every verdict from the single fact of same-provider imposes a cognitive load excessive by frontier standards.
 
 ---
 
-## 2. Frontier evidence — 왜 numerical discount 가 옳은가
+## 2. Frontier evidence — why a numerical discount is correct
 
-### 2.1 Stureborg EMNLP 2024 — 측정된 inflation
+### 2.1 Stureborg EMNLP 2024 — measured inflation
 
 > "Same-provider judge inflates PASS rate by **+14% to +22%** depending on the model family pairing." (§4.2 same-family bias)
 
-연속적 수치이므로 numerical mitigation 이 자연스러운 대응.
+It is a continuous value, so a numerical mitigation is the natural response.
 
 ### 2.2 Anthropic Hybrid Normalization 2026 — 2-stage mitigation
 
 > "Prompt-only mitigation (e.g., 'ignore length' instruction) reaches **~50% effect reduction**; the residual is *your* responsibility."
 
-Hybrid 권고 = prompt warning **+** numerical post-correction. Crumb 는 이미 cross-provider 권고 prompt 를 verifier sandwich 에 주입 (length-context @v1 패턴) — prompt layer 는 50% 이미 cover. **잔여 50% 가 numerical discount 의 정당한 자리**.
+Hybrid recommendation = prompt warning **+** numerical post-correction. Crumb already injects a cross-provider recommendation prompt into the verifier sandwich (length-context @v1 pattern) — the prompt layer already covers 50%. **The remaining 50% is the rightful place for a numerical discount**.
 
-### 2.3 AlpacaEval LC (Dubois et al. 2024) / Arena-Hard v2 — Length-controlled scoring 선례
+### 2.3 AlpacaEval LC (Dubois et al. 2024) / Arena-Hard v2 — Length-controlled scoring precedent
 
-- AlpacaEval 1.0 → 2.0 (LC) 에서 length-aware logistic regression 이 default.
-- Arena-Hard v2 : "headline metric is length-controlled win rate". Frontier 표준 = numerical-controlled scoring, 절대값 아님.
+- AlpacaEval 1.0 → 2.0 (LC) makes length-aware logistic regression the default.
+- Arena-Hard v2: "headline metric is length-controlled win rate". Frontier standard = numerical-controlled scoring, not absolute values.
 
-Same-provider 통제는 length 통제와 같은 family 의 calibration. **이미 frontier 가 채택한 패턴을 같은 layer 에서 적용**.
+Same-provider control is calibration of the same family as length control. **Apply a frontier-adopted pattern at the same layer**.
 
-### 2.4 Rubric-Anchored Judging (NeurIPS 2025) — bias 의 dim-specific concentration
+### 2.4 Rubric-Anchored Judging (NeurIPS 2025) — dim-specific concentration of bias
 
 > "Length bias concentrates in qualitative dims (D1 spec_fit / D5 quality) while quantitative dims (D2/D6 from qa-check-effect) are immune."
 
-Same-provider self-bias 도 **동일하게 qualitative dim 에 집중**. 이미 length-bias firewall (G-C, `dispatcher/live.ts:118-132`) 이 동일한 D1/D5 scope rationale 로 작동 — **scope 는 동일 (D1+D5), mitigation method 만 다름**:
+Same-provider self-bias **also concentrates in the qualitative dims**. The length-bias firewall (G-C, `dispatcher/live.ts:118-132`) already operates with the same D1/D5 scope rationale — **the scope is identical (D1+D5); only the mitigation method differs**:
 
 | Bias source | Mitigation layer | Scope |
 |---|---|---|
 | Length | Prompt ("length is not quality") | D1 / D5 |
 | Same-provider | Prompt + **numerical discount 0.15** | D1 / D5 |
 
-### 2.5 Discount factor 0.15 의 calibration
+### 2.5 Calibration of discount factor 0.15
 
-| 출처 | 측정값 | 보정 후 |
+| Source | Measured value | After correction |
 |---|---|---|
 | Stureborg EMNLP 2024 §4.2 | +14% (Llama family) | discount 0.14 |
 | Stureborg EMNLP 2024 §4.2 | +18% (GPT family self) | discount 0.18 |
 | Stureborg EMNLP 2024 §4.2 | +22% (Claude family self) | discount 0.22 |
-| Anthropic 2026 (prompt 50% cover) | 잔여 절반 | 0.07 ~ 0.11 |
+| Anthropic 2026 (prompt covers 50%) | residual half | 0.07 ~ 0.11 |
 | Cross-provider 3-judge consensus (verifier-isolation-matrix) | F1 97-98%, κ=0.95 | 0% |
 
-**선택**: 보수적으로 **0.15** (Stureborg midpoint). prompt mitigation 50% 가 이미 작동 중이라는 가정 시 0.07~0.11 이 더 정밀하나, prompt 의 실제 effect rate 가 미검증이라 안전 마진 두고 0.15. 정밀화는 score_history 의 same-provider session 추적 데이터 축적 후 P1.
+**Choice**: conservatively **0.15** (Stureborg midpoint). Assuming prompt mitigation 50% is already operating, 0.07~0.11 would be more precise, but with the actual prompt effect rate unverified, a safety margin sets it at 0.15. Refinement is P1 after accumulating same-provider session tracking data in score_history.
 
 ---
 
-## 3. 변경 사양
+## 3. Change specification
 
-### 3.1 신규 동작 (`src/validator/anti-deception.ts`)
+### 3.1 New behavior (`src/validator/anti-deception.ts`)
 
 ```ts
 const SAME_PROVIDER_DISCOUNT = 0.15;
@@ -132,75 +132,75 @@ if (sameProvider) {
   violations.push('self_bias_score_discounted');
 }
 
-// 제거: 기존의 binary verdict downgrade (line 148-150)
-// (aggregate 재계산 후 standard threshold 가 자연스럽게 verdict 결정)
+// Removed: the previous binary verdict downgrade (line 148-150)
+// (after aggregate recomputation, the standard threshold determines verdict naturally)
 ```
 
 ### 3.2 Scope rationale
 
-| Dim | Source | Discount | 이유 |
+| Dim | Source | Discount | Reason |
 |---|---|---|---|
-| D1 spec_fit | verifier-llm | ✅ 0.15 | 100% LLM 판단, qualitative |
-| D2 exec | qa-check-effect | ❌ 면역 | deterministic ground truth |
-| D3 schema | LLM + auto split | ✅ 0.15 | verifier 가 emit 하는 raw LLM-judged `scores.D3.score` 를 깎고, `combineDimScore` 가 그 값과 `autoScores.D3_auto` 를 평균 — combine 전에 깎는 건 LLM 절반만 깎는 것과 수학적으로 동일 |
-| D4 budget | reducer-auto | ❌ 면역 | deterministic, no LLM |
-| D5 quality | verifier-llm | ✅ 0.15 | 100% LLM 판단, qualitative (D3 와 동일 mechanism — D5 도 LLM+auto split) |
-| D6 portability | qa-check-effect | ❌ 면역 | deterministic ground truth |
+| D1 spec_fit | verifier-llm | ✅ 0.15 | 100% LLM judgment, qualitative |
+| D2 exec | qa-check-effect | ❌ immune | deterministic ground truth |
+| D3 schema | LLM + auto split | ✅ 0.15 | Discount the raw LLM-judged `scores.D3.score` emitted by the verifier; `combineDimScore` averages that with `autoScores.D3_auto` — discounting before combine is mathematically equivalent to reducing only the LLM half |
+| D4 budget | reducer-auto | ❌ immune | deterministic, no LLM |
+| D5 quality | verifier-llm | ✅ 0.15 | 100% LLM judgment, qualitative (same mechanism as D3 — D5 is also an LLM+auto split) |
+| D6 portability | qa-check-effect | ❌ immune | deterministic ground truth |
 
-### 3.3 효과 케이스
+### 3.3 Effect cases
 
-| 케이스 | aggregate 변화 | verdict | `max_aggregate_so_far` |
+| Case | Aggregate change | Verdict | `max_aggregate_so_far` |
 |---|---|---|---|
-| 27/30 PASS · same-provider · D1=4 D5=5 | 27 → 25.65 (D1: 4→3.4, D5: 5→4.25) | PASS (≥24) | 25.65 (정직) |
-| 25/30 PASS · same-provider · D1=4 D5=5 | 25 → 23.65 | PARTIAL (자연 hop) | 23.65 |
-| 19/30 PARTIAL · same-provider · D1=4 D5=4 | 19 → 17.8 | FAIL (자연 hop) | 17.8 |
-| 27/30 PASS · **cross-provider** | 27 (변화 없음) | PASS | 27 |
+| 27/30 PASS · same-provider · D1=4 D5=5 | 27 → 25.65 (D1: 4→3.4, D5: 5→4.25) | PASS (≥24) | 25.65 (honest) |
+| 25/30 PASS · same-provider · D1=4 D5=5 | 25 → 23.65 | PARTIAL (natural hop) | 23.65 |
+| 19/30 PARTIAL · same-provider · D1=4 D5=4 | 19 → 17.8 | FAIL (natural hop) | 17.8 |
+| 27/30 PASS · **cross-provider** | 27 (no change) | PASS | 27 |
 
-같은 raw 점수 (27) 가 same-provider 에선 25.65 cap, cross-provider 에선 27 — **Stureborg evidence 가 그대로 매핑**.
+The same raw score (27) caps at 25.65 under same-provider and stays at 27 under cross-provider — **Stureborg evidence maps directly**.
 
-> 위 표는 D1/D5 만 보여 단순화. 실제로는 D3 도 같은 0.15 discount 가 적용되지만, `combineDimScore` 가 `scores.D3.score` (LLM-emitted 절반) 와 `autoScores.D3_auto` (reducer 절반) 를 평균하므로 최종 D3 기여도는 LLM 절반의 7.5% 만 빠짐 (auto 절반은 immune). D5 도 동일 mechanism — verifier 가 emit 한 raw `scores.D5.score` 만 깎이고 `D5_auto` 와 평균.
+> The table above shows only D1/D5 for simplicity. In practice the same 0.15 discount applies to D3 too, but since `combineDimScore` averages `scores.D3.score` (the LLM-emitted half) with `autoScores.D3_auto` (the reducer half), the final D3 contribution drops by only 7.5% on the LLM half (the auto half is immune). D5 follows the same mechanism — only the raw `scores.D5.score` emitted by the verifier is discounted, then averaged with `D5_auto`.
 
 ---
 
 ## 4. Risk + mitigation
 
-### 4.1 Single-provider 환경 페널티
+### 4.1 Single-provider environment penalty
 
-Bagelcode 평가자 환경에서 Codex 만 인증된 경우 (`solo` preset) 모든 session 이 discount 적용.
+In a Bagelcode evaluator environment where only Codex is authenticated (`solo` preset), the discount applies to every session.
 
-**처리**: 의도된 동작. wiki 의 verifier-isolation-matrix 가 이미 single-provider 를 frontier 표준 미달로 결론. discount 는 평가자가 그 trade-off 를 정직하게 보도록 함. 강제로 cross-provider preset 권고는 `crumb doctor` / `crumb config` 가 이미 함.
+**Handling**: intended behavior. The wiki's verifier-isolation-matrix already concludes single-provider is below frontier standard. The discount makes evaluators see that trade-off honestly. Forcing a cross-provider preset recommendation is already done by `crumb doctor` / `crumb config`.
 
-### 4.2 Discount factor 가 provider-pair-specific
+### 4.2 Discount factor is provider-pair-specific
 
-anthropic/anthropic 과 google/google 의 inflation 이 다를 수 있음 (Stureborg 14~22% 분산).
+anthropic/anthropic vs google/google inflation may differ (Stureborg's 14~22% spread).
 
-**처리**: midpoint 0.15 로 시작. score_history 의 same-provider session 의 verdict 분포가 cross-provider 와 통계적으로 비교 가능해지면 per-pair table 로 진화. 현재는 over-engineering.
+**Handling**: start at midpoint 0.15. Once the verdict distributions of same-provider sessions in score_history become statistically comparable to cross-provider, evolve into a per-pair table. For now this would be over-engineering.
 
-### 4.3 Goodhart 회피 인센티브 변형
+### 4.3 Goodhart-avoidance incentive shift
 
-- 이전 mental model: "same-provider 면 어차피 PARTIAL 이니 27+ 노릴 필요 없음".
-- 이후 mental model: "discount 감안해서 raw 27+ 노려야 PASS".
+- Previous mental model: "if same-provider it'll be PARTIAL anyway, no need to chase 27+".
+- New mental model: "factor in the discount and chase raw 27+ to PASS".
 
-**처리**: 품질 압력 증가. 의도된 방향.
+**Handling**: quality pressure increases. Intended direction.
 
 ---
 
-## 5. 결정 영향
+## 5. Decision impact
 
-| 항목 | 영향 |
+| Item | Impact |
 |---|---|
-| `validator/anti-deception.ts` | Rule 4 분기 변경 (binary → numerical), 새 violation tag |
-| `validator/anti-deception.test.ts` | 기존 self-bias 테스트 update + 신규 discount 케이스 추가 |
-| `protocol/types.ts` | `Scores.audit_violations` 의 enum 에 `self_bias_score_discounted` 추가 (이미 free-form string array 면 그대로) |
-| Wiki | 이 페이지 + `bagelcode-scoring-ratchet-frontier-2026-05-02.md` cross-link |
-| Studio / TUI | 변화 없음 — `cross_provider` flag 표시는 그대로, aggregate 가 깎인 값으로 표시되므로 사용자가 보는 숫자가 정직해짐 |
+| `validator/anti-deception.ts` | Rule 4 branch change (binary → numerical), new violation tag |
+| `validator/anti-deception.test.ts` | Update existing self-bias tests + add new discount cases |
+| `protocol/types.ts` | Add `self_bias_score_discounted` to the `Scores.audit_violations` enum (no change if already a free-form string array) |
+| Wiki | Cross-link this page with `bagelcode-scoring-ratchet-frontier-2026-05-02.md` |
+| Studio / TUI | No change — the `cross_provider` flag display stays as is, but the user sees the discounted aggregate, so the displayed numbers become honest |
 
 ---
 
 ## 6. References
 
 - **Stureborg et al. EMNLP 2024** — *Large Language Models are Inconsistent and Biased Evaluators*. §4.2 same-family bias measurement (+14~22% PASS inflation).
-- **Anthropic Hybrid Normalization 2026** (dev docs Q1) — prompt-only mitigation reaches ~50% effect reduction; numerical correction is residual. Hybrid 2-stage 권고.
+- **Anthropic Hybrid Normalization 2026** (dev docs Q1) — prompt-only mitigation reaches ~50% effect reduction; numerical correction is residual. Recommends a hybrid 2-stage approach.
 - **Dubois et al. 2024** (AlpacaEval LC) — *Length-Controlled AlpacaEval*. Length-aware logistic regression as default headline metric.
 - **Arena-Hard v2** (LMSYS 2025) — length-controlled win rate as default.
 - **Rubric-Anchored Judging** (NeurIPS 2025) — bias concentrates in qualitative dims (D1/D5), deterministic dims immune.
@@ -208,8 +208,8 @@ anthropic/anthropic 과 google/google 의 inflation 이 다를 수 있음 (Sture
 
 ## 7. Cross-links
 
-- ★ **[[bagelcode-system-architecture-v0.4]]** §5 (R1-R7 표) — 본 페이지의 R4 가 v0.4 의 anti-deception 7 rules 중 하나
-- [[bagelcode-scoring-ratchet-frontier-2026-05-02]] §3 (Failure modes), §4 (Frontier 수렴), §7 (P0 권고)
+- ★ **[[bagelcode-system-architecture-v0.4]]** §5 (R1-R7 table) — the R4 of this page is one of v0.4's anti-deception 7 rules
+- [[bagelcode-scoring-ratchet-frontier-2026-05-02]] §3 (Failure modes), §4 (Frontier convergence), §7 (P0 recommendations)
 - [[bagelcode-system-architecture-v0.1]] §7.3 (anti-deception Rules)
 - [[bagelcode-verifier-isolation-matrix]] C2 (cross-provider standard), C5 (isolation cost)
 - [[bagelcode-llm-judge-frontier-2026]] R3-R5 (judge-side bias inventory)

@@ -12,10 +12,10 @@ sources:
   - "https://hivetrail.com/blog/agents-md-vs-claude-md-cross-tool-standard"
   - "https://kau.sh/blog/agents-md/ (sync workaround)"
 summary: >-
-  AGENTS.md 가 universal source (Linux Foundation Agentic AI Foundation 표준). CLAUDE.md /
-  GEMINI.md 가 host-specific augmentation. 3 host (Claude Code / Codex CLI / Gemini CLI) 모두
-  AGENTS.md content 자동 로드 (Codex native + Claude `@AGENTS.md` import + Gemini settings.json
-  contextFileName). CRUMB.md drop — content 가 AGENTS.md 로 흡수.
+  AGENTS.md is the universal source (Linux Foundation Agentic AI Foundation standard). CLAUDE.md /
+  GEMINI.md are host-specific augmentation. All 3 hosts (Claude Code / Codex CLI / Gemini CLI)
+  auto-load the AGENTS.md content (Codex native + Claude `@AGENTS.md` import + Gemini settings.json
+  contextFileName). CRUMB.md dropped — its content is absorbed into AGENTS.md.
 provenance:
   extracted: 0.55
   inferred: 0.40
@@ -26,37 +26,37 @@ updated: 2026-05-02
 
 # Identity Files Decomposition — Option B (Settings + Import)
 
-> **Lock**: AGENTS.md = universal source (LF AAIF 표준). CLAUDE.md / GEMINI.md = host-specific augmentation. CRUMB.md dropped — content absorbed.
+> **Lock**: AGENTS.md = universal source (LF AAIF standard). CLAUDE.md / GEMINI.md = host-specific augmentation. CRUMB.md dropped — content absorbed.
 >
-> 3 host (Claude Code / Codex CLI / Gemini CLI) 모두 자기 brand 의 자동 로드 메커니즘으로 AGENTS.md content 도달. 어떤 머신에서든 단순 셋업.
+> All 3 hosts (Claude Code / Codex CLI / Gemini CLI) reach the AGENTS.md content via their own brand's auto-load mechanism. Simple setup on any machine.
 
-## 1. 정통 그라운딩 — 3 host MD auto-load spec
+## 1. Authoritative grounding — auto-load spec for the 3 host MD files
 
-| Host | Native auto-load | Fallback / 설정 | Crumb 채택 path |
+| Host | Native auto-load | Fallback / config | Crumb's chosen path |
 |---|---|---|---|
-| **Claude Code** | `CLAUDE.md` (project root + parents recursive + `.claude/CLAUDE.md` + `~/.claude/CLAUDE.md` + managed policy) | AGENTS.md fallback (CLAUDE.md 없을 때만) — Anthropic 공식 native 지원 미시점 (issue #6235 thousands of upvotes) | **CLAUDE.md 첫 줄 `@AGENTS.md` import** — Claude Code 의 `@path` 표준 syntax (max 5 hop) |
-| **Codex CLI** | **AGENTS.md** ✅ (closest wins, recursive walk, LF AAIF 표준) | (default) | **AGENTS.md 직접 사용** — native |
-| **Gemini CLI** | `GEMINI.md` (default) | `contextFileName` settings 으로 AGENTS.md 가능 | **`.gemini/settings.json` `{ "context": { "fileName": ["AGENTS.md", "GEMINI.md"] } }`** + 호환 fallback 으로 `GEMINI.md` 첫 줄 `@AGENTS.md` |
+| **Claude Code** | `CLAUDE.md` (project root + parents recursive + `.claude/CLAUDE.md` + `~/.claude/CLAUDE.md` + managed policy) | AGENTS.md fallback (only when CLAUDE.md is absent) — Anthropic does not yet officially support it natively (issue #6235 has thousands of upvotes) | **First line of CLAUDE.md: `@AGENTS.md` import** — Claude Code's standard `@path` syntax (max 5 hops) |
+| **Codex CLI** | **AGENTS.md** ✅ (closest wins, recursive walk, LF AAIF standard) | (default) | **Use AGENTS.md directly** — native |
+| **Gemini CLI** | `GEMINI.md` (default) | Can use AGENTS.md via the `contextFileName` setting | **`.gemini/settings.json` `{ "context": { "fileName": ["AGENTS.md", "GEMINI.md"] } }`** + a compatible fallback `@AGENTS.md` on the first line of `GEMINI.md` |
 
-→ **결정적**: 3 host 가 자기 brand 의 자동 로드 메커니즘만 보유. 단 각자 path 로 AGENTS.md content 도달 가능.
+→ **Decisively**: each of the 3 hosts has only its own brand's auto-load mechanism, but all of them can reach the AGENTS.md content via their own path.
 
-## 2. 우리 시스템 적용 (Option B)
+## 2. Applied to our system (Option B)
 
 ### Root identity files
 
 ```
-AGENTS.md   (real, universal source — LF AAIF 표준)
+AGENTS.md   (real, universal source — LF AAIF standard)
             ├── 11 architecture invariants
             ├── Actors (5 + 3 specialist + 5 skill)
             ├── Schema (39 kind × 11 field × 12 step × 8 from)
-            ├── Multi-host entries (4 path)
+            ├── Multi-host entries (4 paths)
             ├── Preset (user-controlled)
             ├── Don't / Must (universal)
             └── For human contributors (Style / Quickstart / How to run / File map / Wiki / Forbidden)
 
 CLAUDE.md   (real, Claude Code augmentation)
             ├── @AGENTS.md  (import)
-            ├── .skills/ 24 매핑 (wiki + implementation)
+            ├── .skills/ 24 mappings (wiki + implementation)
             ├── Korean policy
             ├── Verify gate
             ├── CI ratchet
@@ -73,82 +73,82 @@ GEMINI.md   (real, Gemini CLI augmentation)
             { "context": { "fileName": ["AGENTS.md", "GEMINI.md"] } }
 ```
 
-### CRUMB.md drop
+### Dropping CRUMB.md
 
-이전 universal source 였던 CRUMB.md 의 content (Position in stack / 11 invariants / Actors / Schema / Multi-host entries / Preset / Don't / Must / References) 가 모두 AGENTS.md 로 흡수됨. AGENTS.md 가 LF AAIF 표준이라 자동 로드 메커니즘이 더 강력 (Codex native + Claude `@AGENTS.md` + Gemini contextFileName).
+The previously-universal CRUMB.md content (Position in stack / 11 invariants / Actors / Schema / Multi-host entries / Preset / Don't / Must / References) is fully absorbed into AGENTS.md. AGENTS.md, being the LF AAIF standard, has a stronger auto-load story (Codex native + Claude `@AGENTS.md` + Gemini contextFileName).
 
-CRUMB.md 는 **redundant** 가 되어 drop. drift 위험 단일 source 통제로 0.
+CRUMB.md becomes **redundant** and is dropped. Drift risk goes to 0 thanks to single-source control.
 
-### Host entry MD references 정합
+### Host entry MD reference cleanup
 
-`CRUMB.md` 언급된 4 곳 → `AGENTS.md` 로 정정:
+The 4 places mentioning `CRUMB.md` → corrected to `AGENTS.md`:
 - `.claude/skills/crumb/SKILL.md` §References
 - `.codex/agents/crumb.toml` developer_instructions §0
-- `.gemini/extensions/crumb/GEMINI.md` 첫 단락
+- `.gemini/extensions/crumb/GEMINI.md` first paragraph
 - `.gemini/extensions/crumb/commands/crumb.toml` prompt §0
 
-## 3. 어떤 머신에서든 단순 셋업
+## 3. Simple setup on any machine
 
-### 사용자 환경별 동작
+### Behavior per user environment
 
-| 환경 | Claude Code | Codex | Gemini CLI |
+| Environment | Claude Code | Codex | Gemini CLI |
 |---|---|---|---|
-| Claude Code only | ✅ CLAUDE.md auto + @AGENTS.md import | (사용 X) | (사용 X) |
-| Codex only | (사용 X) | ✅ AGENTS.md auto (native) | (사용 X) |
-| Gemini CLI only | (사용 X) | (사용 X) | ✅ AGENTS.md + GEMINI.md auto via settings.json |
-| 3 host 모두 | ✅ | ✅ | ✅ |
-| 어느 host 도 없음 | (headless `crumb run --adapter mock` deterministic — auth 0) |
+| Claude Code only | ✅ CLAUDE.md auto + @AGENTS.md import | (not used) | (not used) |
+| Codex only | (not used) | ✅ AGENTS.md auto (native) | (not used) |
+| Gemini CLI only | (not used) | (not used) | ✅ AGENTS.md + GEMINI.md auto via settings.json |
+| All 3 hosts | ✅ | ✅ | ✅ |
+| No host at all | (headless `crumb run --adapter mock` deterministic — 0 auth) |
 
-→ **모든 환경에서 동일한 universal identity (AGENTS.md content)** 에 도달. drift 위험 0.
+→ **Every environment reaches the same universal identity (AGENTS.md content).** Drift risk: 0.
 
-## 4. drift 방지 룰
+## 4. Drift-prevention rules
 
-- **AGENTS.md 가 single edit point** — 11 invariants / actors / schema / multi-host / preset 변경 시 AGENTS.md 만 수정
-- CLAUDE.md / GEMINI.md 의 `@AGENTS.md` import 는 자동 동기화 (Claude Code 의 `@path` syntax)
-- 단 Gemini CLI 의 `@<file>` import 호환성 미확정 (2026-04 기준) — 보수적 fallback 으로 `.gemini/settings.json` `contextFileName` 으로 AGENTS.md 도 자동 로드
-- 3 entry MD (.claude/skills, .codex/agents, .gemini/extensions/commands) 의 References 도 AGENTS.md reference 통일
+- **AGENTS.md is the single edit point** — when changing the 11 invariants / actors / schema / multi-host / preset, only edit AGENTS.md
+- The `@AGENTS.md` import in CLAUDE.md / GEMINI.md auto-syncs (Claude Code's `@path` syntax)
+- However, Gemini CLI's `@<file>` import compatibility is not yet confirmed (as of 2026-04) — as a conservative fallback, AGENTS.md is also auto-loaded via `.gemini/settings.json` `contextFileName`
+- The References sections of the 3 entry MDs (.claude/skills, .codex/agents, .gemini/extensions/commands) are also unified to reference AGENTS.md
 
-## 5. Spec 정합 매트릭스 (post-Phase 검증)
+## 5. Spec compliance matrix (post-Phase verification)
 
-7 영역 × 51 항목 spec 비교 (각 host 공식 docs 인용 1차 사료):
+7 areas × 51 items spec comparison (each item cites the host's official docs as primary source):
 
-| 영역 | 정합 / 전체 | 비고 |
+| Area | Compliant / Total | Note |
 |---|---|---|
-| Claude Code CLAUDE.md | 6/7 (86%) | size 권장 200 LOC 초과 (CLAUDE.md @AGENTS.md import 후 365 LOC) — 받아들임 |
-| Claude Code skill (.claude/skills/crumb/SKILL.md) | 11/11 (100%) | `when_to_use` frontmatter 추가 ✅ |
+| Claude Code CLAUDE.md | 6/7 (86%) | Exceeds the recommended 200 LOC size (CLAUDE.md is 365 LOC after `@AGENTS.md` import) — accepted |
+| Claude Code skill (.claude/skills/crumb/SKILL.md) | 11/11 (100%) | Added `when_to_use` frontmatter ✅ |
 | Codex AGENTS.md (root) | 5/5 (100%) | Codex CLI native auto-load (closest wins) |
-| Codex agents.toml (.codex/agents/crumb.toml) | 10/10 (100%) | `.codex/agents/` project-level 정식 지원 ✅ + `[skills]` 섹션 추가 ✅ |
-| Gemini settings.json | 3/3 (100%) | `context.fileName` array schema 정합 |
-| Gemini extension | 10/10 (100%) | manifest + commands/*.toml 모두 정합 |
-| AGENTS.md self-contained | 5/5 (100%) | 11 invariants inline, 외부 @import 의존 0 |
-| **합계** | **50/51 (98%)** | size 권장 1건만 받아들임 |
+| Codex agents.toml (.codex/agents/crumb.toml) | 10/10 (100%) | `.codex/agents/` project-level officially supported ✅ + `[skills]` section added ✅ |
+| Gemini settings.json | 3/3 (100%) | `context.fileName` array schema compliant |
+| Gemini extension | 10/10 (100%) | Both manifest + commands/*.toml compliant |
+| AGENTS.md self-contained | 5/5 (100%) | 11 invariants inline, 0 external @import dependency |
+| **Total** | **50/51 (98%)** | Only 1 size-recommendation accepted |
 
-**Codex docs 인용 (project-level 정합 검증)**:
+**Codex docs citation (project-level compliance verification)**:
 > "To define custom agents, add standalone TOML files under **`~/.codex/agents/`** for personal agents or **`.codex/agents/`** for **project-scoped agents**. Each file defines one custom agent."
 >
 > — [developers.openai.com/codex/subagents](https://developers.openai.com/codex/subagents)
 
-→ 우리 위치 `.codex/agents/crumb.toml` 정합 ✅ (project-scoped agents 표준 path).
+→ Our location `.codex/agents/crumb.toml` is compliant ✅ (the standard project-scoped agents path).
 
-## 6. Phase 적용 결과 (이번 PR)
+## 6. Phase application results (this PR)
 
-- **Phase 1** ✅ AGENTS.md universal source 갱신 (CRUMB.md content 흡수) + CRUMB.md drop
-- **Phase 2** ✅ CLAUDE.md `@AGENTS.md` import + Claude-specific only / GEMINI.md root 신설 / `.gemini/settings.json` 신설
-- **Phase 3** ✅ 3 entry MD references 정정 (`CRUMB.md` → `AGENTS.md`) + SKILL.md frontmatter (`allowed-tools` + `argument-hint`) 정합
-- **Phase 4** ✅ 본 wiki synthesis ingest
+- **Phase 1** ✅ Updated AGENTS.md as universal source (absorbing CRUMB.md content) + dropped CRUMB.md
+- **Phase 2** ✅ CLAUDE.md `@AGENTS.md` import + Claude-specific only / new GEMINI.md root / new `.gemini/settings.json`
+- **Phase 3** ✅ Corrected 3 entry MD references (`CRUMB.md` → `AGENTS.md`) + SKILL.md frontmatter (`allowed-tools` + `argument-hint`) compliance
+- **Phase 4** ✅ Ingested this wiki synthesis
 
-## 6. 평가자 시인성 — 메일 verbatim 정조준 강화
+## 6. Evaluator visibility — sharper alignment with the mail's verbatim text
 
-베이글코드 채용 메일의 "**Claude Code, Codex, Gemini CLI 등 다양한 에이전트를 동시에 사용**" 정조준:
-- 평가자가 어느 host 로 진입하든 AGENTS.md content (universal Crumb identity) 가 동일하게 로드됨
-- 평가자가 ctrl-F "Claude Code" / "Codex" / "Gemini CLI" → AGENTS.md §"Multi-host entries" 표 한 곳에서 모두 확인 가능
-- host-specific 정보가 필요하면 각 host 의 augmentation 파일 (CLAUDE.md / GEMINI.md) 추가 인지
+Aligned with Bagelcode's recruitment mail phrase "**simultaneous use of various agents like Claude Code, Codex, Gemini CLI**":
+- Whichever host the evaluator enters from, the AGENTS.md content (universal Crumb identity) is loaded identically
+- An evaluator hitting ctrl-F for "Claude Code" / "Codex" / "Gemini CLI" → finds them all in one place in the AGENTS.md §"Multi-host entries" table
+- For host-specific information, each host's augmentation file (CLAUDE.md / GEMINI.md) provides the additional context
 
 ## See also
 
 - [[bagelcode-system-architecture-v0.1]] — canonical v0.1 architecture (multi-host × 3-tuple + 5 actor + 3-layer scoring)
 - [[bagelcode-host-harness-decision]] — Hybrid (Skill + headless CLI) lock
-- [[bagelcode-frontier-cli-convergence-2026]] — 4 CLI × 7 primitive convergence (LF AAIF 표준 채택 추진력)
-- `AGENTS.md` (repo root) — universal source 본 페이지
+- [[bagelcode-frontier-cli-convergence-2026]] — 4 CLI × 7 primitive convergence (impetus for adopting the LF AAIF standard)
+- `AGENTS.md` (repo root) — the universal source covered by this page
 - `CLAUDE.md` / `GEMINI.md` (repo root) — host-specific augmentation
-- `.gemini/settings.json` — Gemini CLI contextFileName 설정
+- `.gemini/settings.json` — Gemini CLI contextFileName configuration

@@ -1,5 +1,5 @@
 ---
-title: 베이글코드 과제 — 에이전트 고정 결정 (Claude Code + Codex) + Verifier evolution
+title: Bagelcode Task — Fixed Agent Decision (Claude Code + Codex) + Verifier evolution
 category: synthesis
 tags: [bagelcode, agents, decision, claude-code, codex, verifier, courteval, evolution-history]
 sources:
@@ -11,56 +11,56 @@ created: 2026-05-01
 updated: 2026-05-02
 ---
 
-# 에이전트 고정 + Verifier evolution
+# Fixed Agents + Verifier evolution
 
-> ⚠️ **2026-05-02 supersession**: 이 페이지는 v1-v2 결정 (Verifier = 외부 Gemini cross-provider) 의 evolution context 를 보존. v0.1 부터 **Verifier = Engineering Lead 내부 CourtEval** (Grader/Critic/Defender/Re-grader, ACL 2025) 로 흡수됨. 외부 Gemini 폐기 사유 = subscription-only budget ("나 돈이 없어"). **최종 lock 은 [[bagelcode-final-design-2026]]**.
+> ⚠️ **2026-05-02 supersession**: this page preserves the v1-v2 evolution context (Verifier = external Gemini cross-provider). From v0.1 onward it has been absorbed into **Verifier = Engineering Lead internal CourtEval** (Grader/Critic/Defender/Re-grader, ACL 2025). External Gemini was scrapped due to a subscription-only budget (*"나 돈이 없어"* — I have no money). **Final lock is [[bagelcode-final-design-2026]]**.
 
-> **사용자 결정 (확정 — 현 상태)**: 사용 에이전트는 **Claude Code + Codex** 2종 고정 (subprocess via subscription). 검증은 **Engineering Lead 내부 CourtEval** (4 sub-roles, Claude Sonnet 4.6 vision). 외부 cross-provider Verifier 는 폐기 (cost 제약). 이 페이지의 §"후보 Verifier provider 비교" 는 historical evolution 으로 보존.
+> **User decision (confirmed — current state)**: agents in use are fixed at **Claude Code + Codex** (subprocess via subscription). Verification is **Engineering Lead internal CourtEval** (4 sub-roles, Claude Sonnet 4.6 vision). External cross-provider Verifier is scrapped (cost constraint). The §"Candidate Verifier providers" section of this page is preserved as historical evolution.
 
-## 선정 방법 (6-step decision tree)
+## Selection method (6-step decision tree)
 
-평가자에게 "왜 이 모델 조합?" 에 대한 systematic 답. README 또는 `docs/agent-selection.md` 에 그대로 박을 수치.
+A systematic answer to the evaluator's "why this model combination?" Numbers ready to pin into the README or `docs/agent-selection.md`.
 
 ### Step 1 — Eligibility filter
 
-| 조건 | 통과 조건 | 컷 후보 |
+| Criterion | Pass condition | Cut candidates |
 |---|---|---|
-| Headless / non-interactive | CI/CD 동작 가능 | (모두 통과) |
-| 공식 / maintained SDK | 1순위 vendor or maintained CLI | AutoGen 0.4 (유지보수 모드) |
-| README 즉시 동작 | 평가자 5분 내 실행 | Local 70B Llama (다운로드 부담 → fallback only) |
-| License | MIT / Apache / 사용 OK | (모두 통과) |
-| 베이글코드 메일 명시 | "Claude Code, Codex, Gemini CLI 등" | "등" 이라 의무 X, **가산점** |
+| Headless / non-interactive | CI/CD-runnable | (all pass) |
+| Official / maintained SDK | First-party vendor or maintained CLI | AutoGen 0.4 (maintenance mode) |
+| README runs immediately | Evaluator runs in under 5 min | Local 70B Llama (download burden → fallback only) |
+| License | MIT / Apache / OK to use | (all pass) |
+| Mentioned in Bagelcode mail | "Claude Code, Codex, Gemini CLI 등" (etc.) | "등" leaves it non-mandatory, **bonus** |
 
-### Step 2 — Role-fit scoring (5축 × 10점)
+### Step 2 — Role-fit scoring (5 axes × 10 points)
 
-각 역할에 필요한 capability 가 다름:
+Each role needs different capabilities:
 
-| 축 | 가중 |
+| Axis | Weight |
 |---|---|
-| Reasoning depth | 높음 (Planner/Verifier) / 낮음 (Coordinator) |
-| Code synthesis | 높음 (Builder) |
-| Latency | 높음 (Coordinator routing) |
-| Cost | 항상 |
-| Vision | 옵션 (Verifier game.html 검증) |
+| Reasoning depth | High (Planner/Verifier) / Low (Coordinator) |
+| Code synthesis | High (Builder) |
+| Latency | High (Coordinator routing) |
+| Cost | Always |
+| Vision | Optional (Verifier game.html validation) |
 
-**채점 결과:**
+**Scoring results:**
 
-| 후보 | Coordinator | Builder | Verifier |
+| Candidate | Coordinator | Builder | Verifier |
 |---|---|---|---|
-| Claude Haiku 4.5 | **9** (빠름·쌈) | 5 | 6 |
-| Claude Sonnet 4.6 | 7 | 8 | 9 (단, cross-provider X) |
-| Claude Opus 4.7 | 4 (오버킬) | **9** (코드 SOTA) | 8 |
+| Claude Haiku 4.5 | **9** (fast, cheap) | 5 | 6 |
+| Claude Sonnet 4.6 | 7 | 8 | 9 (but no cross-provider) |
+| Claude Opus 4.7 | 4 (overkill) | **9** (code SOTA) | 8 |
 | GPT-5.5 (Codex) | 6 | **9** (Codex tooling) | 7 |
-| o3 (OpenAI) | 3 (느림·비쌈) | 8 | 8 |
+| o3 (OpenAI) | 3 (slow, expensive) | 8 | 8 |
 | Gemini 2.5 Pro | 5 | 7 | **9** (vision + cross) |
 | Gemini 2.5 Flash | 8 | 6 | 7 |
 | GLM-4.6 | 7 | 6 | 7 |
 
-→ 컬럼별 max 가 1차 후보. tiebreak 은 다른 step.
+→ The column max is the primary candidate; tiebreakers come from other steps.
 
 ### Step 3 — Cost ceiling
 
-[[bagelcode-caching-strategy]] 의 1세션 ≤ $1.5 역산:
+Working backward from the ≤ $1.5 / session budget in [[bagelcode-caching-strategy]]:
 
 ```
 Coordinator (10 calls × 4K in / 0.5K out)  ≈ Haiku    $0.04
@@ -71,54 +71,54 @@ Verifier    (3 calls × 6K / 1K)            ≈ Gemini Pro $0.10
                                           Total ≈ $0.55-0.65
 ```
 
-여유 ~40% — `--parallel-builders` 까지 OK.
-**컷:** o3 단독 사용 시 $1.20+ → 비싼 자리 못 줌.
+Headroom ~40% — even `--parallel-builders` is OK.
+**Cut:** o3 standalone hits $1.20+ → can't earn an expensive seat.
 
-### Step 4 — Provider diversity (강제)
+### Step 4 — Provider diversity (mandatory)
 
-[[bagelcode-fault-tolerance-design]] §F1: **최소 2개 다른 provider 군이 Builder 역할 수행 가능해야 함.**
+[[bagelcode-fault-tolerance-design]] §F1: **at least 2 different provider families must be capable of the Builder role.**
 
-→ Anthropic + OpenAI 조합이 유일하게 "두 코드 SOTA + 다른 군" 매치.
+→ Anthropic + OpenAI is the only pairing matching "two code SOTAs + different families."
 
 ### Step 5 — Capability redundancy
 
-Builder.A 죽었을 때 Builder.B 가 같은 spec 받아 같은 역할 수행 가능?
+When Builder.A dies, can Builder.B receive the same spec and play the same role?
 
-| 조합 | 가능 |
+| Combination | Possible |
 |---|---|
 | Claude Code (Opus 4.7) + Codex (GPT-5.5) | ✅ |
-| Claude Code + Gemini Pro | ⚠ Gemini 코드/tool use 약함 |
-| Codex + Cursor CLI | ⚠ 같은 OpenAI 군 (diversity 깨짐) |
-| Claude Code + Aider | ⚠ Aider 의 어느 LLM? 명확 X |
+| Claude Code + Gemini Pro | ⚠ Gemini is weak at code/tool use |
+| Codex + Cursor CLI | ⚠ Same OpenAI family (diversity broken) |
+| Claude Code + Aider | ⚠ Which LLM does Aider use? Unclear |
 
-### Step 6 — Verifier 격리 (cross-provider 강제)
+### Step 6 — Verifier isolation (cross-provider mandatory)
 
-**규칙: Verifier 는 Anthropic·OpenAI 가 아닌 군에서.** 근거: ICML 2025 §F (Resilience) + CP-WBFT (Byzantine FT) + MAR (degeneration-of-thought).
+**Rule: Verifier must be from a family that is neither Anthropic nor OpenAI.** Rationale: ICML 2025 §F (Resilience) + CP-WBFT (Byzantine FT) + MAR (degeneration-of-thought).
 
 → Default = Gemini 2.5 Pro / fallback = lint-only local.
 
-### 최종 결정
+### Final decision
 
-| 역할 | 모델 | Provider | 가장 큰 이유 |
+| Role | Model | Provider | Top reason |
 |---|---|---|---|
-| **Coordinator** | Claude Haiku 4.5 | Anthropic | routing 9/10, 10× 쌈 |
+| **Coordinator** | Claude Haiku 4.5 | Anthropic | routing 9/10, 10× cheaper |
 | **Builder.A (primary)** | Claude Code w/ Opus 4.7 | Anthropic | code 9/10, headless, depth=1 |
-| **Builder.B (fallback)** | Codex CLI w/ GPT-5.5 | OpenAI | code 9/10, **다른 군** |
+| **Builder.B (fallback)** | Codex CLI w/ GPT-5.5 | OpenAI | code 9/10, **different family** |
 | **Verifier** | Gemini 2.5 Pro | Google | reasoning 9/10, vision, **cross-provider** |
-| Verifier fallback | lint-only local | (none) | 키 없는 평가자 보호 |
+| Verifier fallback | lint-only local | (none) | Protects keyless evaluators |
 
-### Mode 변형 (사용자 자유 노출)
+### Mode variants (exposed to user choice)
 
-| Mode | 활성 actor | 예상 비용 | 용도 |
+| Mode | Active actors | Estimated cost | Use case |
 |---|---|---|---|
-| `--solo` | Coord + Builder.A | ~$0.30 | Anthropic 키만 (최소) |
+| `--solo` | Coord + Builder.A | ~$0.30 | Anthropic key only (minimum) |
 | `--standard` (default) | Coord + Builder.A + Verifier | ~$0.50 | Anthropic + Google |
-| `--full` | + Builder.B | ~$0.65 | 모든 키, fault demo 가능 |
+| `--full` | + Builder.B | ~$0.65 | All keys, fault demo possible |
 | `--parallel` | full + parallel builders | ~$1.10 | stretch demo |
 
-→ README 첫 절은 `--solo` 기준 (최소 셋업). full 은 advanced.
+→ The README's first section is `--solo` baseline (minimum setup). Full is advanced.
 
-### ENV 강제 변경 가능
+### ENV-driven override
 
 ```bash
 CRUMB_MODEL_COORD=claude-haiku-4-5
@@ -128,98 +128,98 @@ CRUMB_MODEL_VERIFIER=gemini-2.5-pro
 CRUMB_VERIFIER_VISION=true
 ```
 
-→ 환경 변수만으로 표 전부 교체 가능. README 마지막 "Advanced configuration" 1쪽.
+→ Replace the entire table via env vars alone. README's last page: "Advanced configuration" (1 page).
 
 
 
-## 고정 사실
+## Fixed facts
 
-| 역할 | 에이전트 | Provider | 모델 (default) | 비고 |
+| Role | Agent | Provider | Model (default) | Notes |
 |---|---|---|---|---|
-| Builder.A | **Claude Code** | Anthropic | `claude-opus-4-7` (또는 `sonnet-4-6`) | Agent SDK headless mode |
-| Builder.B | **Codex** | OpenAI | `gpt-5.5` (또는 `o1`) | Codex CLI subagent + TOML config |
-| Verifier | **cross-provider** | (Google / Z.ai / local) | 결정 대기 (§ 후보 비교) | Anthropic·OpenAI 와 다른 군 |
-| Orchestrator | (Builder.A 의 Claude Code 가 동시 수행) | Anthropic | `claude-haiku-4-5` | sandwich §1+§4 만으로 라우팅 |
+| Builder.A | **Claude Code** | Anthropic | `claude-opus-4-7` (or `sonnet-4-6`) | Agent SDK headless mode |
+| Builder.B | **Codex** | OpenAI | `gpt-5.5` (or `o1`) | Codex CLI subagent + TOML config |
+| Verifier | **cross-provider** | (Google / Z.ai / local) | TBD (§ candidate comparison) | Family different from Anthropic·OpenAI |
+| Orchestrator | (Builder.A's Claude Code does this concurrently) | Anthropic | `claude-haiku-4-5` | Routing via sandwich §1+§4 alone |
 
-→ **Orchestrator 와 Builder.A 가 같은 Claude Code 인스턴스에서 다른 sandwich 로 동작**. 토큰 절감 + Cognition 의 "단일 컨텍스트" 원칙과 정합.
+→ **Orchestrator and Builder.A run on the same Claude Code instance with different sandwiches.** Token savings + consistent with Cognition's "single context" principle.
 
-## 왜 Claude Code + Codex 인가 (사용자 결정 보강)
+## Why Claude Code + Codex (reinforcing the user decision)
 
-### Claude Code 강점
-- **headless mode 안정** ([[bagelcode-frontier-orchestration-2026]] §K) — README CI/CD 동작 보장
-- **Agent SDK depth=1** 제약이 우리 hierarchical 토폴로지와 정확히 일치 (재귀 spawn 금지 = 의도적)
-- **베이글코드 메일 1순위 인용** ("Claude Code, Codex, Gemini CLI" 명시 순서)
+### Claude Code strengths
+- **Stable headless mode** ([[bagelcode-frontier-orchestration-2026]] §K) — guarantees README CI/CD operation
+- **Agent SDK depth=1** constraint matches our hierarchical topology exactly (no recursive spawn = intentional)
+- **First in the Bagelcode mail's quote order** ("Claude Code, Codex, Gemini CLI" listed in this order)
 - prompt cache (sandwich §1+§2 boundary, [[bagelcode-caching-strategy]])
 
-### Codex 강점
-- **TOML agent 정의** ([[bagelcode-frontier-orchestration-2026]] §L) — 우리 `agents/builder-b.md` 와 자연 매핑
-- **CSV 배치 (`spawn_agents_on_csv`)** — stretch 옵션으로 batch 시나리오
-- **non-interactive mode** — README 동작
-- max_threads / max_depth 제어 가능
-- **다른 provider 의존** = 한쪽 장애 시 fallback 보장
+### Codex strengths
+- **TOML agent definition** ([[bagelcode-frontier-orchestration-2026]] §L) — natural mapping to our `agents/builder-b.md`
+- **CSV batch (`spawn_agents_on_csv`)** — stretch option for batch scenarios
+- **non-interactive mode** — README operation
+- max_threads / max_depth controllable
+- **Different provider dependency** = guaranteed fallback when one side fails
 
-### "굳이 둘 다?" 정당화
-- ICML 2025 §F: hierarchical + cross-provider = 95%+ 회복 (single provider 인 경우 회복률 ↓)
-- 베이글코드 멀티 벤더 톤 직접 응답
-- F1 (adapter 장애) 시나리오 시연 가능 — claude-code 죽이고 codex 로 fallback 되는 demo
+### "Why both, really?" justification
+- ICML 2025 §F: hierarchical + cross-provider = 95%+ recovery (single-provider recovery rate is lower)
+- Direct response to Bagelcode's multi-vendor tone
+- F1 (adapter failure) scenario can be demonstrated — kill claude-code and demo the fallback to codex
 
-## Verifier provider 후보 (cross-provider 군)
+## Verifier provider candidates (cross-provider family)
 
-Anthropic 도 OpenAI 도 아닌 군에서 1개 선택:
+Pick one from a family that is neither Anthropic nor OpenAI:
 
-### 후보 V1 — **Google Gemini 2.5 Pro** (기본 권장)
+### Candidate V1 — **Google Gemini 2.5 Pro** (default recommendation)
 
-| 항목 | 평가 |
+| Item | Assessment |
 |---|---|
-| API 안정성 | ✅ Google AI Studio + Vertex AI |
-| Vision | ✅ (game.html 스크린샷 검증 가능) |
-| Korean | ✅ 우수 |
-| 가격 (input) | $1.25/1M (Pro), $0.075/1M (Flash) |
-| Context cache | ⚠ min 4K — sandwich 작으면 미적용 |
+| API stability | ✅ Google AI Studio + Vertex AI |
+| Vision | ✅ (game.html screenshot validation) |
+| Korean | ✅ Excellent |
+| Price (input) | $1.25/1M (Pro), $0.075/1M (Flash) |
+| Context cache | ⚠ min 4K — won't apply for small sandwiches |
 | SDK | `@google/genai` (TS), `google-genai` (Python) |
-| 베이글코드 메일 명시 | ✅ "Gemini CLI" 언급 |
-| 셋업 부담 | ⚠ API 키 필요 |
+| Mentioned in Bagelcode mail | ✅ "Gemini CLI" mentioned |
+| Setup burden | ⚠ API key required |
 
-→ **Verifier 1순위**: Vision 가능 + 메일 명시 정합.
+→ **Verifier #1**: vision-capable + consistent with mail mention.
 
-### 후보 V2 — **Z.ai GLM-4.6** (저비용 옵션)
+### Candidate V2 — **Z.ai GLM-4.6** (low-cost option)
 
-| 항목 | 평가 |
+| Item | Assessment |
 |---|---|
-| API | OpenAI 호환 endpoint |
-| Vision | ⚠ GLM-4V 별도 |
+| API | OpenAI-compatible endpoint |
+| Vision | ⚠ GLM-4V separate |
 | Korean | ✅ |
-| 가격 | input ~$0.6/1M (Pro 대비 50%) |
-| Cache | OpenAI 호환 자동 |
-| 셋업 | 키 발급 빠름, GFW 환경 주의 |
-| 베이글코드 메일 | ❌ 미언급 |
+| Price | input ~$0.6/1M (50% of Pro) |
+| Cache | OpenAI-compatible auto |
+| Setup | Quick key issuance, watch out for GFW |
+| Bagelcode mail | ❌ Not mentioned |
 
-→ **stretch 옵션** — `--verifier=glm` 플래그로 demo 시 비용 비교.
+→ **stretch option** — `--verifier=glm` flag for cost-comparison demo.
 
-### 후보 V3 — **Local Llama 3.3 70B (Ollama)**
+### Candidate V3 — **Local Llama 3.3 70B (Ollama)**
 
-| 항목 | 평가 |
+| Item | Assessment |
 |---|---|
 | API | localhost:11434 |
 | Vision | ❌ |
-| 가격 | $0 (로컬 GPU 필요) |
-| Latency | ✅ 0 네트워크 |
-| 셋업 | ❌ 평가자가 70B 모델 다운로드 부담 |
-| README 동작 | ❌ 평가자에게 무리 |
+| Price | $0 (local GPU required) |
+| Latency | ✅ 0 network |
+| Setup | ❌ 70B download burden on the evaluator |
+| README operation | ❌ Too much for the evaluator |
 
-→ **권장 X** — 평가자 환경에서 동작 보장 안 됨. degraded fallback 모드로만 (lint-only).
+→ **Not recommended** — operation in evaluator's environment isn't guaranteed. Use only as a degraded fallback (lint-only).
 
-### 후보 V4 — **OpenRouter** (router 자체)
+### Candidate V4 — **OpenRouter** (router itself)
 
-| 항목 | 평가 |
+| Item | Assessment |
 |---|---|
-| API | OpenAI 호환 + 100+ 모델 통합 |
-| 장점 | Verifier provider 동적 선택 가능 |
-| 단점 | "다른 provider 군" 의미 약화 (라우터일 뿐) |
+| API | OpenAI-compatible + 100+ models unified |
+| Pros | Verifier provider can be chosen dynamically |
+| Cons | Weakens the "different provider family" meaning (it's just a router) |
 
-→ **stretch** — `--verifier-via=openrouter` 로 demo 시 자유도 강조.
+→ **stretch** — use `--verifier-via=openrouter` to highlight flexibility in demos.
 
-## 결정 — Verifier 디폴트 = **Gemini 2.5 Pro**, fallback = **lint-only local**
+## Decision — Verifier default = **Gemini 2.5 Pro**, fallback = **lint-only local**
 
 ```
 Default chain:
@@ -230,9 +230,9 @@ Default chain:
   PARTIAL verdict + transcript 표기
 ```
 
-→ Gemini 키 없는 평가자도 README 동작 (lint-only 로 degraded).
+→ Evaluators without a Gemini key still get a working README (degraded to lint-only).
 
-## Adapter 구조 (`src/adapters/*`)
+## Adapter structure (`src/adapters/*`)
 
 ```typescript
 // 공통 인터페이스
@@ -255,11 +255,11 @@ class GeminiAdapter implements AgentAdapter { /* @google/genai */ }
 class LintOnlyAdapter implements AgentAdapter { /* fallback, no network */ }
 ```
 
-→ 각 adapter 가 [[bagelcode-fault-tolerance-design]] §F1-F2 의 health probe + circuit breaker 구현.
+→ Each adapter implements the health probe + circuit breaker from [[bagelcode-fault-tolerance-design]] §F1-F2.
 
-## Sandwich 매핑
+## Sandwich mapping
 
-[[kiki-appmaker-orchestration]] 4-section sandwich 가 actor 별로:
+The [[kiki-appmaker-orchestration]] 4-section sandwich, per actor:
 
 ```
 §1 contract   = "너는 누구이고 누구한테 PATCH 한다"
@@ -274,9 +274,9 @@ actor 별 §2 본문:
   - Verifier (Gemini)→ "build artifact 검증, exec 실행, dimensions 채점, STOP"
 ```
 
-→ **Builder.A 와 Builder.B 의 §2 가 같음** = 사용자 입장에서 보면 같은 역할의 두 provider. fallback 의 의미.
+→ **Builder.A and Builder.B share the same §2** = from the user's view, the same role on two providers. That's the meaning of fallback.
 
-## 인증·환경 변수
+## Authentication / environment variables
 
 ```bash
 # .env (sample)
@@ -293,20 +293,20 @@ CRUMB_MODEL_CODEX=gpt-5.5
 CRUMB_MODEL_VERIFIER=gemini-2.5-pro
 ```
 
-→ 모든 변수 optional (디폴트 있음). 키 없으면 그 adapter 자동 disabled + alternative 로 routing.
+→ All variables are optional (defaults exist). Without a key, the adapter is auto-disabled and routing falls back to alternatives.
 
-## 마감 안 위험 시나리오
+## Pre-deadline risk scenarios
 
-| 시나리오 | 대응 |
+| Scenario | Response |
 |---|---|
-| 평가자가 Codex 키 없음 | `--solo` 모드 자동 — Builder.A 만으로 동작, demo 영상은 fallback 전환 시연 |
-| Gemini API 미가입 | lint-only mode 로 degraded, transcript 에 표기, README 에 "Gemini 키 옵션" 명시 |
-| Claude Code 1.x → 2.x 마이너 업 | capability probe 가 model list 자동 재선택 |
-| 전체 네트워크 끊김 | 모든 adapter circuit OPEN → user escalation, 마지막 transcript 보존 |
+| Evaluator has no Codex key | `--solo` mode auto — runs with Builder.A only; demo video shows the fallback transition |
+| Not signed up for Gemini API | Degrade to lint-only mode, mark in transcript, README states "Gemini key optional" |
+| Claude Code 1.x → 2.x minor bump | Capability probe auto-reselects from the model list |
+| Total network outage | All adapter circuits OPEN → user escalation, last transcript preserved |
 
-## 측정 (제출 README 박는 수치)
+## Measurement (numbers to pin into the submission README)
 
-`--demo-fault-injection` 플래그 시 의도적 fault 시연:
+With the `--demo-fault-injection` flag, an intentional fault is staged:
 
 ```
 $ crumb demo --demo-fault-injection
@@ -322,14 +322,14 @@ $ crumb demo --demo-fault-injection
 [T+1:56] DONE in 1m56s (resilient session)
 ```
 
-→ Demo 영상에 30초 분량으로 박으면 ICML 2025 §F 의 hierarchical + cross-provider safeguard 가 **실제 동작**하는 시연.
+→ Pinning a 30-second clip of this in the demo video shows the hierarchical + cross-provider safeguard from ICML 2025 §F **actually working**.
 
 ## See also
 
 - [[bagelcode]] / [[bagelcode-task-direction]]
-- [[bagelcode-orchestration-topology]] — Hub-Ledger-Spoke (이 actor 4명이 그 토폴로지 위에 올라감)
-- [[bagelcode-fault-tolerance-design]] — 각 adapter 의 health probe / circuit breaker
-- [[bagelcode-frontier-orchestration-2026]] — Claude Code SDK / Codex subagents 1차 사료
-- [[bagelcode-caching-strategy]] — provider 별 cache mechanism
-- [[bagelcode-paperclip-vs-alternatives]] — framework 비채택 결정 (이 actor 들 직접 어댑터 통해 호출)
-- [[geode-llm-models]] — multi-provider fallback chain 영감 (4 providers × 14 models)
+- [[bagelcode-orchestration-topology]] — Hub-Ledger-Spoke (these 4 actors sit on top of that topology)
+- [[bagelcode-fault-tolerance-design]] — health probe / circuit breaker per adapter
+- [[bagelcode-frontier-orchestration-2026]] — Claude Code SDK / Codex subagents primary sources
+- [[bagelcode-caching-strategy]] — per-provider cache mechanism
+- [[bagelcode-paperclip-vs-alternatives]] — framework non-adoption decision (these actors are invoked via direct adapter)
+- [[geode-llm-models]] — multi-provider fallback chain inspiration (4 providers × 14 models)
