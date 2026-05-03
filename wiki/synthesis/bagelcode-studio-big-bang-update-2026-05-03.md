@@ -717,11 +717,47 @@ User directive verbatim, 2026-05-03 amendment:
 
 This is a hard gate at M8 — no soft-deprecation, no co-existence period after parity is reached, no "we'll clean it up later" debt accumulation.
 
-## 14. On-disk hierarchy + write/read parity (project → session → version)
+## 14. Lifecycle (session → project → version) + write/read parity
 
-User directive 2026-05-03: *"아웃풋 저장 위치와 읽는 위치 일치도 고려해. 계층도도 세션, 프로젝트, 버전 고려하고."* The migration must codify a single hierarchy diagram, every artifact path must have a single writer + every reader resolves through the same canonical helper, and the **version layer** (project-scoped, not session-scoped) must be a first-class browseable surface in Studio (currently missing).
+User directives 2026-05-03:
+1. *"아웃풋 저장 위치와 읽는 위치 일치도 고려해. 계층도도 세션, 프로젝트, 버전 고려하고."*
+2. *"write/read parity (project→session→version) 이건 session->project(output)->version이야. 혼동하지마. plan 교정하던지 목적에 맞게 합리적으로 생각해서 구성해."*
 
-### 14.1 Canonical hierarchy
+The migration must codify the **lifecycle** (`session → project → version`) without confusing it with the **on-disk hierarchy** (`project/{sessions,versions}/`). They differ in direction:
+
+- **Lifecycle** is a flow: each `session` is a discrete attempt that *contributes to* the user's `project` (the cumulative output / game). When the project reaches a milestone, a `version` is snapshotted from a chosen session's artifacts. So the directional reading is **session → project (output) → version**.
+- **On-disk hierarchy** is a containment: `<crumb-home>/projects/<project_id>/{sessions/<sid>/, versions/<v>/}`. Both `sessions` and `versions` are children of `project` directory because they share the project as their key/scope.
+
+These two views are not contradictory — they answer different questions. The lifecycle answers "how does data flow?" (sessions feed the project; versions snapshot the project). The hierarchy answers "where is data stored?" (everything keyed by project id, with sessions and versions as siblings under it). The migration must preserve both.
+
+Every artifact path must have a single writer + every reader resolves through the same canonical helper, and the **version layer** (project-scoped, not session-scoped) must be a first-class browseable surface in Studio (currently missing).
+
+### 14.0 Lifecycle diagram
+
+```
+                   ┌─────────────────────────────────────────────────────────┐
+                   │  PROJECT (the game / cumulative output)                 │
+                   │  - project_id = sha256(cwd) OR pinned `.crumb/project.toml`│
+                   │  - identity is filesystem-stable across sessions        │
+                   └─────────────────────────────────────────────────────────┘
+                          ▲                                       │
+                contribute                              snapshot   ▼
+                          │                                       
+   ┌────────────┐   ┌────────────┐    ┌────────────┐         ┌────────────┐
+   │ session A  │ + │ session B  │ +  │ session C  │  →→→→→  │ version v1 │
+   │ (mutable)  │   │ (mutable)  │    │ (mutable)  │         │ (frozen)   │
+   └────────────┘   └────────────┘    └────────────┘         └────────────┘
+        │                  │                  │                      │
+   transcript +       transcript +       transcript +           manifest +
+   artifacts/         artifacts/         artifacts/             frozen artifacts/
+                                                                (= a chosen
+                                                                 session's
+                                                                 snapshot)
+```
+
+Sessions are inputs that mutate over their lifetime (`running → paused → done` etc.); they're append-only on disk but their lifecycle state changes. Versions are immutable — a version, once written, never changes. The project itself has no on-disk content of its own beyond the `project_id` directory and the union of its sessions/ + versions/.
+
+### 14.1 On-disk hierarchy (containment, not direction)
 
 ```
 $CRUMB_HOME                           ← env override CRUMB_HOME, default os.homedir()/.crumb
