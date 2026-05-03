@@ -243,30 +243,76 @@ For the canonical spec, see [`wiki/concepts/bagelcode-system-architecture-v0.1.m
 
 ## Output (what a session produces)
 
+### On-disk hierarchy
+
 ```
-~/.crumb/projects/<project-id>/sessions/<session-id>/
-├── transcript.jsonl                    # Replay-deterministic event log (35 × 11)
-├── ledgers/
-│   ├── task.json                       # Cumulative facts (transcript-derivable)
-│   └── progress.json                   # Per-turn state (transcript-derivable)
-├── artifacts/
-│   ├── game/                           # Phaser 3.80 multi-file PWA — open game/index.html
-│   │   ├── index.html                  #   entry (viewport, manifest, sw.js register)
-│   │   ├── manifest.webmanifest
-│   │   ├── sw.js                       #   cache-first service worker (offline)
-│   │   ├── icon-192.png / icon-512.png
-│   │   └── src/main.js + src/{config,scenes,entities,systems}/
-│   ├── spec.md                         # Acceptance criteria + rule book
-│   ├── DESIGN.md                       # Color / mechanics / motion spec
-│   └── tuning.json                     # Balance numbers
-├── exports/
-│   ├── otel.jsonl                      # OpenTelemetry GenAI Semantic Conventions
-│   ├── anthropic-trace.json
-│   └── chrome-trace.json               # chrome://tracing visualization
-└── index.html                          # Auto-generated post-session HTML summary
+~/.crumb/                                 # CRUMB_HOME (override via env; multi-home via CRUMB_HOMES)
+└── projects/
+    └── <project-id>/                     # Project — owns BOTH live sessions AND frozen releases
+        ├── sessions/
+        │   └── <session-ulid>/           # WIP attempt (mutable lifecycle)
+        │       ├── transcript.jsonl              # Replay-deterministic event log (35 × 11)
+        │       ├── meta.json                     # Lifecycle status (running/paused/done/error)
+        │       ├── inbox.txt                     # Slash-command + free-text user input (single-writer)
+        │       ├── ledgers/
+        │       │   ├── task.json                 # Cumulative facts (transcript-derivable)
+        │       │   └── progress.json             # Per-turn state (transcript-derivable)
+        │       ├── agent-workspace/              # Per-actor sandbox + assembled sandwich
+        │       │   └── <actor>/
+        │       │       └── sandwich.assembled.md # System prompt that the host CLI received via
+        │       │                                 # --append-system-prompt (envelope XML + actor
+        │       │                                 # sandwich + procedural skills + sandwich_append).
+        │       │                                 # See AGENTS.md §"Subprocess injection over
+        │       │                                 # CLAUDE.md auto-load" for why this exists.
+        │       ├── artifacts/
+        │       │   ├── game/                     # Phaser 3.80 multi-file PWA — open game/index.html
+        │       │   │   ├── index.html            #   entry (viewport, manifest, sw.js register)
+        │       │   │   ├── manifest.webmanifest
+        │       │   │   ├── sw.js                 #   cache-first service worker (offline)
+        │       │   │   ├── icon-192.svg / icon-512.svg
+        │       │   │   └── src/main.js + src/{config,scenes,entities,systems}/
+        │       │   ├── spec.md                   # Acceptance criteria + rule book
+        │       │   ├── DESIGN.md                 # Color / mechanics / motion spec
+        │       │   └── tuning.json               # Balance numbers
+        │       ├── exports/
+        │       │   ├── otel.jsonl                # OpenTelemetry GenAI Semantic Conventions
+        │       │   ├── anthropic-trace.json
+        │       │   └── chrome-trace.json         # chrome://tracing visualization
+        │       └── index.html                    # Auto-generated post-session HTML summary
+        └── versions/
+            └── <vN>[-<label>]/                   # Released milestone (immutable)
+                ├── manifest.toml                 # Scorecard + parent_version + artifacts_sha256
+                └── artifacts/                    # Frozen copy of the source session's artifacts/
 ```
 
-`crumb release <session-id> --as v1` snapshots `artifacts/` into `~/.crumb/projects/<project-id>/versions/v1/` (immutable; manifest.toml carries scorecard + sha256s). `crumb copy-artifacts v1 --to ./demo` is the Bagelcode submission line.
+### How `<project-id>` is derived (this is a frequent question)
+
+```
+1.  If <cwd>/.crumb/project.toml exists  → use its `id` field (a ULID).
+2.  Otherwise (ambient)                  → sha256(path.resolve(cwd))[:16]
+```
+
+**Two modes — choose deliberately:**
+
+| Mode | When to use | Cross-machine consistency |
+|---|---|---|
+| **Ambient** (default) | Throwaway / single-machine work | ❌ Different machine or different absolute cwd → different `<project-id>`. The 16-hex prefix is purely a local cache key. |
+| **Pinned** (`crumb init --pin`) | Bagelcode submission, shared evaluator demo, anything you want to reproduce | ✅ Writes a stable ULID into `<cwd>/.crumb/project.toml`. **Commit that file to git** → every clone of the repo on every machine resolves to the same `<project-id>`, so sessions land in the same `~/.crumb/projects/<id>/sessions/` bucket regardless of where the clone lives on disk. |
+
+```bash
+# In the directory you'll iterate from:
+mkdir -p ~/projects/match3 && cd ~/projects/match3
+crumb init --pin --label "match3"        # writes .crumb/project.toml
+git add .crumb/project.toml && git commit -m "chore: pin project id"
+```
+
+After that, every `crumb run` from any clone of the same repo writes to the same project bucket. `<session-ulid>` always remains per-run (ULIDs are time-sorted; new run = new ulid).
+
+### Session → Version flow
+
+`crumb release <session-ulid> --as v1 [--label "demo"]` snapshots the source session's `artifacts/` tree into `~/.crumb/projects/<project-id>/versions/v1[-demo]/`, writes `manifest.toml` (scorecard from the most recent `judge.score` event + per-file sha256), and appends `kind=version.released` to the source session's `transcript.jsonl`. Versions stay frozen even if you delete the source session.
+
+`crumb copy-artifacts <session|vN> --to <dest>` is the Bagelcode-submission line: copies the chosen artifacts/ tree out of `~/.crumb/...` into a plain folder you can zip up.
 
 ---
 
