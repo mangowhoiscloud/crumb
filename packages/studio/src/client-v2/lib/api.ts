@@ -76,9 +76,40 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+export interface VersionScorecard {
+  D1?: number;
+  D2?: number;
+  D3?: number;
+  D4?: number;
+  D5?: number;
+  D6?: number;
+  aggregate?: number;
+  verdict?: 'PASS' | 'PARTIAL' | 'FAIL' | 'REJECT';
+}
+
+export interface VersionRow {
+  schema_version?: number;
+  name: string;
+  label?: string;
+  released_at: string;
+  source_session?: string;
+  source_event_id?: string;
+  parent_version?: string;
+  goal?: string;
+  scorecard?: VersionScorecard;
+  artifacts_sha256?: Record<string, string>;
+  dir_name: string;
+}
+
+export interface VersionsResponse {
+  versions: VersionRow[];
+}
+
 export const api = {
   sessions: () => jsonFetch<SessionsResponse>('/api/sessions'),
   doctor: () => jsonFetch<DoctorResponse>('/api/doctor'),
+  projectVersions: (projectId: string) =>
+    jsonFetch<VersionsResponse>(`/api/projects/${encodeURIComponent(projectId)}/versions`),
   spawnRun: (body: { goal: string; preset?: string; adapter?: string; bindings?: unknown }) =>
     jsonFetch<{ ok: boolean; pid: number }>('/api/crumb/run', {
       method: 'POST',

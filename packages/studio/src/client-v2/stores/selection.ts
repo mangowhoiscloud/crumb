@@ -13,12 +13,27 @@
 
 import { useSyncExternalStore } from 'react';
 
+/**
+ * Output panel source pointer. `session` mode renders the live session's
+ * artifacts/ via /api/sessions/:id/artifact/*. `version` mode renders a
+ * frozen release manifest's artifacts/ via /api/projects/:pid/versions/:v/
+ * artifact/*. M7 Versions panel writes this on row click.
+ */
+export type OutputSource =
+  | { mode: 'session' }
+  | { mode: 'version'; projectId: string; versionDir: string };
+
 interface State {
   activeSessionId: string | null;
   selectedNodeActor: string | null;
+  outputSource: OutputSource;
 }
 
-let state: State = { activeSessionId: null, selectedNodeActor: null };
+let state: State = {
+  activeSessionId: null,
+  selectedNodeActor: null,
+  outputSource: { mode: 'session' },
+};
 const listeners = new Set<() => void>();
 
 function subscribe(fn: () => void): () => void {
@@ -32,15 +47,26 @@ function notify(): void {
 
 export function setActiveSession(id: string | null): void {
   if (state.activeSessionId === id) return;
-  // Switching session also clears the node selection — node IDs are
-  // session-agnostic but the inspector is session-bound.
-  state = { ...state, activeSessionId: id, selectedNodeActor: null };
+  // Switching session also clears the node selection + resets output source —
+  // node IDs are session-agnostic but the inspector is session-bound, and a
+  // frozen-version preview pinned to a different project would be misleading.
+  state = {
+    ...state,
+    activeSessionId: id,
+    selectedNodeActor: null,
+    outputSource: { mode: 'session' },
+  };
   notify();
 }
 
 export function setSelectedNodeActor(actor: string | null): void {
   if (state.selectedNodeActor === actor) return;
   state = { ...state, selectedNodeActor: actor };
+  notify();
+}
+
+export function setOutputSource(src: OutputSource): void {
+  state = { ...state, outputSource: src };
   notify();
 }
 
@@ -57,5 +83,13 @@ export function useSelectedNodeActor(): string | null {
     subscribe,
     () => state.selectedNodeActor,
     () => null,
+  );
+}
+
+export function useOutputSource(): OutputSource {
+  return useSyncExternalStore(
+    subscribe,
+    () => state.outputSource,
+    () => ({ mode: 'session' }) as OutputSource,
   );
 }

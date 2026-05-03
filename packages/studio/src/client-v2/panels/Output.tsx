@@ -1,19 +1,25 @@
 /**
- * Output panel — iframe live render of session artifacts.
+ * Output panel — iframe live render of session OR version artifacts.
  *
- * Per migration plan §6 + DESIGN.md §4. Loads artifact list via
- * /api/sessions/:id/artifacts/list, picks the renderable head
- * (index.html → game.html → first .html), serves via
- * /api/sessions/:id/artifact/* in a sandboxed iframe.
+ * Per migration plan §6 + §14.6 + DESIGN.md §4. Source toggle (Session |
+ * Version) follows the `outputSource` selection slice — M7 Versions panel
+ * sets `mode: 'version'` on row click; switching session resets to live.
  *
- * §8.1 quality bar: iframe sandboxed (`allow-scripts allow-same-origin`),
- * empty state when no HTML artifact exists, error state when fetch fails.
+ * Session mode  → /api/sessions/:id/artifact/* (live, via watcher snapshot)
+ * Version mode  → /api/projects/:pid/versions/:dir/artifact/* (frozen)
+ *
+ * §8.1 quality bar: iframe sandboxed, empty / error states explicit, clear
+ * source attribution in header so an evaluator never confuses a frozen
+ * version preview for live builder output.
  */
 
 import type { IDockviewPanelProps } from 'dockview-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useActiveSession } from '../stores/selection';
+import { useActiveSession, useOutputSource } from '../stores/selection';
 import { useTranscriptStream } from '../hooks/useTranscriptStream';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../lib/api';
+import { useSessions } from '../hooks/useSessions';
 
 interface ArtifactsListResponse {
   files: Array<{ path: string; size: number }>;
@@ -21,12 +27,39 @@ interface ArtifactsListResponse {
 
 export function Output(_props: IDockviewPanelProps) {
   const sessionId = useActiveSession();
+  const outputSource = useOutputSource();
   const stream = useTranscriptStream(500);
+  const sessions = useSessions();
   const [diskFiles, setDiskFiles] = useState<string[]>([]);
   const [diskError, setDiskError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
 
-  // Collect artifact paths from transcript + disk fallback.
+  // Reset selection when source pointer changes — old `selected` may not
+  // exist in the new artifact set.
+  useEffect(() => {
+    setSelected(null);
+  }, [outputSource]);
+
+  const isVersion = outputSource.mode === 'version';
+  const projectId = isVersion ? outputSource.projectId : null;
+  const versionDir = isVersion ? outputSource.versionDir : null;
+
+  // Version mode reads artifacts_sha256 from the manifest — no disk listing
+  // needed because frozen manifests are exhaustive.
+  const versionsQ = useQuery({
+    queryKey: ['projectVersions', projectId],
+    queryFn: () => api.projectVersions(projectId!),
+    enabled: !!projectId,
+    staleTime: 30_000,
+  });
+
+  const versionPaths = useMemo<string[]>(() => {
+    if (!isVersion) return [];
+    const v = versionsQ.data?.versions.find((x) => x.dir_name === versionDir);
+    return Object.keys(v?.artifacts_sha256 ?? {});
+  }, [isVersion, versionsQ.data, versionDir]);
+
+  // Collect session-mode artifact paths from transcript + disk fallback.
   const artifactsFromTranscript = useMemo(() => {
     const paths = new Set<string>();
     for (const e of stream.events) {
@@ -37,13 +70,14 @@ export function Output(_props: IDockviewPanelProps) {
   }, [stream.events]);
 
   const allHtmlPaths = useMemo(() => {
+    if (isVersion) return versionPaths.filter((p) => /\.html$/.test(p));
     const set = new Set<string>([...artifactsFromTranscript, ...diskFiles]);
     return Array.from(set).filter((p) => /\.html$/.test(p));
-  }, [artifactsFromTranscript, diskFiles]);
+  }, [isVersion, versionPaths, artifactsFromTranscript, diskFiles]);
 
-  // Disk fallback when transcript hasn't surfaced artifacts yet.
+  // Disk fallback only in session mode — version manifests are exhaustive.
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId || isVersion) return;
     let cancelled = false;
     setDiskError(null);
     fetch(`/api/sessions/${encodeURIComponent(sessionId)}/artifacts/list`)
@@ -58,7 +92,7 @@ export function Output(_props: IDockviewPanelProps) {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, stream.events.length]);
+  }, [sessionId, isVersion, stream.events.length]);
 
   // Pick the renderable head: prefer index.html → game.html → first .html.
   const head = useMemo(() => {
@@ -75,14 +109,30 @@ export function Output(_props: IDockviewPanelProps) {
 
   if (!sessionId) return <Empty>Select a session in the sidebar.</Empty>;
   if (!head)
-    return <Empty>{diskError ? `error: ${diskError}` : 'no HTML artifact found yet'}</Empty>;
+    return (
+      <Empty>
+        {isVersion
+          ? `no HTML artifact in version ${versionDir}`
+          : diskError
+            ? `error: ${diskError}`
+            : 'no HTML artifact found yet'}
+      </Empty>
+    );
 
   const target = selected ?? head;
   const rel = target.replace(/^artifacts\//, '');
-  const iframeSrc = `/api/sessions/${encodeURIComponent(sessionId)}/artifact/${rel
-    .split('/')
-    .map(encodeURIComponent)
-    .join('/')}`;
+  const encodedRel = rel.split('/').map(encodeURIComponent).join('/');
+  // Resolve project id from sessions cache for session-mode legacy fallback.
+  const sessionProjectId =
+    sessions.data?.sessions.find((s) => s.session_id === sessionId)?.project_id ?? null;
+  const iframeSrc = isVersion
+    ? `/api/projects/${encodeURIComponent(projectId!)}/versions/${encodeURIComponent(
+        versionDir!,
+      )}/artifact/${encodedRel}`
+    : `/api/sessions/${encodeURIComponent(sessionId)}/artifact/${encodedRel}`;
+  const sourceLabel = isVersion
+    ? `version · ${versionDir}`
+    : `session · ${sessionProjectId ?? sessionId.slice(0, 10)}`;
 
   return (
     <div
@@ -102,6 +152,24 @@ export function Output(_props: IDockviewPanelProps) {
           alignItems: 'center',
         }}
       >
+        <span
+          title={isVersion ? 'frozen release artifact' : 'live session artifact'}
+          style={{
+            fontSize: 9,
+            fontFamily: 'var(--font-mono)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.4px',
+            padding: '2px 6px',
+            borderRadius: 'var(--r-pill)',
+            color: isVersion ? 'var(--accent-warm)' : 'var(--ink-muted)',
+            border: `1px solid ${isVersion ? 'var(--accent-warm)' : 'var(--hairline)'}`,
+            background: isVersion
+              ? 'color-mix(in oklab, var(--accent-warm) 12%, transparent)'
+              : 'var(--surface-1)',
+          }}
+        >
+          {sourceLabel}
+        </span>
         <select
           value={target}
           onChange={(e) => setSelected(e.target.value)}
