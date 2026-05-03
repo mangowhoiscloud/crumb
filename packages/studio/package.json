@@ -55,6 +55,7 @@
     "start": "node dist/cli.js"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.100.8",
     "chokidar": "^3.6.0",
     "dockview-react": "^6.0.0",
     "open-props": "^1.7.23",
