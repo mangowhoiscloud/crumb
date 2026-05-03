@@ -13,7 +13,11 @@ import { readFile } from 'node:fs/promises';
 
 import chokidar, { type FSWatcher } from 'chokidar';
 
-import { classifySessionState, type SessionClassification } from './bootstrap.js';
+import {
+  classifyFromMtime,
+  classifySessionState,
+  type SessionClassification,
+} from './bootstrap.js';
 import type { EventBus } from './event-bus.js';
 import { JsonlTail } from './jsonl-tail.js';
 import {
@@ -187,12 +191,23 @@ export class SessionWatcher {
       this.bus.publish({ type: 'append', session_id: msg.session_id, msg });
       publishedSessionId = msg.session_id;
     }
-    // Republish derived metrics once per change batch (cheap — re-reduces cached history).
+    // Republish derived metrics + lifecycle classification once per change
+    // batch. classifyFromMtime is pure (no fs syscall) — chokidar already
+    // ensured the file changed, so Date.now() is a fine proxy for the new
+    // mtime. The fresh lifecycle lets the client transition the header pill
+    // and sidebar dot in real time without waiting for the next /api/sessions
+    // poll. Datadog live tail / OTel GenAI span lifecycle convention.
     if (publishedSessionId) {
+      const lifecycle = classifyFromMtime(Date.now(), s.history);
       this.bus.publish({
         type: 'state',
         session_id: publishedSessionId,
         metrics: computeMetrics(s.history),
+        lifecycle: {
+          state: lifecycle.state,
+          last_activity_at: lifecycle.last_activity_at,
+          ...(lifecycle.done_reason ? { done_reason: lifecycle.done_reason } : {}),
+        },
       });
     }
   }

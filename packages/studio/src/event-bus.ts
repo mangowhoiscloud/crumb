@@ -7,6 +7,7 @@
 
 import type { DashboardMessage } from './types.js';
 import type { SessionMetrics } from './metrics.js';
+import type { SessionState } from './bootstrap.js';
 
 export type LiveEvent =
   | { type: 'append'; session_id: string; msg: DashboardMessage }
@@ -17,7 +18,20 @@ export type LiveEvent =
       goal: string | null;
       preset: string | null;
     }
-  | { type: 'state'; session_id: string; metrics: SessionMetrics }
+  | {
+      type: 'state';
+      session_id: string;
+      metrics: SessionMetrics;
+      // v0.5 PR-O1.5 — push the classifier output alongside metrics so the
+      // client can transition the header pill / sidebar dot in real time
+      // instead of waiting for a next-poll. Adds one classifyFromMtime call
+      // per change batch (no fs syscall, just stat already cached).
+      lifecycle?: {
+        state: SessionState;
+        last_activity_at: number;
+        done_reason?: string;
+      };
+    }
   | { type: 'heartbeat'; ts: string };
 
 export type Subscriber = (evt: LiveEvent) => void;
