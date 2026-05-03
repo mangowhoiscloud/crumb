@@ -4,6 +4,31 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — v0.5 React studio port for cross-provider info parity + inbox Q&A console (PR #215, 2026-05-04)
+
+Surfaces in the React studio everything PR #214 landed on the backend: the 3-tier ack model, expired-credential modal, layered cost strip on Waterfall, custom binding overlay in NewSessionForm. v0.5 design goal — "answer at the question, no panel switching" — now visible end-to-end.
+
+- **InboxThread.tsx** (new panel, mounted between dockview pane group and SlashBar) — every user.intervene/pause/resume/approve/veto from the active session renders as a stacked card with three response tiers paired by `metadata.{ack_for, in_reply_to, consumed_intervene_ids}`. `/help` toggle shows a 13-row slash cheatsheet inline. Pure derivation from useTranscriptStream — no client writes back.
+- **SlashBar enhancements** — `/ask <enum>` quick chips (status / cost / next / stuck / scorecard), ↑↓ arrow input history (50-line ring, dedup'd), Tab autocomplete on `/`-prefix.
+- **AdapterRow expired pill** — `authenticated:false` + `login_expires_at` present → its own EXPIRED pill (audit-fg color), red dot. Distinct from "installed but never logged in" (MISSING) and "auth probe unavailable" (UNKNOWN).
+- **AdapterSetupModal** (new component) — click any AdapterRow → modal opens with state-aware copy + copyable commands (re-login / first install / first login / login if needed). Re-check refetches /api/doctor; Esc closes; backdrop click closes.
+- **Waterfall cost strip** — sticky SVG above lane scroll. Cumulative tokens area (filled blue) + cumulative cost line (orange) sampled at every agent.stop with metadata.{tokens_in/out, cost_usd}. OTel GenAI semantic-conventions alignment + Phoenix Arize layered chart pattern. Empty when no usage emitted yet (mock sessions).
+- **Per-lane density heatmap** — bin every step.* / build / qa.result / judge.score / artifact.created / handoff.* / spec / spec.update / error / note / user.intervene event into 1-second buckets keyed by actor; render as stepped CSS linear-gradient backdrop on the lane track (Tufte horizon-graph compression + zero extra row cost).
+- **NewSessionForm** — `bagelcode-cross-3way` preset chip now requires all 3 providers (claude-local + codex-local + gemini-cli-local); body.bindings overlays preset (was: ambient-only); video research toggle gates on gemini availability + serializes to body.video_refs[].
+
+Tests added (47 cases, 4 files):
+
+- src/helpers/ask-formatter.test.ts (17): isAskQuery type guard + every enum × edge state + buildAskResponseDraft envelope + replay determinism
+- src/reducer/index.test.ts (+6): Tier 1 ack on every user.* / ackBodyFor uses event.data fields / Tier 2 /ask emits kind=note / Tier 2 invalid query produces ack but no note / Tier 3 spawn drains pending_intervene_ids / Tier 3 user.* without spawn keeps the buffer
+- src/adapters/_shared.usage.test.ts (12): codex experimental_json + OpenAI legacy + gemini usage_metadata field heuristic + multi-line / cross-line accumulation / partial usage / robustness
+- src/inbox/parser.ask.test.ts (10): 5-enum × table-driven + case-insensitive + out-of-enum fallthrough + empty / whitespace / partial-match edge
+
+Deferred to follow-up PRs:
+- Studio E2E (Playwright + RTL) for InboxThread / AdapterSetupModal pairing logic
+- preset-loader applyCliBindings / loadBindingsOnly tests (require fixture preset .toml + tmpdir setup)
+- Controls fallback integration test in qa-check-playwright (needs playwright + http-server)
+- Rule 9 / Rule 10 anti-deception rules unit tests
+
 ### Added — Pipeline annotations + project default layout + export/import + minimap toggle (M9 — n8n parity polish, 2026-05-03)
 
 Pipeline canvas gains the n8n-style polish that was deferred from M2-M8 to keep the migration focused. All four deliverables ride a single React Flow extension surface — no new dep, no schema change, no server route.
