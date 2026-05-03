@@ -577,7 +577,23 @@ async function cmdResume(args: ParsedArgs): Promise<void> {
   }
 }
 
-async function cmdDoctor(): Promise<void> {
+async function cmdDoctor(args: ParsedArgs): Promise<void> {
+  // v0.4: --self-check exercises the reducer pause/resume state machine
+  // synthetically (no subprocess, no transcript writes) so a fresh-machine
+  // setup or a post-Prune-N merge can be verified end-to-end. Prints a
+  // structured per-step trace and exits non-zero if any transition fails.
+  // Backed by wiki/synthesis/bagelcode-studio-big-bang-update-2026-05-03.md §6.8.
+  if (args.flags.has('self-check')) {
+    const { runSelfCheck, formatSelfCheckReport } = await import('./helpers/self-check.js');
+    const report = runSelfCheck();
+    // eslint-disable-next-line no-console
+    console.log(formatSelfCheckReport(report));
+    if (report.pause_resume_lifecycle !== 'ok') {
+      process.exit(1);
+    }
+    return;
+  }
+
   // v0.1 S12: full environment check (3 host OAuth + playwright + htmlhint).
   const { runDoctor, formatReport } = await import('./helpers/doctor.js');
   const report = await runDoctor();
@@ -1256,6 +1272,7 @@ Usage:
   crumb replay <session-dir>               # re-derive state from transcript
   crumb resume <session-id|dir>            # re-derive state + surface mid-flight resume command (S15)
   crumb doctor                             # full environment check (3 host OAuth + adapter health)
+  crumb doctor --self-check                # reducer pause/resume lifecycle smoke (fresh-machine portability check)
   crumb config <자연어>                     # preset 추천 (Crumb 추천만, 사용자 선택)
   crumb debug <session-id|dir>             # F1-F7 routing 장애 진단
   crumb status <session-id|dir>            # 진행 상황 + last 10 events + scores
@@ -1318,7 +1335,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       await cmdResume(args);
       break;
     case 'doctor':
-      await cmdDoctor();
+      await cmdDoctor(args);
       break;
     case 'config':
       await cmdConfig(args);
