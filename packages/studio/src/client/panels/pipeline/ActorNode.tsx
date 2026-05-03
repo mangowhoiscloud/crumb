@@ -80,6 +80,23 @@ export function ActorNode({ data, selected }: NodeProps) {
         position={Position.Right}
         style={{ background: 'var(--ink-muted)', width: 6, height: 6 }}
       />
+      {/* Right-side TARGET handle (separate id from `right` source).
+          Used by terminal merges into the `done` node — incoming edges
+          loop around to enter from done's right, reading as "session
+          exits here" instead of feeding through to a non-existent
+          downstream rank. */}
+      <Handle
+        id="right-target"
+        type="target"
+        position={Position.Right}
+        style={{
+          background: 'var(--ink-muted)',
+          width: 6,
+          height: 6,
+          // Offset slightly so it doesn't overlap the source handle.
+          transform: 'translate(0, 12px)',
+        }}
+      />
       {/* Back / rollback: top handles route the return edge as a clear
           arc OVER the row instead of overlapping the forward edge. */}
       <Handle

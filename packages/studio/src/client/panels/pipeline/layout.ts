@@ -113,16 +113,22 @@ export function buildDefaultLayout(): { nodes: Node<ActorNodeData>[]; edges: Edg
     };
   });
 
-  const forward: Edge[] = FORWARD_EDGES.map(([from, to, label]) => ({
-    id: `${from}-${to}`,
-    source: from,
-    target: to,
-    sourceHandle: 'right',
-    targetHandle: 'left',
-    label,
-    type: 'default',
-    animated: false,
-  }));
+  const forward: Edge[] = FORWARD_EDGES.map(([from, to, label]) => {
+    // Terminal merges into `done` route into done's right handle so the
+    // edge curves around and reads as "session exits here" instead of
+    // feeding through to a downstream rank that doesn't exist.
+    const isTerminal = to === 'done';
+    return {
+      id: `${from}-${to}`,
+      source: from,
+      target: to,
+      sourceHandle: 'right',
+      targetHandle: isTerminal ? 'right-target' : 'left',
+      label,
+      type: isTerminal ? 'smoothstep' : 'default',
+      animated: false,
+    };
+  });
 
   const back: Edge[] = BACK_EDGES.map(([from, to, label]) => ({
     id: `${from}-${to}`,
