@@ -1174,6 +1174,33 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
 }
 .bindings-grid select:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* v0.4 Video research toggle (Gemini-only — hidden when neither gemini-sdk
+   nor gemini-cli-local is available). Lives inside <details id="new-session-advanced">
+   so collapses with the rest of the custom binding panel. */
+.video-research { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--hairline); }
+.video-research-toggle {
+  display: inline-flex; gap: 6px; align-items: center;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--ink-muted);
+  user-select: none;
+}
+.video-research-toggle input[type="checkbox"] { accent-color: var(--primary); }
+.video-research-refs {
+  width: 100%;
+  margin-top: 6px;
+  background: var(--canvas);
+  color: var(--ink);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 4px 8px;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  outline: none;
+  resize: vertical;
+}
+.video-research-refs:focus { border-color: var(--primary); }
+
 /* ───────────────────────────────────────────────────────────────────────── */
 /* Adapter setup modal — install / auth guide                              */
 /* ───────────────────────────────────────────────────────────────────────── */

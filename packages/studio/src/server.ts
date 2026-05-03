@@ -681,11 +681,13 @@ async function serveCrumbRun(
   let goal: string;
   let preset: string | undefined;
   let adapter: string | undefined;
+  let videoRefs: string[] | undefined;
   try {
     const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
       goal?: unknown;
       preset?: unknown;
       adapter?: unknown;
+      video_refs?: unknown;
     };
     if (typeof body.goal !== 'string' || body.goal.trim().length === 0) {
       res.statusCode = 400;
@@ -696,6 +698,16 @@ async function serveCrumbRun(
     goal = body.goal.trim();
     if (typeof body.preset === 'string' && body.preset.length > 0) preset = body.preset;
     if (typeof body.adapter === 'string' && body.adapter.length > 0) adapter = body.adapter;
+    // v0.4: video_refs — array of YouTube URLs / sandboxed local paths. The
+    // studio toggle "Video research (Gemini)" exposes this; only honored when
+    // gemini-sdk OR gemini-cli-local is installed (the toggle hides
+    // otherwise). Server passes through as `--video-refs <csv>` to crumb run.
+    if (Array.isArray(body.video_refs)) {
+      videoRefs = body.video_refs
+        .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+        .map((v) => v.trim());
+      if (videoRefs.length === 0) videoRefs = undefined;
+    }
   } catch {
     res.statusCode = 400;
     res.setHeader('content-type', 'text/plain; charset=utf-8');
@@ -733,6 +745,7 @@ async function serveCrumbRun(
   const args = ['tsx', 'src/index.ts', 'run', '--goal', goal];
   if (preset) args.push('--preset', preset);
   if (adapter) args.push('--adapter', adapter);
+  if (videoRefs && videoRefs.length > 0) args.push('--video-refs', videoRefs.join(','));
   const child = spawn('npx', args, { cwd: repoRoot, detached: true, stdio: 'ignore' });
   child.unref();
 
@@ -745,6 +758,7 @@ async function serveCrumbRun(
       goal,
       preset: preset ?? null,
       adapter: adapter ?? null,
+      video_refs: videoRefs ?? null,
     }),
   );
 }

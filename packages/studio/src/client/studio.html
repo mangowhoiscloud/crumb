@@ -33,6 +33,24 @@
     <details id="new-session-advanced" class="adv-binding">
       <summary>Custom binding (per-actor harness × model)</summary>
       <div id="new-session-bindings" class="bindings-grid"></div>
+      <!--
+        v0.4 Video research toggle — shown only when gemini-sdk OR gemini-cli-local
+        is installed + auth not-false (probed via /api/doctor). When toggled on,
+        the textarea below accepts YouTube URLs / sandboxed local paths, one per
+        line. The /api/crumb/run body carries video_refs[] and the reducer's
+        goal handler flips state.goal_has_video_refs so researcher routes to
+        the gemini-sdk video path (10fps frame sampling, native YouTube URL).
+        Hidden entirely when gemini is not available.
+      -->
+      <div id="new-session-video" class="video-research" style="display:none;">
+        <label class="video-research-toggle">
+          <input type="checkbox" id="new-session-video-on">
+          <span>Video research (Gemini)</span>
+        </label>
+        <textarea id="new-session-video-refs" class="video-research-refs" rows="2"
+          placeholder="YouTube URL or sandboxed local path · one per line"
+          style="display:none;"></textarea>
+      </div>
     </details>
     <div class="new-session-row">
       <button id="new-session-go">Run</button>

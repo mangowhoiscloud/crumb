@@ -1217,6 +1217,14 @@ async function spawnNewCrumbRun() {
   const adapterSel = $('new-session-adapter');
   const adapterPick = adapterSel?.value?.trim();
   if (adapterPick) body.adapter = adapterPick;
+  // v0.4: video_refs from the toggle textarea (only honored when gemini-sdk
+  // OR gemini-cli-local is installed; the panel hides itself otherwise).
+  const videoOn = $('new-session-video-on');
+  const videoTextarea = $('new-session-video-refs');
+  if (videoOn?.checked && videoTextarea?.value) {
+    const refs = videoTextarea.value.split('\n').map(s => s.trim()).filter(Boolean);
+    if (refs.length > 0) body.video_refs = refs;
+  }
   try {
     const res = await fetch('/api/crumb/run', {
       method: 'POST',
@@ -1775,10 +1783,40 @@ async function refreshAdapterList() {
     renderPresetChips(); // re-disable preset chips that reference unavailable adapters
     renderBindingsGrid();
     renderAdapterPicker();
+    renderVideoResearchPanel(); // v0.4 toggle visibility tracks gemini availability
   } catch (err) {
     root.innerHTML = '<div class="adapter-empty">probe failed: ' + escapeHTML(err.message) + '</div>';
   }
 }
+
+// v0.4: show "Video research (Gemini)" toggle only when gemini-sdk OR
+// gemini-cli-local is installed AND auth is not explicitly false. Hidden
+// otherwise — pure-tap workflows shouldn't see a control they can't act on.
+// The textarea inside the toggle reveals only when the checkbox is on.
+function renderVideoResearchPanel() {
+  const panel = $('new-session-video');
+  if (!panel) return;
+  const geminiAvailable = adapterCache.some(
+    (a) => (a.id === 'gemini-sdk' || a.id === 'gemini-cli-local')
+      && a.installed
+      && a.authenticated !== false,
+  );
+  panel.style.display = geminiAvailable ? '' : 'none';
+  if (!geminiAvailable) {
+    // Force-clear so a stale on-state doesn't leak into the next /api/crumb/run.
+    const cb = $('new-session-video-on');
+    const ta = $('new-session-video-refs');
+    if (cb) cb.checked = false;
+    if (ta) ta.style.display = 'none';
+  }
+}
+
+// Wire checkbox once at module load — toggle reveals/hides the textarea.
+$('new-session-video-on')?.addEventListener('change', () => {
+  const cb = $('new-session-video-on');
+  const ta = $('new-session-video-refs');
+  if (ta) ta.style.display = cb?.checked ? '' : 'none';
+});
 
 // Adapters used by the current session's preset (or live binding) get an
 // `in-use` indicator on top of their active/maybe/inactive state.

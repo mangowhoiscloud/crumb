@@ -4,6 +4,35 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — Video research toggle (Gemini-only) end-to-end (studio → server → CLI → coordinator → reducer) (2026-05-03)
+
+Per user feedback: "세션을 만들 때 gemini sdk나 Gemini CLI가 활성화 되어 있으면 custom binding에 비디오 인코딩 활성화/비활성화 토글 넣고 활성화되면 research에서 비디오 인코딩하도록 프롬프트 수정 및 보강하자. 대신 gemini 쪽이 활성화가 안되어있으면 패스하고 말이야."
+
+End-to-end wiring so the studio's session-create form can opt-in to video research (Gemini 3.1 Pro 10fps frame sampling) when the host has gemini-sdk OR gemini-cli-local installed. Hidden entirely otherwise.
+
+**Studio UI** (`packages/studio/src/client/studio.{html,css,js}`)
+
+- New `<details>` panel "Video research (Gemini)" inside the existing Custom binding details. Visibility tracks `/api/doctor` probe — `renderVideoResearchPanel()` shows the toggle iff `gemini-sdk` OR `gemini-cli-local` is installed AND `authenticated !== false`. Hidden + force-cleared otherwise (stale checkbox state can't leak into the next /api/crumb/run body).
+- Checkbox reveals a textarea (one URL/path per line). Submitted as `body.video_refs: string[]` to /api/crumb/run.
+
+**Studio server** (`packages/studio/src/server.ts`)
+
+- `serveCrumbRun` accepts `body.video_refs` (string[]), trims, drops blanks. Forwards to spawned `crumb run` as `--video-refs <comma-separated>`. Response echo includes `video_refs` field for client confirmation.
+
+**Crumb CLI** (`src/cli.ts`)
+
+- `cmdRun` parses `--video-refs <csv>` into `string[]`. Forwards to `runSession({ videoRefs })`.
+
+**Coordinator** (`src/loop/coordinator.ts`)
+
+- `RunOptions.videoRefs?: string[]` added. When non-empty, the synthetic `goal` event written at session start carries `data: { video_refs: [...] }` so the reducer's `case 'goal'` flips `state.goal_has_video_refs = true`. Empty/undefined keeps existing text-only research flow.
+
+**Researcher path** (no change — already in main)
+
+`agents/researcher.md` step 1 already routes on `data.video_refs`: empty/absent → text-only, non-empty → multi-modal extraction (Step 2 with gemini-sdk file_data Part). The toggle just makes the entry UX explicit.
+
+Verification: 453/453 sweep green; lint+typecheck+format+build clean.
+
 ### Changed — Audit cleanup: C1 invariant doc + C3 session_id consistency + Q2 selectSession hooks + Q6 dead wrapper (2026-05-03)
 
 Four small audit-driven cleanups bundled. None change behavior; all reduce future bug surface.
