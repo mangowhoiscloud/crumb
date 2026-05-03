@@ -2551,6 +2551,61 @@ section.scorecard {
   }
 }
 
+/* ── PR-O4 P5 — score-trajectory sparklines (above composite + radar + rows)
+ *
+ * Six tiny line graphs (one per D1-D6) on a single row across the full
+ * scorecard width. Renders only when ≥ 2 judge.score events exist for
+ * the session — single-round sessions have no trajectory.
+ *
+ * grid-column: 1 / -1 spans all 3 columns of the scorecard-strip grid;
+ * the existing composite/radar/rows children naturally land on row 2.
+ *
+ * Frontier ref (per wiki §4.P5): mirrors Honeycomb dataset overview +
+ * Vercel observability strip (minimalist baseline). */
+.sc-sparklines {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 0 0 8px;
+  border-bottom: 1px dashed var(--hairline);
+  margin: 0 0 4px;
+  flex-wrap: wrap;
+}
+.sc-sparkline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: help;
+}
+.sc-sparkline-key {
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 10px;
+  color: var(--ink-subtle);
+  letter-spacing: 0.3px;
+  min-width: 16px;
+}
+.sc-spark {
+  width: 60px;
+  height: 16px;
+  display: block;
+}
+.sc-spark-line {
+  fill: none;
+  stroke: var(--ink-tertiary);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.sc-spark-dot {
+  stroke: var(--canvas);
+  stroke-width: 0.8;
+}
+.sc-spark-dot.spark-dot-pass    { fill: var(--lime); }
+.sc-spark-dot.spark-dot-partial { fill: var(--warn); }
+.sc-spark-dot.spark-dot-fail    { fill: var(--audit-fg); }
+.sc-spark-dot.spark-dot-pending { fill: var(--ink-subtle); }
+
 /* ── Composite headline ─────────────────────────────────────────────── */
 .sc-composite {
   display: flex;
