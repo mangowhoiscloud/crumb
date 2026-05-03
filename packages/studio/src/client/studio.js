@@ -990,25 +990,77 @@ setTimeout(renderDag, 0);
 
 let activeView = 'pipeline';
 let activeLogActor = null;
-let logEventSource = null;
+
+/**
+ * v0.5 PR-6 — Logs panel state machine + race-guard.
+ *
+ * Frontier convention (ArgoCD pod-logs / Supabase Logs Explorer / Datadog
+ * live tail): a single object holds the in-flight state, every async path
+ * checks `token` before mutating buffer/DOM, and connection state is one
+ * of 6 explicit values (no implicit "reconnecting forever" placeholder).
+ *
+ * State machine:
+ *   idle → awaiting-actor → connecting → streaming
+ *                                    └─→ stalled (heartbeat dead-air)
+ *                                    └─→ errored (snapshot fail / SSE max-retries)
+ *
+ * Token: monotonically increasing. Every actor/session change increments
+ * it; stale fetch / SSE handlers read myToken !== logsCtl.token and bail
+ * before pushing into the buffer or touching the DOM.
+ *
+ * AbortController: the in-flight `fetch()` is aborted when token bumps so
+ * the stale request never resolves into the new actor's panel.
+ *
+ * Heartbeat watchdog: SSE server emits :heartbeat every 15s. We track
+ * lastHeartbeatTs; if no traffic (heartbeat OR chunk OR rotate) arrives
+ * for HEARTBEAT_TIMEOUT_MS we transition to `stalled` + start an
+ * exponential-backoff reconnect countdown (1s → 2s → 4s → 8s → 16s cap).
+ */
+const HEARTBEAT_TIMEOUT_MS = 30_000;
+const BACKOFF_INITIAL_MS = 1_000;
+const BACKOFF_CAP_MS = 16_000;
+
+const logsCtl = {
+  state: 'idle', // 'idle' | 'awaiting-actor' | 'connecting' | 'streaming' | 'stalled' | 'errored'
+  token: 0,
+  abortCtl: null,
+  es: null,
+  hbTimer: null,
+  lastHeartbeatTs: 0,
+  backoffMs: BACKOFF_INITIAL_MS,
+  reconnectCountdownTimer: null,
+  followAuto: true, // user-scrolling-up auto-disables; "Jump to live" re-enables
+};
+
 const logBuffer = []; // [{ kind: 'snapshot' | 'rotate' | 'chunk', file, text }]
 
 function setActiveView(view) {
   activeView = view;
-  document.querySelectorAll('nav.view-tabs button').forEach(b => {
+  document.querySelectorAll('nav.view-tabs button').forEach((b) => {
     b.classList.toggle('active', b.dataset.view === view);
   });
-  document.querySelectorAll('.view-pane').forEach(p => {
+  document.querySelectorAll('.view-pane').forEach((p) => {
     p.classList.toggle('active', p.id === 'view-' + view);
   });
   if (view === 'logs') {
     renderLogActorList();
-    if (!activeLogActor && activeSession) {
+    if (!activeSession) {
+      setLogsState('idle');
+    } else if (activeLogActor) {
+      // Returning to the Logs tab — re-render with current state, don't
+      // tear down the connection if it's still streaming.
+      renderLogContent();
+    } else {
       const s = sessions.get(activeSession);
       if (s?.actors?.length) selectLogActor(s.actors[0]);
+      else setLogsState('awaiting-actor');
     }
   } else {
-    closeLogStream();
+    // Tab switched away from logs — keep the EventSource alive so background
+    // chunks accumulate, but if we're in a transient state (connecting / stalled)
+    // we don't gain anything by holding it. Frontier convention (Datadog,
+    // ArgoCD) is to keep streaming connections warm across tab switches; we
+    // follow that here.
   }
 }
 
@@ -1047,54 +1099,241 @@ function renderLogActorList() {
   });
 }
 
+/**
+ * State transition — single source of truth. Mutates `logsCtl.state`,
+ * pushes a render. Every renderLogContent() / renderLogsConnStatus() reads
+ * this. ArgoCD / Datadog parity.
+ */
+function setLogsState(next, msg) {
+  logsCtl.state = next;
+  renderLogsConnStatus(next, msg ?? '');
+  renderLogContent();
+}
+
 function selectLogActor(actor) {
+  // 1. Bump token; abort in-flight fetch + close prior SSE + clear watchdog.
+  const myToken = ++logsCtl.token;
+  if (logsCtl.abortCtl) logsCtl.abortCtl.abort();
+  closeLogStream();
+  logBuffer.length = 0;
+  logsCtl.backoffMs = BACKOFF_INITIAL_MS;
+  logsCtl.followAuto = true;
+
   activeLogActor = actor;
   $('logs-current-actor').textContent = actor;
   renderLogActorList();
-  closeLogStream();
-  logBuffer.length = 0;
-  $('logs-content').innerHTML = '<div class="logs-empty">connecting…</div>';
-  fetch('/api/sessions/' + encodeURIComponent(activeSession) + '/logs/' + encodeURIComponent(actor))
-    .then(r => r.text())
-    .then(text => {
+
+  if (!actor || !activeSession) {
+    setLogsState('awaiting-actor');
+    return;
+  }
+
+  // 2. Snapshot fetch with AbortSignal.
+  setLogsState('connecting', `loading ${actor}…`);
+  logsCtl.abortCtl = new AbortController();
+  fetch(
+    '/api/sessions/' + encodeURIComponent(activeSession) +
+      '/logs/' + encodeURIComponent(actor),
+    { signal: logsCtl.abortCtl.signal },
+  )
+    .then((r) => r.text())
+    .then((text) => {
+      // 3. STALE GUARD — user clicked another actor / session in flight.
+      if (myToken !== logsCtl.token) return;
       logBuffer.push({ kind: 'snapshot', file: 'snapshot', text });
-      renderLogContent();
-      openLogStream(actor);
+      openLogStream(actor, myToken);
     })
-    .catch(err => {
-      $('logs-content').innerHTML = '<div class="logs-empty">snapshot failed: ' + escapeHTML(err.message) + '</div>';
+    .catch((err) => {
+      if (err.name === 'AbortError') return; // expected on token bump
+      if (myToken !== logsCtl.token) return;
+      setLogsState('errored', `snapshot failed: ${err.message}`);
     });
 }
 
-function openLogStream(actor) {
+function openLogStream(actor, parentToken) {
+  // Caller passes its token so SSE handlers can stale-guard symmetrically
+  // with the snapshot path. Without this, a long-lived EventSource attached
+  // to actor A keeps pushing chunks after the user clicked actor B.
   closeLogStream();
-  const url = '/api/sessions/' + encodeURIComponent(activeSession) +
-              '/logs/' + encodeURIComponent(actor) + '/stream';
-  logEventSource = new EventSource(url);
-  logEventSource.addEventListener('rotate', e => {
+  const url =
+    '/api/sessions/' + encodeURIComponent(activeSession) +
+    '/logs/' + encodeURIComponent(actor) + '/stream';
+  const es = new EventSource(url);
+  logsCtl.es = es;
+  logsCtl.lastHeartbeatTs = Date.now();
+  startHeartbeatWatchdog();
+
+  setLogsState('streaming');
+
+  es.addEventListener('rotate', (e) => {
+    if (parentToken !== logsCtl.token) return;
     const d = JSON.parse(e.data);
     logBuffer.push({ kind: 'rotate', file: d.file, text: '' });
-    renderLogContent();
+    logsCtl.lastHeartbeatTs = Date.now();
+    if (logsCtl.state !== 'streaming') setLogsState('streaming');
+    else renderLogContent();
   });
-  logEventSource.addEventListener('chunk', e => {
+  es.addEventListener('chunk', (e) => {
+    if (parentToken !== logsCtl.token) return;
     const d = JSON.parse(e.data);
     logBuffer.push({ kind: 'chunk', file: d.file, text: d.text });
-    renderLogContent();
+    logsCtl.lastHeartbeatTs = Date.now();
+    if (logsCtl.state !== 'streaming') setLogsState('streaming');
+    else renderLogContent();
   });
-  logEventSource.addEventListener('heartbeat', () => {});
-  logEventSource.onerror = () => {
-    // EventSource auto-reconnects; soft hint only.
+  es.addEventListener('heartbeat', () => {
+    if (parentToken !== logsCtl.token) return;
+    logsCtl.lastHeartbeatTs = Date.now();
+    if (logsCtl.state === 'stalled') setLogsState('streaming');
+  });
+  es.addEventListener('open', () => {
+    if (parentToken !== logsCtl.token) return;
+    logsCtl.lastHeartbeatTs = Date.now();
+    logsCtl.backoffMs = BACKOFF_INITIAL_MS;
+    if (logsCtl.state !== 'streaming') setLogsState('streaming');
+  });
+  es.onerror = () => {
+    if (parentToken !== logsCtl.token) return;
+    // EventSource auto-reconnects on transient drops; we only escalate if
+    // the watchdog confirms dead-air. The browser default is ~3s; we let
+    // it try once silently before showing the stalled banner.
+    if (logsCtl.state === 'streaming') {
+      setLogsState('stalled', 'connection lost — auto-reconnecting…');
+    }
   };
 }
 
 function closeLogStream() {
-  if (logEventSource) {
-    logEventSource.close();
-    logEventSource = null;
+  if (logsCtl.es) {
+    try {
+      logsCtl.es.close();
+    } catch {
+      // ignore
+    }
+    logsCtl.es = null;
+  }
+  if (logsCtl.hbTimer) {
+    clearInterval(logsCtl.hbTimer);
+    logsCtl.hbTimer = null;
+  }
+  if (logsCtl.reconnectCountdownTimer) {
+    clearInterval(logsCtl.reconnectCountdownTimer);
+    logsCtl.reconnectCountdownTimer = null;
   }
 }
 
+/**
+ * Heartbeat watchdog — fires every 5s, escalates to `stalled` when the
+ * gap from lastHeartbeatTs exceeds HEARTBEAT_TIMEOUT_MS. Datadog/Honeycomb
+ * pattern: never trust EventSource's auto-reconnect alone; user needs a
+ * visible signal when traffic dies.
+ */
+function startHeartbeatWatchdog() {
+  if (logsCtl.hbTimer) clearInterval(logsCtl.hbTimer);
+  logsCtl.hbTimer = setInterval(() => {
+    if (logsCtl.state !== 'streaming') return;
+    const ago = Date.now() - logsCtl.lastHeartbeatTs;
+    if (ago > HEARTBEAT_TIMEOUT_MS) {
+      setLogsState(
+        'stalled',
+        `last heartbeat ${Math.floor(ago / 1000)}s ago — auto-reconnect queued`,
+      );
+      startReconnectCountdown(Math.ceil(logsCtl.backoffMs / 1000));
+      logsCtl.backoffMs = Math.min(logsCtl.backoffMs * 2, BACKOFF_CAP_MS);
+    }
+  }, 5_000);
+}
+
+/**
+ * Stripe CLI / Sentry replay pattern — visible countdown to next reconnect
+ * attempt, with a manual "Reconnect now" affordance. Force-reconnect
+ * resets backoff to baseline.
+ */
+function startReconnectCountdown(seconds) {
+  if (logsCtl.reconnectCountdownTimer) clearInterval(logsCtl.reconnectCountdownTimer);
+  let left = seconds;
+  renderLogsConnStatus('stalled', `reconnecting in ${left}s…`);
+  logsCtl.reconnectCountdownTimer = setInterval(() => {
+    left--;
+    if (left <= 0) {
+      clearInterval(logsCtl.reconnectCountdownTimer);
+      logsCtl.reconnectCountdownTimer = null;
+      forceLogsReconnect();
+    } else {
+      renderLogsConnStatus('stalled', `reconnecting in ${left}s…`);
+    }
+  }, 1000);
+}
+
+function forceLogsReconnect() {
+  logsCtl.backoffMs = BACKOFF_INITIAL_MS;
+  if (activeLogActor && activeSession) selectLogActor(activeLogActor);
+}
+
+/**
+ * Connection-status pill in the logs toolbar. 5 visual states:
+ *   idle / awaiting-actor — gray
+ *   connecting           — amber, spin
+ *   streaming            — green, slow-pulse, label "Live"
+ *   stalled              — amber, with "Reconnect now" button
+ *   errored              — red, with "Reconnect now" button
+ */
+function renderLogsConnStatus(state, msg) {
+  const pill = $('logs-conn-status');
+  if (!pill) return;
+  pill.className = 'logs-conn-status state-' + state;
+  const labelByState = {
+    idle: 'pick session',
+    'awaiting-actor': 'pick actor',
+    connecting: 'connecting',
+    streaming: 'live',
+    stalled: 'stalled',
+    errored: 'disconnected',
+  };
+  const showRetry = state === 'stalled' || state === 'errored';
+  pill.innerHTML =
+    '<span class="logs-conn-dot"></span>' +
+    '<span class="logs-conn-label">' + escapeHTML(labelByState[state] ?? state) + '</span>' +
+    (msg ? '<span class="logs-conn-msg">' + escapeHTML(msg) + '</span>' : '') +
+    (showRetry ? '<button class="logs-conn-retry" id="logs-conn-retry-btn">Reconnect now</button>' : '');
+  const retryBtn = document.getElementById('logs-conn-retry-btn');
+  if (retryBtn) retryBtn.addEventListener('click', forceLogsReconnect);
+}
+
 function renderLogContent() {
+  const root = $('logs-content');
+  if (!root) return;
+
+  // 5-state empty-state copy (Supabase Logs Explorer pattern — intent-keyed,
+  // never reuse a generic "no data" label). Each transition the user lives
+  // through gets its own message + class.
+  if (!activeSession) {
+    root.innerHTML = '<div class="logs-empty">Pick a session from the sidebar.</div>';
+    refreshGrepNav('logs', root, $('logs-grep-count'), $('logs-grep-prev'), $('logs-grep-next'));
+    return;
+  }
+  if (!activeLogActor) {
+    root.innerHTML =
+      '<div class="logs-empty">Pick an actor on the left to tail its logs.</div>';
+    refreshGrepNav('logs', root, $('logs-grep-count'), $('logs-grep-prev'), $('logs-grep-next'));
+    return;
+  }
+  if (logsCtl.state === 'connecting') {
+    root.innerHTML =
+      '<div class="logs-empty logs-empty--loading">Loading ' +
+      escapeHTML(activeLogActor) + '…</div>';
+    refreshGrepNav('logs', root, $('logs-grep-count'), $('logs-grep-prev'), $('logs-grep-next'));
+    return;
+  }
+  if (logsCtl.state === 'errored') {
+    root.innerHTML =
+      '<div class="logs-empty logs-empty--errored">Disconnected from ' +
+      escapeHTML(activeLogActor) +
+      "’s log stream. Use the <strong>Reconnect now</strong> button above.</div>";
+    refreshGrepNav('logs', root, $('logs-grep-count'), $('logs-grep-prev'), $('logs-grep-next'));
+    return;
+  }
+
   const query = grepState.logs.query;
   const lines = [];
   let inStderr = false;
@@ -1105,24 +1344,66 @@ function renderLogContent() {
       continue;
     }
     for (const raw of entry.text.split('\n')) {
-      if (/^--- stderr ---$/.test(raw)) { inStderr = true; lines.push({ kind: 'section', text: raw }); continue; }
-      if (/^--- stdout ---$/.test(raw)) { inStderr = false; lines.push({ kind: 'section', text: raw }); continue; }
-      if (/^=== adapter /.test(raw)) { lines.push({ kind: 'section', text: raw }); continue; }
+      if (/^--- stderr ---$/.test(raw)) {
+        inStderr = true;
+        lines.push({ kind: 'section', text: raw });
+        continue;
+      }
+      if (/^--- stdout ---$/.test(raw)) {
+        inStderr = false;
+        lines.push({ kind: 'section', text: raw });
+        continue;
+      }
+      if (/^=== adapter /.test(raw)) {
+        lines.push({ kind: 'section', text: raw });
+        continue;
+      }
       lines.push({ kind: inStderr ? 'stderr' : 'stdout', text: raw });
     }
   }
+
+  // Detect "no real output" vs "actor never spawned". Server returns
+  // `(no spawn log yet for <actor> in this session)` 47-byte body when the
+  // agent-workspace dir has 0 spawn-*.log files. We split that case out so
+  // the user sees the right intent.
+  const totalText = logBuffer.map((b) => b.text || '').join('').trim();
+  const neverSpawned = /no spawn log yet for /.test(totalText);
+  if (lines.length === 0 || (logBuffer.length === 1 && neverSpawned)) {
+    if (neverSpawned) {
+      root.innerHTML =
+        '<div class="logs-empty logs-empty--never-spawned">' +
+        escapeHTML(activeLogActor) +
+        " hasn’t spawned yet. Logs will appear here the moment it does.</div>";
+    } else if (logsCtl.state === 'streaming') {
+      root.innerHTML =
+        '<div class="logs-empty logs-empty--waiting">Connected. Waiting for first output…</div>';
+    } else {
+      root.innerHTML = '<div class="logs-empty">no output yet</div>';
+    }
+    refreshGrepNav('logs', root, $('logs-grep-count'), $('logs-grep-prev'), $('logs-grep-next'));
+    return;
+  }
+
   const visible = lines.slice(-4000); // cap DOM cost; full log lives on disk.
   const qLower = query.toLowerCase();
-  const html = visible.map(l => {
-    const cls = ['log-line'];
-    if (l.kind === 'stderr') cls.push('stderr');
-    if (l.kind === 'section') cls.push('section');
-    if (query && l.text.toLowerCase().includes(qLower)) cls.push('has-match');
-    return '<div class="' + cls.join(' ') + '">' + highlightHTML(l.text, query) + '</div>';
-  }).join('');
-  const root = $('logs-content');
-  root.innerHTML = html || '<div class="logs-empty">no output yet</div>';
-  if ($('logs-follow').checked) root.scrollTop = root.scrollHeight;
+  const html = visible
+    .map((l) => {
+      const cls = ['log-line'];
+      if (l.kind === 'stderr') cls.push('stderr');
+      if (l.kind === 'section') cls.push('section');
+      if (query && l.text.toLowerCase().includes(qLower)) cls.push('has-match');
+      return '<div class="' + cls.join(' ') + '">' + highlightHTML(l.text, query) + '</div>';
+    })
+    .join('');
+  root.innerHTML = html;
+
+  // GitHub Actions pattern — auto-unfollow when the user scrolls up. The
+  // initial scroll-to-bottom still happens via the explicit followAuto flag,
+  // but a scroll-up gesture flips it off. The status pill / "Jump to live"
+  // button can flip it back on.
+  if ($('logs-follow').checked && logsCtl.followAuto) {
+    root.scrollTop = root.scrollHeight;
+  }
   refreshGrepNav('logs', root, $('logs-grep-count'), $('logs-grep-prev'), $('logs-grep-next'));
 }
 
@@ -1137,6 +1418,50 @@ $('logs-copy').addEventListener('click', () => {
   const text = $('logs-content').textContent || '';
   navigator.clipboard?.writeText(text);
 });
+
+// v0.5 PR-6 — scroll-up auto-unfollow + "Jump to live" affordance.
+// GitHub Actions live-log pattern: when the user scrolls up to read older
+// output, stop force-scrolling to bottom on every chunk; show a floating
+// button that re-engages follow + scrolls to the tail.
+const SCROLL_BOTTOM_THRESHOLD_PX = 24;
+$('logs-content').addEventListener('scroll', () => {
+  const root = $('logs-content');
+  const distance = root.scrollHeight - root.scrollTop - root.clientHeight;
+  const atBottom = distance < SCROLL_BOTTOM_THRESHOLD_PX;
+  const wasAuto = logsCtl.followAuto;
+  logsCtl.followAuto = atBottom;
+  const jump = $('logs-jump-live');
+  if (jump) jump.style.display = atBottom ? 'none' : '';
+  // Repaint follow checkbox state for clarity (sticky vs auto-suspended).
+  const cb = $('logs-follow');
+  if (cb && wasAuto !== logsCtl.followAuto && cb.checked) {
+    // Don't actually flip the user's checkbox; the auto state is internal.
+    // We just expose it via the jump button. Vercel CLI / ArgoCD pattern.
+  }
+});
+
+$('logs-jump-live')?.addEventListener('click', () => {
+  const root = $('logs-content');
+  root.scrollTop = root.scrollHeight;
+  logsCtl.followAuto = true;
+  $('logs-jump-live').style.display = 'none';
+});
+
+// v0.5 PR-6 — session change resets the logs panel hard. Without this the
+// previous session's actor stays selected + its EventSource keeps pushing
+// stale chunks into the new session's panel.
+onSessionSelect(() => {
+  ++logsCtl.token;
+  if (logsCtl.abortCtl) logsCtl.abortCtl.abort();
+  closeLogStream();
+  logBuffer.length = 0;
+  activeLogActor = null;
+  if ($('logs-current-actor')) $('logs-current-actor').textContent = '—';
+  setLogsState(activeSession ? 'awaiting-actor' : 'idle');
+});
+
+// Initial paint — connection pill reflects the boot state.
+setLogsState('idle');
 
 // DAG node click → jump to logs tab + select that actor (ArgoCD application
 // graph → pod logs single-click navigation).

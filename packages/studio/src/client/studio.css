@@ -573,6 +573,140 @@ section.logs {
   cursor: pointer;
 }
 .logs-toolbar button:hover { color: var(--ink); border-color: var(--primary); }
+
+/*
+ * v0.5 PR-6 — connection-status pill (5 states). Datadog/Honeycomb live-tail
+ * convention: every state has its own color + the dot animates so the user
+ * can scan it without reading. stalled/errored expose the Reconnect button.
+ */
+.logs-conn-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  letter-spacing: 0.2px;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  flex: 0 0 auto;
+}
+.logs-conn-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.logs-conn-label { font-weight: 600; }
+.logs-conn-msg { font-weight: 400; opacity: 0.85; text-transform: none; letter-spacing: 0; }
+.logs-conn-status.state-idle,
+.logs-conn-status.state-awaiting-actor {
+  color: var(--ink-tertiary);
+  background: rgba(120, 120, 120, 0.10);
+  border-color: rgba(120, 120, 120, 0.25);
+}
+.logs-conn-status.state-idle .logs-conn-dot,
+.logs-conn-status.state-awaiting-actor .logs-conn-dot {
+  background: var(--ink-tertiary);
+}
+.logs-conn-status.state-connecting {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.10);
+  border-color: rgba(245, 158, 11, 0.30);
+}
+.logs-conn-status.state-connecting .logs-conn-dot {
+  background: #f59e0b;
+  animation: logs-conn-spin 1.2s linear infinite;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.55);
+}
+@keyframes logs-conn-spin {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.6); opacity: 0.4; }
+}
+.logs-conn-status.state-streaming {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.10);
+  border-color: rgba(16, 185, 129, 0.30);
+}
+.logs-conn-status.state-streaming .logs-conn-dot {
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.55);
+  animation: logs-conn-pulse 2s ease-in-out infinite;
+}
+@keyframes logs-conn-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.logs-conn-status.state-stalled {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.13);
+  border-color: rgba(245, 158, 11, 0.40);
+}
+.logs-conn-status.state-stalled .logs-conn-dot {
+  background: #f59e0b;
+}
+.logs-conn-status.state-errored {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.13);
+  border-color: rgba(239, 68, 68, 0.45);
+}
+.logs-conn-status.state-errored .logs-conn-dot {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+}
+.logs-conn-retry {
+  margin-left: 6px;
+  background: transparent;
+  color: inherit;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 9.5px;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.logs-conn-retry:hover { background: rgba(255, 255, 255, 0.06); }
+
+/*
+ * v0.5 PR-6 — "Jump to live" floating button. GitHub Actions / ArgoCD pattern:
+ * shown only when followAuto is off (user scrolled up). Single click resumes
+ * follow + scrolls to tail.
+ */
+.logs-jump-live {
+  position: absolute;
+  right: 28px;
+  bottom: 18px;
+  background: var(--primary);
+  color: var(--ink);
+  border: 1px solid var(--primary-hover, var(--primary));
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  z-index: 5;
+}
+.logs-jump-live:hover { filter: brightness(1.08); }
+.logs-jump-live-arrow { display: inline-block; margin-right: 4px; font-weight: 700; }
+.logs-pane { position: relative; }
+
+/*
+ * v0.5 PR-6 — empty-state copy variants (Supabase Logs Explorer pattern,
+ * intent-keyed, not generic). Each state gets its own subtle accent so users
+ * can tell at a glance whether they're loading, waiting on a spawn, or
+ * disconnected.
+ */
+.logs-empty.logs-empty--loading { color: #f59e0b; }
+.logs-empty.logs-empty--never-spawned { color: var(--ink-muted); }
+.logs-empty.logs-empty--never-spawned::before { content: "🌱 "; }
+.logs-empty.logs-empty--waiting { color: #10b981; }
+.logs-empty.logs-empty--waiting::before { content: "✓ "; }
+.logs-empty.logs-empty--errored { color: #ef4444; }
+.logs-empty.logs-empty--errored::before { content: "⚠ "; }
+
 .logs-content {
   flex: 1; min-height: 0; overflow: auto;
   padding: 12px 16px;
