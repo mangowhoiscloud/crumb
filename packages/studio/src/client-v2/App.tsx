@@ -36,6 +36,7 @@ import { ServiceMap } from './panels/ServiceMap';
 import { Logs } from './panels/Logs';
 import { Output } from './panels/Output';
 import { Transcript } from './panels/Transcript';
+import { ToolCallTrace } from './panels/ToolCallTrace';
 import { Narrative } from './panels/Narrative';
 import { Feed } from './panels/Feed';
 import { DetailRail } from './panels/DetailRail';
@@ -52,6 +53,7 @@ const PANEL_COMPONENTS: Record<string, React.FC<IDockviewPanelProps>> = {
   logs: Logs,
   output: Output,
   transcript: Transcript,
+  toolCallTrace: ToolCallTrace,
   narrative: Narrative,
   feed: Feed,
   detailRail: DetailRail,
@@ -104,6 +106,12 @@ function onReady(event: DockviewReadyEvent): void {
     id: 'transcript',
     component: 'transcript',
     title: 'Transcript',
+    position: { referencePanel: viewPane.id, direction: 'within' },
+  });
+  api.addPanel({
+    id: 'toolCallTrace',
+    component: 'toolCallTrace',
+    title: 'Tool Trace',
     position: { referencePanel: viewPane.id, direction: 'within' },
   });
 
@@ -188,7 +196,7 @@ export function App() {
           color: 'var(--ink-subtle)',
         }}
       >
-        <span>v0.4 (M6b)</span>
+        <span>v0.4 (M6c)</span>
         <span style={{ flex: 1 }} />
         <span>⌘B sidebar · Drag tabs to dock · Drag a tab out for popout</span>
       </footer>
