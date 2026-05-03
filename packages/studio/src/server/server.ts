@@ -354,6 +354,51 @@ async function serveSessions(
  * the periodic state polling done by /api/sessions. Cheap (no syscalls beyond
  * what classifiedSnapshot already pays).
  */
+/** M10 — runSelfCheck cached for 30 s to avoid recomputing per /health hit. */
+let selfCheckCache: {
+  verdict: 'ok' | 'degraded' | 'broken';
+  duration_ms: number;
+  steps_failed: number;
+  cached_at: number;
+} | null = null;
+const SELF_CHECK_TTL_MS = 30_000;
+
+interface SelfCheckReport {
+  pause_resume_lifecycle: 'ok' | 'degraded' | 'broken';
+  duration_ms: number;
+  steps: Array<{ status: 'pass' | 'fail' }>;
+}
+
+async function getSelfCheckSnapshot(): Promise<NonNullable<typeof selfCheckCache>> {
+  if (selfCheckCache && Date.now() - selfCheckCache.cached_at < SELF_CHECK_TTL_MS) {
+    return selfCheckCache;
+  }
+  // Lazy import — `crumb` is a peer dep, so the studio package must not
+  // hard-import. Resolve the helper via runtime path; gracefully fall back
+  // to "broken" verdict when the host doesn't have crumb installed.
+  const mod = await import(/* @vite-ignore */ 'crumb/dist/helpers/self-check.js' as string).catch(
+    () => null,
+  );
+  const runSelfCheck = (mod as { runSelfCheck?: () => SelfCheckReport } | null)?.runSelfCheck;
+  if (!runSelfCheck) {
+    selfCheckCache = {
+      verdict: 'broken',
+      duration_ms: 0,
+      steps_failed: -1,
+      cached_at: Date.now(),
+    };
+    return selfCheckCache;
+  }
+  const report = runSelfCheck();
+  selfCheckCache = {
+    verdict: report.pause_resume_lifecycle,
+    duration_ms: report.duration_ms,
+    steps_failed: report.steps.filter((s) => s.status === 'fail').length,
+    cached_at: Date.now(),
+  };
+  return selfCheckCache;
+}
+
 async function serveHealth(
   res: http.ServerResponse,
   watcher: SessionWatcher,
@@ -373,6 +418,8 @@ async function serveHealth(
     const k = s.classification?.state ?? 'unknown';
     byState[k] = (byState[k] ?? 0) + 1;
   }
+  // M10 — pause/resume lifecycle self-check (cached 30s) per migration plan §6.8.
+  const selfCheck = await getSelfCheckSnapshot();
   res.setHeader('content-type', 'application/json');
   res.setHeader('cache-control', 'no-cache');
   res.end(
@@ -382,6 +429,12 @@ async function serveHealth(
       sessions: {
         total: visible.length,
         by_state: byState,
+      },
+      pause_resume_lifecycle: {
+        verdict: selfCheck.verdict,
+        duration_ms: selfCheck.duration_ms,
+        steps_failed: selfCheck.steps_failed,
+        cached_at: new Date(selfCheck.cached_at).toISOString(),
       },
     }),
   );
