@@ -6,15 +6,23 @@
  * so a user without a TUI can still pause / resume / approve / veto / target
  * actors mid-session by appending lines to a plain text file.
  *
- * Polling (not fs.watch) for cross-platform reliability — matches transcript
- * reader's pattern. Polls every 500ms by default. Tracks last-read offset so
- * a re-start picks up where it left off.
+ * v0.4.2 — chokidar fs-event push (was setInterval polling). Studio's
+ * `packages/studio/src/watcher.ts` already uses chokidar for the
+ * transcript-fanout direction; this watcher now mirrors that on the inbox
+ * direction, so latency drops from ~150ms (poll) to <10ms (FSEvents/inotify
+ * push) on macOS/Linux. WSL/NFS/Docker fall back to interval polling via the
+ * `CRUMB_POLL=1` override (mirrors `packages/studio/src/poll-detect.ts`).
+ *
+ * The previous polling comment ("matches transcript reader's pattern") was
+ * stale — the transcript reader is on chokidar, not setInterval — so the
+ * inbox watcher is now consistent with it.
  *
  * See [[bagelcode-user-intervention-frontier-2026-05-02]] §"7 잔여 risk" — G2.
  * Sister of the TUI slash-command bar (`src/tui/app.ts`).
  */
 
-import { existsSync, statSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import chokidar, { type FSWatcher } from 'chokidar';
 import type { TranscriptWriter } from '../transcript/writer.js';
 import { parseInboxLine } from './parser.js';
 
@@ -22,34 +30,53 @@ export interface InboxWatcherOptions {
   inboxPath: string;
   sessionId: string;
   writer: TranscriptWriter;
-  /** Poll interval in ms. Default 500. */
+  /**
+   * Polling interval in ms. When set, forces chokidar's `usePolling: true`
+   * with this `interval`. When undefined (production default), chokidar uses
+   * native fs events (FSEvents/inotify/ReadDirectoryChangesW) with a polling
+   * fallback only when `CRUMB_POLL=1` or WSL is detected.
+   *
+   * Tests pass small values (e.g. 25) to keep test wall-clock low; production
+   * leaves it undefined for sub-10ms native-event latency.
+   */
   pollIntervalMs?: number;
   /** Optional logger for diagnostic output. Default: silent. */
   onError?: (err: Error) => void;
 }
 
 export interface InboxWatcherHandle {
+  /** Stop the watcher. Fire-and-forget — chokidar's close runs in the background. */
   stop: () => void;
+}
+
+/** Decide chokidar polling vs native fs events. Mirrors `packages/studio/src/poll-detect.ts`. */
+function shouldPollInbox(): boolean {
+  const env = process.env.CRUMB_POLL;
+  if (env === '1' || env === 'true') return true;
+  if (env === '0' || env === 'false') return false;
+  if (process.platform === 'linux') {
+    try {
+      const proc = readFileSync('/proc/version', 'utf8').toLowerCase();
+      if (proc.includes('microsoft') || proc.includes('wsl')) return true;
+    } catch {
+      // /proc/version unreadable — fall through to native
+    }
+  }
+  return false;
 }
 
 /** Start watching the inbox file. Creates it (empty) if absent. Returns a stop handle. */
 export function startInboxWatcher(opts: InboxWatcherOptions): InboxWatcherHandle {
-  // 150ms default keeps inbox commands feeling instant — below the 200ms
-  // perceptual threshold for "did my action register?". Studio appends a
-  // line to inbox.txt; the user expects to see the parsed user.intervene
-  // event in the timeline within one frame's worth of polling. Override
-  // via opts.pollIntervalMs for tests / low-cost CI runs.
-  const interval = opts.pollIntervalMs ?? 150;
-
-  // Ensure the file exists so the user can simply `echo ... >> inbox.txt`.
+  // Ensure the file exists so the user (or Studio) can simply `echo ... >> inbox.txt`.
   if (!existsSync(opts.inboxPath)) {
     writeFileSync(opts.inboxPath, '');
   }
 
   let lastSize = 0;
   let stopped = false;
+  let draining: Promise<void> = Promise.resolve();
 
-  const tick = async (): Promise<void> => {
+  const drain = async (): Promise<void> => {
     if (stopped) return;
     try {
       const stat = statSync(opts.inboxPath);
@@ -60,7 +87,7 @@ export function startInboxWatcher(opts: InboxWatcherOptions): InboxWatcherHandle
         const lines = newPart.split('\n');
         // The last element is whatever's after the final newline. If the user
         // hasn't terminated their line yet, defer it — bump lastSize back so
-        // we re-read it on the next tick.
+        // we re-read it on the next event.
         const trailing = lines[lines.length - 1];
         if (trailing && !newPart.endsWith('\n')) {
           lastSize -= Buffer.byteLength(trailing, 'utf-8');
@@ -81,17 +108,36 @@ export function startInboxWatcher(opts: InboxWatcherOptions): InboxWatcherHandle
     }
   };
 
-  const handle = setInterval(() => {
-    void tick();
-  }, interval);
+  // Serialize drain runs so two close-together fs events don't race the
+  // lastSize bookkeeping. chokidar fires on every write, which is exactly
+  // what we want — a single line shows up within a few ms of the appendFile
+  // returning to Studio's POST handler.
+  const schedule = (): void => {
+    draining = draining.then(drain);
+  };
 
-  // Run an immediate tick so existing pre-session content is processed once.
-  void tick();
+  const usePolling = opts.pollIntervalMs !== undefined || shouldPollInbox();
+  const watcher: FSWatcher = chokidar.watch(opts.inboxPath, {
+    persistent: true,
+    awaitWriteFinish: false,
+    ignoreInitial: true, // we run an explicit initial drain below
+    usePolling,
+    // Tests force usePolling via pollIntervalMs; production leaves it native.
+    interval: opts.pollIntervalMs ?? 250,
+  });
+  watcher.on('add', schedule);
+  watcher.on('change', schedule);
+  watcher.on('error', (err: unknown) => {
+    opts.onError?.(err instanceof Error ? err : new Error(String(err)));
+  });
+
+  // Immediate drain so any existing pre-session content is processed once.
+  schedule();
 
   return {
-    stop: () => {
+    stop: (): void => {
       stopped = true;
-      clearInterval(handle);
+      void watcher.close();
     },
   };
 }
