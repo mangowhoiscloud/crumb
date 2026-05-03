@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#3D2817">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Reba Berserker</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon-192.svg" sizes="any" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon-192.svg">
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #1A0F08;
+    color: #F4E8D0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    overflow: hidden;
+    height: 100%;
+    width: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    touch-action: none;
+    overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #game {
+    touch-action: none;
+    display: block;
+  }
+  canvas {
+    touch-action: none;
+    display: block;
+    margin: 0 auto;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+  }
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="aria-mirror" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+<script type="module" src="./src/main.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+{
+  "meta": {
+    "concept_id": "cat-tap-match3-v1",
+    "version": "1.1.0",
+    "profile": "multi-file",
+    "evidence_refs": ["L1-motion-timing-stack", "L2-palette-and-touch-ergonomics", "L3-combo-escalation-feedback"]
+  },
+  "grid": {
+    "rows": 6,
+    "cols": 6
+  },
+  "tile_types": ["white", "black", "yellow", "gray", "calico"],
+  "tile_size_px": 48,
+  "tile_gap_px": 8,
+  "board_width_px": 328,
+  "board_min_width_px": 288,
+  "min_tile_size_px": 44,
+  "specials": {
+    "locked_box": {
+      "taps_to_unlock": 2,
+      "spawn_pct": 0.08,
+      "enabled_after_s": 15
+    },
+    "bomb_paw": {
+      "clear_radius": 1,
+      "spawn_pct": 0.05,
+      "enabled_after_s": 30,
+      "spawned_by_match_4": true
+    }
+  },
+  "scoring": {
+    "match_3": 30,
+    "match_4": 60,
+    "match_5_plus": 150,
+    "cascade_multiplier_step": 0.5,
+    "cascade_multiplier_max": 5.0
+  },
+  "win_threshold": 5000,
+  "time_limit_s": 60,
+  "difficulty_curve": [
+    { "phase": "0_15s",  "from_s": 0,  "to_s": 15, "rules": { "only_basic_tiles": true } },
+    { "phase": "15_30s", "from_s": 15, "to_s": 30, "rules": { "locked_box_pct": 0.08 } },
+    { "phase": "30_45s", "from_s": 30, "to_s": 45, "rules": { "bomb_paw_pct": 0.05 } },
+    { "phase": "45_60s", "from_s": 45, "to_s": 60, "rules": { "fall_speed_mult": 1.3, "urgency": true } }
+  ],
+  "motion": {
+    "cascade_delay_ms": 180,
+    "cascade_delay_range_ms": [150, 210],
+    "tile_pop_in_ms": 250,
+    "tile_spring_overshoot": 1.15,
+    "particle_fade_ms": 400,
+    "gameover_modal_delay_ms": 800,
+    "screen_wide_clear_ms": 600
+  },
+  "feedback": {
+    "haptic_chain_threshold": [3, 4, 5],
+    "haptic_chain_intensity": ["light", "medium", "heavy"],
+    "sfx_pitch_shift_semitones_per_chain": 1,
+    "sfx_pitch_shift_max_semitones": 5,
+    "screen_shake_max_px": 6
+  },
+  "urgency": {
+    "threshold_s": 10,
+    "tempo_multiplier": 1.15,
+    "border_pulse_hz": 2,
+    "hud_timer_color": "#E04848"
+  },
+  "palette": {
+    "bg_board": "#FFF8EE",
+    "bg_frame": "#F0E5D2",
+    "text_primary": "#2D2D2D",
+    "text_secondary": "#6B5D45",
+    "accent_warm": "#FFB627",
+    "accent_alert": "#E04848",
+    "particle_glow": "#FFE9A8",
+    "tiles": {
+      "white":  { "fill": "#F5F5F5", "outline": "#2D2D2D",  "accent": "#FFB6C1", "face_shape": "round",               "contrast_vs_bg": 4.62 },
+      "black":  { "fill": "#2D2D2D", "outline": "#0F0F0F",  "accent": "#FFD66B", "face_shape": "triangle_ears_tall",  "contrast_vs_bg": 12.8 },
+      "yellow": { "fill": "#FFB627", "outline": "#7A4D00",  "accent": "#3E2A00", "face_shape": "long_striped",        "contrast_vs_bg": 4.78 },
+      "gray":   { "fill": "#7E8FA8", "outline": "#2D3A4F",  "accent": "#FFFFFF", "face_shape": "flat_persian",        "contrast_vs_bg": 4.96 },
+      "calico": { "fill": "#C8623E", "outline": "#5C1F0A",  "accent": "#FFFFFF", "face_shape": "tufted",              "contrast_vs_bg": 5.31 }
+    }
+  }
+}

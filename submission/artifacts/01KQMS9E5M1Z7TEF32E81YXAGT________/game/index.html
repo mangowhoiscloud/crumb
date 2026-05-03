@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#FFB627">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="고양이 퍼즐">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<title>고양이 퍼즐 — Cat Match 3</title>
+<style>
+  :root {
+    --bg-board: #FFF8EE;
+    --bg-frame: #F0E5D2;
+    --text-primary: #2D2D2D;
+    --text-secondary: #6B5D45;
+    --accent-warm: #FFB627;
+    --accent-alert: #E04848;
+    --particle-glow: #FFE9A8;
+    --safe-top: env(safe-area-inset-top, 24px);
+    --safe-bottom: env(safe-area-inset-bottom, 28px);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: var(--bg-frame);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", Roboto, "Noto Sans KR", sans-serif;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
+  }
+  #app {
+    position: relative;
+    width: 100vw;
+    height: calc(100vh - var(--safe-top) - var(--safe-bottom));
+    max-width: 480px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+  }
+  /* Phaser canvas mounts here */
+  #phaser-root { position: relative; width: 100%; height: 100%; }
+  #phaser-root canvas { display: block; margin: 0 auto; touch-action: none; }
+
+  /* HUD overlay — DOM, not canvas, so AC tests can assert on it */
+  #hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 56px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 16px;
+    z-index: 5;
+    background: linear-gradient(to bottom, rgba(240,229,210,0.95), rgba(240,229,210,0));
+    pointer-events: none;
+  }
+  #hud .slot { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 15px; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+  #hud .slot .icon { font-size: 18px; }
+  #pause {
+    pointer-events: auto;
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    border: none;
+    background: rgba(255,255,255,0.7);
+    font-size: 18px;
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  #hud-time { font-size: 18px; }
+  #hud-score { font-size: 16px; }
+  #hud.urgency #hud-time { color: var(--accent-alert); }
+
+  /* Board mirror — invisible DOM grid the AC tests can query */
+  #board-mirror {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    z-index: -1;
+  }
+  #board-mirror [data-tile] { width: 1px; height: 1px; display: inline-block; }
+
+  /* Modal — Win / Game Over (AC6) */
+  #modal-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(45,45,45,0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+  #modal-overlay.show { display: flex; }
+  #modal-card {
+    width: min(86vw, 320px);
+    background: var(--bg-board);
+    border-radius: 24px;
+    padding: 32px 24px 24px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(45,45,45,0.35);
+    transform: translateY(8px) scale(0.98);
+    opacity: 0;
+    animation: modalIn 220ms ease-out forwards;
+  }
+  @keyframes modalIn { to { opacity: 1; transform: translateY(0) scale(1); } }
+  #modal-title { font-size: 28px; font-weight: 800; color: var(--text-primary); margin-bottom: 6px; letter-spacing: -0.02em; }
+  #modal-sub { font-size: 14px; color: var(--text-secondary); margin-bottom: 20px; }
+  #modal-score { font-size: 42px; font-weight: 800; color: var(--accent-warm); margin-bottom: 24px; font-variant-numeric: tabular-nums; }
+  .modal-btn {
+    display: block; width: 100%;
+    padding: 14px;
+    border-radius: 14px;
+    border: none;
+    font-size: 16px; font-weight: 700;
+    margin-bottom: 10px;
+    cursor: pointer;
+    min-height: 44px;
+  }
+  .modal-btn.primary { background: var(--accent-warm); color: var(--text-primary); }
+  .modal-btn.secondary { background: rgba(110,93,69,0.12); color: var(--text-secondary); }
+
+  /* Urgency border pulse — AC7 */
+  #urgency-border {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border: 4px solid transparent;
+    box-sizing: border-box;
+    z-index: 4;
+    transition: opacity 80ms linear;
+  }
+  body.urgency #urgency-border {
+    border-color: var(--accent-alert);
+    animation: urgencyPulse 500ms ease-in-out infinite;
+  }
+  @keyframes urgencyPulse {
+    0%, 100% { opacity: 0.25; }
+    50%      { opacity: 1.0; }
+  }
+
+  /* Reduced motion (DESIGN.md §5) */
+  @media (prefers-reduced-motion: reduce) {
+    #modal-card { animation: none; opacity: 1; transform: none; }
+    body.urgency #urgency-border { animation: none; opacity: 0.7; }
+  }
+
+  /* Loading splash */
+  #loading {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg-frame);
+    color: var(--text-secondary);
+    font-size: 14px;
+    z-index: 50;
+  }
+  #loading.hidden { display: none; }
+</style>
+</head>
+<body>
+  <div id="app">
+    <div id="phaser-root"></div>
+
+    <div id="hud" aria-live="polite">
+      <button id="pause" aria-label="pause" type="button">⏸</button>
+      <div class="slot" id="hud-time-slot"><span class="icon" aria-hidden="true">⏱</span><span id="hud-time">time = 60.0s</span></div>
+      <div class="slot" id="hud-score-slot"><span class="icon" aria-hidden="true">★</span><span id="hud-score">score = 0</span></div>
+    </div>
+
+    <div id="board-mirror" aria-hidden="true"></div>
+    <div id="urgency-border"></div>
+
+    <div id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div id="modal-card">
+        <div id="modal-title">Game Over</div>
+        <div id="modal-sub">최종 점수</div>
+        <div id="modal-score">0</div>
+        <button class="modal-btn primary" id="modal-primary">Play Again</button>
+        <button class="modal-btn secondary" id="modal-secondary">Home</button>
+      </div>
+    </div>
+
+    <div id="loading">Loading…</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js" crossorigin="anonymous"></script>
+  <script type="module" src="./src/main.js"></script>
+  <script>
+    // PWA: register service worker (AC8 — cache-first shell, offline-capable)
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => console.warn('SW reg failed', err));
+      });
+    }
+  </script>
+</body>
+</html>

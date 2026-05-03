@@ -1,0 +1,166 @@
+{
+  "game_slug": "kirby-sidescroll-v1",
+  "genre_profile": "sidescroll-2d",
+  "persistence_profile": "local-only",
+
+  "viewport": {
+    "logical_width_px": 640,
+    "logical_height_px": 360,
+    "scale_mode": "FIT",
+    "orientation": "landscape"
+  },
+
+  "physics": {
+    "gravity_y": 800,
+    "world_bounds_padding_px": 32
+  },
+
+  "player": {
+    "walk_speed_px_s": 120,
+    "dash_speed_px_s": 200,
+    "jump_velocity_px_s": -260,
+    "float_jump_velocity_px_s": -180,
+    "float_max_air_jumps": 5,
+    "float_descent_velocity_px_s": 80,
+    "float_exhale_animation_ms": 200,
+    "max_hp": 6,
+    "iframes_ms": 1000,
+    "respawn_delay_ms": 600
+  },
+
+  "platformer_juice": {
+    "coyote_ms": 100,
+    "jump_buffer_ms": 100,
+    "hit_stop_enemy_ms": 16,
+    "hit_stop_player_ms": 32,
+    "hit_stop_restore_ms": 64,
+    "shake_minor_px": 4,
+    "shake_major_px": 8,
+    "shake_death_px": 12,
+    "shake_lerp_in_ms": 100,
+    "shake_lerp_out_ms": 200
+  },
+
+  "inhale": {
+    "hold_threshold_ms": 120,
+    "range_px": 72,
+    "cone_deg": 45,
+    "pull_speed_px_s": 180,
+    "mouthful_swallow_window_ms": 2000,
+    "swallow_hold_ms": 250
+  },
+
+  "spit_star": {
+    "damage": 1,
+    "velocity_px_s": 240,
+    "lifetime_ms": 1500
+  },
+
+  "abilities": {
+    "sword": { "damage": 1.5, "swing_arc_deg": 90, "cooldown_ms": 250, "range_px": 28 },
+    "fire":  { "damage": 1.0, "tick_ms": 200, "duration_ms": 1000, "range_px": 64 },
+    "spark": { "damage": 1.0, "radius_px": 32, "duration_ms": 600, "cooldown_ms": 500 }
+  },
+
+  "ability_discard_hold_ms": 500,
+
+  "enemies": {
+    "Waddler": { "hp": 1, "damage": 1, "walk_speed_px_s": 40, "ability_drop": null,    "ref": "Waddle Dee" },
+    "Flier":   { "hp": 1, "damage": 1, "walk_speed_px_s": 60, "sine_amplitude_px": 24, "sine_period_ms": 1500, "ability_drop": null, "ref": "Bronto Burt" },
+    "Spikee":  { "hp": -1, "damage": 1, "walk_speed_px_s": 0, "ability_drop": null,    "ref": "Gordo (invincible)" },
+    "Burner":  { "hp": 1, "damage": 1, "walk_speed_px_s": 35, "ability_drop": "fire",  "ref": "Hot Head" },
+    "Slasher": { "hp": 1, "damage": 1, "walk_speed_px_s": 35, "ability_drop": "sword", "ref": "Sir Kibble" }
+  },
+
+  "boss_whispy_wood": {
+    "hp_base": 6,
+    "hp_with_sword": 4,
+    "apple_interval_ms": 2500,
+    "apple_predict_lead_ms": 200,
+    "apple_velocity_px_s": 140,
+    "apple_damage": 1,
+    "summon_interval_ms": 3000,
+    "summon_type": "Flier",
+    "trunk_contact_damage": 0,
+    "intro_ms": 800
+  },
+
+  "level": {
+    "horizontal_screens": 3,
+    "logical_width_px": 1920,
+    "tile_size_px": 32,
+    "ground_y_px": 296,
+    "ability_pickup_x_px": 1120,
+    "boss_arena_trigger_x_px": 1700,
+    "checkpoint_count": 0,
+    "enemy_spawn_plan": [
+      { "type": "Waddler", "x": 320,  "y": 280 },
+      { "type": "Waddler", "x": 480,  "y": 280 },
+      { "type": "Flier",   "x": 640,  "y": 200 },
+      { "type": "Spikee",  "x": 800,  "y": 280 },
+      { "type": "Slasher", "x": 1120, "y": 280 },
+      { "type": "Burner",  "x": 1340, "y": 280 },
+      { "type": "Flier",   "x": 1500, "y": 180 }
+    ]
+  },
+
+  "lives": {
+    "starting": 3,
+    "respawn_x_px": 64,
+    "respawn_y_px": 200
+  },
+
+  "parallax": {
+    "layers": [
+      { "id": "sky-gradient",     "scrollFactor": 0.0, "color": "#A8D8FF" },
+      { "id": "cloud-puffs",      "scrollFactor": 0.2, "tint": "#FFFFFF" },
+      { "id": "mid-trees-hills",  "scrollFactor": 0.5, "tint": "#A8D8B5" },
+      { "id": "fg-grass-tufts",   "scrollFactor": 1.5, "tint": "#7DB890" }
+    ]
+  },
+
+  "palette": {
+    "background":  "#A8D8FF",
+    "primary":     "#F4A8B8",
+    "secondary":   "#A8D8B5",
+    "accent":      "#E85058",
+    "enemy_tan":   "#E8B870",
+    "text":        "#3A2840",
+    "outline":     "#3A2840"
+  },
+
+  "motion_ms": {
+    "scene_fade":      400,
+    "hud_pop":         160,
+    "ability_acquire": 300,
+    "boss_intro":      800,
+    "victory_fanfare": 1200,
+    "game_over":       600
+  },
+
+  "input": {
+    "keyboard_movement": ["ArrowLeft", "ArrowRight", "a", "d"],
+    "keyboard_jump":     ["Space", "w", "ArrowUp"],
+    "keyboard_inhale":   ["z"],
+    "keyboard_action":   ["x"],
+    "keyboard_pause":    ["Escape"],
+    "touch_overlay_threshold": "pointer:coarse",
+    "touch_hit_zone_min_px": 44
+  },
+
+  "audio": {
+    "bgm_lead":   { "kind": "osc-square", "pattern": "C-major arpeggio 8-bar", "bpm": 120 },
+    "bgm_bass":   { "kind": "osc-triangle", "pattern": "root+fifth half-time", "bpm": 60 },
+    "sfx_jump":   { "kind": "jsfxr", "duration_ms": 80 },
+    "sfx_inhale": { "kind": "osc-LFO-whoosh", "duration_ms": 250 },
+    "sfx_hit":    { "kind": "jsfxr-noise", "duration_ms": 120 },
+    "sfx_victory":{ "kind": "osc-CEGC", "duration_ms": 1200 }
+  },
+
+  "accessibility": {
+    "contrast_min": 4.5,
+    "colorblind_safe": true,
+    "reduced_motion_shake_px": 0,
+    "reduced_motion_hit_stop_max_ms": 8
+  }
+}

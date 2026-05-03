@@ -1,0 +1,28 @@
+{
+  "name": "고양이 퍼즐 — Cat Match 3",
+  "short_name": "고양이퍼즐",
+  "description": "60초 안에 5000점을 달성하라 — 6×6 고양이 타일 매치-3 퍼즐.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFF8EE",
+  "theme_color": "#FFB627",
+  "lang": "ko",
+  "dir": "ltr",
+  "categories": ["games", "puzzle"],
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

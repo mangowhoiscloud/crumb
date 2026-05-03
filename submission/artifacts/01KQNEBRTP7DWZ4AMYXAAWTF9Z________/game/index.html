@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>레바의 모험: 버서커 (Reba's Adventure: Berserker)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#1a0f2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Reba Berserker">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icon-192.svg">
+<link rel="apple-touch-icon" href="icon-192.svg">
+<style>
+  *,*::before,*::after { box-sizing: border-box; }
+  html,body {
+    margin: 0; padding: 0;
+    width: 100%; height: 100%;
+    background: #1a0f2e;
+    overflow: hidden;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    color: #fff;
+  }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  #game {
+    position: relative;
+    width: 100%; max-width: 428px;
+    height: 100%;
+    margin: 0 auto;
+  }
+  #game canvas { display: block; touch-action: none; }
+  #game-over-ui {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 10;
+  }
+  #game-over-ui.show { display: flex; }
+  #game-over-card {
+    pointer-events: auto;
+    background: rgba(45, 27, 78, 0.94);
+    border: 2px solid #ffd93d;
+    border-radius: 16px;
+    padding: 28px 36px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    min-width: 240px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+  }
+  #game-over-title {
+    margin: 0;
+    font-size: 24px;
+    color: #ffd93d;
+    letter-spacing: 0.5px;
+  }
+  #game-over-card .stat {
+    font-size: 16px;
+    color: #ffffff;
+    margin: 0;
+  }
+  #retry-button {
+    margin-top: 8px;
+    min-width: 88px;
+    min-height: 56px;
+    font-size: 20px;
+    font-weight: bold;
+    background: #ffd93d;
+    color: #1a0f2e;
+    border: 0;
+    border-radius: 12px;
+    cursor: pointer;
+    padding: 8px 24px;
+    font-family: inherit;
+  }
+  #retry-button:active { transform: scale(0.96); }
+</style>
+</head>
+<body>
+<div id="game">
+  <div id="game-over-ui" role="dialog" aria-label="Game Over" aria-live="polite">
+    <div id="game-over-card">
+      <h1 id="game-over-title">Game Over</h1>
+      <p class="stat" id="final-score">SCORE: 0</p>
+      <p class="stat" id="final-kills">KILLS: 0</p>
+      <p class="stat" id="final-time">TIME: 0s</p>
+      <button id="retry-button" type="button" aria-label="Retry">Retry</button>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+<script type="module" src="src/main.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>

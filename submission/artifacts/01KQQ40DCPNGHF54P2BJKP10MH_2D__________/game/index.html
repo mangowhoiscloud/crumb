@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Kirby Sidescroll v1</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#A8D8FF" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="./icon-192.svg" />
+  <link rel="apple-touch-icon" href="./icon-192.svg" />
+  <style>
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      background: #3A2840; color: #F4A8B8;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body { touch-action: none; overflow: hidden; }
+    #game-root {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    #game-root canvas { display: block; max-width: 100%; max-height: 100%; image-rendering: auto; }
+    #boot-msg {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none; font-size: 14px; opacity: 0.6;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+</head>
+<body>
+  <div id="game-root"></div>
+  <div id="boot-msg">Loading Kirby Sidescroll v1…</div>
+  <script type="module" src="./src/main.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>

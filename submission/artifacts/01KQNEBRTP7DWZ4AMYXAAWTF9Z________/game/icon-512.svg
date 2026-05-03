@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="96" fill="#1a0f2e"/>
+  <circle cx="256" cy="232" r="120" fill="#ffd93d"/>
+  <rect x="148" y="200" width="216" height="56" rx="16" fill="#1f2937"/>
+  <circle cx="200" cy="228" r="24" fill="#0ea5e9"/>
+  <circle cx="312" cy="228" r="24" fill="#0ea5e9"/>
+  <circle cx="200" cy="228" r="8" fill="#ffffff"/>
+  <circle cx="312" cy="228" r="8" fill="#ffffff"/>
+  <path d="M168 360 Q256 412 344 360 L344 444 Q256 472 168 444 Z" fill="#ef4444"/>
+  <path d="M140 340 L196 320 L188 364 Z" fill="#fb923c"/>
+  <path d="M372 340 L316 320 L324 364 Z" fill="#fb923c"/>
+  <text x="256" y="496" text-anchor="middle" font-family="system-ui, sans-serif" font-size="36" font-weight="bold" fill="#ffd93d">RAGE</text>
+</svg>
