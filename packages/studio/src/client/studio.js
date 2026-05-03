@@ -148,9 +148,9 @@ function renderSessionList() {
       // `done_reason` heuristic: budget exhausted → forceable resume.
       const resumable = !s.live && (
         s.state === 'paused' || s.state === 'interrupted' || s.state === 'idle' ||
-        (s.done_reason && /token_exhausted|wall_clock|all_builders_open/.test(s.done_reason))
+        (s.done_reason && /token_exhausted|wall_clock|builder_circuit_open/.test(s.done_reason))
       );
-      const forceFlag = s.done_reason && /token_exhausted|wall_clock|all_builders_open/.test(s.done_reason);
+      const forceFlag = s.done_reason && /token_exhausted|wall_clock|builder_circuit_open/.test(s.done_reason);
       const resumeBtn = resumable
         ? '<button class="row-resume" data-resume="' + s.id + '"' +
           (forceFlag ? ' data-force="1"' : '') +
