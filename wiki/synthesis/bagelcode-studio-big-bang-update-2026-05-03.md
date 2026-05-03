@@ -59,6 +59,23 @@ While the cutoff was being committed, another stream pushed `feat/aggregate-stri
 
 **Generalized policy**: any future parallel-stream vanilla PR that lands during the M0–M2 window is accepted only if (a) additive, (b) visually consistent with the M2 baseline target, and (c) its derivation logic is portable to server/Tremor in M1/M6. Anything that re-shapes the layout, introduces a new on-disk path, or duplicates schema is rejected — defer to a v2 panel instead. M-series PRs cite the parallel PR's commit SHA when they re-implement so the lineage is traceable.
 
+### 0.0.2 Remaining backlog → M-series absorption (no parallel vanilla queue)
+
+User directive 2026-05-03: *"안전이라고 고칠 걸 안고치는 보수적인 자세 취하지마. 완전 스택을 갈아엎는 빅뱅인만큼 과감할 땐 과감해야 해."*
+
+The inheritor handoff named four items still queued: **F6 / W3 / W4 / PR-O5**. None of them get a parallel vanilla PR — they're absorbed by M-series PRs that ship as part of this migration. Concrete absorption:
+
+| Backlog | Absorbed by | How |
+|---|---|---|
+| **F6** Block tear-off | **M5** | dockview's built-in popout (`window.open` + `BroadcastChannel`) gives this for free. The standalone F6 ticket evaporates; what was a "4-6h risky custom-window-management ticket" becomes one configuration property on the dockview API. No vanilla F6 work — that would be wasted code. |
+| **PR-O5** trace tree + cross-provider chip + per-spawn lifecycle gauge | **M6** | Tree component is shadcn `<Tree>` over recursive `tool.call → tool.result` walk. Cross-provider chip + lifecycle gauge mount inside `<Scorecard>`. No vanilla PR-O5 — the v1 monolith's render path can't accommodate the recursive tree without architectural surgery. M6 does both surgeries simultaneously. |
+| **W3** design_check effect | **independent reducer-side PR + M6 surface** | Reducer/dispatcher half ships as a chore PR touching `src/dispatcher/qa-runner.ts` + `protocol/schemas/message.schema.json` — that's another stream's territory and runs in parallel with M-series. Studio surface (`<DesignCheckPanel>`) lands in **M6** ready to read whatever payload the reducer emits. If reducer-W3 ships before M6, the panel renders results from day one. If after, the empty-state placeholder stays until reducer-W3 merges + transcripts produce design_check events. Either order works. |
+| **W4** retry policy with cache-hit monitoring | **independent reducer-side PR** | Pure reducer concern — nothing for the migration to do. M-series doesn't block on it; reducer stream lands when ready. |
+
+**The bold framing**: every backlog item that touches Studio UI is *the migration's job*, not parallel work. The conservative "ship F6/PR-O5 on vanilla in parallel and re-port later" plan is rejected — it doubles the work and leaves the v1 monolith dirtier at M8 deletion time. The migration earns its scope by absorbing this backlog, not by tip-toeing around it.
+
+**Conflict-resolution rule**: if a parallel reducer/dispatcher stream lands a schema change that affects an M-PR's reads, the M-PR rebases on top and adapts the read shape. Migration receives, never dictates.
+
 ### Big-bang execution order — locked
 
 - **M0 (NEXT)** `chore/studio-vite-scaffold` — Vite + React 19 + TypeScript scaffold at `packages/studio/src/client-v2/`. `?app=v2` route serves the new bundle; default `?app=v1` keeps vanilla live until M7.1.
