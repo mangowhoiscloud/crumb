@@ -24,8 +24,8 @@
 import { posix, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { openBrowser } from './open-browser.js';
-import { startStudioServer } from './server.js';
+import { openBrowser } from './server/open-browser.js';
+import { startStudioServer } from './server/server.js';
 
 interface Args {
   port: number;
