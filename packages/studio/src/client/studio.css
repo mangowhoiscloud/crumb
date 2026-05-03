@@ -216,6 +216,34 @@ header.summary .goal {
 .pill.partial { background: rgba(255, 178, 135, 0.18); color: var(--warn); }
 .pill.err { background: rgba(250, 127, 170, 0.18); color: var(--audit-fg); }
 .pill.muted { background: var(--surface-2); color: var(--ink-subtle); }
+/*
+ * v0.5 PR-O1 — additional state-driven pills (live / warn). Uses the same
+ * semantic palette as session-row dots so the header and sidebar agree.
+ */
+.pill.live {
+  background: rgba(95, 203, 126, 0.18);
+  color: #5fcb7e;
+}
+.pill.live::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #5fcb7e;
+  margin-right: 6px;
+  vertical-align: middle;
+  box-shadow: 0 0 6px #5fcb7e;
+  animation: pill-live-pulse 2s ease-in-out infinite;
+}
+@keyframes pill-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.pill.warn {
+  background: rgba(255, 178, 135, 0.18);
+  color: var(--warn);
+}
 
 /* v3.4 Console mode — DAG topology + weaving + console input */
 section.dag {
