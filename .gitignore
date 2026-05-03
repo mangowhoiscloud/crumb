@@ -37,9 +37,12 @@ Thumbs.db
 # during assembly (sessions/<id>/agent-workspace/<actor>/sandwich.assembled.md).
 agents/*.local.md
 
-# Maintainer-only operational skills (mirrored from ~/workspace/mango-wiki/.skills/).
-# The committed skills/ bundle is what evaluators see; .skills/ is local working tooling.
-.skills/
+# Maintainer skills (mirrored from ~/workspace/mango-wiki/.skills/) ARE
+# committed at .skills/ — they document the workflow used to build this
+# repo (wiki ingest, gitflow, anti-deception checklist, deep-researcher,
+# karpathy-patterns, codebase-audit, etc.). The runtime `skills/` bundle
+# (no dot) is what actors load at spawn time; `.skills/` here is for
+# evaluators + future contributors who want to see how the work happened.
 
 # temp
 tmp/
