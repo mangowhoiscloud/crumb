@@ -200,9 +200,11 @@ aside.sessions {
 }
 .brand-mark {
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
-  color: var(--primary);
+  width: 26px;
+  height: 26px;
+  /* Multi-color brand mascot — colors are baked into the SVG (cream toast +
+   * crust + crumbs) so it reads on both light and dark themes. Do NOT set
+   * `color` here — that would override stroke fills via currentColor. */
 }
 .brand-text {
   font-family: 'Crumb Brand', ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
