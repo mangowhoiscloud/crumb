@@ -787,7 +787,197 @@ section.swimlane {
   flex: 1; min-height: 0; overflow: auto;
   padding: 16px 0 24px;
   background: var(--canvas);
+  position: relative; /* anchor for the topology mini-toggle */
 }
+
+/* ─── PR-J Trace waterfall (Sentry/Jaeger pattern) ────────────────────── */
+section.swimlane.swimlane-trace {
+  padding: 8px 0 24px;
+}
+.lane-axis,
+.lane-trace {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: stretch;
+  border-bottom: 1px solid var(--hairline);
+  min-height: 32px;
+}
+.lane-axis {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--canvas);
+  border-bottom: 1px solid var(--hairline-strong, var(--hairline));
+  min-height: 22px;
+}
+.lane-axis-label {
+  border-right: 1px solid var(--hairline);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: var(--ink-tertiary);
+  font-weight: 600;
+}
+.lane-axis-track {
+  position: relative;
+  font-size: 9px;
+  color: var(--ink-tertiary);
+}
+.lane-axis-summary {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-subtle);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  letter-spacing: 0.3px;
+}
+.lane-track {
+  position: relative;
+  height: 100%;
+  min-height: 32px;
+  overflow: visible;
+}
+.lane-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--hairline);
+  pointer-events: none;
+  opacity: 0.55;
+}
+.lane-tick:first-child,
+.lane-tick:last-child { opacity: 0.85; }
+.lane-tick-label {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 9px;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.lane-trace .lane-tick-label { display: none; } /* labels live only in axis row */
+.lane-bars {
+  position: relative;
+  height: 100%;
+  min-height: 32px;
+}
+.trace-bar {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 10px;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  transition:
+    transform 80ms ease,
+    border-color 80ms ease,
+    background 80ms ease;
+  box-sizing: border-box;
+}
+.trace-bar:hover {
+  border-color: var(--primary);
+  background: var(--surface-3, var(--surface-2));
+  z-index: 3;
+  transform: translateY(-50%) scale(1.02);
+}
+.trace-bar-label {
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Per-kind tinting — mirror studio.js classifyKindForFeed() vocabulary. */
+.trace-bar.kind-spec     { background: color-mix(in oklab, #5e6ad2 30%, var(--surface-2)); border-color: #5e6ad2; }
+.trace-bar.kind-build    { background: color-mix(in oklab, var(--lime) 28%, var(--surface-2)); border-color: var(--lime); }
+.trace-bar.kind-judge    { background: color-mix(in oklab, var(--lime) 35%, var(--surface-2)); border-color: var(--lime); color: var(--ink); }
+.trace-bar.kind-handoff  { background: color-mix(in oklab, var(--primary) 25%, var(--surface-2)); border-color: var(--primary); }
+.trace-bar.kind-error    { background: color-mix(in oklab, #dc2626 30%, var(--surface-2)); border-color: #dc2626; color: #fee; }
+.trace-bar.kind-audit    { background: var(--audit-bg); border-color: var(--audit-fg); color: var(--audit-fg); }
+.trace-bar.kind-system   { background: var(--surface-2); border-color: var(--hairline); color: var(--ink-subtle); font-style: italic; }
+.trace-bar.kind-tool-call { background: color-mix(in oklab, #06b6d4 22%, var(--surface-2)); border-color: #06b6d4; }
+.trace-bar.deterministic { border-style: solid; border-width: 1px 1px 1px 3px; border-left-color: var(--lime); }
+/* Verdict overlay (strongest signal — overrides per-kind tint when present) */
+.trace-bar.verdict-pass    { background: color-mix(in oklab, var(--lime) 50%, var(--surface-2)); border-color: var(--lime); }
+.trace-bar.verdict-partial { background: color-mix(in oklab, #f59e0b 40%, var(--surface-2)); border-color: #f59e0b; }
+.trace-bar.verdict-fail,
+.trace-bar.verdict-reject  { background: color-mix(in oklab, #dc2626 40%, var(--surface-2)); border-color: #dc2626; color: #fee; }
+
+/* ─── PR-J Topology mini-toggle (top-right floating button) ───────────── */
+.dag-mini-toggle {
+  position: absolute;
+  top: 12px;
+  right: 18px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 6px;
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  color: var(--ink-subtle);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  transition: border-color 80ms ease, color 80ms ease;
+}
+.dag-mini-toggle:hover { border-color: var(--primary); color: var(--ink); }
+.dag-mini-svg { width: 130px; height: 30px; color: var(--ink-tertiary); }
+.dag-mini-toggle:hover .dag-mini-svg { color: var(--primary); }
+
+/* ─── PR-J DAG modal overlay ───────────────────────────────────────────── */
+.dag-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: block;
+}
+.dag-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 9, 12, 0.65);
+  backdrop-filter: blur(4px);
+}
+.dag-modal-card {
+  position: relative;
+  margin: 5vh auto;
+  width: min(1180px, 92vw);
+  max-height: 88vh;
+  overflow: auto;
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.55);
+  padding: 18px 22px 22px;
+}
+.dag-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  background: transparent;
+  border: none;
+  color: var(--ink-subtle);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+  border-radius: 4px;
+}
+.dag-modal-close:hover { color: var(--audit-fg); background: var(--surface-2); }
 .lane {
   display: grid;
   grid-template-columns: 140px 1fr;

@@ -296,18 +296,28 @@ function renderHeader() {
 }
 
 /**
- * Swimlane render — left-to-right chronological per actor lane.
+ * Swimlane render — Gantt-style trace waterfall (PR-J).
  *
- * v0.5 PR-7: consecutive same-kind events are collapsed into ONE chip with
- * a count badge (top-right superscript, message-app convention). Clicking
- * any chip opens the detail panel; if the chip is a group, the detail
- * panel exposes a paginator (← N/M →, plus ←/→ keyboard) so the user can
- * page through every grouped event without losing context.
+ * Frontier convergence: Sentry / Jaeger / Honeycomb / Tempo / LangSmith /
+ * Langfuse / Phoenix all default to a time-axis Gantt for "trace UI" — one
+ * row per actor (~service), bars sized by latency, colored by verdict /
+ * kind. The previous chip-style (left-to-right, fixed bar width) was a
+ * progression view but did not show *time*. The waterfall directly answers
+ * "where is the budget going?" + "which actor is currently spawn-blocking?"
+ * — exactly the questions the user couldn't answer from the chip view.
  *
- * Frontier convergence (Slack unread badge / WhatsApp message bubble /
- * VS Code Problems panel collapsed-duplicate / Datadog log facet count):
- * count badge is offset to top-right corner with a subtle accent so it
- * doesn't compete with the chip's primary kind label.
+ * Layout per row (140px label · variable timeline):
+ *   actor-label  | tick-axis backdrop | bar1 bar2 bar3 ...
+ *
+ * Bar width = (event.metadata.latency_ms / sessionWallMs) * timelineWidth
+ *   - When latency is missing, the bar gets a thin 6px sentinel width with
+ *     dotted border (kind=audit / kind=note typically — instantaneous).
+ *
+ * Bar color: verdict (PASS green / PARTIAL amber / FAIL red) when the event
+ * carries one; otherwise per-kind from the existing kindClass vocabulary
+ * (build/spec → blue, qa.result/handoff → green, error/audit → red/pink).
+ *
+ * Click → existing showDetail() with grouping when consecutive same-kind.
  */
 function renderSwimlane() {
   const root = $('swimlane');
@@ -320,30 +330,58 @@ function renderSwimlane() {
     root.innerHTML = '<div class="empty">Waiting for events…</div>';
     return;
   }
+
+  // Time axis: from first event to max(last event ts, last event ts + last
+  // event latency). Bars are anchored to start = (event.ts - sessionStart),
+  // not (event.ts - event.latency_ms) — the dispatcher's `agent.stop`
+  // event's `metadata.latency_ms` is the spawn duration, but its `ts` is the
+  // *end* of the spawn, so start = ts - latency. We honor that for spawn
+  // events and otherwise treat ts as a point-in-time.
+  const sessionStart = Date.parse(events[0]!.ts);
+  let sessionEnd = sessionStart;
+  for (const e of events) {
+    const t = Date.parse(e.ts);
+    if (Number.isFinite(t)) sessionEnd = Math.max(sessionEnd, t);
+  }
+  const sessionWallMs = Math.max(1, sessionEnd - sessionStart);
+  const sessionElapsedSec = (sessionWallMs / 1000).toFixed(1);
+
+  // Tick axis (5 evenly spaced gridlines + labels at 0/25/50/75/100%).
+  const ticksHtml = [0, 0.25, 0.5, 0.75, 1].map((pct) => {
+    const ms = pct * sessionWallMs;
+    const label = ms < 1000 ? Math.round(ms) + 'ms' : (ms / 1000).toFixed(1) + 's';
+    return (
+      '<div class="lane-tick" style="left:' + (pct * 100).toFixed(2) + '%;">' +
+      '<span class="lane-tick-label">' + label + '</span>' +
+      '</div>'
+    );
+  }).join('');
+
+  // For each actor lane, compute bars in time space.
   const lanes = ACTOR_LANE_ORDER.map((actor) => {
     const evts = events.filter((e) => e.from === actor);
-    const groups = groupConsecutiveByKind(evts);
-    const lastIdx = groups.length - 1;
-    const cells = groups.map((g, i) => renderEvtCell(g, i === lastIdx)).join('');
+    const bars = evts.map((e) => renderTraceBar(e, sessionStart, sessionWallMs));
+    const labelGlyph = '<span class="glyph" style="background:var(' + ACTOR_VAR[actor] + ');"></span>';
     return (
-      '<div class="lane">' +
-      '<div class="lane-label"><span class="glyph" style="background:var(' +
-      ACTOR_VAR[actor] +
-      ');"></span>' +
-      actor +
-      '</div>' +
-      '<div class="lane-events">' +
-      (cells || '<span style="color:var(--ink-tertiary); font-size:11px;">—</span>') +
+      '<div class="lane lane-trace">' +
+      '<div class="lane-label">' + labelGlyph + actor + '</div>' +
+      '<div class="lane-track">' +
+      ticksHtml +
+      '<div class="lane-bars">' + bars.join('') + '</div>' +
       '</div>' +
       '</div>'
     );
   });
-  root.innerHTML = lanes.join('');
-  root.querySelectorAll('.evt').forEach((el) => {
+  const header =
+    '<div class="lane-axis">' +
+    '<div class="lane-label lane-axis-label">elapsed</div>' +
+    '<div class="lane-track lane-axis-track">' + ticksHtml +
+    '<div class="lane-axis-summary">' + sessionElapsedSec + 's total · ' + events.length + ' events</div>' +
+    '</div>' +
+    '</div>';
+  root.innerHTML = header + lanes.join('');
+  root.querySelectorAll('.trace-bar').forEach((el) => {
     el.addEventListener('click', () => {
-      // data-group-ids is a comma-joined string. Single-event chips have a
-      // 1-id list; multi-event groups have N. Pass the list to showDetail
-      // so it can wire the paginator.
       const groupIds = (el.dataset.groupIds ?? '').split(',').filter(Boolean);
       const startId = groupIds[0] ?? el.dataset.id;
       showDetail(startId, groupIds.length > 1 ? groupIds : null);
@@ -352,68 +390,40 @@ function renderSwimlane() {
 }
 
 /**
- * Collapse runs of consecutive events that share `from + kind` into a
- * single group descriptor. Non-consecutive same-kind events stay separate
- * — preserves chronology + the visual rhythm of "actor X did A, then B,
- * then more A".
+ * Render one event as a Gantt bar. Returns an HTML span positioned
+ * absolutely within the parent .lane-bars container.
  */
-function groupConsecutiveByKind(evts) {
-  const groups = [];
-  for (const e of evts) {
-    const prev = groups[groups.length - 1];
-    if (prev && prev.kind === e.kind) {
-      prev.ids.push(e.id);
-      prev.evts.push(e);
-      if (e.metadata?.deterministic) prev.deterministic = true;
-      if (e.kind === 'audit' || (e.metadata?.audit_violations?.length ?? 0) > 0) {
-        prev.audit = true;
-      }
-    } else {
-      groups.push({
-        kind: e.kind,
-        ids: [e.id],
-        evts: [e],
-        deterministic: !!e.metadata?.deterministic,
-        audit:
-          e.kind === 'audit' ||
-          (e.metadata?.audit_violations?.length ?? 0) > 0,
-      });
-    }
-  }
-  return groups;
-}
-
-function renderEvtCell(group, isLast) {
-  const cls = ['evt'];
-  if (group.deterministic) cls.push('deterministic');
-  if (group.audit) cls.push('audit');
-  if (isLast) cls.push('fresh');
-  const count = group.ids.length;
-  if (count > 1) cls.push('grouped');
-  const idsAttr = group.ids.join(',');
-  const firstId = group.ids[0];
-  const titleAttr =
-    count > 1
-      ? `${group.kind} × ${count} (click to page through)`
-      : group.kind;
+function renderTraceBar(evt, sessionStart, sessionWallMs) {
+  const ts = Date.parse(evt.ts);
+  if (!Number.isFinite(ts)) return '';
+  const latency = Number(evt.metadata?.latency_ms ?? 0);
+  // Spawn-style events (agent.stop carries latency for the whole spawn) get
+  // start = ts - latency. Other events are point-in-time.
+  const isSpawnEvent = latency > 0 && (evt.kind === 'agent.stop' || evt.kind === 'note');
+  const startMs = isSpawnEvent ? Math.max(0, ts - sessionStart - latency) : ts - sessionStart;
+  const widthMs = isSpawnEvent ? latency : Math.max(latency, 0);
+  const leftPct = (startMs / sessionWallMs) * 100;
+  // Min visual width 6px (sentinel) for point-in-time events; latency bars
+  // get max(0.5%, computed) so they're always clickable.
+  const widthPct = widthMs > 0 ? Math.max(0.5, (widthMs / sessionWallMs) * 100) : 0;
+  const widthStyle = widthPct > 0 ? `width:${widthPct.toFixed(3)}%;` : 'width:6px;';
+  const cls = ['trace-bar', 'kind-' + (classifyKindForFeed(evt.kind) || 'plain')];
+  if (evt.metadata?.deterministic) cls.push('deterministic');
+  if (evt.kind === 'audit' || (evt.metadata?.audit_violations?.length ?? 0) > 0) cls.push('audit');
+  if (evt.scores?.verdict) cls.push('verdict-' + evt.scores.verdict.toLowerCase());
+  const tokens = evt.metadata?.tokens_in
+    ? ' · ' + formatTokens(evt.metadata.tokens_in) + '→' + formatTokens(evt.metadata.tokens_out ?? 0)
+    : '';
+  const cost = evt.metadata?.cost_usd ? ' · ' + formatCost(evt.metadata.cost_usd) : '';
+  const latLabel = latency > 0 ? Math.round(latency) + 'ms' : '·';
+  const tip = `${evt.kind}  (${latLabel}${tokens}${cost})`;
   return (
-    '<span class="' +
-    cls.join(' ') +
-    '" data-id="' +
-    escapeHTML(firstId) +
-    '" data-group-ids="' +
-    escapeHTML(idsAttr) +
-    '" title="' +
-    escapeHTML(titleAttr) +
-    '">' +
-    escapeHTML(group.kind) +
-    (count > 1
-      ? '<span class="evt-count" aria-label="' +
-        count +
-        ' events">' +
-        count +
-        '</span>'
-      : '') +
+    '<span class="' + cls.join(' ') + '"' +
+    ' data-id="' + escapeHTML(evt.id) + '"' +
+    ' data-group-ids="' + escapeHTML(evt.id) + '"' +
+    ' style="left:' + leftPct.toFixed(3) + '%;' + widthStyle + '"' +
+    ' title="' + escapeHTML(tip) + '">' +
+    '<span class="trace-bar-label">' + escapeHTML(evt.kind) + '</span>' +
     '</span>'
   );
 }
@@ -1184,6 +1194,27 @@ onSessionSelect((id) => {
 
 // Initial DAG render after first paint.
 setTimeout(renderDag, 0);
+
+// PR-J — DAG modal toggle. Topology button (top-right of pipeline tab) opens
+// the full DAG; backdrop click / Esc / × button closes it. The modal stays
+// in DOM but `display:none` so renderDag() always runs (cheap SVG paint)
+// and the user sees the freshest active-actor highlight when they reopen it.
+function openDagModal() {
+  const modal = document.getElementById('dag-modal');
+  if (!modal) return;
+  modal.style.display = 'block';
+  renderDag();
+}
+function closeDagModal() {
+  const modal = document.getElementById('dag-modal');
+  if (modal) modal.style.display = 'none';
+}
+document.getElementById('dag-mini-toggle')?.addEventListener('click', openDagModal);
+document.getElementById('dag-modal-backdrop')?.addEventListener('click', closeDagModal);
+document.getElementById('dag-modal-close')?.addEventListener('click', closeDagModal);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeDagModal();
+});
 
 // ─── v3.4 Logs view (ArgoCD-inspired) ──────────────────────────────────────
 // Tab toggle between Pipeline (DAG + swimlane + scorecard + console) and

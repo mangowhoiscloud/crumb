@@ -137,7 +137,36 @@
   </nav>
 
   <div class="view-pane active" id="view-pipeline">
-    <section class="dag" id="dag-section">
+    <!-- PR-J — Sentry/Jaeger-style trace waterfall is the primary surface.
+         The full DAG (PR-H) lives behind a "Topology" button as a modal so
+         it can be referenced when needed without dominating the pipeline tab. -->
+    <section class="swimlane swimlane-trace" id="swimlane">
+      <div class="empty" id="swim-empty">Waiting for events…</div>
+    </section>
+    <button class="dag-mini-toggle" id="dag-mini-toggle" title="Show pipeline topology DAG (Esc to close)">
+      <svg viewBox="0 0 130 60" class="dag-mini-svg">
+        <!-- 5-phase compact glyph: user → coord → planner → builder → qa → verifier → done -->
+        <line x1="8" y1="30" x2="124" y2="30" stroke="currentColor" stroke-width="0.8" opacity="0.4" />
+        <circle cx="8"  cy="30" r="3" fill="currentColor" />
+        <circle cx="28" cy="30" r="3" fill="currentColor" />
+        <circle cx="48" cy="18" r="3" fill="currentColor" />
+        <circle cx="48" cy="42" r="3" fill="currentColor" opacity="0.4" />
+        <circle cx="68" cy="18" r="3" fill="currentColor" />
+        <circle cx="68" cy="42" r="3" fill="currentColor" opacity="0.4" />
+        <polygon points="84,26 92,30 84,34 76,30" fill="currentColor" />
+        <circle cx="108" cy="18" r="3" fill="currentColor" />
+        <circle cx="108" cy="42" r="3" fill="currentColor" opacity="0.4" />
+        <rect x="120" y="26" width="6" height="8" rx="2" fill="currentColor" opacity="0.6" />
+      </svg>
+      <span>Topology</span>
+    </button>
+  </div>
+
+  <!-- DAG modal overlay — opens on Topology button click, closes on backdrop / Esc -->
+  <div id="dag-modal" class="dag-modal" style="display:none;" role="dialog" aria-modal="true" aria-label="Pipeline topology DAG">
+    <div class="dag-modal-backdrop" id="dag-modal-backdrop"></div>
+    <div class="dag-modal-card">
+      <button class="dag-modal-close" id="dag-modal-close" aria-label="Close">×</button>
       <div class="dag-header">
         <h2>Pipeline · v0.4.2</h2>
         <div class="dag-legend" id="dag-legend">
@@ -155,11 +184,7 @@
         </div>
       </div>
       <svg class="dag-svg" id="dag-svg" viewBox="0 0 1100 320" preserveAspectRatio="xMidYMid meet"></svg>
-    </section>
-
-    <section class="swimlane" id="swimlane">
-      <div class="empty" id="swim-empty">Waiting for events…</div>
-    </section>
+    </div>
   </div>
 
   <div class="view-pane" id="view-logs">

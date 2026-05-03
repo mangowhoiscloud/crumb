@@ -4,6 +4,22 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Studio Pipeline tab: trace waterfall as primary surface, DAG demoted to topology modal (PR-J) (2026-05-03)
+
+PR-H (#114) gave the Pipeline tab a structurally-correct DAG, but a sweep against frontier observability tools (Datadog Service Map / Grafana Tempo / Honeycomb / Sentry trace view / Jaeger Gantt / LangSmith / Langfuse / Phoenix) showed every one of them defaults to a **time-axis trace waterfall**, with the static topology demoted to either a side panel or a "view dependencies" link. The runtime data Crumb already collects (`metadata.tokens_in/out`, `latency_ms`, `cost_usd`, verdict on `judge.score`) was being computed and stored but never bound onto the DAG.
+
+`packages/studio/src/client/studio.{html,css,js}`:
+- **`renderSwimlane()` rewritten as Gantt-style trace waterfall**. One row per actor (`ACTOR_LANE_ORDER`); time-axis backdrop with 5 evenly-spaced ticks (`0% / 25% / 50% / 75% / 100%`) labeled in `ms` / `s`; bars positioned absolutely within each lane (`left = (event.ts - sessionStart) / sessionWallMs * 100%`, `width = latency_ms / sessionWallMs * 100%`). Bar color cascades: verdict (PASS green / PARTIAL amber / FAIL red) → kind class (build / spec / handoff / audit / etc.) → default surface tone. Tooltip carries `kind (latency · tokens · cost)` so a hover answers the three questions the chip view couldn't ("how long? how many tokens? how much?").
+- **DAG demoted to a topology modal**. The full-size 1100×320 SVG (PR-H) now lives inside a `dialog`-shaped `#dag-modal` that opens via a sticky `Topology` button (top-right of the Pipeline tab, with a 130×30 inline mini-glyph hint) and closes on backdrop click / × button / `Esc`. Frontier convergence: Tempo's "View graph" button + Sentry's "View structure" link follow the same demotion pattern — structural correctness when needed, runtime data by default.
+- **Per-kind bar tints via `color-mix(in oklab, ...)`**. Reuses existing `--lime / --primary / --audit-fg / #06b6d4` etc. tokens so the new surface stays inside the Linear/Sentry palette family the rest of the studio already inhabits.
+- Removed the chip-style `groupConsecutiveByKind()` + `renderEvtCell()` helpers (functions ~80 LOC) — the time-axis layout naturally separates events without need for grouping. Click → existing `showDetail()` (no paginator now since each bar is one event).
+
+`design/DESIGN.md` — §5.5 Pipeline DAG section will be updated to note the new surface hierarchy in a follow-up doc PR (kept this PR pure-code so review surface stays focused).
+
+Wiki canonical Mermaid (`wiki/diagrams/pipeline-v0.4.{mmd,md}`) unchanged — it documents the **structural** topology, which the Topology modal still mirrors 1:1. The waterfall is a *trace* surface, not a *topology* surface, so the two don't need to stay in lockstep.
+
+Verification: `npm run lint && npm run typecheck && npm run format:check && npm test && npm run build` — 466 tests pass. Studio HTML re-inlined to 202KB. Live verified at http://127.0.0.1:7321/.
+
 ### Added — Studio agent narrative panel (split from live exec feed) with horizontal resize splitter (2026-05-03)
 
 Per user feedback after PR #113 ("이걸 보여주는 별도의 창을 만들어서 raw가 아니라 사용자가 봤을 때 유의미한 데이터를 출력하도록 개선해. live execution feed 말고 다른 창으로 둬서 live execution feed 위에 두면 될듯 해. 두 창의 높이는 session의 가로처럼 조절할 수도 있고."): PR #113 suppressed raw stream-json blobs from the live execution feed but lost the meaningful narrative content along with the noise. The user wanted the rendered Claude-Code-style ⏺/⎿/✓ bubbles to live in their own panel above the existing feed, not be hidden entirely.
