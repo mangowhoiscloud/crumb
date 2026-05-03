@@ -384,132 +384,13 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
 
     case 'user.intervene': {
       // v0.2.0 G3+G6 — actor-targeted intervention + LangGraph Command(goto/update) pattern.
-      //
-      // data.target_actor: route the user message to a specific actor's task_ledger
-      //   (AutoGen UserProxyAgent + GroupChatManager dynamic-speaker pattern).
-      // data.goto: force progress_ledger.next_speaker = <actor> and spawn (LangGraph
-      //   Command(goto)). Skips the normal routing.
-      // data.swap: { from, to } — adapter override (Paperclip "swap agent" pattern).
-      // data.reset_circuit: clear circuit_breaker for the named actor (or all).
-      // data.cancel: SIGTERM the live spawn for the named actor (or 'all'). v0.4.2
-      //   — emits cancel_spawn effect; live dispatcher fires the AbortController.
-      //   Lossy: kills mid-edit, partial artifacts left as-is.
-      const data = (event.data ?? {}) as {
-        target_actor?: Actor;
-        goto?: Actor;
-        swap?: { from: Actor; to: string };
-        reset_circuit?: Actor | true;
-        sandwich_append?: string;
-        cancel?: Actor | 'all';
-      };
-
-      // Always record the intervention as a fact, but tag with the target actor when given.
-      next.task_ledger.facts.push({
-        source_id: event.id,
-        text: data.target_actor
-          ? `user intervene @${data.target_actor}: ${event.body ?? ''}`
-          : `user intervene: ${event.body ?? ''}`,
-        category: 'constraint',
-      });
-
-      // G4 — sandwich_append: persistent append (across all subsequent spawns
-      // of the matching actor). Stored as a fact with category='sandwich_append'
-      // so the dispatcher can pull it on the next spawn. Optional target_actor
-      // scopes the append; absent target = applies to all actors.
-      if (data.sandwich_append) {
-        next.task_ledger.facts.push({
-          source_id: event.id,
-          text: data.sandwich_append,
-          category: 'sandwich_append',
-          target_actor: data.target_actor,
-        });
-      }
-
-      // G6 — adapter swap (Paperclip-style). Persists in adapter_override for next spawn.
-      if (data.swap) {
-        next.progress_ledger.adapter_override = {
-          ...next.progress_ledger.adapter_override,
-          [data.swap.from]: data.swap.to,
-        };
-      }
-
-      // v0.4.2 — user-driven mid-spawn cancel. Emits a cancel_spawn effect
-      // that the live dispatcher translates into `controller.abort()` →
-      // SIGTERM on the running subprocess. Per-actor when data.cancel is an
-      // Actor name; whole-session when 'all'. Frontier consensus (12-system
-      // survey: bagelcode-nl-intervention-12-systems-2026-05-02): only
-      // IDE-plugin tier (Cline / Continue / Cursor) wires AbortSignal into
-      // the LLM stream, all three with documented cancellation-leak bugs.
-      // Crumb's cooperative-checkpoint default stays — this is opt-in via
-      // an explicit /cancel verb so the lossy mid-edit kill is the user's
-      // choice, not the harness's.
-      if (data.cancel) {
-        effects.push({
-          type: 'cancel_spawn',
-          actor: data.cancel,
-          reason: event.body ? `user-requested cancel: ${event.body}` : 'user-requested cancel',
-        });
-      }
-
-      // G6 — circuit breaker reset for the named actor (or all if `true`).
-      if (data.reset_circuit) {
-        const cb = { ...next.progress_ledger.circuit_breaker };
-        if (data.reset_circuit === true) {
-          // Clear all entries.
-          for (const key of Object.keys(cb) as Actor[]) delete cb[key];
-        } else {
-          delete cb[data.reset_circuit];
-        }
-        next.progress_ledger.circuit_breaker = cb;
-      }
-
-      // G6 — goto: force the routing decision. Bypasses last_active_actor heuristics.
-      if (
-        data.goto &&
-        data.goto !== 'user' &&
-        data.goto !== 'system' &&
-        data.goto !== 'coordinator' &&
-        data.goto !== 'validator'
-      ) {
-        next.progress_ledger.next_speaker = data.goto;
-        effects.push({
-          type: 'spawn',
-          actor: data.goto,
-          adapter: pickAdapter(next, data.goto as 'planner-lead' | 'builder' | 'verifier'),
-          prompt: event.body,
-          sandwich_appends: collectSandwichAppends(next, data.goto),
-        });
-      } else if (
-        // PR-G7-A — `@<actor> body` shorthand (target_actor only, no goto).
-        // Previously this only recorded a fact and did NOT spawn. Users typing
-        // `@builder Codex 말고 claude-local 사용해` expected the builder to wake
-        // up; instead the line was silently dropped (real footgun in
-        // 01KQNAK1CXTBDEBX2WP2QQK891 inbox — 5 of 6 lines wasted). Now an
-        // explicit @actor with a body spawns that actor with the body as
-        // prompt, unless the actor is paused.
-        data.target_actor &&
-        !data.swap &&
-        !data.reset_circuit &&
-        !data.sandwich_append &&
-        data.target_actor !== 'user' &&
-        data.target_actor !== 'system' &&
-        data.target_actor !== 'coordinator' &&
-        data.target_actor !== 'validator' &&
-        event.body &&
-        event.body.trim().length > 0 &&
-        !next.progress_ledger.paused &&
-        !next.progress_ledger.paused_actors.includes(data.target_actor)
-      ) {
-        next.progress_ledger.next_speaker = data.target_actor;
-        effects.push({
-          type: 'spawn',
-          actor: data.target_actor,
-          adapter: pickAdapter(next, data.target_actor as 'planner-lead' | 'builder' | 'verifier'),
-          prompt: event.body,
-          sandwich_appends: collectSandwichAppends(next, data.target_actor),
-        });
-      }
-
+      // PR-Prune-4 — case body split into two helpers (defined below):
+      //   applyInterveneMutations() : record fact + sandwich_append + adapter swap + reset_circuit
+      //   routeIntervene()          : cancel_spawn effect + goto spawn + @actor shorthand spawn
+      // See [[bagelcode-system-architecture-v0.1]] §11 for the user.* surface.
+      const data = parseInterveneData(event);
+      applyInterveneMutations(next, event, data);
+      effects.push(...routeIntervene(next, event, data));
       break;
     }
 
@@ -936,6 +817,150 @@ function routeOnVerdict(
       sandwich_appends: collectSandwichAppends(next, 'builder'),
     },
   ];
+}
+
+/**
+ * PR-Prune-4 — typed extraction of user.intervene `event.data` payload.
+ *
+ * `data` mixes 6 independent verbs (target_actor / goto / swap / reset_circuit /
+ * sandwich_append / cancel) — the inbox parser's grammar is an OR-of-flags, not
+ * an XOR. Centralizing the cast keeps the helpers below from re-asserting the
+ * shape and gives a single place to add validation if needed later.
+ *
+ * See [[bagelcode-system-architecture-v0.1]] §11 for the user.* event surface
+ * and src/inbox/parser.ts for the grammar that fills these fields.
+ */
+interface InterveneData {
+  target_actor?: Actor;
+  goto?: Actor;
+  swap?: { from: Actor; to: string };
+  reset_circuit?: Actor | true;
+  sandwich_append?: string;
+  cancel?: Actor | 'all';
+}
+
+function parseInterveneData(event: Message): InterveneData {
+  return (event.data ?? {}) as InterveneData;
+}
+
+/**
+ * PR-Prune-4 — pure state mutations for user.intervene. No effects emitted;
+ * caller appends those via routeIntervene(). Each branch is independent
+ * (data is OR-of-flags, not XOR), so the user can pause+swap+reset in one
+ * intervention.
+ *
+ *   1. Always: record the intervention as a constraint fact (tagged with
+ *      target_actor when given) so future spawns see it.
+ *   2. Optional `sandwich_append` (G4): persistent append fact pulled by
+ *      every subsequent matching spawn (target_actor scopes; absent = all).
+ *   3. Optional `swap` (G6, Paperclip-style): adapter_override entry.
+ *   4. Optional `reset_circuit` (G6): clear circuit_breaker for the named
+ *      actor, or all entries when set to `true`.
+ */
+function applyInterveneMutations(next: CrumbState, event: Message, data: InterveneData): void {
+  next.task_ledger.facts.push({
+    source_id: event.id,
+    text: data.target_actor
+      ? `user intervene @${data.target_actor}: ${event.body ?? ''}`
+      : `user intervene: ${event.body ?? ''}`,
+    category: 'constraint',
+  });
+  if (data.sandwich_append) {
+    next.task_ledger.facts.push({
+      source_id: event.id,
+      text: data.sandwich_append,
+      category: 'sandwich_append',
+      target_actor: data.target_actor,
+    });
+  }
+  if (data.swap) {
+    next.progress_ledger.adapter_override = {
+      ...next.progress_ledger.adapter_override,
+      [data.swap.from]: data.swap.to,
+    };
+  }
+  if (data.reset_circuit) {
+    const cb = { ...next.progress_ledger.circuit_breaker };
+    if (data.reset_circuit === true) {
+      for (const key of Object.keys(cb) as Actor[]) delete cb[key];
+    } else {
+      delete cb[data.reset_circuit];
+    }
+    next.progress_ledger.circuit_breaker = cb;
+  }
+}
+
+/**
+ * PR-Prune-4 — verb-emitting effects for user.intervene. Mutates next when
+ * spawning (sets next_speaker). Returns Effect[]; caller appends in order.
+ *
+ *   1. data.cancel: emits cancel_spawn effect (per-actor or 'all'). Live
+ *      dispatcher fires the AbortController → SIGTERM. Lossy: kills mid-edit,
+ *      partial artifacts left as-is. Cooperative-checkpoint default stays —
+ *      the lossy kill is opt-in via /cancel verb (frontier consensus per
+ *      bagelcode-nl-intervention-12-systems-2026-05-02 §12-system survey).
+ *   2. data.goto: force routing decision (LangGraph Command(goto)). Bypasses
+ *      last_active_actor heuristics. Skips user/system/coordinator/validator
+ *      (non-spawnable actors).
+ *   3. PR-G7-A `@<actor> body` shorthand: target_actor + body + no other ops
+ *      → spawn that actor with the body as kickoff prompt. Required because
+ *      previously this only recorded a fact and the user expected the actor
+ *      to wake up (real footgun in 01KQNAK1CXTBDEBX2WP2QQK891 inbox — 5 of 6
+ *      lines wasted). Skipped when paused or when the target is in the
+ *      paused_actors set.
+ *
+ * goto and the @actor shorthand are mutually exclusive (else-if): goto is
+ * the explicit spawn verb; the @actor shorthand only fires as the fallback
+ * when no other state-changing flag accompanies the target_actor tag.
+ */
+function routeIntervene(next: CrumbState, event: Message, data: InterveneData): Effect[] {
+  const out: Effect[] = [];
+  if (data.cancel) {
+    out.push({
+      type: 'cancel_spawn',
+      actor: data.cancel,
+      reason: event.body ? `user-requested cancel: ${event.body}` : 'user-requested cancel',
+    });
+  }
+  if (
+    data.goto &&
+    data.goto !== 'user' &&
+    data.goto !== 'system' &&
+    data.goto !== 'coordinator' &&
+    data.goto !== 'validator'
+  ) {
+    next.progress_ledger.next_speaker = data.goto;
+    out.push({
+      type: 'spawn',
+      actor: data.goto,
+      adapter: pickAdapter(next, data.goto as 'planner-lead' | 'builder' | 'verifier'),
+      prompt: event.body,
+      sandwich_appends: collectSandwichAppends(next, data.goto),
+    });
+  } else if (
+    data.target_actor &&
+    !data.swap &&
+    !data.reset_circuit &&
+    !data.sandwich_append &&
+    data.target_actor !== 'user' &&
+    data.target_actor !== 'system' &&
+    data.target_actor !== 'coordinator' &&
+    data.target_actor !== 'validator' &&
+    event.body &&
+    event.body.trim().length > 0 &&
+    !next.progress_ledger.paused &&
+    !next.progress_ledger.paused_actors.includes(data.target_actor)
+  ) {
+    next.progress_ledger.next_speaker = data.target_actor;
+    out.push({
+      type: 'spawn',
+      actor: data.target_actor,
+      adapter: pickAdapter(next, data.target_actor as 'planner-lead' | 'builder' | 'verifier'),
+      prompt: event.body,
+      sandwich_appends: collectSandwichAppends(next, data.target_actor),
+    });
+  }
+  return out;
 }
 
 /**
