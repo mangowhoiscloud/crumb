@@ -156,9 +156,17 @@ function renderSessionList() {
           (forceFlag ? ' data-force="1"' : '') +
           ' title="re-enter coordinator loop (force=' + (forceFlag ? 'true' : 'false') + ')">↻</button>'
         : '';
+      // R5 — Cancel button on live sessions. Posts `/cancel` to the session's
+      // inbox.txt; coordinator's parser+reducer turn it into a `cancel_spawn`
+      // effect that SIGTERMs the active subprocess (R2). Hidden when not
+      // live — no point cancelling a session with no active spawn.
+      const cancelBtn = s.live
+        ? '<button class="row-cancel" data-cancel="' + s.id + '" title="cancel active spawn(s) — SIGTERM the running actor (lossy mid-edit)">⏹</button>'
+        : '';
       return '<div class="' + cls.join(' ') + '" data-id="' + s.id + '" title="' + escapeHTML(stateTitle) + '">' +
         '<button class="row-close" data-close="' + s.id + '" title="dismiss from sidebar (transcript preserved on disk)">×</button>' +
         resumeBtn +
+        cancelBtn +
         '<div><span class="row-dot"></span><span class="row-id">' + escapeHTML(s.id.slice(0, 12)) + '…</span> <span style="color:var(--ink-tertiary);">' + status + '</span></div>' +
         '<div class="row-goal">' + escapeHTML(s.goal ?? '(no goal yet)') + '</div>' +
         '<div class="row-meta">' + cost + ' · ' + (s.metrics?.events ?? 0) + ' evt</div>' +
@@ -172,9 +180,10 @@ function renderSessionList() {
   list.innerHTML = blocks.join('');
   list.querySelectorAll('.session-row').forEach(el => {
     el.addEventListener('click', (e) => {
-      // close + resume buttons have their own handlers — don't double-fire
+      // close + resume + cancel buttons have their own handlers — don't double-fire
       if (e.target?.closest?.('.row-close')) return;
       if (e.target?.closest?.('.row-resume')) return;
+      if (e.target?.closest?.('.row-cancel')) return;
       selectSession(el.dataset.id);
     });
   });
@@ -207,6 +216,41 @@ function renderSessionList() {
         console.error('[studio] resume error:', err);
         btn.textContent = '!';
         setTimeout(() => { btn.disabled = false; btn.textContent = '↻'; }, 3000);
+      }
+    });
+  });
+  // R5 — Cancel button click handler. Posts `/cancel` to the session's
+  // inbox.txt via the existing /api/sessions/:id/inbox endpoint; the
+  // coordinator's parser turns the line into kind=user.intervene with
+  // data.cancel='all', and the reducer emits a cancel_spawn effect that
+  // SIGTERMs the live subprocess (R2 wiring in src/dispatcher/live.ts).
+  list.querySelectorAll('.row-cancel').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.cancel;
+      btn.disabled = true;
+      btn.textContent = '…';
+      try {
+        const res = await fetch('/api/sessions/' + encodeURIComponent(id) + '/inbox', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ line: '/cancel' }),
+        });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => '');
+          console.error('[studio] cancel failed:', res.status, txt);
+          btn.textContent = '!';
+          setTimeout(() => { btn.disabled = false; btn.textContent = '⏹'; }, 3000);
+          return;
+        }
+        // Optimistic UI: row will re-render once the cancel_spawn effect's
+        // kind=note hits the transcript and the watcher fans it out.
+        btn.textContent = '✓';
+        setTimeout(() => { btn.disabled = false; btn.textContent = '⏹'; }, 2000);
+      } catch (err) {
+        console.error('[studio] cancel error:', err);
+        btn.textContent = '!';
+        setTimeout(() => { btn.disabled = false; btn.textContent = '⏹'; }, 3000);
       }
     });
   });
