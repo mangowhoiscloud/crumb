@@ -96,13 +96,13 @@ export function NodeInspector() {
   const recentEvents = useMemo<TranscriptEvent[]>(() => {
     if (!actor) return [];
     const filtered: TranscriptEvent[] = [];
-    // Pull up to 50 — the inner scroller (max-height 500 px ≈ 6 cards
-    // visible) shows ~6 at a time and scrolls the rest. Higher cap is
-    // fine because the rolling window itself bounds memory upstream.
-    for (let i = stream.events.length - 1; i >= 0 && filtered.length < 50; i--) {
+    // No local cap — show every event this actor emitted in the rolling
+    // window (5000 events upstream). The inner scroller (max-height
+    // 500 px) bounds visible area; user scrolls back through the
+    // entire history without artificial truncation.
+    for (let i = stream.events.length - 1; i >= 0; i--) {
       const e = stream.events[i]!;
       if (e.from !== actor) continue;
-      if (!RECENT_EVENT_KINDS_PRIORITY.has(e.kind)) continue;
       filtered.push(e);
     }
     return filtered;
@@ -228,7 +228,7 @@ export function NodeInspector() {
         )}
       </Section>
 
-      <Section title={`Recent ${actor} events (${recentEvents.length})`}>
+      <Section title={`Recent ${actor} events`}>
         {recentEvents.length === 0 ? (
           <div style={{ fontSize: 11, color: 'var(--ink-tertiary)' }}>
             no narrative events from {actor} in the rolling window
