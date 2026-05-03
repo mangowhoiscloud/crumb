@@ -35,6 +35,7 @@ import { ServiceMap } from './panels/ServiceMap';
 import { Narrative } from './panels/Narrative';
 import { Feed } from './panels/Feed';
 import { DetailRail } from './panels/DetailRail';
+import { SlashBar } from './panels/SlashBar';
 import { useSessions, useSessionsSseBridge } from './hooks/useSessions';
 
 const PANEL_COMPONENTS: Record<string, React.FC<IDockviewPanelProps>> = {
@@ -146,15 +147,17 @@ export function App() {
         />
       </div>
 
+      <SlashBar />
+
       <footer
-        className="flex items-center gap-3 border-t px-4 py-1.5 text-xs"
+        className="flex items-center gap-3 border-t px-4 py-1 text-xs"
         style={{
           borderColor: 'var(--hairline)',
           background: 'var(--surface-1)',
           color: 'var(--ink-subtle)',
         }}
       >
-        <span>Status: M2 dockview shell</span>
+        <span>v0.4 (M5b)</span>
         <span style={{ flex: 1 }} />
         <span>⌘B sidebar · Drag tabs to dock · Drag a tab out for popout</span>
       </footer>
