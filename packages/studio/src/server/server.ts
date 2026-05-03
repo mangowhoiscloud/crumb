@@ -342,6 +342,11 @@ async function serveSessions(
         actors: [...actorsSeen],
         // v0.3.5: state + last_activity_at for sidebar dot color + sort.
         state: classification?.state ?? null,
+        // v1.0 client also reads `derived_state` / `derived_state_reason`
+        // (the names predate PR-O1's `state` rename). Emit both so old +
+        // new consumers populate the sidebar lifecycle dot correctly.
+        derived_state: classification?.state ?? 'unknown',
+        derived_state_reason: classification?.done_reason ?? null,
         last_activity_at: classification?.last_activity_at ?? null,
         done_reason: classification?.done_reason ?? null,
         history,
