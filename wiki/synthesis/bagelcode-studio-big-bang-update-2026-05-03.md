@@ -434,7 +434,7 @@ The migration is paced so the live `npx crumb-studio` keeps working at every ste
 | **M4** | `feat/studio-v2-pipeline-waterfall-map` | `<Pipeline>` (swimlane + interactive React Flow DAG with dagre seed layout, drag/pan/zoom/click → `<NodeInspector>`, layout persistence) + `<Waterfall>` (with **BubbleUp drag-select outlier mode**) + `<ServiceMap>` (edge aggregation + cross-provider tint) + **Critical-path overlay** toggle shared across all three viz tabs + `<DetailRail>` tri-mode (event detail / node inspector / outlier baseline-vs-selection histograms). SSE stream → query cache. | `?app=v2` user can: drag pipeline nodes; click → inspect/edit binding; switch to Waterfall, drag-select outliers; switch to Map, hover an edge to see req/s + p50/p95 + error rate; toggle critical-path overlay across all three views |
 | **M5** | `feat/studio-v2-bottom-panels` | `<AgentNarrative>` + `<LiveFeed>` as independently dockable panels. `<SlashBar>` → inbox POST. Both panels tear-off into popout windows. | User can drag Narrative tab out into a separate window; Feed alone in main, popout-Narrative continues to receive SSE |
 | **M6** | `feat/studio-v2-scorecard-budget-trace` | `<Scorecard>` (composite + radar + drilldown + Tremor SparkAreaChart for D1-D6 sparklines per PR-O4 + **per-actor lifecycle gauge** per observability plan P3 + **cross-provider chip** per PR-O5 P7) + `<ErrorBudgetStrip>` (PR-O2 reborn) + **`<DesignCheckPanel>` Detail Rail mode** (W3 surface — palette/touch/motion violations) + `<Logs>` + `<Output>` + `<Transcript>` + **tool-call trace tree** (PR-O5 — recursive collapsible tree of tool.call → tool.result with token + duration per node). | `?app=v2` reaches parity with v1 + adds D1-D6 sparkline + lifecycle gauge + cross-provider chip + design-check audit + trace tree |
-| **M7** | `feat/studio-v2-versions-panel` | Per §14.4: `<VersionsList>` panel + `/api/projects/:pid/versions` + `/api/projects/:pid/versions/:v/artifact/*` endpoints + `<Output>` Source toggle (Session \| Version) + `<Scorecard>` reads version manifest scorecard when version mode active. | Versions browseable; archived release artifacts viewable; manifest sha256 cited in Output header |
+| **M7** | `feat/studio-v2-versions-panel` | Per §14.6: `<VersionsList>` panel + `/api/projects/:pid/versions` + `/api/projects/:pid/versions/:v/artifact/*` endpoints + `<Output>` Source toggle (Session \| Version) + `<Scorecard>` reads version manifest scorecard when version mode active. | Versions browseable; archived release artifacts viewable; manifest sha256 cited in Output header |
 | **M7.1** | `feat/studio-v2-default-on` | Flip default to v2. `?app=v1` continues to work as escape hatch. CHANGELOG entry; docs update. | `npx crumb-studio` opens v2 by default |
 | **M8** | `chore/studio-v1-removal` | Delete `studio.{html,css,js}` + `inline-client.mjs` + `studio-html.generated.ts`. Keep server unchanged. | Bundle drops legacy ~260KB blob |
 | **M9** | `feat/studio-v2-pipeline-annotations` | n8n parity polish: user-added Sticky-Note nodes on the Pipeline canvas (text labels, draggable, persisted), "Save as project default layout" affordance, "Export layout JSON" / "Import layout JSON" actions in the Pipeline toolbar, Pipeline minimap toggle in palette. | Power users can annotate the canvas, share layouts across machines |
@@ -717,47 +717,70 @@ User directive verbatim, 2026-05-03 amendment:
 
 This is a hard gate at M8 — no soft-deprecation, no co-existence period after parity is reached, no "we'll clean it up later" debt accumulation.
 
-## 14. Lifecycle (session → project → version) + write/read parity
+## 14. Project / session / version model + write/read parity
 
-User directives 2026-05-03:
+User directives 2026-05-03 (back-and-forth):
 1. *"아웃풋 저장 위치와 읽는 위치 일치도 고려해. 계층도도 세션, 프로젝트, 버전 고려하고."*
-2. *"write/read parity (project→session→version) 이건 session->project(output)->version이야. 혼동하지마. plan 교정하던지 목적에 맞게 합리적으로 생각해서 구성해."*
+2. *"write/read parity (project→session→version) 이건 session->project(output)->version이야. 혼동하지마."*
+3. *"아니다. project/version/ session이 맞나? 모르겠네. 합리적으로 판단해봐. 레퍼런스들은 어떻게 푸는지 보고."*
 
-The migration must codify the **lifecycle** (`session → project → version`) without confusing it with the **on-disk hierarchy** (`project/{sessions,versions}/`). They differ in direction:
+Both prior framings (`project → session → version` and `session → project → version`) confused storage with lifecycle. This rewrite picks one canonical model after surveying frontier references and aligning to Crumb's actual code.
 
-- **Lifecycle** is a flow: each `session` is a discrete attempt that *contributes to* the user's `project` (the cumulative output / game). When the project reaches a milestone, a `version` is snapshotted from a chosen session's artifacts. So the directional reading is **session → project (output) → version**.
-- **On-disk hierarchy** is a containment: `<crumb-home>/projects/<project_id>/{sessions/<sid>/, versions/<v>/}`. Both `sessions` and `versions` are children of `project` directory because they share the project as their key/scope.
+### 14.0 Reference survey — how comparable tools model this
 
-These two views are not contradictory — they answer different questions. The lifecycle answers "how does data flow?" (sessions feed the project; versions snapshot the project). The hierarchy answers "where is data stored?" (everything keyed by project id, with sessions and versions as siblings under it). The migration must preserve both.
+| Tool | Tier-1 | Tier-2 | Tier-3 | Comment |
+|---|---|---|---|---|
+| **Lovable** ([lovable.dev](https://lovable.dev)) | project | version | — | No separate "session". Each prompt produces a new version; iteration history IS the version tree. |
+| **v0.dev** ([v0.dev](https://v0.dev)) | project | version | — | Same as Lovable. Linear undo across versions. |
+| **Replit Agent** ([replit.com](https://replit.com)) | repl (project) | agent run | — | "Run" is one execution. Versions implicit via repl forks. |
+| **n8n** ([n8n.io](https://n8n.io)) | workflow | execution | — | Workflow is durable, executions are runs. No third tier. |
+| **Cursor agent** | project (repo) | task | — | Project = git repo; task = one agent conversation. Versions implicit via git commits. |
+| **GitHub Actions** | workflow | run | — | Run = one execution. Versions = release tags (separate concept). |
+| **Datadog APM** | service | trace | — | Trace = one request. No "version" per se (deployments tagged separately). |
+| **Crumb** | project | { **session, version** } | — | **3 distinct concepts** because Crumb separates *running attempts* (mutable transcripts) from *released milestones* (immutable artifact snapshots). Lovable/v0 collapse this; Crumb deliberately doesn't. |
 
-Every artifact path must have a single writer + every reader resolves through the same canonical helper, and the **version layer** (project-scoped, not session-scoped) must be a first-class browseable surface in Studio (currently missing).
+**Reading**: most modern AI-builder tools collapse to two tiers because they treat each prompt as both a session and a version. Crumb keeps them separate so a user can experiment across multiple sessions, then pick one to release as a version — the released artifact survives even if the source session is deleted. This is the right design for the multi-actor execution model where one session may take 5+ minutes and produce many checkpoints before the user decides "this is the milestone."
 
-### 14.0 Lifecycle diagram
+### 14.1 The canonical model (storage + flow in one diagram)
+
+The hierarchy is **two-tier**: project owns sessions and versions as **siblings**. The flow is **session → version (snapshot)** within the project's namespace.
 
 ```
-                   ┌─────────────────────────────────────────────────────────┐
-                   │  PROJECT (the game / cumulative output)                 │
-                   │  - project_id = sha256(cwd) OR pinned `.crumb/project.toml`│
-                   │  - identity is filesystem-stable across sessions        │
-                   └─────────────────────────────────────────────────────────┘
-                          ▲                                       │
-                contribute                              snapshot   ▼
-                          │                                       
-   ┌────────────┐   ┌────────────┐    ┌────────────┐         ┌────────────┐
-   │ session A  │ + │ session B  │ +  │ session C  │  →→→→→  │ version v1 │
-   │ (mutable)  │   │ (mutable)  │    │ (mutable)  │         │ (frozen)   │
-   └────────────┘   └────────────┘    └────────────┘         └────────────┘
-        │                  │                  │                      │
-   transcript +       transcript +       transcript +           manifest +
-   artifacts/         artifacts/         artifacts/             frozen artifacts/
-                                                                (= a chosen
-                                                                 session's
-                                                                 snapshot)
+PROJECT  (the game; identity = sha256(cwd) OR pinned `.crumb/project.toml`)
+│
+├── sessions/                  mutable runs — many sessions per project
+│   └── <ulid>/
+│       ├── transcript.jsonl   append-only (single writer: src/transcript/writer.ts)
+│       ├── meta.json          lifecycle status patches (single writer: src/session/meta.ts)
+│       ├── inbox.txt          user.intervene write target
+│       ├── artifacts/         builder writes here; Studio Output reads
+│       └── agent-workspace/<actor>/   per-actor sandboxed cwd
+│
+└── versions/                  immutable milestones — fewer than sessions
+    └── <vN-or-label>/
+        ├── manifest.json      { source_session, source_event_id, scorecard,
+        │                       sha256_per_file, … }
+        └── artifacts/         frozen copy of source session's artifacts
+                              (durable: outlives source session deletion)
 ```
 
-Sessions are inputs that mutate over their lifetime (`running → paused → done` etc.); they're append-only on disk but their lifecycle state changes. Versions are immutable — a version, once written, never changes. The project itself has no on-disk content of its own beyond the `project_id` directory and the union of its sessions/ + versions/.
+**Cardinality**: `1 project : N sessions : M versions` where `M ≤ N` (every version originates from one session; not every session graduates to a version).
 
-### 14.1 On-disk hierarchy (containment, not direction)
+**Flow operation**: `crumb release <session-ulid>` reads `sessions/<sid>/artifacts/` + the session's last `judge.score` event, writes a new `versions/<vN>/{manifest.json, artifacts/}`, and appends `kind=version.released` to the source session's transcript. No session is mutated; a new version directory appears.
+
+**Both questions answered by one model**:
+- *Where is data stored?* → `<crumb-home>/projects/<id>/{sessions/, versions/}/...` (project-keyed, two children).
+- *How does data flow?* → `session.artifacts → snapshotArtifacts() → version.artifacts` (within the project's namespace).
+
+There is no "session inside version" or "version inside session" — they are independent siblings under the project, related only by the snapshot operation that copies bytes from one to the other.
+
+### 14.2 Why this beats the alternatives we considered
+
+- **`project → session → version` (versions nested under each session)**: forces every version to die with its source session, breaks the "durable milestone outlives source session" property, complicates `crumb versions` enumeration (would need to walk all sessions). Rejected.
+- **`session → project → version` (project as a side-effect of sessions)**: implies project is just a label, but Crumb pins `project_id` via `.crumb/project.toml` for stable identity across cwd changes — project is more durable than its sessions. Rejected.
+- **Two-tier project + version (Lovable model)**: collapses session and version, loses the running-attempt-vs-released-milestone distinction. Rejected because Crumb's multi-actor multi-minute execution model needs the running-attempt concept to be observable + interventable independently of versioning.
+
+### 14.3 On-disk hierarchy (the same picture as §14.1, in `src/paths.ts` terms)
 
 ```
 $CRUMB_HOME                           ← env override CRUMB_HOME, default os.homedir()/.crumb
@@ -804,9 +827,9 @@ Every path is discovered through `src/paths.ts` helpers — never built ad hoc:
 | `getVersionsDir(cwd)` | `<projectDir>/versions` | release + browse |
 | `sessionDirFromTranscript(path)` | reverses transcript path back to `<sessionRoot>` | Studio server's artifact serve |
 
-The migration must NOT introduce any second resolver. A new React panel that needs an artifact path posts to `GET /api/sessions/:id/artifact/*` (existing) or `GET /api/projects/:pid/versions/:v/artifact/*` (NEW — see §14.4); the server resolves through `src/paths.ts`.
+The migration must NOT introduce any second resolver. A new React panel that needs an artifact path posts to `GET /api/sessions/:id/artifact/*` (existing) or `GET /api/projects/:pid/versions/:v/artifact/*` (NEW — see §14.6); the server resolves through `src/paths.ts`.
 
-### 14.2 Write/read parity matrix — every artifact path
+### 14.4 Write/read parity matrix — every artifact path
 
 | Path | Writer (only one) | Reader(s) | Studio API endpoint | Studio panel |
 |---|---|---|---|---|
@@ -817,14 +840,14 @@ The migration must NOT introduce any second resolver. A new React panel that nee
 | `<versionsDir>/<v>/manifest.json` | `src/session/version.ts:writeManifest()` (CLI `crumb release`) | Studio Versions panel (M6+, NEW) | `/api/projects/:pid/versions` (NEW), `/api/projects/:pid/versions/:v/manifest` (NEW) | Versions panel (NEW) |
 | `<versionsDir>/<v>/artifacts/**` | `snapshotArtifacts()` (CLI `crumb release`) | Studio Output panel "Version" mode (M6+, NEW) | `/api/projects/:pid/versions/:v/artifact/*` (NEW) | Output, Versions panel |
 
-### 14.3 Bug surfaced by this audit — `snapshotArtifacts` is not recursive
+### 14.5 Bug surfaced by this audit — `snapshotArtifacts` is not recursive
 
 `src/session/version.ts:149-167` — `snapshotArtifacts()` only walks **top-level** files via `readdir(srcDir)` (no `withFileTypes`, no recursion). A multi-file Phaser PWA (`artifacts/game/index.html` + `artifacts/game/src/main.js` + `artifacts/game/manifest.webmanifest` + …) gets only the top-level entries snapshotted; nested files are silently dropped from the version. This is a **real release-data-loss bug**, independent of the migration. Lands as a small fix:
 
 - **PR `fix/session-version-recursive-snapshot`**: switch `readdir(srcDir, { withFileTypes: true, recursive: true })` (Node ≥18.17) or hand-rolled recursion for older targets; preserve `sha256_per_file` keyed by relative path. Test with a fixture that has nested subdirs.
 - Lands independently of the migration.
 
-### 14.4 Versions surface in Studio (NEW — M7 deliverable)
+### 14.6 Versions surface in Studio (NEW — M7 deliverable)
 
 Studio currently has no Versions browser. The user can release a session via `crumb release` (writes `<versionsDir>/<v>/manifest.json` + snapshot), but Studio's Output panel only resolves session-scoped artifacts. The migration adds:
 
@@ -840,12 +863,12 @@ This lands as M7 on the roadmap (after M6 parity, before M8 legacy removal). Doc
 
 The previous M7 "default flip" rolls forward to **M7.1** (`feat/studio-v2-default-on`) — same content, renumbered to make room for the versions deliverable.
 
-### 14.5 Data-stewardship invariants codified
+### 14.7 Data-stewardship invariants codified
 
 Cross-cutting rules that any new code (migration or otherwise) must obey:
 
 - ❌ Never construct a path under `$CRUMB_HOME` outside `src/paths.ts`. Adding a fourth tier (e.g., `runs/`) requires a `chore(paths):` PR that updates `paths.ts` + every consumer in lockstep.
-- ❌ Never copy via symlink for the version snapshot — `snapshotArtifacts` uses `copyFile` exactly because the version must survive source session deletion (§14.1 footnote).
+- ❌ Never copy via symlink for the version snapshot — `snapshotArtifacts` uses `copyFile` exactly because the version must survive source session deletion (§14.1 + §14.3 footnote).
 - ❌ Never write the same logical artifact via two writers (e.g., dispatcher writes `artifacts/game.html` AND a post-process script also writes there). Single writer per path.
 - ❌ Never break the "transcript path is the canonical session-id resolver" rule (`sessionDirFromTranscript` is the only reverse mapping; if you need the session-id from any other surface, derive it from the transcript path the watcher already has).
 - ✅ Studio reads via `<sessionId>` token in URL → server resolves through `watcher.snapshot()` → `sessionDirFromTranscript()` → real path. Adding a new artifact endpoint follows the same chain.
@@ -854,7 +877,7 @@ User directive verbatim, 2026-05-03 amendment:
 
 > 아웃풋 저장 위치와 읽는 위치 일치도 고려해. 계층도도 세션, 프로젝트, 버전 고려하고.
 
-Both halves resolved: the matrix in §14.2 makes write/read parity explicit per path, and the hierarchy in §14.1 codifies project → session → version as the canonical 3-tier shape.
+Both halves resolved: the matrix in §14.4 makes write/read parity explicit per path, and §14.1 codifies the canonical project / { sessions, versions } two-tier shape with session → version snapshot flow.
 
 ## Trigger criteria — when to start M0
 
