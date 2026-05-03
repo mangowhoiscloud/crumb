@@ -89,6 +89,39 @@ What the browser surface gives you:
 
 Drag any tab out of the dock for a popout window (`window.open` + `BroadcastChannel`). Theme + density + minimap state all persist in `localStorage`.
 
+### Slash bar — user intervention grammar
+
+The bottom slash bar (and the headless `inbox.txt` watcher) share one grammar. Both surfaces append a single line; the in-session inbox watcher parses it via `src/inbox/parser.ts` and emits the corresponding `kind=user.*` (or `kind=note`) event into the transcript. The active session's coordinator process then routes off that event — the same flow whether you typed it in the browser, in the TUI, or `echo`'d into `inbox.txt` from a script.
+
+| Command | What it does | Transcript kind |
+|---|---|---|
+| `/approve` | Promote the latest verifier `PARTIAL` verdict to `PASS` so the session can finish. Useful when the verdict is gated on a soft criterion you've already verified manually. | `user.approve` |
+| `/veto <reason>` | Reject the latest verdict. Reducer drops the artifact and routes to a builder respawn (or planner-lead Phase B for Critical), with `reason` captured on the event. | `user.veto` |
+| `/pause [@<actor>] [reason]` | Pause global or per-actor. Bare `/pause` halts every spawn until `/resume`; `/pause @builder waiting` halts builder only and lets the rest continue. | `user.pause` (`data.actor` if scoped) |
+| `/resume [@<actor>]` | Inverse of `/pause`. Resumes either the global queue or the named actor. | `user.resume` |
+| `/goto <actor> [body]` | Force `next_speaker = <actor>` and emit a one-shot spawn — LangGraph's `Command(goto)` analogue. Use it to skip ahead (e.g. straight to verifier) or to re-spawn a stuck actor. | `user.intervene` (`data.goto`) |
+| `/swap <from>=<adapter>` | Live-swap an actor's adapter binding (Paperclip-style BYO). e.g. `/swap builder=mock` to deterministically reproduce a build. The override lives on `progress_ledger.adapter_override[<actor>]` until the session ends. | `user.intervene` (`data.swap`) |
+| `/append [@<actor>] <text>` | Inject a sandwich-append for the next spawn(s). `data.sandwich_append` is concatenated onto the system prompt — preferred way to nudge an actor without restarting. Codex `APPEND_SYSTEM.md` analogue. | `user.intervene` (`data.sandwich_append`) |
+| `/note <text>` | Record a free-form constraint or comment on the timeline. Doesn't change routing — purely an annotation that future actors see in the transcript history. | `note` (from `user`) |
+| `/redo [body]` | Re-emit the last actor's spawn with optional override body. Useful when an actor's last response was incomplete due to a transient adapter failure. | `user.intervene` |
+| `/reset-circuit <actor\|all>` | Clear a tripped circuit-breaker. Use when the dispatcher cut an actor off after consecutive failures and you want to retry. | `user.intervene` (`data.reset_circuit`) |
+| `@<actor> <body>` | Free-text mention — the body becomes a `user.intervene` tagged with `data.target_actor`, surfaced to that actor's next sandwich. e.g. `@builder use red palette` constrains the next builder spawn. | `user.intervene` (`data.target_actor`) |
+| `<plain text>` | Anything that doesn't start with `/` or `@`. Treated as a generic intervention — visible in the transcript, no routing change. | `user.intervene` |
+
+The same lines work via the headless surface:
+
+```bash
+echo "/pause @builder waiting" >> ~/.crumb/projects/<id>/sessions/<sid>/inbox.txt
+echo "@builder use red palette" >> ~/.crumb/projects/<id>/sessions/<sid>/inbox.txt
+echo "/note hold off until I review the spec" >> ~/.crumb/projects/<id>/sessions/<sid>/inbox.txt
+```
+
+Constraints:
+
+- The session must be **live** (`status: "running"`); a `done` / `errored` session has no inbox watcher running, so lines are appended to the file but never parsed. The Studio slash bar greys itself out when the active session is terminal.
+- The reducer is the single source of truth — the slash bar **never** writes the transcript directly. Read-only invariant from AGENTS.md is preserved on every surface.
+- Lines are processed strictly in order; `/pause` followed by `/resume` 1 ms later is fine.
+
 ---
 
 ## Run with real agents
