@@ -320,10 +320,54 @@ function renderHeader() {
     return;
   }
   const m = s.metrics;
-  let pill = '<span class="pill muted">in progress</span>';
-  if (m?.last_verdict === 'PASS') pill = '<span class="pill ok">PASS ' + (m.last_aggregate ?? 0).toFixed(1) + '</span>';
-  else if (m?.last_verdict === 'PARTIAL') pill = '<span class="pill partial">PARTIAL ' + (m.last_aggregate ?? 0).toFixed(1) + '</span>';
-  else if (m?.last_verdict === 'FAIL' || m?.last_verdict === 'REJECT') pill = '<span class="pill err">' + m.last_verdict + ' ' + (m.last_aggregate ?? 0).toFixed(1) + '</span>';
+  // v0.5 PR-O1: derive header pill from the authoritative state classifier
+  // (server-side bootstrap.ts) + last verdict, NOT from a default "in progress"
+  // string. Bug being fixed: session 01KQNEYQT53P5JFGD0944NBZ9D had
+  // meta.json.status="done" + kind=done in transcript, but Studio's header
+  // showed "in progress" because no verdict had landed (FAIL was emitted but
+  // the metrics aggregator hadn't propagated last_verdict yet, OR the
+  // rollback path emits handoff.rollback without re-triggering verdict
+  // capture). The fix: when verdict is absent, fall back to s.state from
+  // the server's classifier (live / idle / interrupted / abandoned /
+  // terminal) — those names already carry the right semantics, no need to
+  // invent "in progress" as a sentinel.
+  let pill;
+  if (m?.last_verdict === 'PASS') {
+    pill =
+      '<span class="pill ok">PASS ' +
+      (m.last_aggregate ?? 0).toFixed(1) +
+      '</span>';
+  } else if (m?.last_verdict === 'PARTIAL') {
+    pill =
+      '<span class="pill partial">PARTIAL ' +
+      (m.last_aggregate ?? 0).toFixed(1) +
+      '</span>';
+  } else if (m?.last_verdict === 'FAIL' || m?.last_verdict === 'REJECT') {
+    pill =
+      '<span class="pill err">' +
+      m.last_verdict +
+      ' ' +
+      (m.last_aggregate ?? 0).toFixed(1) +
+      '</span>';
+  } else if (s.state === 'live') {
+    pill = '<span class="pill live">LIVE</span>';
+  } else if (s.state === 'idle') {
+    pill = '<span class="pill muted">idle</span>';
+  } else if (s.state === 'interrupted') {
+    pill = '<span class="pill warn">interrupted</span>';
+  } else if (s.state === 'abandoned') {
+    pill = '<span class="pill muted">abandoned</span>';
+  } else if (s.state === 'terminal') {
+    // Terminal but no verdict captured — surface the done_reason so the
+    // operator can act (e.g., "token_exhausted" → resume with budget bump).
+    const reason = s.done_reason ? ' · ' + s.done_reason : '';
+    pill = '<span class="pill muted">done' + escapeHTML(reason) + '</span>';
+  } else if (m?.events) {
+    // Has events but no state classification yet — server response in flight.
+    pill = '<span class="pill muted">loading…</span>';
+  } else {
+    pill = '<span class="pill muted">queued</span>';
+  }
   $('header-title').innerHTML = pill + ' <span style="color:var(--ink-subtle); font-size:13px; font-family:ui-monospace,monospace;">' + escapeHTML(s.id) + '</span>';
   $('header-goal').textContent = s.goal ?? '(no goal recorded)';
   $('m-events').textContent = m ? m.events : '—';
