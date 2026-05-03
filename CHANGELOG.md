@@ -4,6 +4,21 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Fixed / Docs — token budget 5× + pre-verifier no-scoring frontier doc (PR-G1+G6) (2026-05-03)
+
+Live session `01KQNEYQT53P5JFGD0944NBZ9D` (Reba Berserker, 17-file Phaser 3.80 PWA) consumed 111,951 tokens before the verifier could even wake. The reducer's `TOKEN_BUDGET_HARD = 50_000` fired `done(token_exhausted)` mid-build → `state.done = true` → coordinator's `if (state.done) return;` (`src/loop/coordinator.ts:273`) skipped every subsequent reduce, including the verifier's `kind=judge.score`. Result: `validator/anti-deception.ts` never got invoked for that session — the `from='validator', kind='audit'` event was missing even though the verifier self-reported `audit_violations: ["self_bias_risk_same_provider"]` in its judge.score metadata. Root cause = budget too low, not the validator pipeline itself.
+
+`src/reducer/index.ts`:
+- `TOKEN_BUDGET_HOOK` 40_000 → **250_000** (soft hook)
+- `TOKEN_BUDGET_HARD` 50_000 → **300_000** (hard cap)
+- Sized for one full spec → multi-file build → qa_check → CourtEval verifier loop with ~30% headroom for one builder-fallback retry. `CRUMB_TOKEN_BUDGET_HOOK` / `CRUMB_TOKEN_BUDGET_HARD` env vars still override for short demos and CI.
+
+`wiki/synthesis/bagelcode-pre-verifier-no-scoring-frontier-2026-05-03.md` (NEW): synthesis answering "왜 planner / builder 중간에 LLM scoring 이 없냐" — short answer is that `qa_check` IS the pre-verifier ratchet (deterministic exec gate, not LLM). 5 frontier references (DeepSeek-R1 / Cognition / CourtEval / Huang ICLR 2024 / SWE-Bench top-10) + cheat sheet for the Bagelcode hiring panel question.
+
+`AGENTS.md` invariant #4 ("Three-layer scoring") now explicitly notes that the `qa_check` effect doubles as the pre-verifier ratchet — discovery path for evaluators who scan invariants first.
+
+Verification: `npm run lint && npm run typecheck && npm run format:check && npm test && npm run build` — 453 tests pass (no test pinned to the old budget; `grep TOKEN_BUDGET src/**/*.test.ts` returns 0).
+
 ### Changed — Custom binding UI polish + audit C2 parent_event_id wiring (2026-05-03)
 
 User feedback: "비활성화면 그냥 색만 지금처럼 페이드아웃시키면 되지 굳이 선을 그을 필요는 없어. ambient에 괄호를 열고닫을 필요도 없고 말이야." Plus closing the audit C2 P0 finding from the post-PR-#104 audit pass.

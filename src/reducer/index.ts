@@ -18,8 +18,21 @@ const CIRCUIT_OPEN_AT = 3;
 // v0.2.0 budget guardrails — hard caps. Wiki: bagelcode-budget-guardrails.md §"P0".
 const RESPEC_MAX = 3; // max # of spec.update events before done(too_many_respec)
 const VERIFY_MAX = 5; // max # of judge.score events before done(too_many_verify)
-const TOKEN_BUDGET_HOOK = Number(process.env.CRUMB_TOKEN_BUDGET_HOOK) || 40_000;
-const TOKEN_BUDGET_HARD = Number(process.env.CRUMB_TOKEN_BUDGET_HARD) || 50_000;
+// v0.4.2 — token budget defaults raised 5×. Live session 01KQNEYQT53P5JFGD0944NBZ9D
+// (Reba Berserker, multi-file PWA) consumed 111,951 tokens before the verifier
+// could even wake — builder alone emitted ~53KB of code (17 files) which cost
+// ~50K input + output tokens, blowing the 50K hard cap mid-build. The reducer
+// then emitted done(token_exhausted) → state.done=true → coordinator's
+// `if (state.done) return;` skipped every subsequent reduce, including the
+// verifier's judge.score, which means anti-deception (validator) never fired
+// for that session.
+//
+// New defaults: 250K hook, 300K hard. Sized for one full spec → multi-file
+// build → qa_check → CourtEval verifier loop with ~30% headroom for a single
+// builder-fallback retry. CRUMB_TOKEN_BUDGET_HOOK / CRUMB_TOKEN_BUDGET_HARD
+// env vars still override for short demos and CI.
+const TOKEN_BUDGET_HOOK = Number(process.env.CRUMB_TOKEN_BUDGET_HOOK) || 250_000;
+const TOKEN_BUDGET_HARD = Number(process.env.CRUMB_TOKEN_BUDGET_HARD) || 300_000;
 
 // v0.2.0 ratchet (autoresearch P4 keep/revert) — score regression beyond this many
 // aggregate points triggers done(ratchet_revert) to stop unbounded loops.
