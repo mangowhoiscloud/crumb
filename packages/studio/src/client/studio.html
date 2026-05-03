@@ -168,6 +168,7 @@
 
   <nav class="view-tabs" id="view-tabs">
     <button data-view="pipeline" class="active">Pipeline</button>
+    <button data-view="waterfall">Waterfall</button>
     <button data-view="logs">Logs</button>
     <button data-view="output">Output</button>
     <button data-view="transcript">Transcript</button>
@@ -200,6 +201,33 @@
       <svg class="dag-svg" id="dag-svg" viewBox="0 0 1100 320" preserveAspectRatio="xMidYMid meet"></svg>
     </section>
 
+  </div>
+
+  <!--
+    v0.5 PR-O3 — Waterfall view. Wall-clock-proportional spans per actor,
+    Datadog APM / Chrome DevTools Performance / Jaeger trace convention.
+    Bars are click-through to the same right-rail detail panel as Pipeline.
+    Hover → tooltip with kind / latency / tokens / cost. Empty in absence
+    of agent.wake → agent.stop pairs (no spans yet to draw).
+  -->
+  <div class="view-pane" id="view-waterfall">
+    <section class="waterfall" id="waterfall-section">
+      <div class="waterfall-toolbar">
+        <span class="waterfall-toolbar-label">Wall-clock waterfall</span>
+        <span class="waterfall-toolbar-hint" id="waterfall-hint">click any bar for detail · hover for tooltip</span>
+        <span style="flex:1;"></span>
+        <span class="waterfall-toolbar-axis" id="waterfall-axis">—</span>
+      </div>
+      <div class="waterfall-body" id="waterfall-body">
+        <div class="empty" id="waterfall-empty">Waiting for spawn spans…</div>
+      </div>
+      <!--
+        Tooltip is positioned absolutely; populated by JS on bar hover.
+        pointer-events: none so it doesn't steal hover from the bar
+        beneath it (Chrome DevTools Performance convention).
+      -->
+      <div id="waterfall-tooltip" class="waterfall-tooltip" style="display:none;"></div>
+    </section>
   </div>
 
   <div class="view-pane" id="view-logs">
