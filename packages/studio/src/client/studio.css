@@ -112,7 +112,13 @@ html, body {
   height: 100%;
 }
 
-body { display: grid; grid-template-columns: var(--sessions-w, 240px) 4px 1fr; height: 100vh; }
+body { display: grid; grid-template-columns: var(--sessions-w, 240px) 4px 1fr; height: 100vh; transition: grid-template-columns 220ms ease; }
+/* F4 — collapsed sidebar: zero out both the sessions column and the resize
+ * handle column; CSS transition above carries the slide. JS toggles the
+ * data attribute on click + persists in localStorage (crumb.sessions-collapsed). */
+body[data-sidebar-collapsed="1"] { grid-template-columns: 0 0 1fr; }
+body[data-sidebar-collapsed="1"] aside.sessions { overflow: hidden; visibility: hidden; }
+body[data-sidebar-collapsed="1"] .resize-handle-sessions { display: none; }
 
 /* Draggable resize handles — Mac/Windows native-feel split bars. */
 .resize-handle {
@@ -290,10 +296,33 @@ header.summary {
   border-bottom: 1px solid var(--hairline);
   padding: 16px 24px;
   display: grid;
-  grid-template-columns: 1fr auto;
+  /* F4 — third column added for the sidebar-toggle hamburger. */
+  grid-template-columns: auto 1fr auto;
   gap: 16px;
   align-items: center;
   background: var(--surface-1);
+}
+/* F4 — sidebar collapse hamburger. Lives in the header so it's reachable
+ * even after the sidebar collapses to width 0. Industry-standard ☰ glyph. */
+.sidebar-toggle {
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--ink-muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 6px 10px;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.sidebar-toggle:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+  border-color: var(--hairline-strong);
+}
+.sidebar-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 header.summary h1 {
   font-size: 22px;
