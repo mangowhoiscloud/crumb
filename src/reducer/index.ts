@@ -500,12 +500,16 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
       //   Command(goto)). Skips the normal routing.
       // data.swap: { from, to } — adapter override (Paperclip "swap agent" pattern).
       // data.reset_circuit: clear circuit_breaker for the named actor (or all).
+      // data.cancel: SIGTERM the live spawn for the named actor (or 'all'). v0.4.2
+      //   — emits cancel_spawn effect; live dispatcher fires the AbortController.
+      //   Lossy: kills mid-edit, partial artifacts left as-is.
       const data = (event.data ?? {}) as {
         target_actor?: Actor;
         goto?: Actor;
         swap?: { from: Actor; to: string };
         reset_circuit?: Actor | true;
         sandwich_append?: string;
+        cancel?: Actor | 'all';
       };
 
       // Always record the intervention as a fact, but tag with the target actor when given.
@@ -536,6 +540,24 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           ...next.progress_ledger.adapter_override,
           [data.swap.from]: data.swap.to,
         };
+      }
+
+      // v0.4.2 — user-driven mid-spawn cancel. Emits a cancel_spawn effect
+      // that the live dispatcher translates into `controller.abort()` →
+      // SIGTERM on the running subprocess. Per-actor when data.cancel is an
+      // Actor name; whole-session when 'all'. Frontier consensus (12-system
+      // survey: bagelcode-nl-intervention-12-systems-2026-05-02): only
+      // IDE-plugin tier (Cline / Continue / Cursor) wires AbortSignal into
+      // the LLM stream, all three with documented cancellation-leak bugs.
+      // Crumb's cooperative-checkpoint default stays — this is opt-in via
+      // an explicit /cancel verb so the lossy mid-edit kill is the user's
+      // choice, not the harness's.
+      if (data.cancel) {
+        effects.push({
+          type: 'cancel_spawn',
+          actor: data.cancel,
+          reason: event.body ? `user-requested cancel: ${event.body}` : 'user-requested cancel',
+        });
       }
 
       // G6 — circuit breaker reset for the named actor (or all if `true`).

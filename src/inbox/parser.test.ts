@@ -212,4 +212,39 @@ describe('inbox parser', () => {
       body: '/unknown some args',
     });
   });
+
+  it('/cancel @<actor> <reason> emits user.intervene with data.cancel=<actor>', () => {
+    const m = parseInboxLine('/cancel @builder taking too long', SID);
+    expect(m).toMatchObject({
+      kind: 'user.intervene',
+      body: 'taking too long',
+      data: { cancel: 'builder' },
+    });
+  });
+
+  it('/cancel @<actor> alone (no reason) still emits cancel for that actor', () => {
+    const m = parseInboxLine('/cancel @verifier', SID);
+    expect(m).toMatchObject({
+      kind: 'user.intervene',
+      data: { cancel: 'verifier' },
+    });
+    expect((m as { body?: string }).body).toBeUndefined();
+  });
+
+  it('bare /cancel cancels all active spawns', () => {
+    const m = parseInboxLine('/cancel', SID);
+    expect(m).toMatchObject({
+      kind: 'user.intervene',
+      data: { cancel: 'all' },
+    });
+  });
+
+  it('/cancel <reason> (no @actor) cancels all with reason in body', () => {
+    const m = parseInboxLine('/cancel panic abort', SID);
+    expect(m).toMatchObject({
+      kind: 'user.intervene',
+      body: 'panic abort',
+      data: { cancel: 'all' },
+    });
+  });
 });
