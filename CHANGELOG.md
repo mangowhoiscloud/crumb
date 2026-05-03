@@ -4,6 +4,10 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Docs — Studio handoff page (2026-05-03)
+
+`wiki/synthesis/bagelcode-studio-handoff-2026-05-03.md` — comprehensive handoff for the next session/stream picking up Studio work. Captures: live state (running server / `main` HEAD), today's PR ledger (open + merged), post-#145/#146 architecture summary (4-pane layout + theme system + observability layers), prioritized pending work (F4 / F5 / F6 / PR-O3 / PR-O4 / PR-O5 / W2 / W3 / W4), worktree filesystem snapshot, 6 known pitfalls (CI registration delay, `crumb-dash` cruft, font fallback, splitter convention, scorecard radar token reads, light-theme actor lane discipline), inheritor decision tree, and critical references read order. No code changes.
+
 ### Added — CRUMB STUDIO branding wordmark + light (default) / dark theme system (F3) (2026-05-03)
 
 The studio chrome was previously dark-only with a Linear-style violet accent. F3 introduces a brand-derived light theme as the new default, preserves the existing dark palette under `[data-theme="dark"]`, and adds a top-left wordmark + theme toggle. All design tokens documented in the new `design.md` at the repo root.
