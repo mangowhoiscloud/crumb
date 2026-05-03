@@ -4,6 +4,50 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Scorecard hybrid + Datadog-grade event detail (PR-K + PR-K') (2026-05-03)
+
+Two coordinated studio surface upgrades:
+
+**PR-K — Scorecard hybrid (Candidate S4 from frontier eval-UI survey)**
+Replaces the flat 6-cell scorecard with three coordinated views:
+- **Composite headline** (`23.0 / 30 PARTIAL ↗ +2.0 vs prev`) — single number / 30 + verdict pill + delta vs previous judge.score
+- **80×80 radar** (CourtEval ACL 2025 spider plot, 6-axis polar)
+- **6-row drilldown** — per-dim bar + value + source badge (LLM / QA / AUTO color-coded). When `audit_violations` present, the original score is shown strikethrough with a red `⚑ -15% self-bias` (or rule-specific) trail next to the corrected value. Rules covered: 1 (verify_pass_without_exec_zero), 2 (D2 override), 3 (D4 override), 4 (self_bias_score_discounted), 5 (researcher_video_evidence_missing), 7 (verify_pass_with_ac_failure).
+
+Empty state: `— / 30 awaiting verifier` + radar gray outline + dim row placeholders.
+
+**PR-K' — Datadog-grade event detail panel**
+Per user feedback ("event detail 에 들어가는 정보를 사용자 고려해서 고도화 — Datadog grade 로 만들거야"):
+
+1. **Group paginator removed → kind-wide horizontal card spread**. Clicking ANY chip (single or grouped) now spreads ALL events of that kind across the session as horizontal scrollable cards (frontier rationale: Datadog log-row "filter by service" / Sentry trace-span "filter by op" expectation). Each card shows actor + ts + audit banner + tag pills + resource line (`↻ ms / ⇄ tok / $ cost`) + body + data + per-card copy button. Mark-as-read still uses the consecutive-run cursor (per-actor lane semantics) so cross-actor accidental marks don't happen.
+
+2. **Single-event panel — tag pills + audit banner + resource breakdown bar + copy buttons.** Tags follow Honeycomb attribute facet pattern (kind/from/provider/model/harness/deterministic/cross_provider with key:value layout). Audit banner surfaces anti-deception violations inline in red. Resource bar visualizes cache_read / tokens_in / tokens_out as a horizontal stack proportional to total, with cost / latency / cache_w secondary cells below. Copy `⧉` buttons inline with each `<h3>` for Body / Data / event id.
+
+`packages/studio/src/client/studio.html` — restructured detail panel: header has title + group badge + position + thread nav. Body split into `#detail-body-single` (Datadog-style structured panel) and `#detail-body-spread` (horizontal cards) — only one visible at a time per `showDetail()` mode.
+
+`packages/studio/src/client/studio.js`:
+- New `renderScorecard()` rewriting + `renderEmpty()` + `sumDims()` + `deriveSanitizeNote(dim, violations)` + `renderComposite()` + `renderRadar(records)` + `renderDimRow(r)`. New constants `DIM_NAMES` + `SOURCE_BADGE`.
+- `showDetail(id, groupIds)` rewritten — branches single vs spread on `groupIds.length > 1`.
+- New `renderDetailSingle(evt)` + `renderResourceBar(evt)` + `renderDetailGroupSpread(events, groupIds)` + `renderSpreadCard(evt)` + `copyToClipboard(text)`.
+- Chip click handler in `renderSwimlane()` widened to kind-wide group: derives `kindIds = sessionEvts.filter(e => e.kind === clicked.kind)` and passes that as `showDetail`'s second arg.
+- Removed `renderDetailGroupNav()` + `navDetailGroup()` (group paginator) — superseded by spread view.
+- Keyboard ←/→ now always steps cross-event (group paginator gone).
+
+`packages/studio/src/client/studio.css`:
+- New `.scorecard-strip` 3-column grid (140 / 92 / 1fr) with 900px breakpoint to wrap.
+- New `.sc-composite` / `.sc-headline` / `.sc-verdict-pill` (PASS green / PARTIAL amber / FAIL red) / `.sc-delta` styles.
+- New `.sc-radar-svg` + `.sc-radar-grid` / `.sc-radar-axis` / `.sc-radar-axis-label` / `.sc-radar-data` (color-mix in oklab on `--primary`).
+- New `.sc-row*` drilldown styles + `.sc-row-source` source badge variants (`src-llm` / `src-qa` / `src-auto`) + `.sc-row-trail` audit trail pill.
+- New `.detail-tag*` tag pill styles (Honeycomb facet pattern) + `.tag-deterministic` (lime) + `.tag-cross-provider` (amber) variants.
+- New `.detail-audit-banner` red strip + `.rbar*` resource breakdown styles + `.detail-copy-btn` inline ⧉ button.
+- New `.detail-body-spread` horizontal cards layout — `display:flex; overflow-x:auto; scroll-snap-type:x proximity` with 320px-wide `.spread-card` items. Card sub-styles: `.spread-card-header` (actor glyph + ts + copy button) / `.spread-card-audit` (red strip) / `.spread-card-resource` (latency / tokens / cost row) / `.spread-card-body` + `.spread-card-data` (`<pre>` with max-height + overflow).
+- Removed `.detail-group-nav` / `.detail-group-btn` / `.detail-group-pos` (paginator styles).
+- Removed `.scorecard-strip .dim` / `.label` / `.value` / `.source` (old flat scorecard).
+
+Layout polish: any pre-existing main-side layout regressions get organic recovery here since the studio HTML/CSS surface is restructured top-to-bottom for both the scorecard bar and the detail panel.
+
+Verification: `npm run lint && npm run typecheck && npm run format:check && npm test && npm run build` — 466 tests pass. Studio HTML re-inlined (~239KB). Live verified at http://127.0.0.1:7321/.
+
 ### Added — DAG runtime data overlay: per-actor badges + edge throughput/latency encoding (PR-J') (2026-05-03)
 
 PR-J (chip-swimlane → Gantt waterfall) was abandoned per user feedback ("main 의 chip 디자인 마음에 듦"). Replaced with the lighter-touch Candidate 4 from the same frontier observability survey: keep main's chip event dashboard intact, instead bind runtime data onto the existing DAG nodes + edges. Frontier convergence: LangSmith / Langfuse / Phoenix per-step token + cost + latency badges (under-node), Datadog Service Map throughput-as-thickness (edge), AWS X-Ray latency-as-color (slow edges turn red).

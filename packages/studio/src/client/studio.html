@@ -290,33 +290,38 @@
   -->
   <div class="detail-header">
     <button class="close" id="detail-close" aria-label="Close detail">×</button>
-    <h3 id="detail-title">Event detail</h3>
-    <div id="detail-pipeline-pos" style="font-size:11px;color:var(--ink-subtle);margin-bottom:8px;font-family:ui-monospace,monospace;"></div>
-    <!--
-      v0.5 PR-9 — cross-actor event paginator (←/→ over all session events,
-      chronological). Always visible when the panel is open; lets the user
-      step through every transcript event regardless of actor lane.
-    -->
-    <div id="detail-event-nav" class="detail-event-nav" style="display:none;"></div>
-    <div id="detail-nav" style="display:flex;gap:6px;margin-bottom:8px;">
-      <button id="detail-prev" style="background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);padding:3px 10px;border-radius:var(--r-sm);font-size:11px;cursor:pointer;">↑ parent</button>
-      <button id="detail-next" style="background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);padding:3px 10px;border-radius:var(--r-sm);font-size:11px;cursor:pointer;">↓ children</button>
+    <div class="detail-title-row">
+      <h3 id="detail-title">Event detail</h3>
+      <span id="detail-group-badge" class="detail-group-badge" style="display:none;"></span>
     </div>
-    <!--
-      v0.5 PR-7 — group paginator. Hidden by default; shown only when the
-      user opened a multi-event chip (consecutive same-kind events on one
-      actor lane). ←/→ buttons + keyboard shortcuts page through the group.
-    -->
-    <div id="detail-group-nav" class="detail-group-nav" style="display:none;"></div>
+    <div id="detail-pipeline-pos" class="detail-pipeline-pos"></div>
+    <!-- PR-K' — cross-actor event paginator stays for single-event nav -->
+    <div id="detail-event-nav" class="detail-event-nav" style="display:none;"></div>
+    <div id="detail-nav" class="detail-thread-nav">
+      <button id="detail-prev" class="detail-nav-btn">↑ parent</button>
+      <button id="detail-next" class="detail-nav-btn">↓ children</button>
+    </div>
   </div>
-  <div class="detail-body">
+
+  <!-- PR-K' single-event view — Datadog-style structured panel -->
+  <div class="detail-body" id="detail-body-single">
+    <div id="detail-tags" class="detail-tags"></div>
+    <div id="detail-audit-banner" class="detail-audit-banner" style="display:none;"></div>
+    <h3>Timing &amp; cost</h3>
+    <div id="detail-resource-bar" class="detail-resource-bar"></div>
     <pre id="detail-meta"></pre>
-    <h3>Body</h3>
+    <h3>
+      Body
+      <button class="detail-copy-btn" id="detail-copy-body" title="Copy">⧉</button>
+    </h3>
     <pre id="detail-body"></pre>
-    <h3>Data</h3>
+    <h3>
+      Data
+      <button class="detail-copy-btn" id="detail-copy-data" title="Copy JSON">⧉</button>
+    </h3>
     <pre id="detail-data"></pre>
     <h3>Conversation thread (parent → this → children)</h3>
-    <div id="detail-thread" style="font-size:11px;font-family:ui-monospace,monospace;max-height:200px;overflow:auto;border:1px solid var(--hairline);border-radius:var(--r-md);padding:8px;background:var(--canvas);"></div>
+    <div id="detail-thread" class="detail-thread"></div>
     <h3>Sandwich preview</h3>
     <div id="sandwich-actor-bar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
     <pre id="sandwich-content" style="display:none;max-height:360px;overflow:auto;"></pre>
@@ -326,6 +331,13 @@
       <button id="detail-msg-send" style="background:var(--primary);color:var(--ink);border:none;border-radius:var(--r-md);padding:6px 12px;font-size:11px;cursor:pointer;">Send</button>
     </div>
     <div id="detail-msg-feedback" style="font-size:10px;color:var(--ink-subtle);margin-top:4px;font-family:ui-monospace,monospace;min-height:12px;"></div>
+  </div>
+
+  <!-- PR-K' multi-event spread view — horizontal cards, one per event in
+       the grouped chip. Hidden until showDetail() opens a group. -->
+  <div class="detail-body detail-body-spread" id="detail-body-spread" style="display:none;">
+    <div id="detail-spread-toolbar" class="detail-spread-toolbar"></div>
+    <div id="detail-spread-cards" class="detail-spread-cards"></div>
   </div>
 </aside>
 

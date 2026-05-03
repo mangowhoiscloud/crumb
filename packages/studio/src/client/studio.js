@@ -388,22 +388,33 @@ function renderSwimlane() {
   root.innerHTML = lanes.join('');
   root.querySelectorAll('.evt').forEach((el) => {
     el.addEventListener('click', () => {
-      // data-group-ids is a comma-joined string. Single-event chips have a
-      // 1-id list; multi-event groups have N. Pass the list to showDetail
-      // so it can wire the paginator.
-      const groupIds = (el.dataset.groupIds ?? '').split(',').filter(Boolean);
-      const startId = groupIds[0] ?? el.dataset.id;
+      // PR-K' (option α): click semantics widened — any chip click now
+      // shows ALL events of that kind across the session, not just the
+      // consecutive group the chip represents. Frontier rationale: users
+      // expect "click on agent.wake" → "see all agent.wake", same as
+      // Datadog log-row "filter by service" or Sentry trace-span "filter
+      // by op". The chip's count badge still shows the consecutive run
+      // for visual rhythm (PR-7 intent), but click expands to kind-wide.
+      const consecutiveIds = (el.dataset.groupIds ?? '').split(',').filter(Boolean);
+      const startId = consecutiveIds[0] ?? el.dataset.id;
       const actor = el.dataset.actor;
-      // Slack-style mark-as-read: clicking acknowledges the entire chip
-      // (single or grouped). Cursor advances to the LATEST event id in
-      // the group, so the badge clears in one click. Frontier convention
-      // — Slack channel click marks all visible messages read; GitHub
-      // notification click clears the dot.
-      const latestId = groupIds[groupIds.length - 1] ?? el.dataset.id;
+      const sessionEvts = eventCache.get(activeSession) ?? [];
+      const startEvt = sessionEvts.find((e) => e.id === startId);
+      const kind = startEvt?.kind;
+      // Kind-wide group: all events with same kind in this session,
+      // chronologically ordered (transcript is already ULID-sorted).
+      const kindIds = kind
+        ? sessionEvts.filter((e) => e.kind === kind).map((e) => e.id)
+        : [startId];
+      // Slack-style mark-as-read: cursor advances to LATEST id in the
+      // *consecutive* run (per-actor lane semantics), not the kind-wide
+      // spread — otherwise clicking an actor's agent.wake chip would
+      // also clear another actor's agent.wake unread badge, which would
+      // confuse the per-lane reading mental model.
+      const latestId = consecutiveIds[consecutiveIds.length - 1] ?? el.dataset.id;
       markRead(activeSession, actor, latestId);
-      // Re-render the lanes so the badge clears immediately.
       renderSwimlane();
-      showDetail(startId, groupIds.length > 1 ? groupIds : null);
+      showDetail(startId, kindIds.length > 1 ? kindIds : null);
     });
   });
 }
@@ -548,27 +559,236 @@ function renderEvtCell(group, isLast, cursor) {
   );
 }
 
+/**
+ * PR-K — Scorecard hybrid (Candidate S4 from frontier eval-UI survey).
+ * Three coordinated views in one bar:
+ *   1. composite headline  — single number / 30 + verdict pill + delta vs prev
+ *   2. radar (60×60 SVG)   — 6-axis spider plot, CourtEval paper convention
+ *   3. drilldown rows      — per-dim bar + source badge + sanitize trail
+ *                            (~~5.0~~→4.25 self_bias_discounted)
+ *
+ * Sources of truth (from src/protocol/types.ts Scores + src/validator/anti-deception.ts):
+ *   - lastJudge.scores.D1..D6.score  → numeric value
+ *   - lastJudge.scores.D1..D6.source → 'verifier-llm' / 'qa-check-effect' / 'reducer-auto'
+ *   - lastJudge.scores.audit_violations[] → sanitize trail context
+ *   - lastJudge.data.audit_violations    → reducer's separate from='validator' record
+ *
+ * Sanitize trail derivation: when audit_violations contains
+ *   - 'verify_pass_without_exec_zero'  → D2 was forced to 0
+ *   - 'verifier_overrode_d2_ground_truth' → D2 was forced to qa.result
+ *   - 'self_bias_score_discounted'        → D1, D3, D5 were × 0.85
+ *   - 'researcher_video_evidence_missing' → D5 was forced to 0
+ *   - 'verify_pass_with_ac_failure'       → D1 capped at 2
+ * The original (pre-sanitize) value is not in the transcript today, so we
+ * compute the *expected* original from the rule + show it as a strikethrough
+ * (best-effort visualization; if reducer ever stamps `pre_sanitize` per-dim
+ * we'll switch to that).
+ */
+const DIM_NAMES = {
+  D1: 'spec_fit',
+  D2: 'exec',
+  D3: 'schema',
+  D4: 'reflection',
+  D5: 'quality',
+  D6: 'portability',
+};
+const SOURCE_BADGE = {
+  'verifier-llm': { label: 'LLM', cls: 'src-llm' },
+  'qa-check-effect': { label: 'QA', cls: 'src-qa' },
+  'reducer-auto': { label: 'AUTO', cls: 'src-auto' },
+};
+
 function renderScorecard() {
   const root = $('scorecard');
-  const events = activeSession ? eventCache.get(activeSession) ?? [] : [];
-  const lastJudge = [...events].reverse().find(e => e.kind === 'judge.score' || e.kind === 'verify.result');
-  const dims = ['D1','D2','D3','D4','D5','D6'];
+  const events = activeSession ? (eventCache.get(activeSession) ?? []) : [];
+  const judges = events.filter((e) => e.kind === 'judge.score' || e.kind === 'verify.result');
+  const lastJudge = judges[judges.length - 1];
+  const prevJudge = judges[judges.length - 2];
+  const dims = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'];
+
   if (!lastJudge?.scores) {
-    root.innerHTML = dims.map(d => dimCard(d, null, null)).join('');
+    root.innerHTML = renderEmpty(dims);
     return;
   }
-  root.innerHTML = dims.map(d => {
+
+  // Build structured per-dim records (score + source + violation flags).
+  const violations = lastJudge.scores?.audit_violations ?? lastJudge.data?.audit_violations ?? [];
+  const dimRecords = dims.map((d) => {
     const dim = lastJudge.scores[d];
-    return dimCard(d, dim?.score, dim?.source);
-  }).join('');
+    return {
+      key: d,
+      name: DIM_NAMES[d],
+      score: typeof dim?.score === 'number' ? dim.score : null,
+      source: dim?.source ?? null,
+      sanitized: deriveSanitizeNote(d, violations),
+    };
+  });
+
+  // Composite + delta + verdict
+  const aggregate = lastJudge.scores?.aggregate ?? sumDims(dimRecords);
+  const verdict = lastJudge.scores?.verdict ?? null;
+  const prevAgg = prevJudge?.scores?.aggregate ?? null;
+  const delta = prevAgg != null ? aggregate - prevAgg : null;
+
+  root.innerHTML =
+    '<div class="sc-composite">' + renderComposite(aggregate, verdict, delta) + '</div>' +
+    '<div class="sc-radar">' + renderRadar(dimRecords) + '</div>' +
+    '<div class="sc-rows">' + dimRecords.map(renderDimRow).join('') + '</div>';
 }
 
-function dimCard(label, score, source) {
-  return '<div class="dim">' +
-    '<div class="label">' + label + '</div>' +
-    '<div class="value">' + (score == null ? '—' : score.toFixed(1)) + '</div>' +
-    '<div class="source">' + (source ?? '—') + '</div>' +
-  '</div>';
+function renderEmpty(dims) {
+  return (
+    '<div class="sc-composite sc-empty"><div class="sc-headline">— / 30</div>' +
+    '<div class="sc-verdict-pill sc-verdict-pending">awaiting verifier</div></div>' +
+    '<div class="sc-radar">' + renderRadar(dims.map((d) => ({ key: d, score: null }))) + '</div>' +
+    '<div class="sc-rows">' +
+    dims
+      .map(
+        (d) =>
+          '<div class="sc-row sc-row-empty">' +
+          '<span class="sc-row-key">' + d + '</span>' +
+          '<span class="sc-row-name">' + DIM_NAMES[d] + '</span>' +
+          '<span class="sc-row-bar"><span class="sc-row-bar-fill" style="width:0%"></span></span>' +
+          '<span class="sc-row-value">—</span>' +
+          '<span class="sc-row-source">—</span>' +
+          '</div>',
+      )
+      .join('') +
+    '</div>'
+  );
+}
+
+function sumDims(records) {
+  return records.reduce((a, r) => a + (typeof r.score === 'number' ? r.score : 0), 0);
+}
+
+/**
+ * Per-rule sanitize note. Returns null when no rule altered this dim.
+ * Format: { note: '15% self-bias', original?: number }
+ */
+function deriveSanitizeNote(dim, violations) {
+  if (!violations || violations.length === 0) return null;
+  if (dim === 'D2') {
+    if (violations.includes('verify_pass_without_exec_zero')) return { note: 'forced 0 (Rule 1)' };
+    if (violations.includes('verifier_overrode_d2_ground_truth')) return { note: 'forced to qa (Rule 2)' };
+  }
+  if (dim === 'D4' && violations.includes('verifier_overrode_d4_ground_truth')) {
+    return { note: 'forced to auto (Rule 3)' };
+  }
+  if ((dim === 'D1' || dim === 'D3' || dim === 'D5') && violations.includes('self_bias_score_discounted')) {
+    return { note: '−15% self-bias' };
+  }
+  if (dim === 'D5' && violations.includes('researcher_video_evidence_missing')) {
+    return { note: 'forced 0 (Rule 5)' };
+  }
+  if (dim === 'D1' && violations.includes('verify_pass_with_ac_failure')) {
+    return { note: 'cap 2 (Rule 7)' };
+  }
+  return null;
+}
+
+function renderComposite(aggregate, verdict, delta) {
+  const aggStr = aggregate != null ? aggregate.toFixed(1) + ' / 30' : '— / 30';
+  const verdictCls = verdict ? 'sc-verdict-' + verdict.toLowerCase() : 'sc-verdict-pending';
+  const verdictTxt = verdict ?? 'pending';
+  let deltaSpan = '';
+  if (delta != null && delta !== 0) {
+    const sign = delta > 0 ? '↗' : '↘';
+    const cls = delta > 0 ? 'sc-delta-up' : 'sc-delta-down';
+    deltaSpan =
+      '<div class="sc-delta ' + cls + '">' +
+      sign + ' ' + (delta > 0 ? '+' : '') + delta.toFixed(1) +
+      '<span class="sc-delta-label"> vs prev</span></div>';
+  }
+  return (
+    '<div class="sc-headline">' + escapeHTML(aggStr) + '</div>' +
+    '<div class="sc-verdict-pill ' + verdictCls + '">' + escapeHTML(verdictTxt) + '</div>' +
+    deltaSpan
+  );
+}
+
+/**
+ * 6-axis radar (CourtEval paper convention). 60×60 SVG, points at fixed
+ * polar coords; missing scores plot at radius 0 (origin) so the empty
+ * polygon collapses cleanly.
+ */
+function renderRadar(records) {
+  const W = 80;
+  const H = 80;
+  const cx = W / 2;
+  const cy = H / 2;
+  const R = 30;
+  const N = 6;
+  // Polar position at axis i (i=0 is top, clockwise)
+  const axisPoint = (i, frac) => {
+    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / N;
+    return [cx + Math.cos(angle) * R * frac, cy + Math.sin(angle) * R * frac];
+  };
+  // Concentric grid (3 levels at 1/3, 2/3, 1)
+  const gridSvg = [1 / 3, 2 / 3, 1]
+    .map((f) => {
+      const pts = Array.from({ length: N }, (_, i) => axisPoint(i, f).join(','));
+      return '<polygon class="sc-radar-grid" points="' + pts.join(' ') + '" />';
+    })
+    .join('');
+  // Axis lines + labels
+  const axesSvg = records
+    .map((r, i) => {
+      const [x, y] = axisPoint(i, 1.18);
+      const [x0, y0] = axisPoint(i, 1);
+      return (
+        '<line class="sc-radar-axis" x1="' + cx + '" y1="' + cy + '" x2="' + x0 + '" y2="' + y0 + '" />' +
+        '<text class="sc-radar-axis-label" x="' + x + '" y="' + (y + 3) + '">' + r.key + '</text>'
+      );
+    })
+    .join('');
+  // Data polygon
+  const dataPts = records
+    .map((r, i) => {
+      const frac = typeof r.score === 'number' ? r.score / 5 : 0;
+      return axisPoint(i, frac).join(',');
+    })
+    .join(' ');
+  const hasData = records.some((r) => typeof r.score === 'number');
+  return (
+    '<svg class="sc-radar-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">' +
+    gridSvg +
+    axesSvg +
+    (hasData ? '<polygon class="sc-radar-data" points="' + dataPts + '" />' : '') +
+    '</svg>'
+  );
+}
+
+function renderDimRow(r) {
+  const score = typeof r.score === 'number' ? r.score : null;
+  const valueDisplay = score == null ? '—' : score.toFixed(1);
+  const fillPct = score != null ? Math.max(0, Math.min(100, (score / 5) * 100)) : 0;
+  const srcInfo = r.source ? SOURCE_BADGE[r.source] : null;
+  const srcSpan = srcInfo
+    ? '<span class="sc-row-source ' + srcInfo.cls + '" title="' + escapeHTML(r.source) + '">' + srcInfo.label + '</span>'
+    : '<span class="sc-row-source">—</span>';
+  let valueSpan = '<span class="sc-row-value">' + escapeHTML(valueDisplay) + '</span>';
+  let trailSpan = '';
+  if (r.sanitized) {
+    valueSpan =
+      '<span class="sc-row-value sc-row-value-sanitized">' + escapeHTML(valueDisplay) + '</span>';
+    trailSpan =
+      '<span class="sc-row-trail" title="' +
+      escapeHTML(r.sanitized.note) +
+      '">⚑ ' +
+      escapeHTML(r.sanitized.note) +
+      '</span>';
+  }
+  return (
+    '<div class="sc-row">' +
+    '<span class="sc-row-key">' + r.key + '</span>' +
+    '<span class="sc-row-name">' + r.name + '</span>' +
+    '<span class="sc-row-bar"><span class="sc-row-bar-fill" style="width:' + fillPct.toFixed(1) + '%"></span></span>' +
+    valueSpan +
+    srcSpan +
+    trailSpan +
+    '</div>'
+  );
 }
 
 /**
@@ -584,53 +804,31 @@ function showDetail(id, groupIds) {
   const evt = events.find((e) => e.id === id);
   if (!evt) return;
 
-  // Wire / refresh the group paginator.
-  if (groupIds && groupIds.length > 1) {
-    const idx = groupIds.indexOf(id);
-    detailGroup = { ids: groupIds, index: idx >= 0 ? idx : 0 };
-  } else if (
-    detailGroup &&
-    detailGroup.ids.includes(id) &&
-    detailGroup.ids.length > 1
-  ) {
-    // Re-entry into the same group (e.g., paginator nudge) — keep the
-    // group, just sync the index.
-    detailGroup.index = detailGroup.ids.indexOf(id);
+  // PR-K' — group spread view replaces the paginator. When the user opens
+  // a multi-event chip, we render ALL events as horizontal cards inside
+  // the (resizable) detail panel; user can drag the panel wider to see
+  // more cards side-by-side. Single-event chips show the legacy detail
+  // structured panel.
+  const isGroup = groupIds && groupIds.length > 1;
+  if (isGroup) {
+    detailGroup = { ids: groupIds, index: groupIds.indexOf(id) };
+    renderDetailGroupSpread(events, groupIds);
+    $('detail-body-single').style.display = 'none';
+    $('detail-body-spread').style.display = '';
+    const badge = $('detail-group-badge');
+    badge.style.display = '';
+    badge.textContent = '× ' + groupIds.length;
+    $('detail-title').textContent = evt.kind + ' (' + groupIds.length + ' events)';
   } else {
     detailGroup = null;
+    renderDetailSingle(evt);
+    $('detail-body-spread').style.display = 'none';
+    $('detail-body-single').style.display = '';
+    $('detail-group-badge').style.display = 'none';
+    $('detail-title').textContent = 'Event detail';
   }
 
-  const fields = [
-    'id: ' + evt.id,
-    'ts: ' + evt.ts,
-    'from: ' + evt.from + (evt.to ? ' → ' + evt.to : ''),
-    'kind: ' + evt.kind,
-    evt.parent_event_id ? 'parent: ' + evt.parent_event_id : '',
-    evt.metadata?.harness ? 'harness: ' + evt.metadata.harness : '',
-    evt.metadata?.provider ? 'provider: ' + evt.metadata.provider : '',
-    evt.metadata?.model ? 'model: ' + evt.metadata.model : '',
-    evt.metadata?.tokens_in != null
-      ? 'tokens: ' +
-        evt.metadata.tokens_in +
-        ' → ' +
-        (evt.metadata.tokens_out ?? 0)
-      : '',
-    evt.metadata?.cost_usd != null
-      ? 'cost: $' + evt.metadata.cost_usd.toFixed(4)
-      : '',
-    evt.metadata?.latency_ms != null
-      ? 'latency: ' + evt.metadata.latency_ms + 'ms'
-      : '',
-  ]
-    .filter(Boolean)
-    .join('\\n');
-  $('detail-meta').textContent = fields;
-  $('detail-body').textContent = evt.body ?? '(empty)';
-  $('detail-data').textContent = evt.data
-    ? JSON.stringify(evt.data, null, 2)
-    : '(none)';
   currentDetailEvent = evt;
-  renderDetailGroupNav();
   renderDetailEventNav();
   renderSandwichBar();
   $('sandwich-content').style.display = 'none';
@@ -638,58 +836,207 @@ function showDetail(id, groupIds) {
 }
 
 /**
- * Group paginator UI — only visible when detailGroup is set. Shows
- * "← N/M →" plus the kind label and accepts ←/→ keyboard shortcuts via
- * the document-level handler below. WhatsApp/Slack message-thread
- * paginator + Datadog log facet pager convention.
+ * PR-K' — single-event detail view, Datadog-style structured panel.
+ * Tag pills + audit banner + token breakdown bar + meta + body + data
+ * + thread + sandwich + send-message all in one column.
  */
-function renderDetailGroupNav() {
-  const root = $('detail-group-nav');
-  if (!root) return;
-  if (!detailGroup) {
-    root.style.display = 'none';
-    root.innerHTML = '';
-    return;
-  }
-  const { ids, index } = detailGroup;
-  const kind =
-    eventCache.get(activeSession)?.find((e) => e.id === ids[index])?.kind ??
-    '?';
-  root.style.display = '';
-  root.innerHTML =
-    '<button id="detail-group-prev" class="detail-group-btn" ' +
-    (index === 0 ? 'disabled' : '') +
-    ' title="Previous in group (←)">←</button>' +
-    '<span class="detail-group-pos">' +
-    escapeHTML(kind) +
-    ' &nbsp;<strong>' +
-    (index + 1) +
-    '</strong>/' +
-    ids.length +
-    '</span>' +
-    '<button id="detail-group-next" class="detail-group-btn" ' +
-    (index === ids.length - 1 ? 'disabled' : '') +
-    ' title="Next in group (→)">→</button>';
-  const prev = document.getElementById('detail-group-prev');
-  const next = document.getElementById('detail-group-next');
-  if (prev) prev.addEventListener('click', () => navDetailGroup(-1));
-  if (next) next.addEventListener('click', () => navDetailGroup(1));
-}
+function renderDetailSingle(evt) {
+  // Tag pills (clickable, used as quick-filter chips later — for now
+  // they're informational; click-to-filter wires up in a follow-up).
+  const tags = [];
+  if (evt.kind) tags.push({ k: 'kind', v: evt.kind });
+  if (evt.from) tags.push({ k: 'from', v: evt.from });
+  if (evt.to) tags.push({ k: 'to', v: evt.to });
+  if (evt.metadata?.provider) tags.push({ k: 'provider', v: evt.metadata.provider });
+  if (evt.metadata?.model) tags.push({ k: 'model', v: evt.metadata.model });
+  if (evt.metadata?.harness) tags.push({ k: 'harness', v: evt.metadata.harness });
+  if (evt.metadata?.deterministic) tags.push({ k: 'tag', v: 'deterministic', cls: 'tag-deterministic' });
+  if (evt.metadata?.cross_provider) tags.push({ k: 'tag', v: 'cross_provider', cls: 'tag-cross-provider' });
+  $('detail-tags').innerHTML = tags
+    .map(
+      (t) =>
+        '<span class="detail-tag ' + (t.cls || '') + '" title="' + escapeHTML(t.k) + '=' + escapeHTML(t.v) + '">' +
+        '<span class="detail-tag-key">' + escapeHTML(t.k) + '</span>' +
+        '<span class="detail-tag-val">' + escapeHTML(t.v) + '</span>' +
+        '</span>',
+    )
+    .join('');
 
-function navDetailGroup(delta) {
-  if (!detailGroup) return;
-  const nextIdx = detailGroup.index + delta;
-  if (nextIdx < 0 || nextIdx >= detailGroup.ids.length) return;
-  detailGroup.index = nextIdx;
-  showDetail(detailGroup.ids[nextIdx], detailGroup.ids);
+  // Audit banner — when this event has audit_violations OR is a kind=audit event,
+  // surface it in red. Datadog's "anomaly" banner pattern.
+  const violations =
+    evt.metadata?.audit_violations ?? evt.scores?.audit_violations ?? evt.data?.violations ?? [];
+  const auditBanner = $('detail-audit-banner');
+  if (Array.isArray(violations) && violations.length > 0) {
+    auditBanner.style.display = '';
+    auditBanner.innerHTML =
+      '<strong>★ anti-deception</strong>' +
+      ' — ' + violations.map(escapeHTML).join(', ');
+  } else {
+    auditBanner.style.display = 'none';
+    auditBanner.innerHTML = '';
+  }
+
+  // Token + cost + latency breakdown bar — visual rather than text.
+  $('detail-resource-bar').innerHTML = renderResourceBar(evt);
+
+  // Compact meta block
+  const fields = [
+    'id      ' + evt.id,
+    'ts      ' + evt.ts,
+    'session ' + (evt.session_id ?? '?'),
+    evt.parent_event_id ? 'parent  ' + evt.parent_event_id : '',
+    evt.metadata?.tool ? 'tool    ' + evt.metadata.tool : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+  $('detail-meta').textContent = fields;
+  $('detail-body').textContent = evt.body ?? '(empty)';
+  $('detail-data').textContent = evt.data ? JSON.stringify(evt.data, null, 2) : '(none)';
+
+  // Wire copy buttons (rebound on every render so closure stays current)
+  const copyBody = $('detail-copy-body');
+  if (copyBody) copyBody.onclick = () => copyToClipboard(evt.body ?? '');
+  const copyData = $('detail-copy-data');
+  if (copyData)
+    copyData.onclick = () =>
+      copyToClipboard(evt.data ? JSON.stringify(evt.data, null, 2) : '');
 }
 
 /**
- * v0.5 PR-9 — cross-actor event paginator. Steps through every transcript
- * event for the active session, sorted chronologically (ULID order).
- * Coexists with the group paginator (PR-7); group ←/→ wins when a group
- * is active so the user can finish paging through a related run before
- * stepping to the next sibling event.
+ * Compact horizontal stack: cache_read | tokens_in | tokens_out, sized in
+ * proportion. Plus a separate row for cost + latency. Datadog APM
+ * "resource breakdown" pattern. Shown only when at least one number exists.
+ */
+function renderResourceBar(evt) {
+  const md = evt.metadata ?? {};
+  const tokIn = Number(md.tokens_in ?? 0);
+  const tokOut = Number(md.tokens_out ?? 0);
+  const cacheR = Number(md.cache_read ?? 0);
+  const total = tokIn + tokOut + cacheR;
+  const cost = md.cost_usd != null ? '$' + Number(md.cost_usd).toFixed(4) : '—';
+  const lat = md.latency_ms != null ? Number(md.latency_ms) + 'ms' : '—';
+  if (total === 0 && md.cost_usd == null && md.latency_ms == null) {
+    return '<div class="detail-resource-empty">no token / cost / latency on this event</div>';
+  }
+  const seg = (label, n, cls) => {
+    if (!n || total === 0) return '';
+    const pct = (n / total) * 100;
+    return (
+      '<div class="rbar-seg ' + cls + '" style="width:' + pct.toFixed(2) + '%" ' +
+      'title="' + label + ': ' + formatTokens(n) + '">' +
+      '<span class="rbar-seg-label">' + label + ' ' + formatTokens(n) + '</span>' +
+      '</div>'
+    );
+  };
+  const bar =
+    total > 0
+      ? '<div class="rbar">' +
+        seg('cache', cacheR, 'rbar-cache') +
+        seg('in', tokIn, 'rbar-in') +
+        seg('out', tokOut, 'rbar-out') +
+        '</div>'
+      : '<div class="rbar rbar-empty"><span>no tokens</span></div>';
+  return (
+    bar +
+    '<div class="rbar-meta">' +
+    '<span class="rbar-meta-cell"><span class="rbar-meta-k">cost</span>' + escapeHTML(cost) + '</span>' +
+    '<span class="rbar-meta-cell"><span class="rbar-meta-k">latency</span>' + escapeHTML(lat) + '</span>' +
+    (md.cache_write
+      ? '<span class="rbar-meta-cell"><span class="rbar-meta-k">cache_w</span>' +
+        formatTokens(md.cache_write) +
+        '</span>'
+      : '') +
+    '</div>'
+  );
+}
+
+/**
+ * PR-K' — group spread view. Renders all events in the group as
+ * horizontally-scrolling cards. The aside.detail container is already
+ * resizable (PR-2 resize-handle); user drags it wider to see more cards
+ * side-by-side. Each card is a compact, self-contained event preview
+ * with the same Datadog-grade metadata (tag pills, resource bar, body,
+ * data) the single-view shows.
+ */
+function renderDetailGroupSpread(events, groupIds) {
+  const groupEvts = groupIds.map((id) => events.find((e) => e.id === id)).filter(Boolean);
+  // Distinct actor count tells the user this is a kind-wide spread (PR-K' α)
+  // not just the consecutive lane group.
+  const distinctActors = new Set(groupEvts.map((e) => e.from)).size;
+  const actorSummary = distinctActors > 1 ? distinctActors + ' actors' : '';
+  $('detail-spread-toolbar').innerHTML =
+    '<span class="spread-toolbar-label">' +
+    'kind: ' + escapeHTML(groupEvts[0]?.kind ?? 'group') +
+    ' · ' + groupEvts.length + ' events' +
+    (actorSummary ? ' · ' + actorSummary : '') +
+    '</span>' +
+    '<span class="spread-toolbar-hint">Drag the panel edge to widen ↔</span>';
+  $('detail-spread-cards').innerHTML = groupEvts.map(renderSpreadCard).join('');
+  // Wire per-card copy buttons
+  $('detail-spread-cards').querySelectorAll('.spread-card-copy').forEach((btn) => {
+    btn.addEventListener('click', () => copyToClipboard(btn.dataset.text ?? ''));
+  });
+}
+
+function renderSpreadCard(evt) {
+  const md = evt.metadata ?? {};
+  const tagsHtml = [
+    md.provider ? '<span class="detail-tag"><span class="detail-tag-key">provider</span><span class="detail-tag-val">' + escapeHTML(md.provider) + '</span></span>' : '',
+    md.model ? '<span class="detail-tag"><span class="detail-tag-key">model</span><span class="detail-tag-val">' + escapeHTML(md.model) + '</span></span>' : '',
+    md.deterministic ? '<span class="detail-tag tag-deterministic"><span class="detail-tag-key">tag</span><span class="detail-tag-val">deterministic</span></span>' : '',
+  ].filter(Boolean).join('');
+  const violations = md.audit_violations ?? evt.scores?.audit_violations ?? [];
+  const banner = Array.isArray(violations) && violations.length > 0
+    ? '<div class="spread-card-audit">★ ' + violations.map(escapeHTML).join(', ') + '</div>'
+    : '';
+  const lat = md.latency_ms != null ? Number(md.latency_ms) + 'ms' : '—';
+  const tok = md.tokens_in != null
+    ? formatTokens(md.tokens_in) + '→' + formatTokens(md.tokens_out ?? 0)
+    : '—';
+  const cost = md.cost_usd != null ? '$' + Number(md.cost_usd).toFixed(4) : '—';
+  const dataPreview = evt.data ? JSON.stringify(evt.data, null, 2) : '';
+  return (
+    '<article class="spread-card" data-id="' + escapeHTML(evt.id) + '">' +
+    '<header class="spread-card-header">' +
+    '<span class="spread-card-actor"><span class="glyph" style="background:var(' + (ACTOR_VAR[evt.from] || '--ink-tertiary') + ');"></span>' + escapeHTML(evt.from || '?') + '</span>' +
+    '<span class="spread-card-ts">' + escapeHTML((evt.ts || '').split('T')[1]?.slice(0, 12) ?? '') + '</span>' +
+    '<button class="spread-card-copy" data-text="' + escapeHTML(evt.id) + '" title="Copy event id">⧉ id</button>' +
+    '</header>' +
+    banner +
+    '<div class="spread-card-tags">' + tagsHtml + '</div>' +
+    '<div class="spread-card-resource">' +
+    '<span title="latency"><strong>↻</strong>&nbsp;' + escapeHTML(lat) + '</span>' +
+    '<span title="tokens in→out"><strong>⇄</strong>&nbsp;' + escapeHTML(tok) + '</span>' +
+    '<span title="cost"><strong>$</strong>&nbsp;' + escapeHTML(cost) + '</span>' +
+    '</div>' +
+    '<div class="spread-card-body-label">body</div>' +
+    '<pre class="spread-card-body">' + escapeHTML(evt.body ?? '(empty)') + '</pre>' +
+    (dataPreview
+      ? '<div class="spread-card-body-label">data ' +
+        '<button class="spread-card-copy" data-text="' + escapeHTML(dataPreview) + '" title="Copy JSON">⧉</button>' +
+        '</div>' +
+        '<pre class="spread-card-data">' + escapeHTML(dataPreview) + '</pre>'
+      : '') +
+    '</article>'
+  );
+}
+
+function copyToClipboard(text) {
+  if (!text) return;
+  try {
+    navigator.clipboard?.writeText(text);
+  } catch {
+    // older browsers / non-https — silent
+  }
+}
+
+/**
+ * PR-K' — cross-actor event paginator. Steps through every transcript
+ * event for the active session, sorted chronologically (ULID order). The
+ * group paginator (PR-7) was REMOVED in PR-K' — opening a grouped chip
+ * now spreads ALL events as horizontal cards in `#detail-body-spread`
+ * (see `renderDetailGroupSpread`), so group nav is no longer needed.
  */
 function renderDetailEventNav() {
   const root = $('detail-event-nav');
@@ -741,20 +1088,17 @@ function navDetailEvent(delta) {
   showDetail(events[nextIdx].id, null);
 }
 
-// Keyboard ←/→ — group paginator wins when a group is active; otherwise
-// falls through to the cross-event paginator. Input / textarea focus is
-// guarded so typing isn't hijacked.
+// Keyboard ←/→ — cross-event paginator. PR-K' removed the group paginator
+// (groups now show as horizontal card spread instead), so ←/→ always
+// steps to the previous/next event in the session. Input / textarea
+// focus is guarded so typing isn't hijacked.
 document.addEventListener('keydown', (e) => {
   if (!$('detail')?.classList.contains('open')) return;
   const tag = (document.activeElement?.tagName ?? '').toLowerCase();
   if (tag === 'input' || tag === 'textarea') return;
   if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
   const delta = e.key === 'ArrowLeft' ? -1 : 1;
-  if (detailGroup) {
-    navDetailGroup(delta);
-  } else {
-    navDetailEvent(delta);
-  }
+  navDetailEvent(delta);
   e.preventDefault();
 });
 
