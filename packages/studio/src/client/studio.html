@@ -4,11 +4,50 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Crumb · Live Studio</title>
+<!--
+  PR-Branding (F3) — pre-paint theme bootstrap (FOUC prevention).
+  Runs before any CSS computes against tokens. Reads the persisted
+  preference (or OS preference if absent) and sets data-theme on
+  <html> so the :root vs [data-theme="dark"] palette resolves
+  correctly on first paint. No-op for users who have an explicit
+  preference.
+-->
+<script>
+(function () {
+  try {
+    var stored = localStorage.getItem('crumb.theme');
+    var auto = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.dataset.theme = stored || auto;
+  } catch (e) {
+    // localStorage may be blocked; default to light (matches :root).
+    document.documentElement.dataset.theme = 'light';
+  }
+})();
+</script>
 <style>__CSS__</style>
 </head>
 <body>
 
 <aside class="sessions" id="sessions-pane">
+  <!--
+    PR-Branding (F3) — Crumb wordmark. Inline SVG bread silhouette + 3 crumb
+    dots (simplified from the logo glyph). currentColor + var(--primary) so
+    the mark recolors with theme. Wordmark uses font-family "Crumb Brand"
+    cascade defined in studio.css @font-face.
+  -->
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true" fill="none">
+      <!-- Bread loaf silhouette: rounded trapezoid base + dome top -->
+      <path d="M5 11c0-3 2.5-5 7-5s7 2 7 5v6c0 1.5-1 2.5-2.5 2.5h-9C6 19.5 5 18.5 5 17z"
+            fill="currentColor" />
+      <!-- Crumb dots dropping bottom-left -->
+      <circle cx="3.5" cy="20.5" r="1" fill="currentColor" opacity="0.9" />
+      <circle cx="2" cy="22" r="0.6" fill="currentColor" opacity="0.7" />
+      <circle cx="5" cy="22" r="0.5" fill="currentColor" opacity="0.6" />
+    </svg>
+    <span class="brand-text">CRUMB<span class="brand-suffix">STUDIO</span></span>
+  </div>
+
   <div class="sessions-header">
     <h2>Adapters</h2>
     <button id="adapter-refresh" class="icon-btn" title="Re-probe installed adapters">↻</button>
@@ -134,6 +173,10 @@
     <button data-view="transcript">Transcript</button>
     <span style="flex:1;"></span>
     <button id="resume-btn" class="resume-btn" style="display:none;" title="Re-spawn the last interrupted actor">▶ Resume</button>
+    <!-- PR-Branding (F3) — theme toggle. Glyph swapped by JS to match
+         current state (☀ when on dark = "switch to light", 🌙 when on
+         light). Persists choice in localStorage 'crumb.theme'. -->
+    <button id="theme-toggle" class="theme-toggle" type="button" title="Toggle light / dark theme">🌙</button>
   </nav>
 
   <div class="view-pane active" id="view-pipeline">

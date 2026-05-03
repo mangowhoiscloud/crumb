@@ -3183,6 +3183,48 @@ setActiveView = function(view) {
   if (view === 'output') refreshOutputTab();
 };
 
+// ─── v0.5 PR-Branding (F3) — theme toggle wiring ──────────────────────
+//
+// Pre-paint bootstrap script in <head> already set
+// document.documentElement.dataset.theme on first load (light by default,
+// dark via localStorage 'crumb.theme' or prefers-color-scheme: dark).
+// This block (a) syncs the toggle button glyph to current state on boot,
+// (b) flips on click + writes localStorage, (c) watches OS preference
+// changes for users without an explicit override.
+(function initThemeToggle() {
+  const btn = document.getElementById('theme-toggle');
+  const html = document.documentElement;
+  const currentTheme = () => (html.dataset.theme === 'dark' ? 'dark' : 'light');
+  const updateGlyph = () => {
+    if (btn) btn.textContent = currentTheme() === 'dark' ? '☀' : '🌙';
+  };
+  updateGlyph();
+
+  if (btn) {
+    btn.addEventListener('click', () => {
+      const next = currentTheme() === 'dark' ? 'light' : 'dark';
+      html.dataset.theme = next;
+      try { localStorage.setItem('crumb.theme', next); } catch {}
+      updateGlyph();
+    });
+  }
+
+  // Follow OS preference changes ONLY when no explicit override is stored.
+  if (window.matchMedia) {
+    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (e) => {
+      let stored = null;
+      try { stored = localStorage.getItem('crumb.theme'); } catch {}
+      if (!stored) {
+        html.dataset.theme = e.matches ? 'dark' : 'light';
+        updateGlyph();
+      }
+    };
+    if (mql.addEventListener) mql.addEventListener('change', onChange);
+    else if (mql.addListener) mql.addListener(onChange);
+  }
+})();
+
 // ─── v3.5 Studio hardening: resize, dismiss, resume, transcript ───────
 
 // (1) Draggable pane resize. Persists widths in localStorage so a refresh
