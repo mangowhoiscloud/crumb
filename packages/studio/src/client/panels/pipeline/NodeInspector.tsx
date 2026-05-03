@@ -7,7 +7,7 @@
  * recomputes scores or rollups; we just shape the existing fields).
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   setSelectedNodeActor,
   useActiveSession,
@@ -156,6 +156,8 @@ export function NodeInspector() {
           {description}
         </div>
       </Section>
+
+      <SandwichWidget sessionId={sessionId} actor={actor} />
 
       <Section title="Live metrics (per-actor)">
         {totals ? (
@@ -437,4 +439,138 @@ function formatMs(ms?: number): string {
 
 function truncate(s: string, n: number): string {
   return s.length <= n ? s : s.slice(0, n - 1) + '…';
+}
+
+/**
+ * Sandwich preview — assembled system prompt the host CLI received via
+ * `--append-system-prompt` for this actor's most recent spawn. Lives at
+ * `~/.crumb/projects/<pid>/sessions/<sid>/agent-workspace/<actor>/sandwich.assembled.md`
+ * on disk; served read-only by `GET /api/sessions/:id/sandwich/:actor`.
+ *
+ * Collapsed by default (large bodies are 80–200 KB). Click to fetch +
+ * expand. Reading the system prompt is a frequent debug move so it's
+ * the second card under Identity.
+ */
+function SandwichWidget({
+  sessionId,
+  actor,
+}: {
+  sessionId: string | null;
+  actor: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [body, setBody] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Reset on session / actor change so the widget never shows stale.
+  useEffect(() => {
+    setOpen(false);
+    setBody(null);
+    setError(null);
+  }, [sessionId, actor]);
+
+  const load = async (): Promise<void> => {
+    if (!sessionId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch(
+        `/api/sessions/${encodeURIComponent(sessionId)}/sandwich/${encodeURIComponent(actor)}`,
+      );
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setBody(await r.text());
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggle = (): void => {
+    const next = !open;
+    setOpen(next);
+    if (next && body == null && !loading) void load();
+  };
+
+  return (
+    <Section
+      title={`Injected prompt (sandwich) ${body ? `· ${(body.length / 1024).toFixed(1)} KB` : ''}`}
+    >
+      <button
+        type="button"
+        onClick={toggle}
+        style={{
+          all: 'unset',
+          cursor: 'pointer',
+          fontSize: 11,
+          fontFamily: 'var(--font-mono)',
+          color: 'var(--ink-muted)',
+          padding: '4px 8px',
+          border: '1px solid var(--hairline)',
+          borderRadius: 'var(--r-sm)',
+          background: 'var(--surface-1)',
+          width: '100%',
+          textAlign: 'left',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        <span aria-hidden style={{ color: 'var(--ink-tertiary)' }}>
+          {open ? '▾' : '▸'}
+        </span>
+        <span>
+          {open ? 'hide' : 'view'} sandwich.assembled.md
+        </span>
+        <span style={{ flex: 1 }} />
+        {loading && <span style={{ color: 'var(--ink-tertiary)', fontSize: 10 }}>loading…</span>}
+      </button>
+      {open && error && (
+        <div
+          style={{
+            marginTop: 6,
+            fontSize: 11,
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--audit-fg)',
+          }}
+        >
+          error · {error}
+        </div>
+      )}
+      {open && body != null && (
+        <pre
+          style={{
+            marginTop: 6,
+            padding: 'var(--space-2) var(--space-3)',
+            background: 'var(--surface-card)',
+            border: '1px solid var(--hairline-soft)',
+            borderRadius: 'var(--r-sm)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            lineHeight: 1.45,
+            color: 'var(--ink-muted)',
+            maxHeight: 360,
+            overflow: 'auto',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            margin: 0,
+          }}
+        >
+          {body}
+        </pre>
+      )}
+      {open && !loading && body == null && !error && (
+        <div
+          style={{
+            marginTop: 6,
+            fontSize: 11,
+            color: 'var(--ink-tertiary)',
+          }}
+        >
+          (no content)
+        </div>
+      )}
+    </Section>
+  );
 }
