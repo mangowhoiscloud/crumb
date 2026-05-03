@@ -4,6 +4,36 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — 4-pane studio layout + Datadog-grade scorecard hybrid + event detail spread (PR-K + PR-K' + Layout fix) (2026-05-03)
+
+Composite of three previously-separate strands, merged into one cohesive UI overhaul:
+
+1. **Scorecard hybrid (PR-K)** — replaces the 6-flat-cell row at the top of the active session with a 3-column hybrid: composite headline (`23.0 / 30` big number + verdict pill PASS/PARTIAL/FAIL + delta `↗ +2.0 vs prev`), 80×80 CourtEval radar (6-axis spider plot), and 6-row drilldown (`D1 spec_fit ████░ 4.5 LLM`). Anti-deception-flagged dims show strikethrough (~~5.0~~ ⚑ -15% self-bias). Pulled from `feature/scorecard-hybrid-radar` (`ff47a8e`).
+2. **Event detail spread (PR-K')** — group-spread for swimlane chip ×N badges. Click a grouped chip → horizontal multi-card spread within the right rail (replaces the prior `← 1/3 →` paginator). Single-event detail gets Datadog-grade fields: tag pills (kind/from/provider/model/harness/deterministic/cross_provider), audit banner (anti-deception violations), resource-breakdown bar (cache green / in purple / out cyan stacked + cost/latency/cache_w sublabels), copy buttons (body / data / event id ⧉). Same source.
+3. **4-pane vertical layout (Layout fix)** — restores the broken layout from the W-Studio-A regression. Swimlane is moved OUT of `#view-pipeline` to its own top-level pane, with three splitter handles between the four logical regions:
+
+```
+┌────────────────────────────────────┐
+│ view-pane (absorber, flex:1)        │  Pipeline | Logs | Output | Transcript
+├──── #splitter-view-swim ────────────┤  4px row-resize, single-var
+│ swimlane (--swimlane-h, default 200)│  event view (chips per actor)
+├──── #splitter-swim-narr ────────────┤  4px row-resize, two-var (total preserved)
+│ narrative (--narrative-h, default 220) │  agent narrative (stream-json bubbles)
+├──── #splitter-narr-feed ────────────┤  4px row-resize, two-var
+│ feed (--feed-h, default 180)        │  live execution feed
+└────────────────────────────────────┘
+```
+
+**Splitter convention** (industry-standard, Linear / VSCode / Datadog): drag UP → upper narrows, drag DOWN → lower narrows. Single-var splitters (between absorber and a fixed pane) modify only the lower pane's height; two-var splitters (between two fixed panes) modify both adjacent panes inversely so the boundary moves while the total panes-height is preserved (view-pane absorber stays put). 80 px floors per pane prevent collapse; 70 vh ceilings prevent overlap.
+
+**Persistence**: `localStorage.crumb.pane.{swimlane,narrative,feed}-h` (px ints). One-shot migration shim from legacy `crumb.narrative-h` (W-Studio-A) → `crumb.pane.narrative-h`.
+
+**Restored from main**: `FEED_FORMATTERS` table (18 per-kind formatters from PR #140 W-Studio-A) was regressed by the scorecard branch's older base — re-applied verbatim so the live feed keeps its Datadog-grade per-kind rendering.
+
+`packages/studio/src/client/studio.{html,css,js}` — see commit diff for the full delta.
+
+Verification: `npm run lint:all && npm run typecheck && npm run format:check && npm test && npm run build` — 466/466 tests pass, lint clean. Studio HTML re-inlined to ~256 KB. Live verified at http://127.0.0.1:7321/.
+
 ### Docs — Pre-verifier-no-scoring page: explicit LLM-judge vs deterministic-gate distinction + Anthropic cache numbers (W1) (2026-05-03)
 
 `wiki/synthesis/bagelcode-pre-verifier-no-scoring-frontier-2026-05-03.md` was originally written to deflect reviewer questions about why intermediate phases (spec, design) lack scoring. The page implicitly conflated "no scoring at all" with "no LLM scoring", because the only scoring that *was* present (`qa_check`) was discussed under its own heading. Reviewers reading the TL;DR table can mistake the "(none)" cell on the planner-lead row as "no gate is allowed" rather than "no LLM gate is allowed". After the post-merge token-quality audit and the 10-system frontier survey on "step-gate-with-cached-retry", this distinction was made load-bearing.
