@@ -1,0 +1,65 @@
+%%{init: {
+  'theme': 'default',
+  'themeVariables': {
+    'fontSize': '13px',
+    'fontFamily': 'ui-sans-serif, system-ui, sans-serif',
+    'lineColor': '#5e6ad2',
+    'primaryColor': '#dbeafe',
+    'primaryBorderColor': '#3b82f6',
+    'primaryTextColor': '#1e293b',
+    'secondaryColor': '#fef3c7',
+    'secondaryBorderColor': '#f59e0b',
+    'tertiaryColor': '#dcfce7',
+    'tertiaryBorderColor': '#22c55e',
+    'clusterBkg': '#f8fafc',
+    'clusterBorder': '#cbd5e1'
+  }
+}}%%
+flowchart LR
+    User{{user}} -->|goal| Coord((coordinator))
+    Coord -->|spawn| Planner((planner-lead))
+    Planner <-->|handoff / step.research| Researcher((researcher))
+    Planner -->|spec| Builder((builder))
+    Builder -->|build| QaCheck[/qa_check/]
+    QaCheck -->|qa.result| Verifier((verifier))
+    Fallback((builder-fallback)) -.->|build| QaCheck
+
+    Verifier -.->|judge.score| Validator[/validator/]
+    Verifier ==>|PASS| Done([done])
+    Verifier -.->|FAIL deviation=Important / Minor| Builder
+    Verifier -.->|FAIL deviation=Critical| Planner
+    Verifier -.->|FAIL circuit OPEN| Fallback
+    Done -->|↻ resume| Coord
+
+    User -. @actor / goto .-> Planner
+    User -. @actor / goto .-> Builder
+    User -. @actor / goto .-> Verifier
+
+    subgraph spec[A · Spec]
+      Planner
+      Researcher
+    end
+    subgraph build[B · Build]
+      Builder
+      Fallback
+    end
+    subgraph qa[C · QA ground truth]
+      QaCheck
+    end
+    subgraph verify[D · Verify]
+      Verifier
+      Validator
+    end
+    subgraph done_phase[E · Done]
+      Done
+    end
+
+    classDef llm fill:#dbeafe,stroke:#3b82f6,color:#1e293b;
+    classDef effect fill:#dcfce7,stroke:#22c55e,color:#166534,stroke-width:2px;
+    classDef terminal fill:#fef3c7,stroke:#f59e0b,color:#92400e,stroke-dasharray:3 2;
+    classDef ext fill:#f1f5f9,stroke:#94a3b8,color:#334155;
+
+    class Planner,Researcher,Builder,Fallback,Verifier,Coord llm;
+    class QaCheck,Validator effect;
+    class Done terminal;
+    class User ext;

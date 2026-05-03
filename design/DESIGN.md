@@ -187,6 +187,83 @@ The studio inlines two design systems chosen from
 - Detail panel 420px overlay (right side), dismissible via `×` or Esc.
 - Scorecard fixed 6-column grid below swimlane, always visible.
 
+## 5.5 Pipeline DAG (top of the Pipeline tab)
+
+The Pipeline tab opens with a **layered control-flow DAG** rendered as inline
+SVG (no external library — keeps the zero-CDN constraint). The DAG is the
+visual contract for the post-PR-G reducer routing: every edge is grounded
+against `src/reducer/index.ts` and every node maps to one of `src/protocol/types.ts:Actor`
+or to a deterministic effect runner.
+
+Canonical Mermaid source: `wiki/diagrams/pipeline-v0.4.mmd` (mirrors the
+studio DAG exactly — if you change one, change both).
+
+### Layout
+
+```
+┌─ A · Spec ─────┐ ┌─ B · Build ────┐ ┌─ C · QA ─┐ ┌─ D · Verify ─┐ ┌─ E · Done ─┐
+│ planner-lead   │ │ builder        │ │          │ │ verifier     │ │            │
+│      ↕         │ │      ↑         │ │ qa_check │ │      ↓       │ │   done     │
+│ researcher     │ │ builder-       │ │ (effect) │ │ validator    │ │            │
+│                │ │  fallback      │ │          │ │ (effect)     │ │            │
+└────────────────┘ └────────────────┘ └──────────┘ └──────────────┘ └────────────┘
+                                                                       ↻ resume
+user (diamond) ─→ coordinator ─→ planner-lead ─→ ... ─→ done ─↻─→ coordinator
+```
+
+5 phases × 1100×320 viewport. Phases are color-coded translucent rectangles so
+the eye groups the actors without losing edge contrast.
+
+### Node shapes (semantic)
+
+| Shape | Meaning | Examples |
+|---|---|---|
+| circle | LLM-driven actor (spawns a subprocess) | coordinator, planner-lead, researcher, builder, builder-fallback, verifier |
+| hexagon | deterministic effect (no LLM) | qa_check, validator |
+| diamond | external input | user |
+| rounded box (dashed) | terminal | done |
+
+### Eight edge types
+
+| Edge | Color / stroke | When |
+|---|---|---|
+| `flow` | indigo solid | standard handoff / spawn |
+| `respawn` | blue dashed | Important/Minor deviation → rebuild same actor (PR-G2) |
+| `rollback` | amber dashed | Critical deviation → planner-lead respec |
+| `fallback` | red dashed | circuit OPEN → builder-fallback (different LLM) |
+| `terminal` | green solid | verifier PASS → done |
+| `audit` | pink dotted | anti-deception side-effect (conditional) |
+| `intervene` | gray dotted | user.intervene goto / @actor shorthand (PR-G7-A) |
+| `resume` | cyan solid | done → re-enter loop (PR-G7-B) |
+
+### Live behavior
+
+- **Active node** (last actor that emitted an event) glows lime with a
+  `drop-shadow(0 0 6px var(--lime))`.
+- **Recent nodes** (last 8 events' senders) get a `--primary` stroke at 2px.
+- **Edge ripples** — each new event replays the matching edge as a 1.5s
+  dashed-outline pulse, so the user sees the routing decision animate
+  through the graph in real time. Verdict-based ripples respect the post-PR-G
+  routing (default Important → builder respawn, NOT planner).
+- **Legend** above the SVG documents the 8 edge types + 3 shapes. Always
+  visible — frontier UX (Anthropic Console, Vertex Trace Viewer) keeps the
+  legend on-screen rather than hover-only.
+
+### Why this design
+
+1. **Accuracy over compactness.** The pre-v0.4.2 DAG had `verifier → planner-lead`
+   as the only FAIL edge, which was wrong post-PR-G. Three feedback edges
+   (Important / Critical / circuit-OPEN) all visible at once is the only
+   honest representation.
+2. **Inline SVG, not Mermaid runtime.** Mermaid 11+ is ~3MB JS — violates the
+   zero-CDN/zero-build invariant. Hand-rolled SVG is ~250 LOC and renders
+   instantly even on first paint. The Mermaid source still ships under
+   `wiki/diagrams/` for static documentation rendering (mermaid.live editor).
+3. **Phase-banded layout, not force-directed.** A force-directed layout
+   reflows on every render and confuses the spatial memory the user builds
+   over a long session. Fixed layered grid keeps the planner in the same
+   place every render.
+
 ## 6. Module map (file-level spec)
 
 ```
