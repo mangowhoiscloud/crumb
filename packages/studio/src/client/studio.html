@@ -283,35 +283,50 @@
 
 <aside class="detail" id="detail">
   <div class="resize-handle resize-handle-detail" id="detail-resize" title="Drag to resize detail pane"></div>
-  <button class="close" id="detail-close" aria-label="Close detail">×</button>
-  <h3 id="detail-title">Event detail</h3>
-  <div id="detail-pipeline-pos" style="font-size:11px;color:var(--ink-subtle);margin-bottom:8px;font-family:ui-monospace,monospace;"></div>
-  <div id="detail-nav" style="display:flex;gap:6px;margin-bottom:8px;">
-    <button id="detail-prev" style="background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);padding:3px 10px;border-radius:var(--r-sm);font-size:11px;cursor:pointer;">↑ parent</button>
-    <button id="detail-next" style="background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);padding:3px 10px;border-radius:var(--r-sm);font-size:11px;cursor:pointer;">↓ children</button>
-  </div>
   <!--
-    v0.5 PR-7 — group paginator. Hidden by default; shown only when the
-    user opened a multi-event chip (consecutive same-kind events on one
-    actor lane). ←/→ buttons + keyboard shortcuts page through the group.
+    v0.5 PR-9 — sticky header (close + paginators + title). User feedback:
+    close button must NOT scroll out of reach. Header pinned at top:0
+    inside the panel; .detail-body below scrolls independently.
   -->
-  <div id="detail-group-nav" class="detail-group-nav" style="display:none;"></div>
-  <pre id="detail-meta"></pre>
-  <h3>Body</h3>
-  <pre id="detail-body"></pre>
-  <h3>Data</h3>
-  <pre id="detail-data"></pre>
-  <h3>Conversation thread (parent → this → children)</h3>
-  <div id="detail-thread" style="font-size:11px;font-family:ui-monospace,monospace;max-height:200px;overflow:auto;border:1px solid var(--hairline);border-radius:var(--r-md);padding:8px;background:var(--canvas);"></div>
-  <h3>Sandwich preview</h3>
-  <div id="sandwich-actor-bar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
-  <pre id="sandwich-content" style="display:none;max-height:360px;overflow:auto;"></pre>
-  <h3>Send message to this actor</h3>
-  <div style="display:flex;gap:6px;">
-    <input type="text" id="detail-msg" placeholder="@actor or /command or text" style="flex:1;background:var(--canvas);color:var(--ink);border:1px solid var(--hairline);border-radius:var(--r-md);padding:6px 10px;font-family:ui-monospace,monospace;font-size:12px;outline:none;">
-    <button id="detail-msg-send" style="background:var(--primary);color:var(--ink);border:none;border-radius:var(--r-md);padding:6px 12px;font-size:11px;cursor:pointer;">Send</button>
+  <div class="detail-header">
+    <button class="close" id="detail-close" aria-label="Close detail">×</button>
+    <h3 id="detail-title">Event detail</h3>
+    <div id="detail-pipeline-pos" style="font-size:11px;color:var(--ink-subtle);margin-bottom:8px;font-family:ui-monospace,monospace;"></div>
+    <!--
+      v0.5 PR-9 — cross-actor event paginator (←/→ over all session events,
+      chronological). Always visible when the panel is open; lets the user
+      step through every transcript event regardless of actor lane.
+    -->
+    <div id="detail-event-nav" class="detail-event-nav" style="display:none;"></div>
+    <div id="detail-nav" style="display:flex;gap:6px;margin-bottom:8px;">
+      <button id="detail-prev" style="background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);padding:3px 10px;border-radius:var(--r-sm);font-size:11px;cursor:pointer;">↑ parent</button>
+      <button id="detail-next" style="background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);padding:3px 10px;border-radius:var(--r-sm);font-size:11px;cursor:pointer;">↓ children</button>
+    </div>
+    <!--
+      v0.5 PR-7 — group paginator. Hidden by default; shown only when the
+      user opened a multi-event chip (consecutive same-kind events on one
+      actor lane). ←/→ buttons + keyboard shortcuts page through the group.
+    -->
+    <div id="detail-group-nav" class="detail-group-nav" style="display:none;"></div>
   </div>
-  <div id="detail-msg-feedback" style="font-size:10px;color:var(--ink-subtle);margin-top:4px;font-family:ui-monospace,monospace;min-height:12px;"></div>
+  <div class="detail-body">
+    <pre id="detail-meta"></pre>
+    <h3>Body</h3>
+    <pre id="detail-body"></pre>
+    <h3>Data</h3>
+    <pre id="detail-data"></pre>
+    <h3>Conversation thread (parent → this → children)</h3>
+    <div id="detail-thread" style="font-size:11px;font-family:ui-monospace,monospace;max-height:200px;overflow:auto;border:1px solid var(--hairline);border-radius:var(--r-md);padding:8px;background:var(--canvas);"></div>
+    <h3>Sandwich preview</h3>
+    <div id="sandwich-actor-bar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+    <pre id="sandwich-content" style="display:none;max-height:360px;overflow:auto;"></pre>
+    <h3>Send message to this actor</h3>
+    <div style="display:flex;gap:6px;">
+      <input type="text" id="detail-msg" placeholder="@actor or /command or text" style="flex:1;background:var(--canvas);color:var(--ink);border:1px solid var(--hairline);border-radius:var(--r-md);padding:6px 10px;font-family:ui-monospace,monospace;font-size:12px;outline:none;">
+      <button id="detail-msg-send" style="background:var(--primary);color:var(--ink);border:none;border-radius:var(--r-md);padding:6px 12px;font-size:11px;cursor:pointer;">Send</button>
+    </div>
+    <div id="detail-msg-feedback" style="font-size:10px;color:var(--ink-subtle);margin-top:4px;font-family:ui-monospace,monospace;min-height:12px;"></div>
+  </div>
 </aside>
 
 <script>__JS__</script>

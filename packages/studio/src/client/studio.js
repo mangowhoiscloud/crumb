@@ -585,7 +585,9 @@ function showDetail(id, groupIds) {
   $('detail-data').textContent = evt.data
     ? JSON.stringify(evt.data, null, 2)
     : '(none)';
+  currentDetailEvent = evt;
   renderDetailGroupNav();
+  renderDetailEventNav();
   renderSandwichBar();
   $('sandwich-content').style.display = 'none';
   $('detail').classList.add('open');
@@ -638,20 +640,78 @@ function navDetailGroup(delta) {
   showDetail(detailGroup.ids[nextIdx], detailGroup.ids);
 }
 
-// Keyboard ←/→ for group pagination — only fires when the detail panel is
-// open and not focused on an input/textarea (so typing isn't hijacked).
+/**
+ * v0.5 PR-9 — cross-actor event paginator. Steps through every transcript
+ * event for the active session, sorted chronologically (ULID order).
+ * Coexists with the group paginator (PR-7); group ←/→ wins when a group
+ * is active so the user can finish paging through a related run before
+ * stepping to the next sibling event.
+ */
+function renderDetailEventNav() {
+  const root = $('detail-event-nav');
+  if (!root) return;
+  const evt = currentDetailEvent;
+  if (!activeSession || !evt) {
+    root.style.display = 'none';
+    root.innerHTML = '';
+    return;
+  }
+  const events = eventCache.get(activeSession) ?? [];
+  const idx = events.findIndex((e) => e.id === evt.id);
+  if (idx < 0) {
+    root.style.display = 'none';
+    root.innerHTML = '';
+    return;
+  }
+  root.style.display = '';
+  root.innerHTML =
+    '<button id="detail-event-prev" class="detail-event-btn" ' +
+    (idx === 0 ? 'disabled' : '') +
+    ' title="Previous event in session (←)">←</button>' +
+    '<span class="detail-event-pos">event &nbsp;<strong>' +
+    (idx + 1) +
+    '</strong>/' +
+    events.length +
+    '</span>' +
+    '<button id="detail-event-next" class="detail-event-btn" ' +
+    (idx === events.length - 1 ? 'disabled' : '') +
+    ' title="Next event in session (→)">→</button>';
+  document
+    .getElementById('detail-event-prev')
+    ?.addEventListener('click', () => navDetailEvent(-1));
+  document
+    .getElementById('detail-event-next')
+    ?.addEventListener('click', () => navDetailEvent(1));
+}
+
+function navDetailEvent(delta) {
+  if (!activeSession) return;
+  const events = eventCache.get(activeSession) ?? [];
+  const evt = currentDetailEvent;
+  if (!evt) return;
+  const idx = events.findIndex((e) => e.id === evt.id);
+  if (idx < 0) return;
+  const nextIdx = idx + delta;
+  if (nextIdx < 0 || nextIdx >= events.length) return;
+  // Stepping out of a group resets the group paginator state.
+  showDetail(events[nextIdx].id, null);
+}
+
+// Keyboard ←/→ — group paginator wins when a group is active; otherwise
+// falls through to the cross-event paginator. Input / textarea focus is
+// guarded so typing isn't hijacked.
 document.addEventListener('keydown', (e) => {
-  if (!detailGroup) return;
   if (!$('detail')?.classList.contains('open')) return;
   const tag = (document.activeElement?.tagName ?? '').toLowerCase();
   if (tag === 'input' || tag === 'textarea') return;
-  if (e.key === 'ArrowLeft') {
-    navDetailGroup(-1);
-    e.preventDefault();
-  } else if (e.key === 'ArrowRight') {
-    navDetailGroup(1);
-    e.preventDefault();
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  const delta = e.key === 'ArrowLeft' ? -1 : 1;
+  if (detailGroup) {
+    navDetailGroup(delta);
+  } else {
+    navDetailEvent(delta);
   }
+  e.preventDefault();
 });
 
 function renderSandwichBar() {
@@ -1416,7 +1476,19 @@ function selectLogActor(actor) {
   }
 
   // 2. Snapshot fetch with AbortSignal.
-  setLogsState('connecting', `loading ${actor}…`);
+  // v0.5 PR-9: debounce the visible 'connecting' transition. User feedback
+  // — actor switches were briefly painting amber even on fast (<150ms)
+  // snapshot responses. Frontier convention (Linear / Datadog facet
+  // panels): hold the previous state for ~150ms; if the new state lands
+  // within that window we never repaint to the intermediate "connecting"
+  // chrome. Slow responses (network hiccup) still surface amber as
+  // expected.
+  const debounceTimer = setTimeout(() => {
+    if (myToken === logsCtl.token && logsCtl.state !== 'streaming') {
+      setLogsState('connecting', `loading ${actor}…`);
+    }
+  }, 150);
+
   logsCtl.abortCtl = new AbortController();
   fetch(
     '/api/sessions/' + encodeURIComponent(activeSession) +
@@ -1425,12 +1497,14 @@ function selectLogActor(actor) {
   )
     .then((r) => r.text())
     .then((text) => {
+      clearTimeout(debounceTimer);
       // 3. STALE GUARD — user clicked another actor / session in flight.
       if (myToken !== logsCtl.token) return;
       logBuffer.push({ kind: 'snapshot', file: 'snapshot', text });
       openLogStream(actor, myToken);
     })
     .catch((err) => {
+      clearTimeout(debounceTimer);
       if (err.name === 'AbortError') return; // expected on token bump
       if (myToken !== logsCtl.token) return;
       setLogsState('errored', `snapshot failed: ${err.message}`);
@@ -1569,7 +1643,18 @@ function renderLogsConnStatus(state, msg) {
   const pill = $('logs-conn-status');
   if (!pill) return;
   pill.className = 'logs-conn-status state-' + state;
-  const labelByState = {
+  // v0.5 PR-9 — when SSE is up, derive the label from real actor lifecycle
+  // state pulled from the transcript, not just "live". User feedback:
+  // the pill should reflect what the actor is doing right now, not
+  // merely "the SSE pipe is open".
+  //   - actor produced events in last 30s          → "live · streaming"
+  //   - last event is 'agent.stop' / 'done'         → "live · idle (done)"
+  //   - last event is 'error'                       → "live · errored"
+  //   - actor has no events yet                     → "live · waiting"
+  // Other states (idle / connecting / stalled / errored) keep their
+  // default labels — those are network-layer conditions, not actor
+  // lifecycle, so mixing semantics would confuse readers.
+  const baseLabels = {
     idle: 'pick session',
     'awaiting-actor': 'pick actor',
     connecting: 'connecting',
@@ -1577,12 +1662,31 @@ function renderLogsConnStatus(state, msg) {
     stalled: 'stalled',
     errored: 'disconnected',
   };
+  let label = baseLabels[state] ?? state;
+  if (state === 'streaming' && activeLogActor && activeSession) {
+    const events = (eventCache.get(activeSession) ?? []).filter(
+      (e) => e.from === activeLogActor,
+    );
+    const last = events[events.length - 1];
+    if (!last) {
+      label = 'live · waiting';
+    } else if (last.kind === 'error') {
+      label = 'live · errored';
+    } else if (last.kind === 'agent.stop' || last.kind === 'done') {
+      label = 'live · idle';
+    } else {
+      const ageMs = Date.now() - new Date(last.ts).getTime();
+      label = ageMs < 30_000 ? 'live · streaming' : 'live · idle';
+    }
+  }
   const showRetry = state === 'stalled' || state === 'errored';
   pill.innerHTML =
     '<span class="logs-conn-dot"></span>' +
-    '<span class="logs-conn-label">' + escapeHTML(labelByState[state] ?? state) + '</span>' +
+    '<span class="logs-conn-label">' + escapeHTML(label) + '</span>' +
     (msg ? '<span class="logs-conn-msg">' + escapeHTML(msg) + '</span>' : '') +
-    (showRetry ? '<button class="logs-conn-retry" id="logs-conn-retry-btn">Reconnect now</button>' : '');
+    (showRetry
+      ? '<button class="logs-conn-retry" id="logs-conn-retry-btn">Reconnect now</button>'
+      : '');
   const retryBtn = document.getElementById('logs-conn-retry-btn');
   if (retryBtn) retryBtn.addEventListener('click', forceLogsReconnect);
 }
@@ -2358,6 +2462,15 @@ onAppendMsg((d) => {
   if (d.msg.kind === 'artifact.created' && activeView === 'output') {
     refreshOutputTab();
   }
+});
+
+// v0.5 PR-9: refresh logs pill when transcript advances for the active actor.
+// Keeps "live · streaming / idle / errored" label honest in real time.
+onAppendMsg((d) => {
+  if (d.session_id !== activeSession) return;
+  if (!activeLogActor) return;
+  if (d.msg.from !== activeLogActor) return;
+  if (logsCtl.state === 'streaming') renderLogsConnStatus('streaming');
 });
 
 // Hook the existing setActiveView so switching to Output triggers a refresh.

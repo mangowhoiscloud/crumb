@@ -989,12 +989,19 @@ section.swimlane {
   100% { opacity: 1; transform: translateX(0); }
 }
 
+/*
+ * v0.5 PR-9: detail panel layout split into a fixed header (sticky close
+ * + paginator + title) and a scroll body (meta / body / data / thread).
+ * User feedback: close button must NOT scroll out of reach. The fixed
+ * header sits at top:0 inside the panel; the scrollable body fills the
+ * remainder. Datadog/Linear right-rail convention.
+ */
 aside.detail {
   position: fixed; right: 0; top: 0; bottom: 0; width: var(--detail-w, 420px);
   background: var(--surface-1);
   border-left: 1px solid var(--hairline);
-  padding: 20px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
   font-size: 12px;
   color: var(--ink-muted);
@@ -1002,6 +1009,20 @@ aside.detail {
   transition: transform 140ms ease;
 }
 aside.detail.open { transform: translateX(0); }
+aside.detail .detail-header {
+  flex: 0 0 auto;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--hairline);
+  padding: 12px 20px 10px 20px;
+}
+aside.detail .detail-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 12px 20px 20px 20px;
+}
 aside.detail h3 {
   font-size: 11px;
   text-transform: uppercase;
@@ -1009,6 +1030,7 @@ aside.detail h3 {
   color: var(--ink-subtle);
   margin-bottom: 12px;
 }
+aside.detail .detail-header h3 { margin-bottom: 8px; }
 aside.detail pre {
   background: var(--canvas);
   border: 1px solid var(--hairline);
@@ -1020,11 +1042,53 @@ aside.detail pre {
   color: var(--ink);
 }
 aside.detail .close {
-  position: absolute; top: 12px; right: 12px;
-  width: 24px; height: 24px; border-radius: var(--r-sm);
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  width: 26px; height: 26px; border-radius: var(--r-sm);
   border: 1px solid var(--hairline); background: var(--canvas); color: var(--ink-muted);
   cursor: pointer; font-size: 14px;
+  z-index: 6;
 }
+aside.detail .close:hover { color: var(--ink); border-color: var(--primary); }
+
+/*
+ * v0.5 PR-9: cross-actor event paginator. Lets the user step through
+ * EVERY transcript event (sorted chronologically) with ←/→, regardless
+ * of which actor lane the chip lives in. Complements the existing group
+ * paginator (consecutive same-kind on one lane) — both are visible
+ * simultaneously when applicable, and they don't interfere because
+ * group nav scopes to ids ⊆ allEventIds.
+ */
+.detail-event-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  color: var(--ink-muted);
+}
+.detail-event-btn {
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--ink-muted);
+  border-radius: var(--r-sm);
+  padding: 2px 9px;
+  font: inherit;
+  cursor: pointer;
+}
+.detail-event-btn:hover:not([disabled]) {
+  border-color: var(--primary);
+  color: var(--ink);
+}
+.detail-event-btn[disabled] { opacity: 0.35; cursor: not-allowed; }
+.detail-event-pos { flex: 1 1 auto; text-align: center; color: var(--ink); }
+.detail-event-pos strong { color: var(--primary); font-weight: 700; }
 
 section.scorecard {
   border-top: 1px solid var(--hairline);
