@@ -168,6 +168,17 @@
       <div class="logs-pane">
         <div class="logs-toolbar">
           <span id="logs-current-actor" style="color:var(--ink);font-family:ui-monospace,monospace;">—</span>
+          <!--
+            v0.5 PR-6 — connection-status pill (idle / awaiting-actor /
+            connecting / streaming / stalled / errored). Datadog/Honeycomb
+            live-tail standard: every state has its own color + label, and
+            stalled/errored expose a "Reconnect now" affordance directly.
+            Populated by renderLogsConnStatus() in studio.js.
+          -->
+          <span id="logs-conn-status" class="logs-conn-status state-idle">
+            <span class="logs-conn-dot"></span>
+            <span class="logs-conn-label">pick session</span>
+          </span>
           <input type="text" id="logs-filter" placeholder="grep…" title="substring · Enter=next · Shift+Enter=prev · Esc=clear">
           <span class="grep-controls">
             <span id="logs-grep-count" class="grep-count">—</span>
@@ -181,6 +192,16 @@
         <div class="logs-content" id="logs-content">
           <div class="logs-empty">Pick an actor on the left to tail its spawn logs in real time.</div>
         </div>
+        <!--
+          v0.5 PR-6 — "Jump to live" button. Shown only when followAuto is
+          off (user scrolled up in a streaming view). GitHub Actions / ArgoCD
+          pattern — the floating affordance pulls them back to the tail
+          without a full reload. Hidden by default; toggled by the scroll
+          handler in studio.js.
+        -->
+        <button id="logs-jump-live" class="logs-jump-live" style="display:none;" title="Resume following the live tail">
+          <span class="logs-jump-live-arrow">↓</span> Jump to live
+        </button>
       </div>
     </section>
   </div>
