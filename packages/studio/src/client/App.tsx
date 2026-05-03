@@ -199,7 +199,7 @@ export function App() {
           color: 'var(--ink-subtle)',
         }}
       >
-        <span>v0.4 (M8)</span>
+        <span>v1.0.0</span>
         <span style={{ flex: 1 }} />
         <span>⌘B sidebar · Drag tabs to dock · Drag a tab out for popout</span>
       </footer>

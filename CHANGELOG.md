@@ -4,6 +4,67 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-05-03
+
+First publishable release. The big-bang Studio migration (M0 → M8) reached its hard gate; the React + dockview client replaces the vanilla DOM bundle entirely; transcript schema, reducer invariants, anti-deception validator, multi-host preset system, and CourtEval verifier flow are all production-shaped.
+
+### M-series retrospective (Studio big-bang, 2026-05-03)
+
+The migration ran in 12 sequential PRs over a single day. Key decisions and their backing in `wiki/synthesis/bagelcode-studio-big-bang-update-2026-05-03.md`:
+
+- **Cutoff** (§0.0) — chose big-bang over piecewise re-implementation once Prune-1/2/3 settled. Vanilla last-call (#161, #164, PR-O4 sparkline) only landed because they were already in flight.
+- **Stack** (§3) — Vite 6 + React 19 + TanStack Query + dockview + React Flow + shadcn-flavored primitives + Tailwind v4 + Open Props design tokens. Picked dockview over Allotment / react-resizable-panels because it was the only option satisfying reactive resize + independent docking + popout windows simultaneously.
+- **Quality bar** (§8.1) — every M-PR enforced: a11y AA, theme parity, density parity, empty/loading/error/reconnecting states, anti-deception alignment (every score row carries SourceBadge per AGENTS.md invariant 4), telemetry-free, no console output in production.
+- **Plan §17 audit** — formalized the server / client role matrix, intentional separations (doctor.ts dual-existence, qa-runner ground truth, watcher disk-walk fallback), and active leaks. Three leaks fixed in line: client metric recomputation → server-derived; D1-D6 hardcoding → DIMENSIONS const; metrics.per_actor SSE missing → server payload extension.
+- **Decoupling** (§17.2) — Studio package never imports crumb-core types. `Dimension` const + `VersionManifest` schema live in both `src/protocol/types.ts` and `packages/studio/src/server/types.ts` as mirrors; the studio is publishable standalone. `@iarna/toml` is the only shared infrastructure dep.
+
+### M-PR landing order
+
+- **M0** (#143) — Vite scaffold + `?app=v2` route + asset handler
+- **M1** (#163) — server.ts extracted under `src/server/`
+- **M2** (#165) — dockview shell + DESIGN.md (Stitch 9-section) + tokens.css
+- **M3** (#175) — Sidebar (AdapterList + SessionList + cascading NewSessionForm)
+- **M4a** (#176) — Pipeline (React Flow + dagre seed + NodeInspector tri-mode dispatch)
+- **M4b** (#180) — Waterfall + ServiceMap (wall-clock spans + handoff aggregation)
+- **M5** (#179) — Narrative + Feed (per-kind formatters, rolling SSE window)
+- **M5b** (#181) — SlashBar (8 quick-action chips, inbox.txt POST)
+- **M6a** (#183) — Logs + Output + Transcript (view-pane parity)
+- **M6b** (#185) — Scorecard + ErrorBudgetStrip + sparklines + DIMENSIONS const + tone tokens
+- **M6c** (#187) — DesignCheckPanel (Detail Rail mode 2) + ToolCallTrace (PR-O5 surface)
+- **M7** (#188) — Versions panel + `/api/projects/:pid/versions` + frozen artifact serve + Output Source toggle
+- **M7.1** (#189) — default flipped: `/` serves React; `?app=v1` reserved as escape hatch
+- **M8** (#190) — legacy v1 hard-delete + `client-v2/` → `client/` rename + tsconfig.app.json
+- **M10** (#182) — `/api/health` `pause_resume_lifecycle` + Status Bar HealthBadge
+- **M10b/c** (this PR) — HealthBadge click-to-Sheet with per-step pass/fail + sessions-by-state breakdown
+
+### Bundle + perf footprint at 1.0.0
+
+- Single Vite output to `dist/client/` (~790 KB JS / ~150 KB CSS gzipped)
+- v1 vanilla bundle deleted: ~260 KB inlined payload removed
+- 8 view-pane sibling tabs (Pipeline, Waterfall, Service Map, Logs, Output, Transcript, Tool Trace, Versions)
+- Independent docking + popout (Narrative + Feed tear-off via dockview)
+- Theme + density toggles persist in localStorage; pre-paint bootstrap prevents FOUC
+
+### What's not in 1.0.0 (deferred)
+
+- **W3 reducer-side `design_check`** — DesignCheckPanel renders an empty-state until the reducer emits the rule block; mark as scoped follow-up
+- **Sticky-Note pipeline annotations** (n8n-style) — dropped from M9 by user direction; not core to evaluator workflow
+- **BubbleUp drag-select on Waterfall** — Detail Rail mode 4 (outlier baseline-vs-selection histograms)
+- **Critical-path overlay** — toggle deferred; not core to evaluator-mode
+- **Live-tail SSE for Logs** — currently snapshot-only via GET `/api/sessions/:id/logs/:actor`; SSE endpoint exists but client-side wiring is M6b follow-up
+
+### Added — Studio HealthBadge click-to-Sheet (M10b/c — full self-check report, 2026-05-03)
+
+`HealthBadge` is now a button. Clicking opens a modal Sheet showing the full `/api/health` snapshot:
+
+- pause/resume lifecycle verdict pill + duration_ms + cached_at
+- per-step pass/fail rows from the self-check report (with optional message + duration_ms)
+- watcher paths-tracked + sessions-by-state breakdown (live / idle / interrupted / abandoned / terminal / unknown)
+- Esc / backdrop-click / × button all close
+- footer cites the source endpoint + cache TTLs (server 30 s · client 60 s)
+
+Server side: `serveHealth()` payload now includes `pause_resume_lifecycle.steps[]` (was just the failed-count). When `crumb` peer-dep is unresolvable, the steps array carries a single synthetic row explaining why so the Sheet doesn't render an empty list.
+
 ### Removed — Legacy v1 vanilla Studio bundle + `?app=v1` escape hatch (M8 cleanup, 2026-05-03)
 
 Hard delete of every v1 surface now that M7.1 flipped the default to React + dockview and downstream M-PRs have reached parity:

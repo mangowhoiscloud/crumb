@@ -1,6 +1,6 @@
 {
   "name": "crumb",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "description": "Multi-agent execution harness for casual game prototyping. Pitch a game in one line, watch agents collaborate, intervene anytime.",
   "type": "module",
   "main": "dist/index.js",
