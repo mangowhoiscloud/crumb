@@ -31,7 +31,7 @@ A new outer actor in the v0.3.0 split. Runs between planner-lead's step.concept 
 |---|---|
 | **Role** | Evidence-extractor specialist (video understanding via Gemini 3.1 Pro + native YouTube URL OR text-only fallback). Runs at `claude-opus-4-7 / effort=high` by default; `--preset bagelcode-cross-3way` swaps to `gemini-cli + gemini-3-1-pro` for video path. |
 | **Goal** | Emit 1–8 `kind=step.research.video` events (one per observed mechanic) + a single `kind=step.research` synthesis tying mechanics to design lessons. When `data.video_refs` is empty → text-only path: 3 references × 3 lessons. |
-| **Reads** | `kind=goal` (`data.video_refs`) + `kind=step.concept` (the just-locked concept) + `agents/specialists/game-design.md` (§3 video evidence schema). **DOES NOT** read prior `step.design / build / judge.score` — output flows back to planner who consumes it during step.design. |
+| **Reads** | `kind=goal` (`data.video_refs`) + `kind=step.concept` (the just-locked concept) + `agents/specialists/game-design.md` (§1 envelope + §2 forbidden for envelope-aware extraction filter, §3 video evidence schema for output shape). **DOES NOT** read prior `step.design / build / judge.score` — output flows back to planner who consumes it during step.design. |
 | **Writes** | `step.research.video` × N + `step.research` + `handoff.requested(to=planner-lead)`. NEVER writes artifacts under `artifacts/`. |
 
 ## Contract
@@ -89,6 +89,18 @@ When NO named game is detected, fall through to genre-based research (the existi
 
 ### 2. Multi-modal extraction (per video, max 5 videos per spawn)
 
+**Envelope-aware extraction (v0.3.6).** Before describing the prompt, the researcher
+inline-reads `agents/specialists/game-design.md` §1 envelope (Phaser 3.80
+multi-file, mobile-first portrait 320–428, ≤ 25 files, ≤ 5 MB, procedural-first
+sprites + Web Audio, 60fps, offline, ES modules no build) and §2 forbidden
+(no Three.js / Babylon, no Unity / Godot binaries, no npm bundlers, no
+network requests at runtime, no IAP / ads / live-ops, no Phaser 2 syntax,
+no external asset URLs except CDN). Every extracted mechanic MUST be judged
+against this envelope before it lands in `mechanics_extracted` — observations
+that demand 3D rendering, native engine features, server multiplayer, runtime
+network calls, or live-ops monetization are recorded separately under
+`mechanics_out_of_envelope` so the planner sees what was filtered and why.
+
 For each accepted video_ref, call the SDK with prompt structure:
 
 ```
@@ -99,8 +111,29 @@ Extract mechanics + timing from this gameplay clip. For each <mechanic>, return:
 - timing_ms (combo_window_ms, cascade_delay_ms, animation_duration_ms — only when measurable)
 - palette_hint (3-5 hex codes sampled from dominant tile/background)
 - difficulty_signal (none / increasing / spike / drop)
+- envelope_fit (string): one of
+    "fits" — buildable as-is in Phaser 3.80 multi-file mobile-first portrait
+    "fits-with-adaptation" — buildable after a documented simplification
+       (e.g. 3D parallax → 2.5D layered Phaser TileSprite, online co-op →
+       async leaderboard, particle-heavy boss → procedural sprite + Bayer
+       dither). Set `adaptation_note` describing the swap.
+    "out-of-envelope" — needs Three.js / native engine / runtime network /
+       IAP / ads / >5MB assets. EXCLUDE from `mechanics_extracted`; route
+       to `mechanics_out_of_envelope` with `forbidden_reason` citing the
+       specific §2 row violated.
 
-Return strict JSON matching agents/specialists/game-design.md §"video evidence schema".
+Cross-check rules (apply BEFORE populating mechanics_extracted):
+- Any 3D camera / true 3D physics / Z-axis depth → out-of-envelope (§2 Three.js)
+- Any visible network round-trip (matchmaking, live PvP, push notification,
+  cloud save during play) → out-of-envelope (§1 offline + §2 network)
+- Any cash-shop / loot-box / rewarded-ad / season-pass → out-of-envelope (§2 IAP/ads/live-ops)
+- Any mechanic requiring > 5 MB assets or > 25 files to faithfully reproduce
+  → out-of-envelope unless a procedural simplification is described
+- Any mechanic requiring a custom native shader / compute pass → out-of-envelope
+
+Return strict JSON matching agents/specialists/game-design.md §"video evidence
+schema", with mechanics partitioned into mechanics_extracted (envelope-fit)
+and mechanics_out_of_envelope (filtered, with forbidden_reason).
 ```
 
 Emit one `kind=step.research.video` event per clip:
@@ -112,7 +145,9 @@ data:
   video_ref: <url or path>
   duration_s: <float>
   frame_rate_used: <int>           # 1, 2, 5, or 10 fps depending on clip pace
-  mechanics_extracted: [<MechanicEvidence>, ...]
+  mechanics_extracted: [<MechanicEvidence>, ...]    # envelope-fit only
+  mechanics_out_of_envelope:                         # filtered (v0.3.6)
+    - { name, forbidden_reason: "§2 Three.js" | "§2 network" | "§2 IAP" | ... }
   palette_observed: [<hex>, ...]
   timing_summary: { combo_window_ms?, cascade_delay_ms?, ... }
 metadata:

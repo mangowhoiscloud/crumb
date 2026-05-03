@@ -4,6 +4,23 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Studio live exec feed suppresses raw stream-json + researcher §1/§2 envelope-aware extraction (2026-05-03)
+
+Per user feedback (single message, two pain points bundled): "추출할 때 game-design.md를 고려해서 추출할 수 있도록 하고 ⏺ Bash(...) ⎿ ...  raw {"type":"assistant",...} blob 별도의 창으로 띄워줄 수 있겠어? 지금은 live execution feed에서 이렇게 섞여져 보여."
+
+**Studio — feed-vs-logs separation** (`packages/studio/src/client/studio.js`)
+
+- `renderStreamJsonLine` return contract clarified: `null` = NOT stream-json (caller falls through to raw render so plain-log lines stay visible), `[]` = parsed stream-json with no narrative bubbles (caller skips → suppressed from feed), `[bubble, …]` = render each bubble. Empty arrays are truthy in JS so the caller's `if (bubbles)` enters the for-loop, iterates zero times, and `continue`s — exactly the suppression we want.
+- Three `return null;` paths after successful JSON parse changed to `return [];`: unrecognized `obj.type === 'system'` subtypes, `rate_limit_event`, and the catch-all unknown-but-typed case. Result: the live execution feed no longer shows `{"type":"assistant","message":{...},"signature":"..."}` blobs alongside rendered ⏺/⎿ bubbles. Full raw stream remains visible in the Logs view (`spawn-*.log` on disk) for debugging.
+
+**Researcher — envelope-aware extraction** (`agents/researcher.md`, `agents/specialists/game-design.md`)
+
+- `agents/researcher.md` step 2 (Multi-modal extraction) now inline-reads §1 envelope (Phaser 3.80 multi-file, mobile-first portrait 320–428, ≤ 25 files / ≤ 5 MB, procedural-first sprites + Web Audio, 60fps offline, ES modules no build) and §2 forbidden (no Three.js / Babylon, no Unity / Godot binaries, no npm bundlers, no runtime network, no IAP / ads / live-ops, no Phaser 2 syntax, no external asset URLs except CDN) BEFORE describing the extraction prompt.
+- Extraction prompt extended with `envelope_fit` per-mechanic field (`fits` / `fits-with-adaptation` / `out-of-envelope`) plus 5 cross-check rules (3D rejection, network rejection, monetization rejection, asset budget rejection, custom-shader rejection). Mechanics that violate envelope are routed to a new `mechanics_out_of_envelope` array with `forbidden_reason` citing the specific §2 row, instead of polluting `mechanics_extracted` and forcing the planner to filter downstream.
+- `agents/specialists/game-design.md` §3.1 `MechanicEvidence` schema gains `envelope_fit` + `adaptation_note`, §3.2 `step.research.video` event shape gains `mechanics_out_of_envelope`. The "Reads" row in researcher's Role/Goal/Visibility table cites §1 + §2 explicitly so the cross-check is not buried in step 2's prose.
+
+Why now: video-LLM extraction without envelope discipline regularly surfaces 3D parallax / live PvP / loot-box mechanics that planner-lead has to rediscover-and-filter when synthesizing tuning.json. Pre-filtering at the researcher saves a planner round-trip and gives the verifier audit trail (`mechanics_out_of_envelope[].forbidden_reason`) for D5 evidence quality scoring.
+
 ### Changed — Pipeline DAG visualization overhaul (PR-H) (2026-05-03)
 
 Pre-PR-G the studio's Pipeline tab DAG was a stale 3-phase 215px graph with one feedback edge (verifier → planner-lead) — wrong post-PR-G routing where Important/Minor deviations now respawn the builder, not the planner. Plus several gaps: no labels on edges, no resume cycle, no validator-as-effect distinction, `system` node was confusingly labeled "qa-check".

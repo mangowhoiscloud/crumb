@@ -286,6 +286,9 @@ timing_ms:                                # only fields that were measurable; om
   feedback_lag_ms: <int>                  # input → visual response
 palette_hint: ["#hex1", "#hex2", ...]     # 3-5 dominant hex codes from tile/background pixels
 difficulty_signal: <none | increasing | spike | drop>
+envelope_fit: <"fits" | "fits-with-adaptation" | "out-of-envelope">   # v0.3.6
+adaptation_note: <string>                 # required when envelope_fit = "fits-with-adaptation";
+                                          # e.g. "3D parallax → 2.5D layered Phaser TileSprite"
 ```
 
 ### §3.2 `step.research.video` event shape
@@ -298,7 +301,11 @@ data:
   video_ref: "https://youtu.be/<clip-id>" | "sessions/<id>/inbox/<file>.mp4"
   duration_s: <float>
   frame_rate_used: <1 | 2 | 5 | 10>       # higher = faster-paced gameplay
-  mechanics_extracted: [<MechanicEvidence>, ...]   # 1-8 entries
+  mechanics_extracted: [<MechanicEvidence>, ...]   # 1-8 envelope-fit entries
+  mechanics_out_of_envelope:              # v0.3.6 — pre-filtered against §1 / §2
+    - name: <kebab-case>                  # e.g. "live-pvp-matchmaking"
+      forbidden_reason: <string>          # cite the §2 row, e.g. "§2 network requests at runtime"
+      frame_observations: [<bullet>, ...] # 1-2 bullets so verifier can audit the filter call
   palette_observed: ["#hex1", ...]        # union of mechanic palette_hints
   timing_summary:                         # consensus across mechanics
     combo_window_ms?: <int>
