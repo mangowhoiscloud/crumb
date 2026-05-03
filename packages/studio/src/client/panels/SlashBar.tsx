@@ -14,7 +14,7 @@
  * src/inbox/parser.ts owns grammar.
  */
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { api } from '../lib/api';
 import { useActiveSession } from '../stores/selection';
 
@@ -27,13 +27,48 @@ const QUICK_CHIPS = [
   '@builder use red palette',
   '/note ',
   '/redo',
+  // v0.5 PR-Inbox-Console — Tier 2 enum chips. Reducer routes via the
+  // ask-formatter helper (LLM-zero, replay-deterministic), response
+  // lands as `kind=note` in the InboxThread within ≤500ms.
+  '/ask status',
+  '/ask cost',
+  '/ask next',
+  '/ask stuck',
+  '/ask scorecard',
 ];
+
+const ALL_COMMANDS = [
+  '/approve',
+  '/veto ',
+  '/pause',
+  '/resume',
+  '/goto ',
+  '/swap ',
+  '/append ',
+  '/note ',
+  '/redo',
+  '/cancel',
+  '/reset-circuit ',
+  '/ask status',
+  '/ask cost',
+  '/ask next',
+  '/ask stuck',
+  '/ask scorecard',
+];
+
+const HISTORY_CAP = 50;
 
 export function SlashBar() {
   const sessionId = useActiveSession();
   const [text, setText] = useState('');
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState<{ text: string; tone: 'ok' | 'err' } | null>(null);
+  // v0.5 PR-Inbox-Console — input history (terminal pattern). ↑↓ navigates;
+  // newest entry at the end. Caps at HISTORY_CAP so the array doesn't grow
+  // unbounded across long sessions. Module-scope would persist across
+  // session switches; in-component is the right scope (history is per-tab).
+  const historyRef = useRef<string[]>([]);
+  const [historyIdx, setHistoryIdx] = useState<number>(-1);
 
   const submit = async (): Promise<void> => {
     if (!sessionId) {
@@ -45,6 +80,13 @@ export function SlashBar() {
     setPending(true);
     try {
       await api.inboxAppend(sessionId, line);
+      // Push into history (dedupe consecutive duplicates).
+      const h = historyRef.current;
+      if (h[h.length - 1] !== line) {
+        h.push(line);
+        if (h.length > HISTORY_CAP) h.shift();
+      }
+      setHistoryIdx(-1);
       setText('');
       setFeedback({ text: `posted · ${line.slice(0, 40)}`, tone: 'ok' });
     } catch (err) {
@@ -57,6 +99,14 @@ export function SlashBar() {
   const insertChip = (chip: string): void => {
     setText((prev) => (prev ? `${prev} ${chip}` : chip));
   };
+
+  // v0.5 PR-Inbox-Console — `/`-prefix completion. `Tab` accepts the
+  // first match; matches drawn from ALL_COMMANDS. Same pattern Cursor /
+  // Claude Code REPL ship (cycles via repeated Tab). Empty when input
+  // doesn't start with `/`.
+  const completions = text.startsWith('/')
+    ? ALL_COMMANDS.filter((c) => c.toLowerCase().startsWith(text.toLowerCase())).slice(0, 6)
+    : [];
 
   return (
     <div
@@ -83,6 +133,34 @@ export function SlashBar() {
             if (e.key === 'Enter') {
               e.preventDefault();
               void submit();
+              return;
+            }
+            if (e.key === 'Tab' && completions.length > 0) {
+              e.preventDefault();
+              setText(completions[0] ?? text);
+              return;
+            }
+            if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              const h = historyRef.current;
+              if (h.length === 0) return;
+              const next = historyIdx === -1 ? h.length - 1 : Math.max(0, historyIdx - 1);
+              setHistoryIdx(next);
+              setText(h[next] ?? '');
+              return;
+            }
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              const h = historyRef.current;
+              if (historyIdx === -1) return;
+              if (historyIdx < h.length - 1) {
+                const next = historyIdx + 1;
+                setHistoryIdx(next);
+                setText(h[next] ?? '');
+              } else {
+                setHistoryIdx(-1);
+                setText('');
+              }
             }
           }}
           style={{

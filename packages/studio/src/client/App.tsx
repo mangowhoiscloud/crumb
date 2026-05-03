@@ -37,6 +37,7 @@ import { Narrative } from './panels/Narrative';
 import { Feed } from './panels/Feed';
 import { DetailRail } from './panels/DetailRail';
 import { SlashBar } from './panels/SlashBar';
+import { InboxThread } from './panels/InboxThread';
 import { Scorecard } from './panels/Scorecard';
 import { ErrorBudgetStrip } from './panels/ErrorBudgetStrip';
 import { useEffect } from 'react';
@@ -205,6 +206,7 @@ export function App() {
         />
       </div>
 
+      <InboxThread />
       <SlashBar />
 
       <footer
