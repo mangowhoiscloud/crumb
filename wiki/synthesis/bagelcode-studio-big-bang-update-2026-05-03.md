@@ -101,14 +101,18 @@ packages/studio/
     │   │   │   ├── NodeInspector.tsx  [Detail Rail content when node selected]
     │   │   │   ├── layout.ts          [dagre seeding + persistence helpers]
     │   │   │   └── style-store.ts     [per-actor color override (Zustand slice)]
-    │   │   ├── Waterfall.tsx          [PR #142]
+    │   │   ├── Waterfall.tsx          [PR #142 + BubbleUp drag-select outlier mode]
+    │   │   ├── ServiceMap.tsx         [edge aggregation: req/s, p50/p95, error rate per actor pair]
     │   │   ├── Logs.tsx
     │   │   ├── Output.tsx
     │   │   ├── Transcript.tsx
     │   │   ├── AgentNarrative.tsx     [independent dockable]
     │   │   ├── LiveFeed.tsx           [independent dockable]
-    │   │   ├── DetailRail.tsx         [right-rail event detail]
+    │   │   ├── DetailRail.tsx         [right-rail event detail OR node inspector OR design-check audit]
     │   │   ├── ErrorBudgetStrip.tsx   [PR-O2]
+    │   │   ├── DesignCheckPanel.tsx   [W3 — palette / WCAG 44px / motion violations surface]
+    │   │   ├── CommandPalette.tsx     [⌘K Linear/Raycast — preset+session+action fuzzy]
+    │   │   ├── DensityToggle.tsx      [Comfortable / Compact — Datadog Notebook]
     │   │   └── SlashBar.tsx           [console-input]
     │   ├── components/ui/       [shadcn primitives — owned source]
     │   │   ├── button.tsx
@@ -161,7 +165,7 @@ preserved — Vite output is bundled into the published npm package via `files` 
 │ ┌──────────────┐ ┌─────────────────────────────────────────────────────┐   │
 │ │ SIDE BAR     │ │ MAIN GROUP                                          │   │
 │ │ (dock left)  │ │ ┌─ tabs ─────────────────────────────────────────┐  │   │
-│ │              │ │ │ Pipeline │ Waterfall │ Logs │ Output │ Transcript │  │   │
+│ │              │ │ │ Pipeline │ Waterfall │ Map │ Logs │ Output │ Transcript │     │   │
 │ │ ▸ Brand      │ │ ├──────────────────────────────────────────────────┤  │   │
 │ │ ▸ Adapters   │ │ │ Scorecard strip (composite + radar + drilldown)  │  │   │
 │ │ ▸ Sessions   │ │ ├──────────────────────────────────────────────────┤  │   │
@@ -271,7 +275,78 @@ The Inspector lives in the Detail Rail (right-side dockview panel) and replaces 
 - Pan + zoom + minimap all functional via keyboard + mouse + trackpad
 - Pipeline view performance: 60 fps when dragging (React Flow profiles at <16 ms per frame for ≤20 nodes)
 
-## 7. Migration roadmap — strangler fig in 9 PRs
+### 6.2 Service Map view
+
+A separate tab next to Pipeline + Waterfall. Where Pipeline answers "what is the actor graph and where is each event in it?" and Waterfall answers "how long did each spawn take?", Service Map answers **"which actor → actor handoffs are slow / failing / hot in aggregate?"** — Datadog APM Service Map convention.
+
+| Element | Encoding |
+|---|---|
+| Node | Actor; size encodes total spawn count, fill encodes error rate (0% green → 100% red), border encodes circuit-breaker state (solid healthy / dashed half-open / red half-tinted open) |
+| Edge | Actor → actor handoff direction; thickness encodes req/s, color encodes avg latency (green ≤p50 / amber ≤p95 / red >p95), hover reveals exact stats panel |
+| Aggregation | Group `agent.wake → agent.stop` pairs by `(from_actor, to_actor)` from `kind=handoff.requested`; bucket per current session OR last-N sessions toggle |
+| Cross-provider tint | Edges where verifier's provider ≠ build's provider get a purple-violet underline (Datadog inferred-dependency convention adapted) |
+| Anti-deception | Error-rate fill source is `kind=qa.result` deterministic ground truth (D2/D6) — never LLM verdict text. Tooltip cites the source ("error from qa-check-effect"). |
+| Layout | Same dagre engine that seeds Pipeline; no second graph library. |
+
+Lands inside M4 alongside Pipeline + Waterfall (the three viz tabs share the actor color palette + the right-rail Detail Rail).
+
+### 6.3 Critical-path overlay (Lightstep convention)
+
+Toggle at top-right of Pipeline + Waterfall + Service Map. When on:
+- Walks the longest chain of dependent spans by wall-clock (or `metadata.parent_id` when present), draws a 2 px black overlay on top of the regular bars/edges.
+- Skips spans whose `qa.result` is missing — unverified spans cannot define the critical path (AGENTS.md anti-deception invariant 5).
+- Shows total critical-path duration + percentage of session wall-clock in a small chip at the toggle.
+- Toggle state persists per-session in `localStorage.crumb.studio.critical-path.<sessionId>`.
+
+### 6.4 BubbleUp drag-select on Waterfall
+
+Drag-select a latency band on the Waterfall (mouse drag → shaded selection rectangle). On release:
+- Right Detail Rail switches to "Outlier mode": for every `metadata.*` attribute (provider, model, effort, harness, sandwich_hash, cache_hit, etc.), render side-by-side mini-histograms — orange = selected spans, blue = baseline (rest of the session).
+- Sort by deviation (max KL-divergence) so the most-different attribute is at top — Honeycomb BubbleUp UX convention.
+- Click any attribute to broadcast a filter to Pipeline (highlight matching nodes) and Service Map (tint matching edges).
+- Esc clears the selection.
+
+### 6.5 Command palette (⌘K)
+
+Linear / Raycast / cmdk pattern, vanilla-via-shadcn `<Command>` primitive (Radix + cmdk). Fuzzy-search across:
+- Live sessions (jump to session)
+- Adapters (open setup modal)
+- Presets (start a new session with this preset)
+- Actions (`Toggle theme`, `Toggle sidebar`, `Reset pipeline layout`, `Pop out narrative`, `Pop out feed`, `Run doctor`, `Re-probe adapters`, `Density: comfortable/compact`, `Critical-path overlay on/off`)
+- View tabs (jump to Pipeline / Waterfall / Map / Logs / Output / Transcript)
+- Recent events in current session (deep-link to detail)
+
+Keyboard-first, no mouse required. Sub-palette pattern (selecting "Start new session" pushes a sub-palette with preset + bindings cascade — same shape as the `<NewSessionForm>` flow). Lives in `<CommandPalette>` panel + `useCommandPalette()` hook.
+
+### 6.6 Density toggle (Comfortable / Compact)
+
+Mirrors Datadog Notebook density toggle. Two modes via `data-density="comfortable|compact"` on the dockview root:
+- **Comfortable** (default for new users) — row heights 32 / 44 / 56 px (preset-chip / harness-row / model-row), padding generous, `body-md` typography
+- **Compact** (power-user) — row heights drop ~25% (24 / 36 / 44), `body-sm`, tighter dock-tab heights, denser scorecard layout
+
+Toggle in Status Bar bottom-right + via ⌘K palette. Persists in `localStorage.crumb.studio.density`.
+
+### 6.7 Studio-side W3 surface — `<DesignCheckPanel>`
+
+W3 (`design_check` deterministic effect — palette ⊂ retro / touch zone WCAG 2.5.5 AAA = 44×44 px / motion timing within evidence_ref deviation) is reducer-side, but its results need a Studio surface. The big-bang plan adds:
+
+| Surface | Behavior |
+|---|---|
+| **`<DesignCheckPanel>`** in Detail Rail | When a `kind=qa.result` event with a `design_check` block is selected, the rail switches to a third mode (after event-detail and node-inspector) showing per-rule pass/fail with the offending hex / px / ms value + the rule's threshold + a "view evidence_ref" link |
+| **`<Scorecard>` D5** | The visual-design dimension fills its bar from `qa-check-effect` source for the deterministic part; LLM source for the subjective part — both surfaced with source attribution (per AGENTS.md invariant 4 D3/D5 split) |
+| **`<LiveFeed>` formatter** | New `design_check` formatter renders `palette ✓ · touch ✗(2/8 zones <44px) · motion ✓` style one-liner, color-coded |
+
+### 6.8 Pause/Resume portability self-check
+
+The user asked early in the session: *"다른 머신에서 crumb를 처음 세팅할 때도 QA 에이전트가 이런 것까지 점검할 수 있으려면 어떤 조치가 필요한지"* — pause/resume must work on a fresh machine, and the QA agent must be able to verify it as part of the auto-verification suite. Three deliverables (independent of the migration):
+
+1. **`crumb doctor --self-check`** — runs an end-to-end smoke test: spawn → pause → resume → veto → approve → done, asserts every transition produces the expected reducer state. Exit non-zero if any transition fails. Lands as a small CLI helper, no migration dependency.
+2. **`packages/studio/src/server/health.ts`** — `/api/health` extended to include `pause_resume_lifecycle: 'ok' | 'degraded' | 'broken'` derived from the doctor self-check result cached for 30 s.
+3. **`<HealthBadge>`** in Status Bar — green dot when `pause_resume_lifecycle === 'ok'`, amber when degraded, red when broken; hover shows the failing transition; click opens the doctor output in a Sheet.
+
+These deliverables can be built before, during, or after the migration; they touch server + reducer, not the React client.
+
+## 7. Migration roadmap — strangler fig (sequence, not schedule)
 
 The migration is paced so the live `npx crumb-studio` keeps working at every step (no flag day). The legacy bundle and the React bundle co-exist behind `?app=v2` until parity is reached, then the legacy is deleted.
 
@@ -279,15 +354,17 @@ The migration is paced so the live `npx crumb-studio` keeps working at every ste
 |---|---|---|---|
 | **M0** | `chore/studio-vite-scaffold` | Add Vite + React deps. Create `packages/studio/src/client-v2/{index.html,main.tsx}` "Hello world". Wire `vite build` → `dist/client-v2/`. Add `serveHtmlV2()` route gated on `?app=v2`. Legacy bundle untouched. | `?app=v2` shows blank React shell + sessions JSON dump |
 | **M1** | `chore/studio-server-extract` | Move `server.ts` + siblings under `src/server/` for clarity. No behavior change. Update import paths. | All existing tests pass; `npm run build` clean |
-| **M2** | `feat/studio-v2-shell-dockview` | dockview + shadcn primitives + Tailwind v4 + Open Props vars. App shell with empty panels. Sidebar (Brand + Adapters + Sessions placeholders) + Main + Bottom group + Status bar. | `?app=v2` shows full dockview frame, drag splitters work, layout persists |
-| **M3** | `feat/studio-v2-sidebar` | `<AdapterList>` + `<SessionList>` + `<NewSessionForm>` (cascading per PR #143) + `<BrandMark>` (#148 SVG) + ⌘K palette. TanStack Query for `/api/sessions` + `/api/doctor`. | `?app=v2` left sidebar fully functional; can spawn a session |
-| **M4** | `feat/studio-v2-pipeline-waterfall` | `<Pipeline>` (swimlane + interactive React Flow DAG with dagre seed layout, drag/pan/zoom/click → `<NodeInspector>`, layout persistence) + `<Waterfall>` + `<DetailRail>` (dual-mode: event detail or node inspector). SSE stream → query cache. | `?app=v2` user can drag pipeline nodes, click to inspect/edit binding, layout persists across reload |
+| **M2** | `feat/studio-v2-shell-dockview` | dockview + shadcn primitives + Tailwind v4 + Open Props vars. App shell with empty panels. Sidebar (Brand + Adapters + Sessions placeholders) + Main + Bottom group + Status bar. **First commit publishes `packages/studio/src/client/DESIGN.md` (Stitch 9-section format from VoltAgent/awesome-design-md) — the design contract every subsequent panel commit references.** Density toggle attribute on dockview root from day one. | `?app=v2` shows full dockview frame, drag splitters work, layout persists, density toggle flips comfortable↔compact, DESIGN.md is the contract for any future panel work |
+| **M3** | `feat/studio-v2-sidebar` | `<AdapterList>` + `<SessionList>` + `<NewSessionForm>` (cascading per PR #143 — preset-chip + harness-row + model-row variants per redesign DESIGN.md §6) + `<BrandMark>` (#148 SVG) + **`<CommandPalette>` (⌘K) with sub-palette nav** + `<AdapterDoctorDialog>` (F5 advanced — auth/API/install hint per OS, copy buttons). TanStack Query for `/api/sessions` + `/api/doctor`. | `?app=v2` left sidebar fully functional, ⌘K opens palette, can spawn a session via cascading form, F4 sidebar collapse works (free via dockview), F5 adapter modal works |
+| **M4** | `feat/studio-v2-pipeline-waterfall-map` | `<Pipeline>` (swimlane + interactive React Flow DAG with dagre seed layout, drag/pan/zoom/click → `<NodeInspector>`, layout persistence) + `<Waterfall>` (with **BubbleUp drag-select outlier mode**) + `<ServiceMap>` (edge aggregation + cross-provider tint) + **Critical-path overlay** toggle shared across all three viz tabs + `<DetailRail>` tri-mode (event detail / node inspector / outlier baseline-vs-selection histograms). SSE stream → query cache. | `?app=v2` user can: drag pipeline nodes; click → inspect/edit binding; switch to Waterfall, drag-select outliers; switch to Map, hover an edge to see req/s + p50/p95 + error rate; toggle critical-path overlay across all three views |
 | **M5** | `feat/studio-v2-bottom-panels` | `<AgentNarrative>` + `<LiveFeed>` as independently dockable panels. `<SlashBar>` → inbox POST. Both panels tear-off into popout windows. | User can drag Narrative tab out into a separate window; Feed alone in main, popout-Narrative continues to receive SSE |
-| **M6** | `feat/studio-v2-scorecard-budget` | `<Scorecard>` (composite + radar + drilldown) + `<ErrorBudgetStrip>` (PR-O2 reborn) + `<Logs>` + `<Output>` + `<Transcript>`. | `?app=v2` reaches parity with v1 |
+| **M6** | `feat/studio-v2-scorecard-budget-trace` | `<Scorecard>` (composite + radar + drilldown + Tremor SparkAreaChart for D1-D6 sparklines per PR-O4 + **per-actor lifecycle gauge** per observability plan P3 + **cross-provider chip** per PR-O5 P7) + `<ErrorBudgetStrip>` (PR-O2 reborn) + **`<DesignCheckPanel>` Detail Rail mode** (W3 surface — palette/touch/motion violations) + `<Logs>` + `<Output>` + `<Transcript>` + **tool-call trace tree** (PR-O5 — recursive collapsible tree of tool.call → tool.result with token + duration per node). | `?app=v2` reaches parity with v1 + adds D1-D6 sparkline + lifecycle gauge + cross-provider chip + design-check audit + trace tree |
 | **M7** | `feat/studio-v2-default-on` | Flip default to v2. `?app=v1` continues to work as escape hatch. CHANGELOG entry; docs update. | `npx crumb-studio` opens v2 by default |
 | **M8** | `chore/studio-v1-removal` | Delete `studio.{html,css,js}` + `inline-client.mjs` + `studio-html.generated.ts`. Keep server unchanged. | Bundle drops legacy ~260KB blob |
+| **M9** | `feat/studio-v2-pipeline-annotations` | n8n parity polish: user-added Sticky-Note nodes on the Pipeline canvas (text labels, draggable, persisted), "Save as project default layout" affordance, "Export layout JSON" / "Import layout JSON" actions in the Pipeline toolbar, Pipeline minimap toggle in palette. | Power users can annotate the canvas, share layouts across machines |
+| **M10** | `feat/studio-v2-self-check` | `crumb doctor --self-check` (pause/resume lifecycle smoke), `/api/health` extended with `pause_resume_lifecycle`, `<HealthBadge>` in Status Bar. Decoupled from migration — can ship before, during, or after. | Fresh-machine user can verify Studio + reducer pause/resume works; QA agent can include this in its auto-verification suite |
 
-Estimate: 4–7 days of focused work per PR (M2 / M3 / M4 are the heaviest). Total ~3 weeks if linear; PR-Prune-1/2/3 land first (≤1 day) so the schema we render is the cleaner one.
+Sequencing is dictated by **dependency order**, not timeline. Each PR is independently mergeable, CI-green at the verify gate, and leaves `npx crumb-studio` working. The migration's quality bar is "extreme production level" — every panel ships with full keyboard navigation, full a11y AA, full theme support, full error states (loading / empty / failed / reconnecting), and full unit + interaction test coverage before the next PR begins. There is no schedule pressure; PRs ship when they meet the quality bar, not before.
 
 ## 8. Inherited backlog — where each item lands
 
@@ -295,15 +372,46 @@ Estimate: 4–7 days of focused work per PR (M2 / M3 / M4 are the heaviest). Tot
 |---|---|---|
 | **F4** sidebar collapse | M3 (free via dockview) | Hand-rolled hamburger ticket disappears |
 | **F5** adapter modal advanced | M3 (`<AdapterDoctorDialog>` via Radix Dialog) | Auth + install hint card, copy buttons |
-| **F6** block tear-off | M5 (free via dockview popout) | The 4–6h risky ticket becomes built-in |
-| **PR-O3** wall-clock waterfall | M4 (already shipped #142, port logic to React) | No new behavior; refactor only |
+| **F6** block tear-off | M5 (free via dockview popout) | The risky custom-window ticket becomes built-in |
+| **PR-O3** wall-clock waterfall | M4 (already shipped #142, port logic to React + add BubbleUp drag-select) | New behavior added: outlier mode |
 | **PR-O4** aggregate strip + sparkline | M6 (Tremor SparkAreaChart) | D1–D6 lines + token/cost live |
-| **PR-O5** trace tree + cross-provider chip | M6 (custom recursive tree) | Reuses dockview right-rail |
+| **PR-O5** trace tree | M6 (custom recursive tree) | Reuses dockview right-rail |
+| **PR-O5** cross-provider chip | M6 in `<Scorecard>` | Verifier provider ≠ build provider visual cue |
+| **PR-O5** per-spawn lifecycle gauge | M6 in `<Scorecard>` | 9-state machine gauge (P3 from observability plan) |
+| **Service Map view** (from PR #143 PR-V2) | M4 `<ServiceMap>` | Datadog Service Map convention, dagre-laid-out, edge aggregation |
+| **Critical-path overlay** (Lightstep convention) | M4 (shared toggle across Pipeline/Waterfall/Map) | Black 2 px overlay; skips unverified spans |
+| **BubbleUp drag-select outlier mode** | M4 (Waterfall) | Honeycomb pattern; baseline-vs-selection histograms in Detail Rail |
+| **⌘K command palette** | M3 (`<CommandPalette>` via shadcn `<Command>`) | Linear/Raycast/cmdk; sub-palette nav |
+| **Density toggle** (Comfortable/Compact) | M2 (root attribute) | Datadog Notebook convention |
+| **`<DesignCheckPanel>`** (W3 Studio surface) | M6 (Detail Rail mode + Scorecard D5 + Live Feed formatter) | The reducer-side W3 effect needs this UI to be useful |
+| **Self-check / pause-resume portability** | M10 (`crumb doctor --self-check` + `<HealthBadge>`) | Decoupled — can land any time |
 | **W2** sandwich byte-identical CI test | independent — server-side, no migration impact | Land any time |
-| **W3** design_check deterministic gate | independent — reducer-side | Land any time |
+| **W3** design_check deterministic gate | independent — reducer-side; Studio surface in M6 | Reducer + UI co-evolve |
 | **W4** retry policy with cache-hit monitoring | independent — reducer-side | Land any time |
+| **n8n parity Sticky-Note nodes + Save layout / Import-export** | M9 | Power-user annotation polish |
 | **PR-Prune-1/2/3** (other stream) | **PRE-REQUISITE** for M0 | Schema delta + actor list must settle before we draw component shapes |
-| **PR #143 redesign plan** (merged) | Implementation lives in M3 (form) and M4 (pipeline) | This page supersedes the standalone implementation tickets |
+| **PR #143 redesign plan** (merged) | Implementation lives in M2 (DESIGN.md) + M3 (form) + M4 (pipeline + map) | This page supersedes the standalone implementation tickets |
+
+## 8.1 Production-level quality bar — what every PR must satisfy before merge
+
+Every M-series PR must clear all of these before review approval (CI is necessary but not sufficient):
+
+| Bar | Definition |
+|---|---|
+| **A11y AA** | All interactive controls have accessible names + roles + focus states; full keyboard navigation (Tab/Shift-Tab/Esc/Arrow keys/Enter/Space all work); WAI-ARIA APG patterns followed (combobox, listbox, dialog, tabpanel); axe-core CI check passes; screen-reader trace via VoiceOver / NVDA spot-check noted in PR description. |
+| **Theme parity** | Every panel renders correctly in both light + dark themes. Token usage only — no hard-coded `#xxxxxx` outside `theme.css` and the brand mark. Visual snapshot per theme committed to `__visual__/` (Playwright `expect(page).toHaveScreenshot`). |
+| **Density parity** | Every panel renders correctly in both Comfortable + Compact density. Visual snapshots per density. |
+| **States — loading / empty / error / reconnecting** | Every panel renders all four states explicitly. No "blank while fetching" — skeleton rows (Datadog DRUIDS convention). Error state shows actionable retry. Reconnecting state for SSE-bound panels shows live "reconnecting (attempt N)" hint. |
+| **Reduced motion** | `@media (prefers-reduced-motion: reduce)` collapses all transitions to 0 ms; tested in CI via Playwright emulation. |
+| **i18n-ready** | All user-visible strings extracted to a single `strings.ts` map (no inline JSX literals). Even if Korean translations don't ship in this migration, the structure is in place. |
+| **Performance budget** | `<Pipeline>` drag at 60 fps for ≤20 nodes (React Flow profile); `<Waterfall>` render <16 ms for ≤500 spans; SSE event → DOM update <50 ms p95 measured via Performance API marks; bundle entry chunk ≤80 kB gz, total initial load ≤240 kB gz. CI fails the PR if bundle regresses by >5%. |
+| **Test coverage** | Unit tests for every hook and pure function; component tests via Vitest + Testing Library for every panel covering happy path + error path + keyboard interactions; one Playwright e2e per migration milestone (M3 spawn flow, M4 pipeline drag + inspect, M5 narrative tear-off, M6 scorecard sparkline). |
+| **No console output in production** | `console.log` allowed only in dev; production build strips them via `terser` or fails CI. |
+| **Documentation per panel** | Every `panels/*.tsx` ships with a JSDoc block citing: which API endpoint(s) it consumes, which Zustand slice it reads/writes, which AGENTS.md invariant(s) it must respect, link to the relevant DESIGN.md row spec. |
+| **Anti-deception alignment** | Any panel surfacing a score or verdict must cite its source per AGENTS.md invariant 4 (`reducer-auto` / `qa-check-effect` / `verifier-llm`). Tooltip on every score badge. |
+| **Telemetry-free** | No analytics, no telemetry, no third-party scripts. Local-only. |
+
+A PR that passes CI but fails any of these bars is sent back. The bar is enforced via PR template checkbox + reviewer checklist.
 
 ## 9. Risks, mitigations, open questions
 
@@ -367,3 +475,9 @@ Start M0 (`chore/studio-vite-scaffold`) when **all four** of these are true:
 4. User explicitly approves this plan (no implicit consent)
 
 Until then, the existing piecewise PRs (F4/F5 etc.) **are not started** — the work would be wasted re-implementation post-migration. Better to wait.
+
+M10 (self-check + health badge) is decoupled — it touches server + reducer only and can land in parallel with the migration trigger queue.
+
+## Quality, not pace
+
+This plan deliberately omits effort estimates and target dates. The migration ships when each PR meets §8.1's production-level quality bar. There is no schedule to slip; PRs queue up sequentially, and the next one starts only after the current one has been merged at full quality. Tradeoffs in scope (e.g., "do we add Sticky-Notes in M9?") are decided on quality + user value, never on time pressure.
