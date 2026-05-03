@@ -3514,6 +3514,36 @@ makeResizable(
   'crumb.sessions-w',
   () => parseInt(getComputedStyle(document.body).getPropertyValue('--sessions-w'), 10) || 240,
 );
+
+// F4 — collapsible sessions sidebar. Hamburger in header.summary toggles
+// data-sidebar-collapsed on body; CSS zeros the sidebar + handle columns
+// (with a 220ms transition for the slide). Persisted in localStorage so
+// the chosen state survives reloads. Resized width is preserved separately
+// via `crumb.sessions-w` (above) so re-expand restores the user's setting.
+(function initSidebarToggle() {
+  const KEY = 'crumb.sessions-collapsed';
+  const btn = document.getElementById('sidebar-toggle');
+  if (!btn) return;
+  const apply = (collapsed) => {
+    if (collapsed) {
+      document.body.dataset.sidebarCollapsed = '1';
+      btn.setAttribute('aria-expanded', 'false');
+      btn.title = 'Expand sessions sidebar';
+    } else {
+      delete document.body.dataset.sidebarCollapsed;
+      btn.setAttribute('aria-expanded', 'true');
+      btn.title = 'Collapse sessions sidebar';
+    }
+  };
+  let initial = false;
+  try { initial = localStorage.getItem(KEY) === '1'; } catch (_) {}
+  apply(initial);
+  btn.addEventListener('click', () => {
+    const next = document.body.dataset.sidebarCollapsed !== '1';
+    apply(next);
+    try { localStorage.setItem(KEY, next ? '1' : '0'); } catch (_) {}
+  });
+})();
 makeResizable(
   'detail-resize',
   (start, abs, dx) => {

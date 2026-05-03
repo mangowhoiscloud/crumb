@@ -165,6 +165,11 @@
   </div>
 
   <header class="summary">
+    <!-- F4 — collapsible sidebar toggle. Hamburger button toggles
+         data-sidebar-collapsed on <body>; CSS zeros out the grid columns
+         + hides the resize handle. localStorage persists state across
+         reloads (key: crumb.sessions-collapsed). -->
+    <button id="sidebar-toggle" class="sidebar-toggle" aria-expanded="true" aria-label="Toggle sessions sidebar" title="Collapse sessions sidebar">☰</button>
     <div>
       <h1 id="header-title"><span class="pill muted">no session</span></h1>
       <div class="goal" id="header-goal">Pick a session on the left or hit ＋ to start a new crumb run.</div>
