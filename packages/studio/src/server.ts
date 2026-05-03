@@ -151,13 +151,52 @@ export async function startStudioServer(
     res.end('not found');
   });
 
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(requestedPort, bind, () => resolve());
-  });
+  // v0.5 — Port ephemeral fallback (Vite / Gradio convention).
+  //
+  // Vite (5173 → +1 on EADDRINUSE) and Gradio (7860 → searches up to N) both
+  // walk forward when the requested port is occupied. Streamlit (8501 strict)
+  // and n8n (5678 strict) is the alternative — but those have a known issue
+  // queue (Streamlit #7426, n8n community #1758) about the rigidity. We
+  // follow the Vite walk pattern. Strict mode opt-in via
+  // `CRUMB_STUDIO_STRICT_PORT=1` for users who run multi-instance and need
+  // deterministic ports.
+  //
+  // The walk is bounded (up to 16 attempts) to avoid spinning forever when
+  // the user has every port in [7321, 7336] occupied — at that point the
+  // failure should be surfaced explicitly.
+  const strictPort = process.env.CRUMB_STUDIO_STRICT_PORT === '1';
+  const maxWalk = strictPort ? 1 : 16;
+  let actualPort = requestedPort;
+  let lastError: Error | null = null;
+  for (let i = 0; i < maxWalk; i++) {
+    const tryPort = requestedPort + i;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const onError = (err: Error & { code?: string }): void => {
+          server.removeListener('error', onError);
+          reject(err);
+        };
+        server.once('error', onError);
+        server.listen(tryPort, bind, () => {
+          server.removeListener('error', onError);
+          resolve();
+        });
+      });
+      actualPort = tryPort;
+      lastError = null;
+      break;
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException;
+      lastError = e;
+      if (e.code !== 'EADDRINUSE') break;
+      // EADDRINUSE — try next port. The server is in 'closed' state after a
+      // failed listen, so we can call listen() again on the same instance.
+    }
+  }
+  if (lastError) throw lastError;
 
   const addr = server.address();
-  const port = typeof addr === 'object' && addr ? addr.port : requestedPort;
+  const port = typeof addr === 'object' && addr ? addr.port : actualPort;
   const url = `http://${bind === '0.0.0.0' ? 'localhost' : bind}:${port}/`;
 
   return {
