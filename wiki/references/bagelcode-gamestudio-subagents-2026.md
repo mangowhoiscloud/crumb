@@ -1,17 +1,17 @@
 ---
-title: gamestudio-subagents — Claude Code + 12-agent role-play 게임 스튜디오 (2026)
+title: gamestudio-subagents — Claude Code + 12-agent role-play game studio (2026)
 category: references
 tags: [bagelcode, gamestudio-subagents, claude-code, role-play, prompt-only, single-context, host-harness, byo-agent, 2026]
 sources:
   - "https://github.com/pamirtuna/gamestudio-subagents"
   - "[[bagelcode-production-cases-2026]] §E1"
-  - "[[bagelcode-mobile-game-tech-2026]] §6 비교표"
+  - "[[bagelcode-mobile-game-tech-2026]] §6 comparison table"
   - "[[bagelcode-verifier-isolation-matrix]] #20"
-  - "[[bagelcode-host-harness-decision]] (Crumb 결정의 시장 검증 데이터)"
+  - "[[bagelcode-host-harness-decision]] (market validation data for the Crumb decision)"
 summary: >-
-  pamirtuna/gamestudio-subagents (193 stars, 2026) — Claude Code CLI 호출만으로 12 agent
-  페르소나를 inline 흉내내는 prompt-only 게임 스튜디오. Crumb host harness 결정의 시장 검증 + Crumb이
-  그 위에 올린 frontier 5축 (transcript / replay / cross-provider / mode 동적 / single-file).
+  pamirtuna/gamestudio-subagents (193 stars, 2026) — a prompt-only game studio that mimics 12 agent
+  personas inline solely through Claude Code CLI invocations. Market validation for the Crumb host harness decision +
+  the frontier 5 axes that Crumb adds on top (transcript / replay / cross-provider / dynamic mode / single-file).
 provenance:
   extracted: 0.65
   inferred: 0.30
@@ -20,77 +20,77 @@ created: 2026-05-02
 updated: 2026-05-02
 ---
 
-# gamestudio-subagents — Claude Code + 12-agent role-play 게임 스튜디오
+# gamestudio-subagents — Claude Code + 12-agent role-play game studio
 
 > **URL**: https://github.com/pamirtuna/gamestudio-subagents · **193 stars** · 2026
 >
-> 우리 [[bagelcode-host-harness-decision]] 결정 (default = Claude Code skill, host = Claude Code) 의 **시장 검증 데이터**. 같은 Category C (host harness 위 light layer) 패턴을 prompt-only 까지 극단적으로 얇게 깎은 사례. Crumb 의 frontier 5축은 이 위에 올린 차이.
+> **Market validation data** for our [[bagelcode-host-harness-decision]] (default = Claude Code skill, host = Claude Code). A case in the same Category C (light layer on top of a host harness) pattern, sharpened to the extreme of being prompt-only. Crumb's frontier 5 axes are the differences layered on top.
 
 ---
 
-## 1. 한 줄 정의
+## 1. One-line definition
 
-**Claude Code CLI 한 줄 호출만으로 12-agent role 을 흉내내는 prompt-only 게임 스튜디오.** 별도 런타임도 없고 Task tool 도 안 쓰고 transcript 도 없다. 모든 "agent" 는 사용자가 `claude "Read agents/<role>.md ..."` 라고 명시하면 Claude 가 그 markdown 을 읽고 inline 으로 그 페르소나로 행동한다.
+**A prompt-only game studio that mimics 12 agent roles purely through one-line Claude Code CLI invocations.** No separate runtime, no Task tool, no transcript. Every "agent" only activates when the user explicitly writes `claude "Read agents/<role>.md ..."` — Claude reads that markdown and acts inline as the persona.
 
 ---
 
-## 2. Invocation 패턴
+## 2. Invocation pattern
 
 ```bash
-# 1단계: 프로젝트 init
+# Step 1: project init
 python scripts/init_project.py
 # → user prompt: project name, engine (Godot/Unity/Unreal), mode (Design/Prototype/Full)
-# → projects/<name>/{agents,documentation,source,qa,builds,project-config.json} 생성
+# → creates projects/<name>/{agents,documentation,source,qa,builds,project-config.json}
 
-# 2단계: agent 호출 — 매번 사용자가 어느 agent 를 활성화할지 prompt 로 직접 명시
+# Step 2: agent invocation — each time the user explicitly names which agent to activate via prompt
 claude "Read agents/market_analyst.md and project-config.json in projects/<name>...
         do competitive analysis for match-3 puzzle space-themed."
 
-# 3단계: 진행 관리
+# Step 3: progress management
 python scripts/project_manager.py status <name>     # 🟢/🟡/🔵/✅/❌
 python scripts/project_manager.py resume <name>
 python scripts/project_manager.py freeze <name>
 python scripts/project_manager.py startover <name>
 ```
 
-→ **dispatch routing 자체를 사용자가 prompt 로 작성한다.** 자동 routing 없음. ^[extracted]
+→ **The user writes the dispatch routing itself as a prompt.** No automatic routing. ^[extracted]
 
 ---
 
-## 3. 12 agent 정의
+## 3. The 12 agent definitions
 
 ```
-agents/                              ← project-agnostic 12 markdown 페르소나
-├── master_orchestrator.md           시스템 조정자, 프로젝트 init
-├── producer.md                       타임라인/품질 관리
-├── market_analyst.md                 경쟁사/시장 분석
+agents/                              ← project-agnostic 12 markdown personas
+├── master_orchestrator.md           system coordinator, project init
+├── producer.md                       timeline / quality management
+├── market_analyst.md                 competitor / market analysis
 ├── data_scientist.md                 analytics, A/B test
-├── sr_game_designer.md               비전/시스템 architect
-├── mid_game_designer.md              콘텐츠 구현
-├── mechanics_developer.md            코어 게임플레이 엔지니어
+├── sr_game_designer.md               vision / system architect
+├── mid_game_designer.md              content implementation
+├── mechanics_developer.md            core gameplay engineer
 ├── game_feel_developer.md            polish, juice
 ├── sr_game_artist.md                 art director
 ├── technical_artist.md               shader, VFX
 ├── ui_ux_agent.md                    interface
-└── qa_agent.md                       테스트 + 검증
+└── qa_agent.md                       testing + verification
 
-projects/<name>/agents/              ← project-specific override (12 카피 + customize)
+projects/<name>/agents/              ← project-specific override (12 copies + customize)
 ```
 
-각 markdown = Claude 가 그 페르소나로 행동하라는 system prompt 단편. **sandwich 4-section 같은 강제 구조 없음.** 본질은 role-play instruction. ^[extracted]
+Each markdown = a system-prompt fragment instructing Claude to act as that persona. **No mandatory structure like the sandwich 4-section pattern.** The essence is role-play instructions. ^[extracted]
 
 ---
 
-## 4. Coordination — Claude inline reasoning 에 100% 위임
+## 4. Coordination — 100% delegated to Claude inline reasoning
 
 WebFetch verbatim:
 > "**No explicit MCP or Tool reference** mentioned; relies on Claude's ability to read markdown agent definitions from filesystem and coordinate via conversation."
 
-→ **Task tool spawn 없음. subprocess 없음. MCP 서버 없음.** 12 agent 의 협업은 단일 Claude 세션 안에서 Claude 가 12 markdown 을 다 읽고 inline 으로 페르소나를 전환하며 self-conversation 하는 것. [[bagelcode-frontier-orchestration-2026]] §B Cognition "**single thread context**" 입장과 동형. ^[extracted]
+→ **No Task tool spawn. No subprocess. No MCP server.** Cooperation among the 12 agents happens inside a single Claude session as Claude reads all 12 markdown files and self-converses while switching personas inline. Isomorphic to the [[bagelcode-frontier-orchestration-2026]] §B Cognition "**single thread context**" stance. ^[extracted]
 
 ---
 
-## 5. State / Persistence — filesystem 만
+## 5. State / persistence — filesystem only
 
 ```
 projects/<name>/
@@ -105,21 +105,21 @@ projects/<name>/
 ```
 
 - transcript ❌ / session ❌ / append-only ❌
-- `project_manager.py` status = 디렉토리 marker (🟢/🟡/🔵) 그 이상 영속화 X
-- 매 `claude` 호출 = **fresh context**
-- Resume = "마지막 산출물 다시 읽고 다음 단계 prompt 를 사용자가 직접 입력" ^[inferred]
+- `project_manager.py` status = directory marker (🟢/🟡/🔵), no persistence beyond that
+- Every `claude` call = **fresh context**
+- Resume = "re-read the last artifact, then the user types the next-step prompt by hand" ^[inferred]
 
 ---
 
-## 6. 3 mode — `init` 시점에 박힘
+## 6. The 3 modes — locked at `init` time
 
-| Mode | 활성 agent | 산출 | trigger |
+| Mode | Active agents | Output | Trigger |
 |---|---|---|---|
-| **Design** | Market Analyst + Sr Designer + Sr Artist | design doc + market validation + art direction (구현 X) | `init_project.py` 시 user 선택 |
-| **Prototype** | Design + 일부 Engineering | playable prototype + telemetry + feasibility | 동일 |
-| **Development** | 12 agent 전체 | 완성된 게임 + data-driven iteration + QA + launch | 동일 |
+| **Design** | Market Analyst + Sr Designer + Sr Artist | design doc + market validation + art direction (no implementation) | user choice during `init_project.py` |
+| **Prototype** | Design + a subset of Engineering | playable prototype + telemetry + feasibility | same |
+| **Development** | All 12 agents | finished game + data-driven iteration + QA + launch | same |
 
-→ **mode 를 init 에 박는다.** run 중 escalate 불가. [[bagelcode-production-cases-2026]] §B1 Lanham "**single 으로 시작 → 점진 확장**" 권고와 충돌. ^[inferred]
+→ **Mode is locked at init.** Cannot be escalated mid-run. Conflicts with [[bagelcode-production-cases-2026]] §B1 Lanham's "**start single → expand incrementally**" recommendation. ^[inferred]
 
 ---
 
@@ -131,128 +131,128 @@ projects/<name>/
 - **Version control**: Git
 - **Target engines**: Godot, Unity, Unreal, custom
 - **AI backbone**: Claude (Anthropic)
-- **Auth**: Claude Code CLI 자체 OAuth → Max plan 구독 그대로 사용 ✅
-- **Dependencies**: 없음 (no `package.json`, no `requirements.txt`) — Python `scripts/` 만 ^[extracted]
+- **Auth**: Claude Code CLI's own OAuth → uses the Max plan subscription as-is ✅
+- **Dependencies**: none (no `package.json`, no `requirements.txt`) — only Python `scripts/` ^[extracted]
 
 ---
 
-## 8. Routing / Orchestration topology
+## 8. Routing / orchestration topology
 
 ```
-User Input (자연어 + 활성 agent 명시)
+User Input (natural language + explicit active agent)
     ↓
-Master Orchestrator (mode/project 기반 agent 선택)
+Master Orchestrator (selects agents based on mode/project)
     ↓
-Producer Agent (병렬 워크플로 조정)
+Producer Agent (coordinates parallel workflows)
     ├→ Market Analyst (Phase 1: Go/No-Go)
     ├→ Design Team (Sr / Mid Designer)
     ├→ Engineering Team (Mechanics / Game Feel)
     ├→ Art Team (Sr Artist / Technical Artist / UI/UX)
     ├→ Data Scientist (analytics, A/B test)
-    └→ QA Agent (telemetry 기반 테스트)
+    └→ QA Agent (telemetry-based testing)
     ↓
 Continuous Loop: Data Collection → Data Scientist → Market Analyst → Producer Optimization
     ↓
 Launch + Post-Launch Monitoring
 ```
 
-**inter-agent RPC 없음.** orchestration 은 Claude 가:
-1. agent role markdown 모두 읽음
-2. project-config.json 으로 워크플로 의존성 추론
-3. 자연어 prompt 로 task 조정 ^[extracted]
+**No inter-agent RPC.** Orchestration happens because Claude:
+1. reads every agent role markdown
+2. infers workflow dependencies from project-config.json
+3. coordinates tasks via natural-language prompts ^[extracted]
 
 ---
 
-## 9. Crumb 관점 — 같은 영양 (차용한 발상)
+## 9. From the Crumb perspective — the same nutrients (borrowed ideas)
 
-| 발상 | gamestudio | Crumb |
+| Idea | gamestudio | Crumb |
 |---|---|---|
 | Claude Code = host harness | `claude "..."` invocation | `.claude/skills/crumb/SKILL.md` trigger |
-| markdown agent definition | `agents/<role>.md` 12 | `agents/{coordinator,planner-lead,engineering-lead,...}.md` 4 + specialists 5 |
-| project-config 분리 | `project-config.json` | `.crumb/config.toml` + presets |
+| markdown agent definition | `agents/<role>.md` × 12 | `agents/{coordinator,planner-lead,engineering-lead,...}.md` × 4 + specialists × 5 |
+| project-config separation | `project-config.json` | `.crumb/config.toml` + presets |
 | Python helper script | `init_project.py`, `project_manager.py` | `npx tsx src/index.ts run\|replay\|event\|ls\|doctor` |
-| mode 변형 | Design / Prototype / Full | `--solo` / `--standard` / `--rigorous` / `--parallel` |
-| 도메인 = 캐주얼 게임 | match-3 예시 | 60s match-3 cat 예시 |
+| mode variants | Design / Prototype / Full | `--solo` / `--standard` / `--rigorous` / `--parallel` |
+| domain = casual games | match-3 example | 60s match-3 cat example |
 
-→ Crumb [[bagelcode-host-harness-decision]] 의 vendor-side 검증 데이터. **1:1 발상 일치 = Crumb 결정이 시장 기 검증된 패턴과 정합.** ^[inferred]
+→ Vendor-side validation data for Crumb's [[bagelcode-host-harness-decision]]. **1:1 idea match = the Crumb decision is consistent with a market-validated pattern.** ^[inferred]
 
 ---
 
-## 10. Crumb 관점 — 의도적으로 다른 6 곳
+## 10. From the Crumb perspective — six places we deliberately diverge
 
-| 차원 | gamestudio | **Crumb** | 다른 이유 (출처) |
+| Dimension | gamestudio | **Crumb** | Reason for divergence (source) |
 |---|---|---|---|
-| Agent 수 | 12 | **4 외부 + N 내부 step** | [[bagelcode-production-cases-2026]] §B1 Lanham "start single, escalate" |
+| Number of agents | 12 | **4 external + N internal steps** | [[bagelcode-production-cases-2026]] §B1 Lanham "start single, escalate" |
 | Coordination | Claude inline conversation (single context) | **Task tool spawn (depth=1) + JSONL transcript** | [[bagelcode-frontier-orchestration-2026]] §I MAR (degeneration-of-thought) |
-| Persistence | filesystem 디렉토리만 | **transcript.jsonl append-only + ULID + 38 kind** | replay determinism + audit trail + crash recovery |
-| Replay | 없음 | **`crumb replay <session-dir>` = 동일 state 재구성** | reducer (state, event) → effects 순수 함수 |
-| Mode | init 시 박음 | **CLI flag 동적** | "기획자 자연어 escalate" — turn 중 mode 변경 가능 |
-| Provider | Claude only | **`--cross-provider` opt-in (Codex + Claude)** | [[bagelcode-verifier-isolation-matrix]] C2 cross-provider 학술 backbone |
-| 산출 | engine-specific binary (Godot/Unity/Unreal) | **single-file HTML5 (Phaser CDN)** | 평가자 셋업 0 + 1회 응시 risk 차단 |
+| Persistence | filesystem directory only | **transcript.jsonl append-only + ULID + 38 kinds** | replay determinism + audit trail + crash recovery |
+| Replay | none | **`crumb replay <session-dir>` = reconstructs identical state** | reducer (state, event) → effects pure function |
+| Mode | locked at init | **CLI flag dynamic** | "planner natural-language escalate" — mode change possible mid-turn |
+| Provider | Claude only | **`--cross-provider` opt-in (Codex + Claude)** | [[bagelcode-verifier-isolation-matrix]] C2 cross-provider academic backbone |
+| Output | engine-specific binary (Godot/Unity/Unreal) | **single-file HTML5 (Phaser CDN)** | zero evaluator setup + blocks the one-shot-attempt risk |
 
-→ **핵심 추상 차이**:
+→ **Core abstraction difference**:
 ```
-gamestudio = "12 markdown 페르소나 + Claude inline self-conversation"
-            (control-plane 자체가 없음, Claude 세션이 곧 control-plane)
+gamestudio = "12 markdown personas + Claude inline self-conversation"
+            (no control plane of its own — the Claude session itself is the control plane)
 
-Crumb     = "4 sandwich actor + Task subagent + JSONL control-plane"
-            (control-plane이 LLM layer 외부 = ToS와 무관 = 자유도 본질)
+Crumb     = "4 sandwich actors + Task subagent + JSONL control plane"
+            (the control plane is outside the LLM layer = ToS-independent = the freedom is the essence)
 ```
 
-[[bagelcode-system-architecture]] §6 "Control plane vs LLM layer 책임 분담" 표가 정확히 이 차이를 박아둔 매트릭스. ^[inferred]
+The [[bagelcode-system-architecture]] §6 "Control plane vs LLM layer responsibility split" table is the matrix that pins down exactly this difference. ^[inferred]
 
 ---
 
-## 11. gamestudio 의 5 한계 — Crumb 이 메우는 자리
+## 11. The 5 limitations of gamestudio — the gaps Crumb fills
 
-### L1. transcript / audit trail 없음
-베이글코드 채용 메일 verbatim "**기획자가 에이전트에게 게임을 만들게 한다**" → AI 의사결정 chain 추적 불가. **Crumb**: `transcript.jsonl` 38 kind + `crumb replay`. ^[inferred]
+### L1. No transcript / audit trail
+Bagelcode recruitment-mail verbatim "**planners have agents build the game**" → no way to trace AI decision chains. **Crumb**: `transcript.jsonl` 38 kinds + `crumb replay`. ^[inferred]
 
-### L2. single context inline = MAR/CP-WBFT 학술 backing 없음
-12 페르소나가 한 Claude 세션 안 self-conversation = [[bagelcode-frontier-orchestration-2026]] §I MAR "**degeneration-of-thought**" 직격. **Crumb**: Verifier sandwich 분리 + `--cross-provider` 시 Lanham 0.32→0.89 패턴.
+### L2. Single-context inline = no MAR/CP-WBFT academic backing
+12 personas self-conversing inside one Claude session = a direct hit by [[bagelcode-frontier-orchestration-2026]] §I MAR "**degeneration-of-thought**". **Crumb**: Verifier sandwich split + the Lanham 0.32→0.89 pattern when `--cross-provider` is on.
 
-### L3. crash recovery / pause-resume 약함
-`project_manager.py freeze/resume` = 디렉토리 marker 만, 진행 중 turn 복구 X. **Crumb**: reducer pure → state machine → live/replay/test 3 loop variant 동일 reducer.
+### L3. Weak crash recovery / pause-resume
+`project_manager.py freeze/resume` = directory markers only, with no recovery of an in-flight turn. **Crumb**: pure reducer → state machine → identical reducer across the live/replay/test loop variants.
 
-### L4. mode 가 init 에 박힘 = escalate 불가
-Design → Prototype → Full 전환을 사용자가 새 init 으로만 가능. **Crumb**: `--solo` → `--standard` → `--rigorous` → `--parallel` CLI flag, turn 중 사용자 개입으로도 escalate 가능.
+### L4. Mode locked at init = no escalation
+Design → Prototype → Full transitions are only possible via a fresh init by the user. **Crumb**: `--solo` → `--standard` → `--rigorous` → `--parallel` CLI flags, escalation possible even via mid-turn user intervention.
 
-### L5. engine-specific binary = 평가자 셋업 무거움
-Godot/Unity/Unreal export → 평가자가 엔진 + 프로젝트 import 필요. **Crumb**: Phaser CDN single-file HTML → 더블클릭만.
+### L5. Engine-specific binary = heavy evaluator setup
+Godot/Unity/Unreal export → the evaluator must install the engine and import the project. **Crumb**: Phaser CDN single-file HTML → just a double-click.
 
-→ **5 한계 = [[bagelcode-frontier-rationale-5-claims]] 의 5 frontier claim 5축과 매핑.** gamestudio = production validation, Crumb = 그 위 frontier 5축 적용. ^[inferred]
+→ **The 5 limitations map to the 5 axes of [[bagelcode-frontier-rationale-5-claims]]'s 5 frontier claims.** gamestudio = production validation, Crumb = the 5 frontier axes applied on top. ^[inferred]
 
 ---
 
-## 12. Auth / runtime — 정확히 Category C ([[bagelcode-host-harness-decision]] 매트릭스)
+## 12. Auth / runtime — exactly Category C ([[bagelcode-host-harness-decision]] matrix)
 
-| 차원 | 값 |
+| Dimension | Value |
 |---|---|
 | Prerequisites | Git / Python 3.8+ / Node.js (Mermaid) / `npm install -g @anthropic-ai/claude-code` + `claude auth login` |
-| Auth 메커니즘 | Claude Code CLI 자체 OAuth (1st-party) |
-| 구독 호환 | ✅ Max plan 그대로 사용 |
-| 2026-04-04 enforcement | ✅ 영향 없음 (CLI subprocess invoke = 사용자 직접 호출과 구별 불가) |
-| 자체 web UI | ❌ 없음 (terminal 만) |
-| Claude Code 미설치 시 | 동작 0% (mock 없음) ← **Crumb 의 차별점** |
+| Auth mechanism | Claude Code CLI's own OAuth (1st-party) |
+| Subscription compatibility | ✅ Max plan usable as-is |
+| 2026-04-04 enforcement | ✅ unaffected (CLI subprocess invocation = indistinguishable from a user's direct invocation) |
+| Own web UI | ❌ none (terminal only) |
+| Without Claude Code installed | 0% functional (no mock) ← **Crumb's differentiator** |
 
-→ **2026-04-04 enforcement 후에도 그대로 동작.** 외부 도구가 OAuth 토큰을 도용하는 게 아니라 사용자가 자기 터미널에서 `claude` 호출 + Python 스크립트가 그 호출 보조 + markdown 파일이 prompt 자료. Anthropic 이 막을 표면 없음. ^[inferred]
+→ **Continues to work after the 2026-04-04 enforcement.** Not an external tool stealing OAuth tokens, but the user invoking `claude` from their own terminal + Python scripts assisting the call + markdown files providing prompt material. No surface for Anthropic to block. ^[inferred]
 
 ---
 
-## 13. README 평가자 의문 — 선제 답변 (제안)
+## 13. Anticipated evaluator questions — preemptive answers (suggested)
 
-> "gamestudio-subagents (193 stars, 2026) 는 Claude Code 위 prompt-only orchestration 의 production validation 입니다. 우리 [[bagelcode-host-harness-decision]] 결정과 같은 Category — Claude Code 자체 OAuth + light layer (markdown agent + Python scripts). Crumb 은 그 위에 5 frontier claim 을 더한 것: (1) **transcript JSONL 38 kind** — 의사결정 audit trail (gamestudio 없음), (2) **reducer pure + replay deterministic** — crash recovery (gamestudio 없음), (3) **`--cross-provider` opt-in** — MAR/CP-WBFT 학술 backing (gamestudio Claude only), (4) **mode CLI flag 동적** — Lanham start-single-escalate (gamestudio init 박힘), (5) **single-file HTML 산출** — 평가자 셋업 0 (gamestudio engine-specific). gamestudio = production validation, Crumb = 그 위 frontier 5축."
+> "gamestudio-subagents (193 stars, 2026) is the production validation of prompt-only orchestration on top of Claude Code. Same Category as our [[bagelcode-host-harness-decision]] decision — Claude Code's own OAuth + a light layer (markdown agents + Python scripts). Crumb adds 5 frontier claims on top: (1) **transcript JSONL with 38 kinds** — decision audit trail (gamestudio has none), (2) **pure reducer + deterministic replay** — crash recovery (gamestudio has none), (3) **`--cross-provider` opt-in** — MAR/CP-WBFT academic backing (gamestudio is Claude only), (4) **dynamic mode CLI flag** — Lanham start-single-escalate (gamestudio locks it at init), (5) **single-file HTML output** — zero evaluator setup (gamestudio is engine-specific). gamestudio = production validation, Crumb = the 5 frontier axes on top."
 
 ---
 
 ## See also
 
 - [[bagelcode]] / [[bagelcode-task-direction]]
-- [[bagelcode-host-harness-decision]] — Category C 결정 (gamestudio = 시장 검증)
-- [[bagelcode-production-cases-2026]] §E1 — 종합 비교 안 gamestudio 위치
-- [[bagelcode-mobile-game-tech-2026]] §6 — Claude-Code-Game-Studios (49 agent) 와 함께 비교표
-- [[bagelcode-verifier-isolation-matrix]] #20 — QA Agent 격리 ✅ / Claude only ❌
-- [[bagelcode-paperclip-vs-alternatives]] — BYO adapter 패턴 (다른 layer 의 발상 일치)
+- [[bagelcode-host-harness-decision]] — the Category C decision (gamestudio = market validation)
+- [[bagelcode-production-cases-2026]] §E1 — gamestudio's position in the comprehensive comparison
+- [[bagelcode-mobile-game-tech-2026]] §6 — comparison table alongside Claude-Code-Game-Studios (49 agents)
+- [[bagelcode-verifier-isolation-matrix]] #20 — QA Agent isolation ✅ / Claude only ❌
+- [[bagelcode-paperclip-vs-alternatives]] — BYO adapter pattern (idea agreement at a different layer)
 - [[bagelcode-frontier-orchestration-2026]] §B Cognition single-thread / §I MAR degeneration-of-thought
-- [[bagelcode-frontier-rationale-5-claims]] — Crumb 의 5축이 gamestudio 의 5 한계와 매핑
-- [[bagelcode-system-architecture]] §6 — control plane vs LLM layer 책임 분담 표
+- [[bagelcode-frontier-rationale-5-claims]] — Crumb's 5 axes mapped against gamestudio's 5 limitations
+- [[bagelcode-system-architecture]] §6 — control-plane vs LLM-layer responsibility split table

@@ -27,13 +27,14 @@ sources:
   - "[[bagelcode-user-intervention-frontier-2026-05-02]]"
   - "[[bagelcode-recruitment-task]]"
 summary: >-
-  메일 요구사항 #2 ("사용자가 협업 과정에 개입") 충족 검증을 위해 frontier 12 system × 5 dimension
-  (activation / NL classification mechanism / replay / CRUDvia NL / steal-or-avoid) 비교. 11/12 가
-  LLM 판단 (implicit) 또는 protocol gate (per-tool approve/reject) 사용. 명시적 enum 분류기는 bkit
-  단 1 개 — regex 8 언어 + scalar confidence (FP precision bug 2회 패치) 패턴이 anti-pattern 으로
-  관찰됨. Crumb v0.2.0 의 "raw NL → kind=user.intervene body + collectSandwichAppends → next actor
-  context-aware judgment" 경로가 frontier consensus 와 정합. PR-A/PR-B (이미 머지) 가 schema
-  side 를 커버하므로 추가 enum 분류기 도입은 후퇴.
+  To validate the email's requirement #2 ("the user can intervene in the collaboration process"),
+  this survey compares 12 frontier systems across 5 dimensions (activation / NL classification mechanism /
+  replay / CRUD via NL / steal-or-avoid). 11/12 use LLM judgment (implicit) or a protocol gate
+  (per-tool approve/reject). The only explicit enum classifier is bkit — its regex 8-language +
+  scalar confidence pattern (patched twice for FP precision bugs) is observed as an anti-pattern.
+  Crumb v0.2.0's path of "raw NL → kind=user.intervene body + collectSandwichAppends → next actor
+  context-aware judgment" aligns with the frontier consensus. Since PR-A/PR-B (already merged) cover
+  the schema side, introducing an additional enum classifier would be a regression.
 provenance:
   extracted: 0.70
   inferred: 0.25
@@ -44,19 +45,19 @@ updated: 2026-05-02
 
 # NL Intervention — Frontier 12 System Survey
 
-> **목적**: 메일 §2 "**사용자가 이 협업 과정에 개입하거나 관찰할 수 있어야 합니다**" 충족 설계 시 explicit NL classifier (intent.schema.json + enum action mapping) vs implicit LLM judgment 의 frontier consensus 검증. Sister 합성 [[bagelcode-user-intervention-frontier-2026-05-02]] 의 5-system 매트릭스를 12 system × NL classification dimension 으로 확장.
+> **Purpose**: When designing for the email §2 requirement — "**the user must be able to intervene in or observe this collaboration process**" — validate the frontier consensus on explicit NL classifier (intent.schema.json + enum action mapping) vs implicit LLM judgment. Extends the 5-system matrix in the sister synthesis [[bagelcode-user-intervention-frontier-2026-05-02]] to 12 systems × NL classification dimension.
 >
-> **계기**: 사용자 명시 (2026-05-02): "LLM 이 자체적으로 판단해서 고르는게 더 프론티어스럽지 않아? 이와 유사한 사례들이 정확히 어떻게 푼 거야?" — 직전 회차에 제안된 `intent.schema.json` + coordinator NL classifier section 이 bkit 패턴 답습 위험 → frontier 사례 재조사로 검증.
+> **Trigger**: User said explicitly (2026-05-02): "Isn't it more frontier-like for the LLM to decide on its own? How exactly did similar cases solve this?" — the previously proposed `intent.schema.json` + coordinator NL classifier section risked recapitulating the bkit pattern, prompting a re-investigation of frontier cases.
 
 ---
 
-## 1. 12 system × 5 dimension 비교
+## 1. 12-system × 5-dimension comparison
 
-각 차원: activation/lock signal · NL classification mechanism · replay strategy · CRUD via NL · steal-or-avoid.
+Each dimension: activation/lock signal · NL classification mechanism · replay strategy · CRUD via NL · steal-or-avoid.
 
 | # | System | Activation | NL classification | Replay | CRUD via NL | Verdict |
 |---|---|---|---|---|---|---|
-| 1 | **bkit** (popup-studio-ai/bkit-claude-code, 525★) | Claude Code plugin via `hooks/hooks.json`; 19 hook events | **regex 8 언어** (`AGENT_TRIGGER_PATTERNS` etc.) + `triggers.confidenceThreshold + 0.1` (ENH-226 patched FP bug) | 없음 (workflow-state-machine, no transcript) | C/R only via slash; no U/D | ❌ **avoid** — regex enum brittle |
+| 1 | **bkit** (popup-studio-ai/bkit-claude-code, 525★) | Claude Code plugin via `hooks/hooks.json`; 19 hook events | **regex across 8 languages** (`AGENT_TRIGGER_PATTERNS` etc.) + `triggers.confidenceThreshold + 0.1` (ENH-226 patched FP bug) | None (workflow-state-machine, no transcript) | C/R only via slash; no U/D | ❌ **avoid** — regex enum brittle |
 | 2 | **LangGraph** (`interrupt()` + `Command(resume=...)`) | Library — `interrupt()` from any node; `Checkpointer` (Postgres/InMemory) | None built-in — host app classifies; lib transports | "Replay-on-resume": pre-interrupt side effects rerun (footgun) | Read/U via `Command(resume / goto / update)` discriminated union | ✅ **steal envelope** — tagged-union, but Crumb's idempotent reducer fold beats node-rerun |
 | 3 | **Cursor 2.0** (Composer / Agent, 2025-10-29) | Always-on chat; per-prompt up to 8 parallel agents on git worktrees | Implicit interrupt-vs-queue heuristic (host LLM) | Per-agent worktree = filesystem audit; `git checkout` revert | Implicit — mid-run msg is steering or interrupt | ⚠ **steal worktree isolation, avoid implicit heuristic** (forum bugs #140944 / #130337) |
 | 4 | **Cline** (cline/cline, v0.1.35+) | Cancel button + chat; auto-approve mode | None — new msg = hard interrupt + reassess | Chat history only; PR #5500 fixed lockout when stuck | None — new msg = new task | ❌ **avoid** — "reassess from scratch" loses state |
@@ -73,106 +74,106 @@ updated: 2026-05-02
 
 ## 2. Frontier consensus — 11/12 implicit, 1/12 explicit (anti-pattern)
 
-| 분류 메커니즘 | 채택 시스템 수 | 평가 |
+| Classification mechanism | Adopting systems | Assessment |
 |---|---|---|
-| **Implicit LLM judgment** (host LLM 또는 agent LLM 이 컨텍스트로 판단) | 9/12: LangGraph, Cursor, Cline, OpenHands, Devin, Manus, Claude Code, Codex, AutoGen | frontier 정답 |
-| **Protocol gate** (NL 분류 없이 explicit verb 만, approve/reject) | 2/12: Inspect AI, Aider | safe, rigid |
-| **Explicit enum classifier** (regex / schema-forced action enum) | 1/12: bkit | **anti-pattern** — FP precision bug, 8 언어 사전 폭발 |
+| **Implicit LLM judgment** (the host LLM or the agent LLM judges from context) | 9/12: LangGraph, Cursor, Cline, OpenHands, Devin, Manus, Claude Code, Codex, AutoGen | frontier answer |
+| **Protocol gate** (no NL classification, only explicit verbs — approve/reject) | 2/12: Inspect AI, Aider | safe, rigid |
+| **Explicit enum classifier** (regex / schema-forced action enum) | 1/12: bkit | **anti-pattern** — FP precision bugs, 8-language dictionary explosion |
 
-→ Crumb v0.2.0 의 현행 경로 (raw NL → `kind=user.intervene body=<text>` + `collectSandwichAppends(next, actor)` → 다음 actor LLM 이 컨텍스트에서 판단) 는 **9/12 majority pattern + protocol gate 2/12 (slash commands) hybrid**. 명시적 enum 분류기 도입은 후퇴.
+→ Crumb v0.2.0's current path (raw NL → `kind=user.intervene body=<text>` + `collectSandwichAppends(next, actor)` → the next actor's LLM judges from context) is a **9/12 majority pattern + 2/12 protocol gate (slash commands) hybrid**. Introducing an explicit enum classifier would be a regression.
 
 ---
 
-## 3. bkit 정밀 분석 — 왜 anti-pattern 인가
+## 3. bkit deep-dive — why it's an anti-pattern
 
-bkit (popup-studio-ai/bkit-claude-code, 525★, last commit 2026-05-02) 은 한국어 커뮤니티 기반 Claude Code plugin 으로 가장 가까운 비교 대상. NL 분류 메커니즘 4 layer:
+bkit (popup-studio-ai/bkit-claude-code, 525★, last commit 2026-05-02) is a Korean-community-driven Claude Code plugin and the closest comparison target. Its 4-layer NL classification mechanism:
 
 ```
 [1] AGENT_TRIGGER_PATTERNS / SKILL_TRIGGER_PATTERNS / NEW_FEATURE_PATTERNS
-    ─ keyed by en/ko/ja/zh/es/fr/de/it (8 언어)
+    ─ keyed by en/ko/ja/zh/es/fr/de/it (8 languages)
     ─ regex match → score
 [2] confidenceThreshold scalar (default 0.7)
     ─ ENH-226 Phase A: triggers.confidenceThreshold + 0.1 → FP precision
       bug → patched to Number((threshold + 0.1).toFixed(2))
-    ─ score 가 threshold 아래면 ambiguous → formatAskUserQuestion
-[3] additionalContext 주입 via UserPromptSubmit hook
-    ─ Claude Code 가 자동으로 <system-reminder> 래핑
-[4] 21 hook events 의 deep integration (PreToolUse / SubagentStart / TeammateIdle / ...)
+    ─ if score < threshold → ambiguous → formatAskUserQuestion
+[3] additionalContext injection via UserPromptSubmit hook
+    ─ Claude Code automatically wraps with <system-reminder>
+[4] deep integration with 21 hook events (PreToolUse / SubagentStart / TeammateIdle / ...)
 ```
 
-문제점:
+Problems:
 
-| 문제 | 증거 | Crumb 영향 |
+| Problem | Evidence | Impact on Crumb |
 |---|---|---|
-| **regex 8 언어 사전** | `AGENT_TRIGGER_PATTERNS` keyed by language | 39 kind × 12 step × 8 actor 매핑 사전 = 폭발. 한국어 + 영어 mixed input ("spec 90초로 amend") 분류 불안정 |
-| **scalar confidence FP bug** | ENH-226 패치 | 숫자 게이트는 보일러플레이트, 신뢰성 낮음 |
-| **proprietary identity** (`bkit.config.json`) | `.claude-plugin/`, 고유 schema | Linux Foundation AGENTS.md 표준 회피 권고 ([[bagelcode-multi-host-harness-research-2026]] 발견 5) |
-| **21 hook deep integration** | hooks/hooks.json | multi-host 깨짐 — Claude Code 잠금. Codex / Gemini 진입 불가 |
+| **regex 8-language dictionary** | `AGENT_TRIGGER_PATTERNS` keyed by language | A 39 kind × 12 step × 8 actor mapping dictionary would explode. Mixed Korean + English input ("spec 90초로 amend") classifies unstably |
+| **scalar confidence FP bug** | ENH-226 patch | Numeric gates are boilerplate, low reliability |
+| **proprietary identity** (`bkit.config.json`) | `.claude-plugin/`, custom schema | Recommended to avoid the Linux Foundation AGENTS.md standard ([[bagelcode-multi-host-harness-research-2026]] finding 5) |
+| **21 hook deep integration** | hooks/hooks.json | Breaks multi-host — locks to Claude Code. Codex / Gemini entries become impossible |
 
-→ Crumb 회피 결정 (이미 [[bagelcode-multi-host-harness-research-2026]] §A 에서 부분 회피, 이번 survey 로 NL 분류 차원 추가).
+→ Crumb's avoidance decision (already partially avoided in [[bagelcode-multi-host-harness-research-2026]] §A; this survey adds the NL classification dimension).
 
 ---
 
-## 4. Crumb 의 frontier 매핑
+## 4. Crumb's frontier mapping
 
-### 4.1 차용 결정
+### 4.1 Adoption decisions
 
-| Pattern | 출처 | Crumb 적용 |
+| Pattern | Source | Crumb application |
 |---|---|---|
-| **Implicit LLM judgment** | LangGraph + AutoGen + Claude Code skill matcher 등 9/12 | raw NL → `body` + sandwich_append → 다음 actor LLM 이 게임 컨텍스트로 판단 (이미 작동) |
-| **Tagged-union envelope** | LangGraph `Command(resume / goto / update)` | `data.{goto, swap, reset_circuit, target_actor, sandwich_append}` 6 fields (PR-B 머지) |
-| **Stuck-detector excludes user.intervene** | OpenHands #5500 | ✅ **verified** — `src/reducer/index.ts:49` (recovery branch excludes `user/coordinator/system`), `:477` (failure branch same exclusion), `:489` (`stuck_count` only on `kind=error`). User can also force-clear via `user.intervene data.reset_circuit` (line 369). Regression specs in `src/reducer/index.test.ts`: "OpenHands #5500: user.intervene does not reset an OPEN circuit breaker" + "OpenHands #5500: user.* events never increment stuck_count". |
-| **`additionalContext` from UserPromptSubmit** | Claude Code native + bkit + umputun gist | `.claude/skills/crumb/SKILL.md` 가 동일 surface 사용 (이미 작동) |
-| **Per-tool approval comment field** | Inspect AI | `kind=judge.score` body 에 자유 텍스트 코멘트 (이미 작동) |
-| **Worktree-per-actor isolation** | Cursor 2.0 | `sessions/<id>/agent-workspace/<actor>/` cwd (v0.1 invariant 8, 이미 작동) |
+| **Implicit LLM judgment** | LangGraph + AutoGen + Claude Code skill matcher, etc., 9/12 | raw NL → `body` + sandwich_append → next actor's LLM judges with game context (already working) |
+| **Tagged-union envelope** | LangGraph `Command(resume / goto / update)` | `data.{goto, swap, reset_circuit, target_actor, sandwich_append}` 6 fields (PR-B merged) |
+| **Stuck-detector excludes user.intervene** | OpenHands #5500 | ✅ **verified** — `src/reducer/index.ts:49` (recovery branch excludes `user/coordinator/system`), `:477` (failure branch same exclusion), `:489` (`stuck_count` only on `kind=error`). The user can also force-clear via `user.intervene data.reset_circuit` (line 369). Regression specs in `src/reducer/index.test.ts`: "OpenHands #5500: user.intervene does not reset an OPEN circuit breaker" + "OpenHands #5500: user.* events never increment stuck_count". |
+| **`additionalContext` from UserPromptSubmit** | Claude Code native + bkit + umputun gist | `.claude/skills/crumb/SKILL.md` uses the same surface (already working) |
+| **Per-tool approval comment field** | Inspect AI | Free-text comment in `kind=judge.score` body (already working) |
+| **Worktree-per-actor isolation** | Cursor 2.0 | `sessions/<id>/agent-workspace/<actor>/` cwd (v0.1 invariant 8, already working) |
 
-### 4.2 회피 결정
+### 4.2 Avoidance decisions
 
-| Anti-pattern | 출처 | Crumb 회피 |
+| Anti-pattern | Source | Crumb avoidance |
 |---|---|---|
-| **Regex enum classifier** | bkit | `intent.schema.json` 도입 안 함 — raw NL 그대로 흘림 |
-| **Implicit interrupt-vs-queue heuristic** | Cursor (#140944, #130337) | 명시적 marker 1-bit 게이트 (lock 모드는 향후 옵션, 핵심 경로는 SKILL.md auto-attach) |
-| **GroupChatManager 중앙화** | AutoGen #5022 | host-inline coordinator (이미 작동, v0.1 Must 5번 — STOP after handoff) |
-| **"Reassess from scratch" 인터럽트** | Cline | reducer fold + transcript replay (이미 작동) |
+| **Regex enum classifier** | bkit | Don't introduce `intent.schema.json` — pass raw NL through |
+| **Implicit interrupt-vs-queue heuristic** | Cursor (#140944, #130337) | Explicit marker 1-bit gate (lock mode is a future option; the core path is SKILL.md auto-attach) |
+| **Centralized GroupChatManager** | AutoGen #5022 | Host-inline coordinator (already working, v0.1 Must #5 — STOP after handoff) |
+| **"Reassess from scratch" interrupt** | Cline | Reducer fold + transcript replay (already working) |
 | **Slash-only rigidity** | Aider | NL = primary, slash = power-user shortcut |
-| **proprietary identity 파일** | bkit `.claude-plugin/` | Linux Foundation AGENTS.md 표준 |
+| **Proprietary identity files** | bkit `.claude-plugin/` | Linux Foundation AGENTS.md standard |
 
-### 4.3 메일 §2 매핑 강화
+### 4.3 Email §2 mapping reinforcement
 
-| 메일 키워드 | Frontier 사례 강화 |
+| Email keyword | Frontier-case reinforcement |
 |---|---|
-| "사용자가 ... 개입" | 9/12 implicit LLM judgment + 2/12 protocol gate hybrid (Crumb 정확히 이 패턴) |
-| "관찰" | append-only transcript 는 Crumb + Inspect AI 만 보유 (12 system 中 2개) |
-| "독창적인 아이디어" | "raw NL → context-aware actor judgment + structured user.* protocol verbs" 조합 = 12 system 中 어디에도 정확히 동일 패턴 없음 |
-| "기획자 페르소나" | 자유 텍스트 그대로 다음 actor 컨텍스트에 흘림 — 어휘 사전 강요 안 함 |
+| "user ... intervenes" | 9/12 implicit LLM judgment + 2/12 protocol gate hybrid (Crumb is exactly this pattern) |
+| "observes" | Append-only transcript is held only by Crumb + Inspect AI (2 of 12 systems) |
+| "original idea" | The combination "raw NL → context-aware actor judgment + structured user.* protocol verbs" is not exactly matched by any of the 12 systems |
+| "planner persona" | Free text passed as-is into the next actor's context — no vocabulary dictionary forced |
 
 ---
 
-## 5. 잔여 의문 (D-1 마감 기준)
+## 5. Open questions (D-1 deadline basis)
 
 | Question | Answer |
 |---|---|
-| `intent.schema.json` 작성 필요? | ❌ no — frontier consensus 가 implicit. 9/12 가 이렇게 함. enum 강제는 bkit anti-pattern |
-| Coordinator NL classifier section 추가? | ❌ no — 동일 사유 |
-| Marker file + UserPromptSubmit hook 추가? | ⚠ optional — 현재 Claude Code skill matcher 가 cold start 처리, in-session NL 은 SKILL.md `@actor` mention 으로 커버됨. lock 모드는 nice-to-have |
-| `metadata.intercept_mode` inline 필요? | ❌ no — marker 안 도입하면 fsync barrier 문제 자체 발생 안 함 |
-| OpenHands #5500 stuck-detector exclusion 적용? | ✅ **verified** — `src/reducer/index.ts:{49,477,489}` excludes `from='user'`/`'coordinator'`/`'system'` from both breaker recovery and failure paths; `stuck_count` only increments on `kind=error`. Regression specs in `src/reducer/index.test.ts` |
+| Need to write `intent.schema.json`? | ❌ no — frontier consensus is implicit. 9/12 do this. Forcing an enum is the bkit anti-pattern |
+| Add a Coordinator NL classifier section? | ❌ no — same reason |
+| Add a marker file + UserPromptSubmit hook? | ⚠ optional — currently the Claude Code skill matcher handles cold start, and in-session NL is covered by SKILL.md `@actor` mentions. Lock mode is nice-to-have |
+| Need `metadata.intercept_mode` inline? | ❌ no — without the marker, the fsync barrier issue itself doesn't arise |
+| Apply OpenHands #5500 stuck-detector exclusion? | ✅ **verified** — `src/reducer/index.ts:{49,477,489}` excludes `from='user'`/`'coordinator'`/`'system'` from both breaker recovery and failure paths; `stuck_count` only increments on `kind=error`. Regression specs in `src/reducer/index.test.ts` |
 
 ---
 
-## 6. 한 줄 정리
+## 6. One-line summary
 
-**12 frontier system 비교 결과 raw NL → `body` + sandwich → context-aware actor judgment 가 majority pattern (9/12)**. bkit 의 regex 8 언어 enum 분류는 anti-pattern (FP bug 2회 패치 + 다국어 사전 폭발). Crumb 의 PR-A/PR-B (G1+G3+G5+G6 머지) 경로가 정확히 majority pattern + protocol gate hybrid. 명시적 enum 분류기 도입은 후퇴.
+**Across 12 frontier systems, raw NL → `body` + sandwich → context-aware actor judgment is the majority pattern (9/12)**. bkit's regex 8-language enum classification is an anti-pattern (FP bug patched twice + multilingual dictionary explosion). Crumb's PR-A/PR-B path (G1+G3+G5+G6 merged) is exactly the majority pattern + protocol gate hybrid. Introducing an explicit enum classifier would be a regression.
 
 ---
 
 ## See also
 
-- [[bagelcode-user-intervention-frontier-2026-05-02]] — 5-system 매트릭스 + PR 매핑 sister 합성 (이 페이지의 dimension 확장 대상)
-- [[bagelcode-multi-host-harness-research-2026]] — bkit / claude-flow / openclaw 등 7-system multi-host 조사 (NL classification 차원 추가가 이 survey)
-- [[bagelcode-recruitment-task]] — 메일 verbatim 요구사항 #2
+- [[bagelcode-user-intervention-frontier-2026-05-02]] — 5-system matrix + PR mapping sister synthesis (the dimension extension target of this page)
+- [[bagelcode-multi-host-harness-research-2026]] — 7-system multi-host survey of bkit / claude-flow / openclaw, etc. (this survey adds the NL classification dimension)
+- [[bagelcode-recruitment-task]] — verbatim email requirement #2
 - [[bagelcode-system-architecture-v0.1]] — canonical v0.1 architecture
-- [[bagelcode-paperclip-vs-alternatives]] — framework 비채택 + 패턴 차용 결정
-- `src/reducer/index.ts` — 5 user.* event 처리 + 6 data field (PR-A + PR-B 머지)
-- `src/inbox/parser.ts` + `src/inbox/watcher.ts` — G2 inbox watcher (이미 wiring 완료, `src/loop/coordinator.ts:339`)
-- `agents/coordinator.md` — host-inline coordinator (AutoGen GroupChatManager 회피 패턴)
+- [[bagelcode-paperclip-vs-alternatives]] — framework non-adoption + pattern borrowing decision
+- `src/reducer/index.ts` — handles 5 user.* events + 6 data fields (PR-A + PR-B merged)
+- `src/inbox/parser.ts` + `src/inbox/watcher.ts` — G2 inbox watcher (wiring already complete, `src/loop/coordinator.ts:339`)
+- `agents/coordinator.md` — host-inline coordinator (AutoGen GroupChatManager avoidance pattern)

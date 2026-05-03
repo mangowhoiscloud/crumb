@@ -1,136 +1,136 @@
 ---
-title: 베이글코드 과제 — Frontier Observability / Managed Agent / OTel 표준 사료
+title: Bagelcode task — Frontier Observability / Managed Agent / OTel standard sources
 category: references
 tags: [bagelcode, observability, studio, otel, managed-agent, frontier, 2026, vertex, anthropic-console, agentops]
 sources:
   - "Anthropic Claude Managed Agents (2026-04-08 launch)"
   - "Google Vertex AI Agent Builder / Gemini Enterprise (Cloud Next 2026)"
   - "AgentOps OSS (MIT, AgentOps-AI)"
-  - "Microsoft Agent Framework 1.0 (AutoGen 후속)"
-  - "OpenTelemetry GenAI Semantic Conventions (de facto 표준)"
+  - "Microsoft Agent Framework 1.0 (AutoGen successor)"
+  - "OpenTelemetry GenAI Semantic Conventions (de facto standard)"
   - "OpenLLMetry (Traceloop)"
   - "raw/bagelcode-research/observability-frontier-2026-05.md"
 created: 2026-05-02
 updated: 2026-05-02
 ---
 
-# Frontier Observability / Managed Agent / 표준 — 자체 구축 정당화
+# Frontier Observability / Managed Agent / Standards — justification for building our own
 
-> **핵심 발견**: **OpenTelemetry GenAI Semantic Conventions = 2026 de facto 표준** (Datadog / Google Vertex / Anthropic / Phoenix / Langfuse / AgentOps 모두 호환).
+> **Key finding**: **OpenTelemetry GenAI Semantic Conventions = the 2026 de facto standard** (compatible with Datadog / Google Vertex / Anthropic / Phoenix / Langfuse / AgentOps).
 >
-> Crumb 자체 구축이라도 transcript.jsonl 의 schema 를 OTel GenAI 와 alias → **표준 호환 + 0 SaaS 비용 + 향후 어느 platform 으로든 export**.
+> Even with Crumb building its own, aliasing the transcript.jsonl schema to OTel GenAI gives us **standards compatibility + zero SaaS cost + future export to any platform**.
 
 ---
 
-## 1. 빅테크 Managed Agent Platform (2026)
+## 1. Big-tech Managed Agent Platforms (2026)
 
-### 1A. Anthropic Claude Managed Agents (2026-04-08 launch, 신선)
+### 1A. Anthropic Claude Managed Agents (2026-04-08 launch, fresh)
 
 > "the first serious attempt by a **frontier model provider** to own the infrastructure layer for agent execution"
 
-| 항목 | 값 |
+| Item | Value |
 |---|---|
 | Console | https://console.anthropic.com/studio |
 | Workbench | https://platform.claude.com/workbench |
-| Observability | timeline UI, **각 tool call 클릭 → arguments / responses** |
+| Observability | timeline UI, **click each tool call → arguments / responses** |
 | **Replay** | run modifications + replay → regression debug |
 | Sandbox | gVisor isolated container, `/workspace` write + `/source` RO |
 | Network | default-deny egress |
 | Billing | model token + runtime rate |
-| Deploy | Console / Claude Code / 신규 CLI |
+| Deploy | Console / Claude Code / new CLI |
 
-**핵심 발화 (verbatim):**
+**Key quote (verbatim):**
 > "The observability UI renders these traces as a **timeline** where you can click into any tool call to see exact arguments and responses, and you can **replay a run with modifications to debug regressions**."
 
-→ **Crumb 의 summary.html 의 inspiration**. 같은 timeline + click expand + replay 패턴.
+→ **Inspiration for Crumb's summary.html**. Same timeline + click-expand + replay pattern.
 
 ### 1B. Google Vertex AI Agent Builder → Gemini Enterprise Agent Platform (Cloud Next 2026)
 
-| 항목 | 값 |
+| Item | Value |
 |---|---|
-| 신명 | Gemini Enterprise Agent Platform (← Vertex AI Agent Builder rebrand) |
-| Studio | **token consumption / latency / error rates / tool calls** 4-차원 |
+| New name | Gemini Enterprise Agent Platform (← Vertex AI Agent Builder rebrand) |
+| Studio | **token consumption / latency / error rates / tool calls**, 4 dimensions |
 | **Unified Trace Viewer** | agent reasoning paths debugging |
-| Auto-raters | multi-turn quality 측정 |
+| Auto-raters | multi-turn quality measurement |
 | Online evaluation | live traffic |
-| 표준 | **OTel-compliant telemetry** (자체 platform 도 표준 채택) |
+| Standard | **OTel-compliant telemetry** (their own platform also adopts the standard) |
 
-**핵심 발화 (verbatim):**
+**Key quote (verbatim):**
 > "Using standardized, **OTel-compliant telemetry**, you can verify every agent, tool, and API handoff to ensure accountability, visualize full execution paths, and quickly diagnose reasoning loops or monitor performance metrics."
 
-→ **빅테크 자체도 표준 따른다**. 우리도 따르면 platform-agnostic.
+→ **Even big tech follows the standard**. If we follow it too, we are platform-agnostic.
 
-### 1C. Microsoft Agent Framework 1.0 (AutoGen 후속)
+### 1C. Microsoft Agent Framework 1.0 (AutoGen successor)
 
-- **AutoGen 0.4 → maintenance mode**, MAF 1.0 으로 이전
+- **AutoGen 0.4 → maintenance mode**, migration to MAF 1.0
 - streaming + **checkpointing** + HITL approvals + **pause/resume**
-- enterprise-ready 후속
+- enterprise-ready successor
 
-→ pause/resume 패턴 우리 `--pause` slash command 와 정합.
+→ The pause/resume pattern aligns with our `--pause` slash command.
 
 ### 1D. AutoGen Studio (legacy)
 
 - drag-and-drop UI, playground view
-- 우리 TUI 가 더 가벼운 변형
+- Our TUI is a lighter variant
 
 ---
 
-## 2. Frontier OSS (Bagelcode 정합)
+## 2. Frontier OSS (alignment with Bagelcode)
 
-### 2A. AgentOps (MIT) ★ 가장 정합
+### 2A. AgentOps (MIT) ★ best aligned
 
 URL: https://www.agentops.ai/ · https://github.com/AgentOps-AI/agentops
 
-| 항목 | 값 |
+| Item | Value |
 |---|---|
-| License | MIT (자체 호스팅 OK) |
-| 설치 | Python SDK + 단일 decorator |
-| 운영 | "**entirely within your own infrastructure**, keeping credential exposure risk inside your own security perimeter" |
-| 추적 | **전체 lifecycle** (initialization → completion) |
-| Integrations | CrewAI · Agno · OpenAI Agents SDK · Langchain · AutoGen · AG2 · CamelAI · **Google ADK 공식** |
+| License | MIT (self-hostable) |
+| Install | Python SDK + single decorator |
+| Operation | "**entirely within your own infrastructure**, keeping credential exposure risk inside your own security perimeter" |
+| Tracking | **full lifecycle** (initialization → completion) |
+| Integrations | CrewAI · Agno · OpenAI Agents SDK · Langchain · AutoGen · AG2 · CamelAI · **Google ADK official** |
 
-→ **베이글코드 OSS 자체 호스팅 정조준**. 우리 transcript 와 1:1 mapping 가능.
+→ **Directly aligned with Bagelcode's OSS self-hosting**. Maps 1:1 to our transcript.
 
 ### 2B. OpenLLMetry (Traceloop)
 
 URL: https://github.com/traceloop/openllmetry
 
-- OpenTelemetry 기반 LLM 관측
-- **OTel GenAI semantic conventions working group 리드** ★
-- 자체 호스팅 OK
+- LLM observability based on OpenTelemetry
+- **Leads the OTel GenAI semantic conventions working group** ★
+- Self-hostable
 
-→ **표준 자체를 만드는 그룹**. 우리 schema 의 가장 정통적 reference.
+→ **The group that creates the standard itself**. The most authoritative reference for our schema.
 
 ### 2C. Langfuse (Clickhouse-acquired 2026-01)
 
-- 완전 OSS + self-host
+- Fully OSS + self-host
 - "**lacks native HITL** (annotation queues, review studios), so ops teams build those layers themselves"
 
-→ 표준 OSS 도 HITL 은 자체 구축. 우리 자체 TUI 정당화.
+→ Even the standard OSS builds HITL itself. Justifies our own TUI.
 
 ### 2D. Phoenix (Arize, MIT)
 
-- Postgres backed, local 우선
-- 가벼움, 시각 UI
+- Postgres backed, local-first
+- Lightweight, visual UI
 
 ### 2E. Helicone
 
 - proxy-based, OSS, $25/mo flat or free tier
 - API-level
 
-### 2F. Datadog LLM Observability (SaaS but 표준 정합)
+### 2F. Datadog LLM Observability (SaaS but standards-aligned)
 
 - enterprise SaaS
-- **OTel GenAI native 지원** ★
-- 베이글코드가 이미 Datadog 사용 시 호환
+- **Native OTel GenAI support** ★
+- Compatible if Bagelcode already uses Datadog
 
 ---
 
-## 3. ★ OpenTelemetry GenAI Semantic Conventions = 2026 표준
+## 3. ★ OpenTelemetry GenAI Semantic Conventions = 2026 standard
 
 URL: https://opentelemetry.io/docs/specs/semconv/gen-ai/
 
-### 핵심 발화 (verbatim)
+### Key quotes (verbatim)
 
 > "Semantic Conventions for Generative AI focus on capturing insights into AI model behavior through three primary signals: **Traces, Metrics, and Events**."
 
@@ -138,10 +138,10 @@ URL: https://opentelemetry.io/docs/specs/semconv/gen-ai/
 
 > "actively developing semantic conventions for **multi-agent systems, covering tasks, actions, agent teams, memory, and artifact tracking**."
 
-### 표준 attribute 핵심 (Crumb alias 매핑)
+### Core standard attributes (Crumb alias mapping)
 
 ```jsonc
-// 우리 transcript.jsonl              OTel GenAI alias
+// Our transcript.jsonl              OTel GenAI alias
 {
   "id": "01J9X4...",            // → span_id
   "ts": "2026-05-02T...",       // → start_time_unix_nano
@@ -155,55 +155,54 @@ URL: https://opentelemetry.io/docs/specs/semconv/gen-ai/
     "tokens_out": 1500,                  // → gen_ai.usage.output_tokens
     "cache_read": 4500,                  // → gen_ai.usage.cache_read_tokens
     "tool_calls": [...],                 // → nested gen_ai.tool.call spans
-    "artifacts": [{"path", "sha256"}]    // → gen_ai.artifact.* (실험)
+    "artifacts": [{"path", "sha256"}]    // → gen_ai.artifact.* (experimental)
   }
 }
 ```
 
-→ **field 이름만 alias 매핑 (10줄)**. transcript schema 그대로 유지하면서 표준 호환.
+→ **Field-name alias mapping only (10 lines)**. Standards compatibility while keeping the transcript schema as is.
 
-### 채택 platform 매트릭스
+### Adopting platform matrix
 
-| Platform | OTel GenAI 호환 | 우리 적용 |
+| Platform | OTel GenAI compatibility | Our application |
 |---|---|---|
-| Datadog LLM Observability | ✅ native | export 가능 |
-| Google Vertex AI Agent Builder | ✅ official | export 가능 |
-| Anthropic Claude Console | ✅ JSON 호환 (추정) | export 가능 |
-| OpenLLMetry / Traceloop | ✅ working group 리드 | export 가능 |
-| Phoenix / Langfuse / AgentOps | ✅ export/import | export 가능 |
+| Datadog LLM Observability | ✅ native | export possible |
+| Google Vertex AI Agent Builder | ✅ official | export possible |
+| Anthropic Claude Console | ✅ JSON-compatible (estimated) | export possible |
+| OpenLLMetry / Traceloop | ✅ leads the working group | export possible |
+| Phoenix / Langfuse / AgentOps | ✅ export/import | export possible |
 
-→ **우리 자체 구축이라도 어느 platform 으로든 마이그레이션 가능**.
+→ **Even though we build our own, we can migrate to any platform.**
 
-### 상태 (2026-03 기준)
+### Status (as of 2026-03)
 
 > "As of March 2026, most GenAI semantic conventions are in **experimental status**, meaning the API isn't fully stabilized yet."
 
-→ field 이름 변경 가능성 인지. 우리는 alias layer 로 격리하면 변경 영향 ε.
+→ Aware that field names may change. With our alias layer isolating it, the change impact is ε.
 
 ---
 
-## 4. 학술 / 산업 표준 (NeurIPS 2026)
+## 4. Academic / industry standards (NeurIPS 2026)
 
 ### NeurIPS 2026 Evaluations & Datasets Track
 
 > "renamed the Evaluations & Datasets (ED) Track, with an expanded scope that explicitly positions evaluation as a scientific object of study. The track now includes... auditing, red-teaming methods, **interaction protocols**, metrics, and experimental or qualitative study designs."
 
-→ **interaction protocols** 명시. Crumb transcript schema 가 그 카테고리.
+→ **interaction protocols** is explicitly named. The Crumb transcript schema falls into that category.
 
 ### awesome-ai-agent-papers (VoltAgent)
 URL: https://github.com/VoltAgent/awesome-ai-agent-papers
 
 > "core topics: multi-agent coordination, memory & RAG, tooling, **evaluation & observability**, security"
 
-→ 2026 active 영역.
+→ An active 2026 area.
 
 ---
 
-## 5. 5 Frontier Studio 의 공통 차원
+## 5. Common dimensions across the 5 frontier studios
 
 ```
-모든 frontier (Vertex / Anthropic / AgentOps / Phoenix / Langfuse) 
-공통 5 차원:
+Common 5 dimensions across all frontier (Vertex / Anthropic / AgentOps / Phoenix / Langfuse):
 
   1. Token consumption (in / out / cache)
   2. Latency (per turn / per tool call)
@@ -211,30 +210,30 @@ URL: https://github.com/VoltAgent/awesome-ai-agent-papers
   4. Tool calls timeline (with arguments / responses)
   5. Cost (model billing)
 
-특이 차원:
-  6. Replay with modifications     (Anthropic 만)
+Distinctive dimensions:
+  6. Replay with modifications     (Anthropic only)
   7. Multi-turn auto-rater          (Google)
   8. Reasoning path visualization   (Google Unified Trace Viewer)
   9. Sandbox / permission audit     (Anthropic gVisor)
 ```
 
-→ **우리 TUI 4 pane + summary.html + 옵션 web observer 가 1-9 모두 cover.** 자체 구축이지만 frontier 와 같은 정보 layer.
+→ **Our TUI 4 panes + summary.html + optional web observer cover all of 1-9.** Built ourselves but with the same information layer as the frontier.
 
 ---
 
-## 6. Crumb 의 정합 매핑
+## 6. Crumb alignment mapping
 
-### Anthropic Claude Managed 의 4 패턴 → Crumb
+### The 4 Anthropic Claude Managed patterns → Crumb
 
 | Anthropic | Crumb |
 |---|---|
 | timeline UI | TUI top pane + summary.html |
-| tool call click → args/responses | Enter 키 → expand |
+| tool call click → args/responses | Enter key → expand |
 | **replay with modifications** | `crumb replay <id>` + slash command modify |
 | gVisor sandbox + `/workspace` RW + `/source` RO | `--dangerously-skip-permissions` + cwd sandbox + `--add-dir` |
 | network default-deny | adapter subprocess env sanitization |
 
-### Google Vertex 의 5 차원 → Crumb studio
+### The 5 Google Vertex dimensions → Crumb studio
 
 | Vertex | Crumb |
 |---|---|
@@ -244,46 +243,46 @@ URL: https://github.com/VoltAgent/awesome-ai-agent-papers
 | Tool calls timeline | TUI timeline + summary.html replay |
 | OTel-compliant | transcript.jsonl alias |
 
-### AgentOps 의 SDK 패턴 → Crumb 의 자체 변형
+### AgentOps SDK pattern → Crumb's own variant
 
 | AgentOps | Crumb |
 |---|---|
-| Python SDK + decorator | TS SDK 안에 직접 (자체 구현) |
-| 자체 인프라 운영 | file-based local |
-| 전체 lifecycle 추적 | transcript.jsonl 단일 source |
-| Google ADK 통합 | (해당 없음, 우리 도구는 Claude/Codex) |
+| Python SDK + decorator | Direct in TS SDK (own implementation) |
+| Self-infrastructure operation | file-based local |
+| Full lifecycle tracking | transcript.jsonl as the single source |
+| Google ADK integration | (N/A, our tools are Claude/Codex) |
 
 ---
 
-## 7. 결정 — Crumb 의 OTel alias 패턴
+## 7. Decision — Crumb's OTel alias pattern
 
-### 자체 구축 + 표준 호환 = 가장 강한 위치
+### Build our own + standards compatible = strongest position
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  Crumb transcript.jsonl                                   │
-│   ├── 우리 자체 schema (id, ts, from, to, kind, data)     │
+│   ├── our own schema (id, ts, from, to, kind, data)       │
 │   └── OTel alias layer (10 LOC)                           │
 │                                                           │
 │  $ crumb export --format otel-jsonl                       │
-│       → Langfuse / Phoenix / Datadog / Vertex 어디로든    │
+│       → Langfuse / Phoenix / Datadog / Vertex anywhere    │
 │                                                           │
 │  $ crumb export --format anthropic-trace                  │
-│       → Claude Console import (호환 형식)                  │
+│       → Claude Console import (compatible format)         │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 평가자 메시지 (README 한 단락)
+### Evaluator-facing message (one README paragraph)
 
-> "Crumb 의 observability 는 자체 구축 (transcript.jsonl + blessed TUI + summary.html), Bagelcode 의 OSS 자체 호스팅 패턴 (Metabase / Superset / DataHub) 정합. 동시에 schema 는 **OpenTelemetry GenAI Semantic Conventions** (Datadog / Google Vertex / OpenLLMetry / Phoenix 모두 호환) 와 alias — 자체 구축이지만 표준 호환. `crumb export --format otel-jsonl` 로 어느 platform 이든 마이그레이션 가능. 5 frontier studio 의 5 공통 차원 (token / latency / error / tool / cost) 모두 cover."
+> "Crumb's observability is built in-house (transcript.jsonl + blessed TUI + summary.html), aligned with Bagelcode's OSS self-hosting pattern (Metabase / Superset / DataHub). At the same time, the schema is aliased with **OpenTelemetry GenAI Semantic Conventions** (compatible with Datadog / Google Vertex / OpenLLMetry / Phoenix) — built in-house yet standards-compatible. `crumb export --format otel-jsonl` enables migration to any platform. The 5 common dimensions across 5 frontier studios (token / latency / error / tool / cost) are all covered."
 
-→ **자체 구축의 정당화 + 표준 호환 + 향후 path = 한 단락에 압축**.
+→ **Justification for building our own + standards compatibility + future path = compressed into one paragraph.**
 
 ---
 
-## 1차 사료 (15 links)
+## Primary sources (15 links)
 
-### 빅테크 platform
+### Big-tech platforms
 - [Anthropic Claude Console Studio](https://console.anthropic.com/studio)
 - [Anthropic Workbench](https://platform.claude.com/workbench)
 - [Anthropic Managed Agents launch (SiliconANGLE 2026-04-08)](https://siliconangle.com/2026/04/08/anthropic-launches-claude-managed-agents-speed-ai-agent-development/)
@@ -293,7 +292,7 @@ URL: https://github.com/VoltAgent/awesome-ai-agent-papers
 - [Gemini Enterprise Agent Platform (Cloud Next 2026, SiliconANGLE)](https://siliconangle.com/2026/04/22/google-brings-agentic-development-optimization-governance-one-roof-gemini-enterprise-agent-platform/)
 - [Microsoft Agent Framework 1.0](https://devblogs.microsoft.com/agent-framework/microsoft-agent-framework-version-1-0/)
 
-### 표준
+### Standards
 - [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/)
 - [GenAI agent spans (OTel)](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/)
 - [GenAI events](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-events/)
@@ -306,16 +305,16 @@ URL: https://github.com/VoltAgent/awesome-ai-agent-papers
 - [Best AI Observability Tools 2026 (Arize)](https://arize.com/blog/best-ai-observability-tools-for-autonomous-agents-in-2026/)
 - [8 AI Observability Platforms compared (Softcery)](https://softcery.com/lab/top-8-observability-platforms-for-ai-agents-in-2025)
 
-### 학술
+### Academic
 - [NeurIPS 2026 Evaluations & Datasets Track](https://blog.neurips.cc/2026/03/23/introducing-the-evaluations-datasets-track-at-neurips-2026/)
 - [awesome-ai-agent-papers (VoltAgent)](https://github.com/VoltAgent/awesome-ai-agent-papers)
 
 ## See also
 
 - [[bagelcode]] / [[bagelcode-task-direction]]
-- [[bagelcode-stack-and-genre-2026]] — Bagelcode OSS 자체 호스팅 정합
-- [[bagelcode-frontier-orchestration-2026]] — sister: orchestration 패턴
-- [[bagelcode-production-cases-2026]] — sister: 실 production 사례
-- [[bagelcode-fault-tolerance-design]] — gVisor / circuit breaker 패턴
-- [[bagelcode-transcripts-schema]] — OTel alias 적용 대상
-- [[bagelcode-rubric-scoring]] — 5 차원 studio 차원과 정합
+- [[bagelcode-stack-and-genre-2026]] — alignment with Bagelcode OSS self-hosting
+- [[bagelcode-frontier-orchestration-2026]] — sister: orchestration patterns
+- [[bagelcode-production-cases-2026]] — sister: real production cases
+- [[bagelcode-fault-tolerance-design]] — gVisor / circuit breaker patterns
+- [[bagelcode-transcripts-schema]] — target of OTel alias application
+- [[bagelcode-rubric-scoring]] — alignment with the 5 studio dimensions
