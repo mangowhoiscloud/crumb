@@ -124,6 +124,28 @@ function formatCost(n) {
   return '$' + (n ?? 0).toFixed(3);
 }
 
+// PR-O4 P2 — set the `title` (native browser tooltip) on a metrics-row dd
+// to a per-actor breakdown. `pickWeight` orders actors by descending
+// contribution so the most-loaded one is on top. `formatBucket` controls
+// the per-line text (defaults to `pickWeight` rounded). Skips silently
+// when metrics or per_actor is missing — the dd already shows '—'.
+function setPerActorTitle(id, m, pickWeight, formatBucket) {
+  const el = $(id);
+  if (!el) return;
+  if (!m || !m.per_actor) {
+    el.removeAttribute('title');
+    return;
+  }
+  const fmt = formatBucket || ((b) => String(Math.round(pickWeight(b))));
+  const lines = Object.entries(m.per_actor)
+    .map(([actor, bucket]) => ({ actor, weight: pickWeight(bucket), bucket }))
+    .filter((x) => x.weight > 0)
+    .sort((a, b) => b.weight - a.weight)
+    .map((x) => x.actor + ': ' + fmt(x.bucket));
+  if (lines.length === 0) el.removeAttribute('title');
+  else el.setAttribute('title', lines.join('\n'));
+}
+
 function ensureSession(id, hints) {
   let s = sessions.get(id);
   if (!s) {
@@ -443,6 +465,29 @@ function renderHeader() {
   $('m-cost').textContent = m ? formatCost(m.cost_usd) : '—';
   $('m-p95').textContent = m ? Math.round(m.latency_p95_ms) + 'ms' : '—';
   $('m-err').textContent = m ? m.error_count + ' / ' + m.audit_count : '—';
+  // PR-O4 P2 — per-actor breakdown on hover (native title attribute, no
+  // tooltip dependency). Walks metrics.per_actor sorted by descending
+  // contribution so the noisiest actor is at the top.
+  setPerActorTitle('m-events', m, (b) => b.events);
+  setPerActorTitle(
+    'm-tokens',
+    m,
+    (b) => b.tokens_in + b.tokens_out,
+    (b) => formatTokens(b.tokens_in) + '→' + formatTokens(b.tokens_out),
+  );
+  setPerActorTitle(
+    'm-cache',
+    m,
+    (b) => b.cache_read,
+    (b) => formatTokens(b.cache_read) + ' cache_read',
+  );
+  setPerActorTitle('m-cost', m, (b) => b.cost_usd, (b) => formatCost(b.cost_usd));
+  setPerActorTitle(
+    'm-p95',
+    m,
+    (b) => b.latency_ms_total / Math.max(1, b.events),
+    (b) => Math.round(b.latency_ms_total / Math.max(1, b.events)) + 'ms avg',
+  );
   const banner = $('audit-banner');
   if (m && m.audit_count > 0) {
     banner.textContent =
@@ -973,6 +1018,7 @@ function renderScorecard() {
   const delta = prevAgg != null ? aggregate - prevAgg : null;
 
   root.innerHTML =
+    renderScoreSparklines(judges, dims) +
     '<div class="sc-composite">' +
     renderComposite(aggregate, verdict, delta) +
     '</div>' +
@@ -982,6 +1028,82 @@ function renderScorecard() {
     '<div class="sc-rows">' +
     dimRecords.map(renderDimRow).join('') +
     '</div>';
+}
+
+// PR-O4 P5 — score-trajectory sparklines.
+// Six tiny line graphs (one per D1-D6) showing the dim's score history
+// across all judge.score events in this session, plus a verdict-colored
+// dot at the latest round so PASS/PARTIAL/FAIL is at-a-glance.
+//
+// Skipped when there are < 2 rounds (no trajectory yet — the existing
+// scorecard already shows the lone snapshot via the radar + rows).
+//
+// Frontier ref (per wiki §4.P5): six tiny sparklines mirror Honeycomb
+// dataset overview + Vercel observability strip; minimalist baseline
+// follows Karpathy autoresearch.
+function renderScoreSparklines(judges, dims) {
+  if (!judges || judges.length < 2) return '';
+  const W = 60;
+  const H = 16;
+  const PAD = 2;
+  const histories = dims.map((d) => {
+    const series = judges
+      .map((j) => {
+        const v = j.scores?.[d];
+        return typeof v?.score === 'number' ? v.score : null;
+      })
+      .filter((s) => s !== null);
+    return { dim: d, series };
+  });
+  // Per-dim normalised polyline. y inverts (SVG origin top-left, score
+  // is "higher = better"). Ranges fixed 0..5 so cross-dim comparison
+  // is meaningful (D2 at 5 + D5 at 2 reads correctly side-by-side).
+  const max = 5;
+  const verdictAtLast = judges[judges.length - 1]?.scores?.verdict ?? null;
+  const dotClass =
+    verdictAtLast === 'PASS' ? 'spark-dot-pass'
+    : verdictAtLast === 'PARTIAL' ? 'spark-dot-partial'
+    : verdictAtLast === 'FAIL' || verdictAtLast === 'REJECT' ? 'spark-dot-fail'
+    : 'spark-dot-pending';
+  const sparkSvg = (h) => {
+    if (h.series.length < 2) return '';
+    const stepX = (W - 2 * PAD) / Math.max(1, h.series.length - 1);
+    const points = h.series
+      .map((s, i) => {
+        const x = PAD + i * stepX;
+        const y = H - PAD - (s / max) * (H - 2 * PAD);
+        return x.toFixed(1) + ',' + y.toFixed(1);
+      })
+      .join(' ');
+    const lastX = PAD + (h.series.length - 1) * stepX;
+    const lastY = H - PAD - (h.series[h.series.length - 1] / max) * (H - 2 * PAD);
+    return (
+      '<svg class="sc-spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true">' +
+        '<polyline class="sc-spark-line" points="' + points + '" />' +
+        '<circle class="sc-spark-dot ' + dotClass + '" cx="' + lastX.toFixed(1) + '" cy="' + lastY.toFixed(1) + '" r="2" />' +
+      '</svg>'
+    );
+  };
+  const cells = histories
+    .map(
+      (h) =>
+        '<div class="sc-sparkline" title="' +
+        h.dim +
+        ' across ' +
+        h.series.length +
+        ' round' +
+        (h.series.length === 1 ? '' : 's') +
+        ': ' +
+        h.series.map((s) => s.toFixed(1)).join(' → ') +
+        '">' +
+        '<span class="sc-sparkline-key">' +
+        h.dim +
+        '</span>' +
+        sparkSvg(h) +
+        '</div>',
+    )
+    .join('');
+  return '<div class="sc-sparklines">' + cells + '</div>';
 }
 
 function renderEmpty(dims) {
