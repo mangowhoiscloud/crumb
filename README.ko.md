@@ -268,25 +268,75 @@ Preset 파일: `.crumb/presets/*.toml`. **Cross-provider 는 별도 flag 가 아
 
 ## 산출물
 
-성공한 세션:
+### 디스크 계층
 
 ```
-sessions/<session-id>/
-├── transcript.jsonl                    # Replay-deterministic 이벤트 로그 (35 kind × 11 field)
-├── ledgers/
-│   ├── task.json                       # 누적 사실 (transcript 에서 derive 가능)
-│   └── progress.json                   # turn 별 상태 (transcript 에서 derive 가능)
-├── artifacts/
-│   ├── game.html                       # Phaser 3.80 single-file 플레이 가능 게임
-│   ├── spec.md                         # Acceptance criteria + 룰북
-│   ├── DESIGN.md                       # 색감 / 메커닉 / 모션 spec
-│   └── tuning.json                     # 밸런스 수치 (Unity ScriptableObject 변환 가능)
-├── exports/                            # ★ v0.1 — observability 내보내기
-│   ├── otel.jsonl                      # OpenTelemetry GenAI Semantic Conventions
-│   ├── anthropic-trace.json            # Anthropic Console import 형식
-│   └── chrome-trace.json               # chrome://tracing 시각화
-└── index.html                          # ★ v0.1 — 자동 생성 HTML 후처리 리포트
+~/.crumb/                                 # CRUMB_HOME (env override / CRUMB_HOMES 멀티-홈)
+└── projects/
+    └── <project-id>/                     # 프로젝트 — 라이브 세션 + frozen 릴리스 모두 소유
+        ├── sessions/
+        │   └── <session-ulid>/           # WIP 시도 (가변 lifecycle)
+        │       ├── transcript.jsonl              # Replay-deterministic 이벤트 로그 (35 × 11)
+        │       ├── meta.json                     # 라이프사이클 상태 (running/paused/done/error)
+        │       ├── inbox.txt                     # 슬래시 명령 + 자유 텍스트 user 입력 (단일 writer)
+        │       ├── ledgers/
+        │       │   ├── task.json                 # 누적 facts (transcript 에서 도출)
+        │       │   └── progress.json             # turn 별 상태 (transcript 에서 도출)
+        │       ├── agent-workspace/              # 액터별 sandbox + 조립된 sandwich
+        │       │   └── <actor>/
+        │       │       └── sandwich.assembled.md # host CLI 가 --append-system-prompt 로 받은
+        │       │                                 # 시스템 프롬프트 (envelope XML + 액터 sandwich +
+        │       │                                 # 절차 skill + sandwich_append).
+        │       │                                 # AGENTS.md §"Subprocess injection over CLAUDE.md
+        │       │                                 # auto-load" 가 여기서 구현됨.
+        │       ├── artifacts/
+        │       │   ├── game/                     # Phaser 3.80 multi-file PWA — game/index.html
+        │       │   │   ├── index.html
+        │       │   │   ├── manifest.webmanifest
+        │       │   │   ├── sw.js                 #   cache-first service worker (offline)
+        │       │   │   ├── icon-192.svg / icon-512.svg
+        │       │   │   └── src/main.js + src/{config,scenes,entities,systems}/
+        │       │   ├── spec.md                   # 수락 기준 + 룰북
+        │       │   ├── DESIGN.md                 # 색감 / 메커닉 / 모션 spec
+        │       │   └── tuning.json               # 밸런스 수치
+        │       ├── exports/
+        │       │   ├── otel.jsonl                # OpenTelemetry GenAI Semantic Conventions
+        │       │   ├── anthropic-trace.json
+        │       │   └── chrome-trace.json         # chrome://tracing 시각화
+        │       └── index.html                    # 자동 생성 post-session HTML 요약
+        └── versions/
+            └── <vN>[-<label>]/                   # 릴리스된 마일스톤 (immutable)
+                ├── manifest.toml                 # 스코어카드 + parent_version + artifacts_sha256
+                └── artifacts/                    # 소스 세션 artifacts/ 의 frozen 사본
 ```
+
+### `<project-id>` 계산 (자주 묻는 질문)
+
+```
+1.  <cwd>/.crumb/project.toml 이 있으면  → 그 안의 `id` 필드 사용 (ULID).
+2.  없으면 (ambient)                     → sha256(path.resolve(cwd))[:16]
+```
+
+**두 모드 — 의도 가지고 선택:**
+
+| 모드 | 사용 시점 | 머신 간 일관성 |
+|---|---|---|
+| **Ambient** (기본) | 한 머신에서 끝나는 작업 | ❌ 다른 머신/다른 cwd → 다른 `<project-id>`. 16-hex prefix 는 로컬 캐시 키일 뿐. |
+| **Pinned** (`crumb init --pin`) | Bagelcode 제출 / 평가자 데모 / 재현이 필요한 모든 작업 | ✅ `<cwd>/.crumb/project.toml` 에 stable ULID 박힘. **그 파일을 git 에 commit** 하면 어느 머신에서 clone 하든 같은 `<project-id>` 로 풀려서 모든 머신이 같은 `~/.crumb/projects/<id>/sessions/` 버킷에 모임. |
+
+```bash
+mkdir -p ~/projects/match3 && cd ~/projects/match3
+crumb init --pin --label "match3"        # .crumb/project.toml 생성
+git add .crumb/project.toml && git commit -m "chore: pin project id"
+```
+
+이후 어느 clone 에서 `crumb run` 하든 같은 프로젝트 버킷에 들어감. `<session-ulid>` 는 매 실행마다 새로 (ULID 는 시간 정렬, 새 run = 새 ulid).
+
+### 세션 → 버전 흐름
+
+`crumb release <session-ulid> --as v1 [--label "demo"]` 가 소스 세션의 `artifacts/` 트리를 `~/.crumb/projects/<project-id>/versions/v1[-demo]/` 로 스냅샷하고, `manifest.toml` (가장 최근 `judge.score` 의 스코어카드 + 파일별 sha256) 작성, 소스 세션 `transcript.jsonl` 에 `kind=version.released` append. 소스 세션을 지워도 버전은 동결 상태 그대로.
+
+`crumb copy-artifacts <session|vN> --to <dest>` 는 Bagelcode 제출 라인 — 선택한 artifacts/ 트리를 `~/.crumb/...` 밖의 일반 폴더로 복사 (zip 가능).
 
 이 산출물은 **Unity 신작팀의 input asset** — Crumb 는 production Unity workflow **앞 단계**의 prototype 검증 도구.
 
