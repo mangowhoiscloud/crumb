@@ -81,7 +81,9 @@ export function Narrative(_props: IDockviewPanelProps) {
         }}
       >
         <span>Agent narrative</span>
-        <span style={{ color: 'var(--ink-tertiary)' }}>{bubbles.length} bubbles</span>
+        <span style={{ color: 'var(--ink-tertiary)' }}>
+          {bubbles.length}/{stream.events.length} bubbles
+        </span>
         <span style={{ flex: 1 }} />
         <span
           style={{
