@@ -36,7 +36,7 @@ import { dirname, join, resolve as pathResolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { watch as fsWatch, createReadStream } from 'node:fs';
 
-import { STUDIO_HTML } from '../studio-html.js';
+import { STUDIO_HTML } from './studio-html.js';
 import { probeAdapters } from './doctor.js';
 import { EventBus, type LiveEvent } from './event-bus.js';
 import { computeMetrics } from './metrics.js';

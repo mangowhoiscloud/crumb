@@ -1,0 +1,75 @@
+/*
+ * M2 — Studio v2 globals (Tailwind v4 + token bridge).
+ *
+ * Tailwind v4 uses @import "tailwindcss" (no @tailwind directives).
+ * Open Props is layered before via tokens.css so var(--…) are
+ * resolvable inside Tailwind utilities.
+ */
+
+@import './tokens.css';
+@import 'tailwindcss';
+@import 'dockview-react/dist/styles/dockview.css';
+
+/* Map our brand tokens onto Tailwind v4 theme variables so Tailwind
+ * utilities emit CSS that respects the design tokens. Tailwind v4
+ * reads --color-* / --spacing-* from the theme layer. */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+  --color-primary: var(--primary);
+  --color-accent-warm: var(--accent-warm);
+  --color-lime: var(--lime);
+  --color-warn: var(--warn);
+  --color-audit-fg: var(--audit-fg);
+  --color-hairline: var(--hairline);
+  --color-actor-builder: var(--actor-builder);
+  --color-actor-verifier: var(--actor-verifier);
+  --color-actor-planner-lead: var(--actor-planner-lead);
+  --color-actor-researcher: var(--actor-researcher);
+  --color-actor-coordinator: var(--actor-coordinator);
+  --color-actor-system: var(--actor-system);
+
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono);
+  --font-brand: var(--font-brand);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+html {
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -0.05px;
+}
+
+/* Density-aware default heights for dockview tab bars + group headers.
+ * Per §6.6 — Comfortable / Compact toggle. dockview honors CSS vars
+ * via its own theming layer; we mirror token names so component
+ * styles read the same vars. */
+:root {
+  --dv-tabs-and-actions-container-height: 36px;
+}
+[data-density='compact'] {
+  --dv-tabs-and-actions-container-height: 28px;
+}
