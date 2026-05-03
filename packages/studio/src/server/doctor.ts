@@ -23,7 +23,8 @@
  */
 
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { constants as fsConstants, existsSync, readFileSync } from 'node:fs';
+import { access } from 'node:fs/promises';
 import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
 
@@ -286,7 +287,7 @@ function probeCodexAuth(): Pick<
     const obj = JSON.parse(raw) as {
       auth_mode?: string;
       OPENAI_API_KEY?: string | null;
-      tokens?: { id_token?: string; access_token?: string };
+      tokens?: { id_token?: string; access_token?: string; refresh_token?: string };
     };
     if (obj.auth_mode === 'apikey' && obj.OPENAI_API_KEY) {
       return { authenticated: true, plan: 'apikey', auth_source: 'config-file' };
@@ -294,12 +295,21 @@ function probeCodexAuth(): Pick<
     if (obj.auth_mode === 'chatgpt' && obj.tokens?.id_token) {
       const payload = decodeJwtPayload(obj.tokens.id_token);
       const exp = typeof payload?.exp === 'number' ? payload.exp * 1000 : 0;
-      const live = exp > Date.now();
+      // Codex CLI auto-refreshes the id_token from refresh_token at spawn
+      // time. The id_token's `exp` is short (≈ 1 h); we treat the session
+      // as authenticated whenever a refresh_token is on disk, even if the
+      // id_token has lapsed since the last interactive session — refresh
+      // is silent and the spawn will succeed. Plan / email are read from
+      // the *last* id_token payload (best-effort; if the user changed
+      // plan since last refresh the chip shows stale value until next
+      // codex invocation rewrites auth.json).
+      const idTokenLive = exp > Date.now();
+      const refreshAvailable = !!obj.tokens.refresh_token;
       const auth = (
         payload?.['https://api.openai.com/auth'] as { chatgpt_plan_type?: string } | undefined
       )?.chatgpt_plan_type;
       return {
-        authenticated: live,
+        authenticated: idTokenLive || refreshAvailable,
         ...(auth ? { plan: auth } : {}),
         ...(typeof payload?.email === 'string' ? { email: payload.email } : {}),
         ...(exp ? { login_expires_at: new Date(exp).toISOString() } : {}),
@@ -395,18 +405,46 @@ function readKeychainPassword(service: string): Promise<string | null> {
   });
 }
 
+/**
+ * Cross-platform `which`-equivalent — walks $PATH, checks `fs.access`.
+ * `spawn('which', …)` fails on Windows (no `which`); `spawn('where', …)`
+ * works there but errors on POSIX. Doing the lookup ourselves removes
+ * the platform dependency entirely (the result also matches what Node's
+ * `child_process.spawn(name, …)` would resolve when invoking the CLI).
+ *
+ * Windows: append `.exe` / `.cmd` / `.bat` etc. via `PATHEXT` so the
+ * lookup finds `codex.cmd` (npm shim) the same way the OS would.
+ */
 function hasBinary(name: string): Promise<boolean> {
   return new Promise((resolve) => {
-    const p = spawn('which', [name], { stdio: 'ignore' });
+    const pathEnv = process.env.PATH ?? '';
+    const sep = process.platform === 'win32' ? ';' : ':';
+    const dirs = pathEnv.split(sep).filter((d) => d.length > 0);
+    const exts =
+      process.platform === 'win32'
+        ? (process.env.PATHEXT ?? '.EXE;.CMD;.BAT;.COM').split(';').filter((e) => e.length > 0)
+        : [''];
+    let pending = 0;
     let settled = false;
     const settle = (v: boolean) => {
-      if (!settled) {
-        settled = true;
-        resolve(v);
-      }
+      if (settled) return;
+      settled = true;
+      resolve(v);
     };
-    p.on('exit', (code) => settle(code === 0));
-    p.on('error', () => settle(false));
+    if (dirs.length === 0) return settle(false);
+    for (const dir of dirs) {
+      for (const ext of exts) {
+        pending++;
+        const candidate = join(dir, name + ext);
+        access(candidate, fsConstants.X_OK).then(
+          () => settle(true),
+          () => {
+            pending--;
+            if (pending === 0) settle(false);
+          },
+        );
+      }
+    }
   });
 }
 

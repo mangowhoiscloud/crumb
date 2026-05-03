@@ -199,12 +199,12 @@ function HealthSheet({ snapshot, onClose }: { snapshot: HealthSnapshot; onClose:
               <div style={{ marginTop: 'var(--space-2)' }}>
                 {lifecycle.steps.map((s, i) => (
                   <div
-                    key={`${s.name}-${i}`}
+                    key={`${s.step}-${i}`}
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: '14px 1fr 60px',
+                      gridTemplateColumns: '14px 1fr',
                       gap: 'var(--space-2)',
-                      alignItems: 'center',
+                      alignItems: 'baseline',
                       padding: '4px 0',
                       borderBottom: '1px solid var(--hairline-soft)',
                       fontSize: 11,
@@ -219,13 +219,10 @@ function HealthSheet({ snapshot, onClose }: { snapshot: HealthSnapshot; onClose:
                       {s.status === 'pass' ? '✓' : '✗'}
                     </span>
                     <span style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ color: 'var(--ink)' }}>{s.name}</span>
-                      {s.message && (
-                        <span style={{ color: 'var(--ink-muted)', fontSize: 10 }}>{s.message}</span>
+                      <span style={{ color: 'var(--ink)' }}>{s.step}</span>
+                      {s.detail && (
+                        <span style={{ color: 'var(--ink-muted)', fontSize: 10 }}>{s.detail}</span>
                       )}
-                    </span>
-                    <span style={{ color: 'var(--ink-tertiary)', textAlign: 'right' }}>
-                      {s.duration_ms != null ? `${s.duration_ms}ms` : '—'}
                     </span>
                   </div>
                 ))}

@@ -11,10 +11,9 @@
 import { useQuery } from '@tanstack/react-query';
 
 export interface SelfCheckStep {
-  name: string;
+  step: string;
   status: 'pass' | 'fail';
-  duration_ms?: number;
-  message?: string;
+  detail?: string;
 }
 
 export interface HealthSnapshot {

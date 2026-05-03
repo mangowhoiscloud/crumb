@@ -108,7 +108,7 @@ export async function startStudioServer(opts: StudioServerOptions = {}): Promise
       return void serveDoctor(res);
     }
     if (req.method === 'GET' && url.pathname === '/api/stream') {
-      return serveStream(req, res, url, bus);
+      return serveStream(req, res, url, bus, watcher);
     }
     // /api/sessions/:id/sandwich/:actor (GET — read sandwich)
     const sandwichMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/sandwich\/([^/]+)$/);
@@ -242,12 +242,13 @@ export async function startStudioServer(opts: StudioServerOptions = {}): Promise
  * of a 404).
  */
 async function serveHtmlClient(res: http.ServerResponse): Promise<void> {
-  // Resolve relative to this module's dist location: dist/server.js →
-  // dist/client/index.html sits as a sibling. Walks via fileURLToPath so
-  // npm-link / npm-i-g installs all resolve correctly (no symlinks per
-  // §13.1 portability invariants).
+  // tsc emits this module to `dist/server/server.js` (rootDir=src). The
+  // Vite client bundle lands at `dist/client/`, so walk one level up
+  // from this file's dirname. Resolved via fileURLToPath so npm-link /
+  // npm-i-g all locate the bundle correctly (no symlinks per §13.1
+  // portability invariants).
   const here = fileURLToPath(import.meta.url);
-  const indexPath = pathResolve(dirname(here), 'client', 'index.html');
+  const indexPath = pathResolve(dirname(here), '..', 'client', 'index.html');
   try {
     const html = await readFile(indexPath, 'utf8');
     res.setHeader('content-type', 'text/html; charset=utf-8');
@@ -280,7 +281,7 @@ async function serveClientAsset(res: http.ServerResponse, urlPath: string): Prom
     return;
   }
   const here = fileURLToPath(import.meta.url);
-  const assetPath = pathResolve(dirname(here), 'client', 'assets', rel);
+  const assetPath = pathResolve(dirname(here), '..', 'client', 'assets', rel);
   try {
     const buf = await readFile(assetPath);
     const ext = rel.split('.').pop()?.toLowerCase() ?? '';
@@ -365,10 +366,9 @@ async function serveSessions(
  */
 /** M10 — runSelfCheck cached for 30 s to avoid recomputing per /health hit. */
 export interface SelfCheckStep {
-  name: string;
+  step: string;
   status: 'pass' | 'fail';
-  duration_ms?: number;
-  message?: string;
+  detail?: string;
 }
 
 let selfCheckCache: {
@@ -391,12 +391,28 @@ async function getSelfCheckSnapshot(): Promise<NonNullable<typeof selfCheckCache
     return selfCheckCache;
   }
   // Lazy import — `crumb` is a peer dep, so the studio package must not
-  // hard-import. Resolve the helper via runtime path; gracefully fall back
-  // to "broken" verdict when the host doesn't have crumb installed.
-  const mod = await import(/* @vite-ignore */ 'crumb/dist/helpers/self-check.js' as string).catch(
-    () => null,
-  );
-  const runSelfCheck = (mod as { runSelfCheck?: () => SelfCheckReport } | null)?.runSelfCheck;
+  // hard-import. Try two resolutions in order:
+  //   1. `crumb/dist/helpers/self-check.js` (npm-installed peer)
+  //   2. relative `../../../dist/helpers/self-check.js` (monorepo workspace)
+  // Falls back to "broken" verdict when neither resolves.
+  let mod: { runSelfCheck?: () => SelfCheckReport } | null = await import(
+    /* @vite-ignore */ 'crumb/dist/helpers/self-check.js' as string
+  ).catch(() => null);
+  if (!mod) {
+    const here = fileURLToPath(import.meta.url);
+    const monorepoUrl = pathResolve(
+      dirname(here),
+      '..',
+      '..',
+      '..',
+      '..',
+      'dist',
+      'helpers',
+      'self-check.js',
+    );
+    mod = await import(/* @vite-ignore */ `file://${monorepoUrl}` as string).catch(() => null);
+  }
+  const runSelfCheck = mod?.runSelfCheck;
   if (!runSelfCheck) {
     selfCheckCache = {
       verdict: 'broken',
@@ -404,9 +420,9 @@ async function getSelfCheckSnapshot(): Promise<NonNullable<typeof selfCheckCache
       steps_failed: -1,
       steps: [
         {
-          name: 'crumb-self-check.import',
+          step: 'crumb-self-check.import',
           status: 'fail',
-          message: 'crumb peer-dep not resolvable from this Studio install',
+          detail: 'crumb peer-dep not resolvable from this Studio install',
         },
       ],
       cached_at: Date.now(),
@@ -757,6 +773,7 @@ function serveStream(
   res: http.ServerResponse,
   url: URL,
   bus: EventBus,
+  watcher: SessionWatcher,
 ): void {
   const sessionFilter = url.searchParams.get('session') ?? '*';
   res.setHeader('content-type', 'text/event-stream');
@@ -779,8 +796,24 @@ function serveStream(
   const filter = sessionFilter === '*' ? '*' : sessionFilter;
   const unsubscribe = bus.subscribe(filter, write);
 
-  // Initial heartbeat so EventSource confirms connection.
+  // Initial heartbeat so EventSource confirms connection immediately
+  // (browsers transition CONNECTING → OPEN on first byte).
   write({ type: 'heartbeat', ts: new Date().toISOString() });
+
+  // Backfill historical events for the requested session so panels
+  // (Waterfall / ServiceMap / Logs / Transcript / Narrative) populate
+  // immediately on connect, not only after the next live append. The
+  // rolling window cap (default 200 client-side) bounds this naturally.
+  if (sessionFilter !== '*') {
+    const match = watcher.snapshot().find((s) => s.session_id === sessionFilter);
+    if (match) {
+      const HISTORY_REPLAY_CAP = 500;
+      const slice = match.history.slice(-HISTORY_REPLAY_CAP);
+      for (const msg of slice) {
+        write({ type: 'append', session_id: match.session_id, msg });
+      }
+    }
+  }
 
   const heartbeat = setInterval(() => {
     write({ type: 'heartbeat', ts: new Date().toISOString() });

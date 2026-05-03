@@ -47,6 +47,10 @@ export function useTranscriptStream(windowSize = 200): StreamState {
     setState({ events: [], status: 'connecting', reconnectAttempts: 0 });
     const es = new EventSource(`/api/stream?session=${encodeURIComponent(sessionId)}`);
 
+    const promote = (): void => {
+      setState((prev) => (prev.status === 'connecting' ? { ...prev, status: 'streaming' } : prev));
+    };
+
     const onAppend = (e: Event): void => {
       const me = e as MessageEvent;
       try {
@@ -62,12 +66,15 @@ export function useTranscriptStream(windowSize = 200): StreamState {
       }
     };
 
-    const onHeartbeat = (): void => {
-      setState((prev) => (prev.status === 'connecting' ? { ...prev, status: 'streaming' } : prev));
-    };
-
     es.addEventListener('append', onAppend);
-    es.addEventListener('heartbeat', onHeartbeat);
+    es.addEventListener('heartbeat', promote);
+    // Promote on connection open too — covers idle sessions where the
+    // next append + next 15 s heartbeat are both far away. EventSource's
+    // readyState transition (CONNECTING → OPEN) is enough confirmation.
+    es.addEventListener('open', promote);
+    // Also promote on any unnamed message — some proxies strip `event:`
+    // prefixes; same effect: confirms a frame round-tripped.
+    es.addEventListener('message', promote);
     es.onerror = () => {
       setState((prev) => ({
         ...prev,
@@ -76,7 +83,16 @@ export function useTranscriptStream(windowSize = 200): StreamState {
       }));
     };
 
+    // Safety net for the listener-registration race: if the SSE
+    // connection is OPEN within 1.5 s but no event listener has fired
+    // yet (server's first frame arrived before listeners registered),
+    // force-promote so the user sees an accurate "streaming" badge.
+    const grace = window.setTimeout(() => {
+      if (es.readyState === EventSource.OPEN) promote();
+    }, 1500);
+
     return () => {
+      window.clearTimeout(grace);
       es.close();
     };
   }, [sessionId, windowSize]);
