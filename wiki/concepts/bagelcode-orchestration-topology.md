@@ -1,5 +1,5 @@
 ---
-title: 베이글코드 과제 — Orchestration Topology 결정 (PDCA 폐기 → Hierarchical Hybrid)
+title: Bagelcode Task — Orchestration Topology Decision (PDCA Rejected → Hierarchical Hybrid)
 category: concepts
 tags: [bagelcode, topology, orchestration, hierarchical, pdca-rejected, fault-tolerance]
 sources:
@@ -10,36 +10,36 @@ created: 2026-05-01
 updated: 2026-05-01
 ---
 
-# Orchestration Topology — PDCA 폐기 → Hierarchical Hybrid
+# Orchestration Topology — PDCA Rejected → Hierarchical Hybrid
 
-> ⚠️ **2026-05-02 supersession**: 이 페이지의 토폴로지 다이어그램에서 *Verifier = Gemini / GLM / local* 표기는 v1-v2 시점. **v0.1 부터 Verifier 는 Engineering Lead 내부 CourtEval 4 sub-role** 로 흡수됨 — 별도 actor 아님. Hub-Ledger-Spoke 토폴로지 자체는 그대로 유효 (3 outer actor: Coord + Planner Lead + Engineering Lead). 최종 lock = [[bagelcode-final-design-2026]].
+> ⚠️ **2026-05-02 supersession**: In this page's topology diagram, the *Verifier = Gemini / GLM / local* notation is from v1-v2. **Starting with v0.1, the Verifier is absorbed as the 4 sub-roles of CourtEval inside the Engineering Lead** — it is no longer a separate actor. The Hub-Ledger-Spoke topology itself remains valid (3 outer actors: Coord + Planner Lead + Engineering Lead). Final lock = [[bagelcode-final-design-2026]].
 
-> **결정 한 줄**: linear PDCA chain 폐기. Anthropic 의 orchestrator-worker + Magentic-One 의 ledger + Cognition 의 단일 transcript + ICML 2025 의 hierarchical resilience 를 합친 **Hub-Ledger-Spoke** 토폴로지로 간다.
+> **Decision in one line**: Reject the linear PDCA chain. Combine Anthropic's orchestrator-worker + Magentic-One's ledger + Cognition's single transcript + ICML 2025's hierarchical resilience into a **Hub-Ledger-Spoke** topology.
 
-## 왜 PDCA 를 버리는가 (3가지 fact)
+## Why we are rejecting PDCA (3 facts)
 
-### 1. Topology 별 fault degradation (ICML 2025)
+### 1. Per-topology fault degradation (ICML 2025)
 [[bagelcode-frontier-orchestration-2026]] §F (Resilience of Faulty MAS):
 
-| 구조 | faulty agent 1명일 때 성능 저하 | 우리 컨셉 매핑 |
+| Structure | Performance drop with 1 faulty agent | Mapping to our concept |
 |---|---|---|
-| **Hierarchical** A→(B↔C) | **5.5%** | ✅ 채택 |
-| Linear chain | 10.5% | ❌ PDCA 가 이 구조 |
+| **Hierarchical** A→(B↔C) | **5.5%** | ✅ Adopted |
+| Linear chain | 10.5% | ❌ This is what PDCA is |
 | Flat peer | 23.7% | ❌ |
 
-→ PDCA 의 Plan→Design→Do→Check→Act 가 정확히 **linear chain** = 가장 fragile 한 두 번째 자리.
+→ PDCA's Plan→Design→Do→Check→Act is exactly a **linear chain** = sitting in the second-most-fragile slot.
 
-### 2. Cognition 의 "context fragmentation" 경고
+### 2. Cognition's "context fragmentation" warning
 - "Share **full agent traces**, not just individual messages"
-- PDCA 는 stage 끼리 산출물 (SPEC.md → DESIGN_SYSTEM.md → output/) 만 넘김 = 정확히 fragmentation
-- 충돌하는 implicit decision 양산 (Planner 가 가정한 컨텍스트와 Builder 의 현실 불일치)
+- PDCA only passes deliverables between stages (SPEC.md → DESIGN_SYSTEM.md → output/) = exactly fragmentation
+- Mass-produces conflicting implicit decisions (mismatch between the context Planner assumed and the reality Builder faces)
 
-### 3. PDCA 의 단조로움 = 평가 신호 약화
-- 베이글코드 메일 "**독창적 아이디어**" 명시
-- PDCA 는 1980년대 품질 관리 프레임 — 신선함 0
-- frontier 패턴 (Magentic-One ledger, ALAS local compensation, Challenger/Inspector) 무지
+### 3. PDCA's monotony = weakened evaluation signal
+- The Bagelcode mail explicitly calls for "**original ideas**"
+- PDCA is a 1980s quality-management frame — zero novelty
+- Ignorant of frontier patterns (Magentic-One ledger, ALAS local compensation, Challenger/Inspector)
 
-## 새 토폴로지 — "Hub-Ledger-Spoke"
+## The new topology — "Hub-Ledger-Spoke"
 
 ```
                            ┌──────────────────────────┐
@@ -63,17 +63,17 @@ updated: 2026-05-01
                          (모든 agent pull-only access)
 ```
 
-### 4 actor (모두 hierarchical = ICML 5.5% degradation 군)
+### 4 actors (all hierarchical = ICML 5.5% degradation tier)
 
-1. **Orchestrator (Haiku 4.5)** = 라우터 + ledger 관리자 + circuit breaker
-2. **Builder.A (Claude Code)** = 1차 시도 (Anthropic provider)
-3. **Builder.B (Codex)** = 2차 시도 또는 병렬 — **Builder.A 가 fail 시 자동 fallback** (provider 다양화)
-4. **Verifier (cross-provider)** = Gemini 2.5 Pro / GLM-4.6 / 또는 local — Anthropic·OpenAI 와 다른 군
+1. **Orchestrator (Haiku 4.5)** = router + ledger manager + circuit breaker
+2. **Builder.A (Claude Code)** = first attempt (Anthropic provider)
+3. **Builder.B (Codex)** = second attempt or in parallel — **automatic fallback when Builder.A fails** (provider diversification)
+4. **Verifier (cross-provider)** = Gemini 2.5 Pro / GLM-4.6 / or local — a different family than Anthropic / OpenAI
 
-### 두 개 ledger (Magentic-One 차용)
+### Two ledgers (borrowed from Magentic-One)
 
 ```jsonc
-// task-ledger.json — 무엇을 알고 있나
+// task-ledger.json — what we know
 {
   "facts_known": ["...", "..."],
   "facts_to_lookup": ["...", "..."],
@@ -81,7 +81,7 @@ updated: 2026-05-01
   "constraints": ["...", "..."]
 }
 
-// progress-ledger.json — 어디까지 왔나
+// progress-ledger.json — how far we've come
 {
   "step": 3,
   "complete": false,
@@ -92,25 +92,25 @@ updated: 2026-05-01
 }
 ```
 
-→ Orchestrator 가 매 turn 시작 전 progress-ledger 갱신 + self-reflect. **task-ledger 는 사실 누적, progress-ledger 는 step 마다 새로 작성** (Magentic-One 패턴 그대로).
+→ The Orchestrator updates the progress-ledger and self-reflects at the start of every turn. **The task-ledger accumulates facts, while the progress-ledger is rewritten from scratch every step** (Magentic-One pattern verbatim).
 
-## Anthropic ⊕ Cognition 화해
+## Anthropic ⊕ Cognition reconciliation
 
-| Cognition 입장 | Anthropic 입장 | 우리 화해 |
+| Cognition's stance | Anthropic's stance | Our reconciliation |
 |---|---|---|
-| 단일 컨텍스트 우월 | 병렬 spawn 가능 | **단일 transcript** + agent 가 query 시 자기 envelope 만 |
-| context engineering 1순위 | prompt engineering 1순위 | sandwich §1+§2 = engineered context (캐시 boundary) |
-| 코딩은 parallelizable 안 함 | research 는 됨 | **2 Builder 는 순차 시도** (병렬 X), Verifier 는 독립 |
-| filesystem 출력으로 telephone game 회피 | filesystem 출력으로 telephone game 회피 | artifacts/ 디렉터리 + ref만 transcript 에 |
+| Single context wins | Parallel spawn possible | **Single transcript** + each agent only sees its own envelope on query |
+| Context engineering first | Prompt engineering first | sandwich §1+§2 = engineered context (cache boundary) |
+| Coding does not parallelize | Research does | **The 2 Builders run sequentially** (no parallel), Verifier is independent |
+| Avoid the telephone game via filesystem output | Avoid the telephone game via filesystem output | artifacts/ directory + only refs in the transcript |
 
-## "PDCA 가 아니면 뭔가" — Step model 변경
+## "If not PDCA, then what?" — Step model change
 
-### old (PDCA, 폐기)
+### old (PDCA, rejected)
 ```
 Plan → Do → Check → Act → (repeat)
 ```
 
-### new (Hub-Ledger 기반)
+### new (Hub-Ledger based)
 ```
                     ┌──────────────────────────┐
                     │ goal received → ledger.init │
@@ -137,39 +137,39 @@ Plan → Do → Check → Act → (repeat)
                      └─→ stuck (5 turns) → escalate ─────┘
 ```
 
-핵심 점:
-- **순차 retry 가 아닌 provider fallback** — Builder.A 가 실패하면 같은 spec 으로 Builder.B 시도. ([[bagelcode-fault-tolerance-design]])
-- **Verifier 는 항상 cross-provider** — Anthropic·OpenAI 결과 검증을 같은 provider 로 하면 의미 없음. 다른 군이 봐야 함. (CP-WBFT 인사이트)
-- **stuck 감지** = progress-ledger.stuck_count 5+ → 사용자 escalation (자동 무한 루프 방지)
+Key points:
+- **Provider fallback rather than sequential retry** — if Builder.A fails, try Builder.B with the same spec. ([[bagelcode-fault-tolerance-design]])
+- **Verifier is always cross-provider** — verifying Anthropic / OpenAI output with the same provider is meaningless. A different family must look at it. (CP-WBFT insight)
+- **Stuck detection** = progress-ledger.stuck_count 5+ → escalate to the user (prevents automatic infinite loops)
 
-## ALAS local compensation 적용
+## Applying ALAS local compensation
 
-[[bagelcode-frontier-orchestration-2026]] §H ALAS 패턴:
+[[bagelcode-frontier-orchestration-2026]] §H ALAS pattern:
 
-| 사고 | old (PDCA 식) | new (ALAS 식) |
+| Incident | old (PDCA-style) | new (ALAS-style) |
 |---|---|---|
-| Builder 산출 hallucination | 전체 PDCA 재시작 | **그 build 메시지만 invalidate, 다음 turn 에 retry instruction** |
-| 사용자 spec 변경 | Plan 부터 다시 | **diff 만 transcript 에 추가**, ledger 부분 갱신 |
-| Verifier 실패 (네트워크) | 전체 멈춤 | **Verifier 로컬 fallback** (정적 lint 만), transcript 에 표기 |
-| 한 adapter 장애 | 전체 down | **circuit breaker open**, 다른 Builder 로 라우팅 |
+| Builder output hallucination | Restart the entire PDCA | **Invalidate only that build message, retry instruction on the next turn** |
+| User changes the spec | Start over from Plan | **Just append the diff to the transcript**, partial ledger update |
+| Verifier failure (network) | Halt everything | **Verifier local fallback** (static lint only), mark in transcript |
+| One adapter outage | Whole system goes down | **Open the circuit breaker**, route to the other Builder |
 
-→ "역사 기반 로컬 보상" = transcript 에 already 있는 정보 기반 부분 retry. 전역 reset 금지.
+→ "History-based local compensation" = partial retry based on information already present in the transcript. No global reset allowed.
 
-## TradingAgents 와의 정합
+## Alignment with TradingAgents
 
-[[bagelcode-tradingagents-paper]] §4.2 5단계 (Analyst/Trader/Researcher/Risk/Fund) 와 우리 매핑:
+[[bagelcode-tradingagents-paper]] §4.2 5 stages (Analyst / Trader / Researcher / Risk / Fund) mapped to ours:
 
-| TA | 우리 |
+| TA | Ours |
 |---|---|
-| Analyst Team (structured) | (없음, Orchestrator 가 흡수) |
-| Trader (decision) | Builder.A 또는 .B |
-| Researcher debate (NL) | Builder.A vs Builder.B 결과를 Verifier 가 판정 |
-| Risk Mgmt (structured adjust) | progress-ledger 의 self-reflect |
-| Fund Manager (final) | Orchestrator 의 done 판정 |
+| Analyst Team (structured) | (none, absorbed by the Orchestrator) |
+| Trader (decision) | Builder.A or .B |
+| Researcher debate (NL) | Builder.A vs Builder.B output judged by the Verifier |
+| Risk Mgmt (structured adjust) | progress-ledger self-reflect |
+| Fund Manager (final) | Orchestrator's done verdict |
 
-→ TA 5단계가 우리 4-actor 위에 층층이 매핑됨. 단조롭지 않음.
+→ TA's 5 stages map cleanly on top of our 4 actors layer-by-layer. Not monotonous.
 
-## 사용자 개입 위치 (4 hook)
+## User-intervention positions (4 hooks)
 
 ```
 1) goal 직후         → constraint 추가 가능
@@ -178,39 +178,39 @@ Plan → Do → Check → Act → (repeat)
 4) done 직전         → /reject (재실행 강제)
 ```
 
-→ 각 hook 이 **Builder/Verifier wake 사이의 자연스러운 quiet point**. interrupt-driven (TUI keystroke 가 transcript 에 기록).
+→ Each hook is a **natural quiet point between Builder/Verifier wakes**. Interrupt-driven (TUI keystrokes are recorded into the transcript).
 
-## 예상 효율 영향
+## Expected efficiency impact
 
-| 측정 | PDCA 안 (폐기) | Hub-Ledger (채택) |
+| Metric | PDCA plan (rejected) | Hub-Ledger (adopted) |
 |---|---|---|
-| 1세션 turn 수 | ~6 (P/Des/Do/Check/Act/Final) | ~5 (goal/builder.A/verify/[fallback].B/done) |
-| Token 1세션 (캐시 적용) | ~150K | ~140K (ledger overhead 약 +10K, 단축 turn 으로 상쇄) |
-| Faulty agent 회복 | 중-약 (chain) | **강 (hierarchical + cross-provider fallback)** |
-| 단일 컨텍스트 | 약 (stage 별 fragment) | **강 (single transcript)** |
-| 독창성 | 낮음 (1980s 패턴) | **높음 (2026 frontier 차용)** |
+| Turns per session | ~6 (P/Des/Do/Check/Act/Final) | ~5 (goal/builder.A/verify/[fallback].B/done) |
+| Tokens per session (with cache) | ~150K | ~140K (ledger overhead ~+10K, offset by shorter turns) |
+| Faulty-agent recovery | medium-weak (chain) | **strong (hierarchical + cross-provider fallback)** |
+| Single context | weak (per-stage fragments) | **strong (single transcript)** |
+| Originality | low (1980s pattern) | **high (borrows 2026 frontier)** |
 
-## Stretch — 2 Builder **병렬** 모드 (옵션)
+## Stretch — 2-Builder **parallel** mode (optional)
 
-`--parallel-builders` 플래그 시:
-- Builder.A 와 .B 가 같은 spec 받아 **동시** 산출
-- Verifier 가 **둘 다 평가** + 선택 (또는 사용자 선택)
-- 토큰 2× 비용 vs 정확도 ↑ + Cognition 의 "벤더 lock-in 회피" 정조준
+When the `--parallel-builders` flag is set:
+- Builder.A and .B receive the same spec and produce output **simultaneously**
+- The Verifier **evaluates both** and picks (or the user picks)
+- 2× token cost vs higher accuracy + directly hits Cognition's "avoid vendor lock-in" point
 
-→ default 는 sequential fallback. parallel 은 demo 시연 옵션.
+→ Default is sequential fallback. Parallel is a demo-only option for showcasing.
 
-## 미정 / 후속
+## Open / follow-up
 
-- [ ] Verifier provider 선택 — Gemini 2.5 Pro vs GLM-4.6 vs local Llama 3.3 ([[bagelcode-agents-fixed]] 에서 결정)
-- [ ] task-ledger / progress-ledger 의 정확한 JSON Schema
-- [ ] stuck_count 임계값 (5 가 적당? 3?)
-- [ ] parallel mode 의 cost guard (사용자 사전 confirm 강제?)
+- [ ] Verifier provider choice — Gemini 2.5 Pro vs GLM-4.6 vs local Llama 3.3 (decided in [[bagelcode-agents-fixed]])
+- [ ] Exact JSON Schema for task-ledger / progress-ledger
+- [ ] stuck_count threshold (is 5 right? 3?)
+- [ ] Cost guard for parallel mode (force user pre-confirm?)
 
 ## See also
 
 - [[bagelcode]] / [[bagelcode-task-direction]]
-- [[bagelcode-frontier-orchestration-2026]] — 1차 사료
-- [[bagelcode-fault-tolerance-design]] — 실패 분류 + 복구 primitive (이 토폴로지 위에 올라감)
-- [[bagelcode-agents-fixed]] — Claude Code + Codex 고정 + cross-provider 검증
-- [[bagelcode-transcripts-schema]] — 단일 transcript 스키마 (이미 박혀 있음)
+- [[bagelcode-frontier-orchestration-2026]] — primary source
+- [[bagelcode-fault-tolerance-design]] — failure taxonomy + recovery primitives (sits on top of this topology)
+- [[bagelcode-agents-fixed]] — Claude Code + Codex fixed + cross-provider verification
+- [[bagelcode-transcripts-schema]] — single transcript schema (already locked in)
 - [[bagelcode-tradingagents-paper]] / [[hub-spoke-pattern]]

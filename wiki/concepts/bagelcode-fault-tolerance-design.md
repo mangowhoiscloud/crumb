@@ -1,5 +1,5 @@
 ---
-title: 베이글코드 과제 — Fault Tolerance 설계 (연결부 / 통신 / 에이전트 자체)
+title: Bagelcode Task — Fault Tolerance Design (connection / communication / agent itself)
 category: concepts
 tags: [bagelcode, fault-tolerance, resilience, circuit-breaker, retry, fallback, observability]
 sources:
@@ -12,58 +12,58 @@ created: 2026-05-01
 updated: 2026-05-01
 ---
 
-# Fault Tolerance 설계 — 연결부 / 통신 / 에이전트 자체
+# Fault Tolerance Design — connection / communication / agent itself
 
-> ⚠️ **2026-05-02 supersession**: 본문에서 "Verifier (Gemini)" 가 OPEN 되면 lint mode 로 degrade 한다는 시나리오는 v1-v2 가정. **v0.1 부터 Verifier 는 Engineering Lead 내부 CourtEval** — degrade trigger 는 Codex circuit OPEN → builder-fallback (claude-local) 으로 전환 + CourtEval 의 Critic 이 Defender 못 이기면 verdict 자동 다운그레이드 (스키마 강제). 외부 Gemini 키 invalid 시나리오 (line 48) 는 무관. 최종 lock = [[bagelcode-final-design-2026]] + [[bagelcode-budget-guardrails]].
+> ⚠️ **2026-05-02 supersession**: The scenario in the body where "Verifier (Gemini)" degrades to lint mode when OPEN was a v1-v2 assumption. **Starting from v0.1, Verifier is CourtEval inside Engineering Lead** — the degrade trigger is Codex circuit OPEN → switching to builder-fallback (claude-local) + automatic verdict downgrade when CourtEval's Critic cannot beat the Defender (schema-enforced). The external Gemini key invalid scenario (line 48) is irrelevant. Final lock = [[bagelcode-final-design-2026]] + [[bagelcode-budget-guardrails]].
 
-> 사용자 주안점 그대로 받아옴: "환경 변화가 발생했을 때 (1) **연결부**, (2) **통신 과정**, (3) **파트별 에이전트 자체** 에 장애 대응 및 변화를 잡아야 한다." 이 페이지는 그 3축에 frontier safeguard 들을 매핑한 spec.
+> Adopted verbatim from the user's emphasis: "When environmental change occurs, fault response and adaptation must be caught at (1) **the connection**, (2) **the communication process**, and (3) **the per-part agent itself**." This page is the spec that maps frontier safeguards to those 3 axes.
 
-## 실패 분류 (Failure Taxonomy)
+## Failure Taxonomy
 
-3축 × 모드별로 5종 정리:
+Organized into 5 modes across 3 axes × per-mode:
 
 ```
                        ┌─────────────────────────────────┐
-        연결부          │  F1. Adapter 장애 (네트워크/인증)  │
-                       │  F2. 모델/API 환경 변경 (rate, 마이그레이션)
+        connection     │  F1. Adapter failure (network/auth)│
+                       │  F2. Model/API environment change (rate, migration)
                        └─────────────────────────────────┘
 
                        ┌─────────────────────────────────┐
-        통신 과정       │  F3. 메시지 schema 위반 / 손상     │
-                       │  F4. 동시성 / 순서 / 중복            │
+        communication  │  F3. Message schema violation / corruption │
+                       │  F4. Concurrency / order / duplication      │
                        └─────────────────────────────────┘
 
                        ┌─────────────────────────────────┐
-       에이전트 자체    │  F5. 에이전트 거짓 / 환각 / 무한 루프 │
+       agent itself    │  F5. Agent deception / hallucination / infinite loop │
                        └─────────────────────────────────┘
 ```
 
-각 F# 마다 (a) 감지, (b) 복구 primitive, (c) transcript 표시, (d) 사용자 surface.
+For each F#: (a) detection, (b) recovery primitive, (c) transcript representation, (d) user surface.
 
 ---
 
-## F1 — Adapter 장애 (연결부 1)
+## F1 — Adapter failure (connection 1)
 
-### 시나리오
-- Anthropic API 5xx, rate limit, OAuth 만료
-- Codex CLI binary 없음 / 인증 토큰 죽음
-- Gemini API 키 invalid
+### Scenario
+- Anthropic API 5xx, rate limit, OAuth expiry
+- Codex CLI binary missing / auth token dead
+- Gemini API key invalid
 
-### 감지
-- adapter call 의 try/catch + structured error code
+### Detection
+- try/catch + structured error code on adapter call
 - timeout (per-call 30s default, configurable)
-- response schema 검증 실패
+- response schema validation failure
 
-### 복구 primitive
-1. **Retry with exponential backoff** — 1s/2s/4s, 최대 3회
-2. **Circuit breaker** ([[kiki-circuit-breaker]] 차용)
-   - 같은 adapter 5분 내 3회 실패 → **OPEN** (1분 동안 호출 차단)
-   - HALF_OPEN → 1회 성공 → CLOSED
+### Recovery primitive
+1. **Retry with exponential backoff** — 1s/2s/4s, up to 3 attempts
+2. **Circuit breaker** (borrowed from [[kiki-circuit-breaker]])
+   - 3 failures within 5 min for the same adapter → **OPEN** (calls blocked for 1 min)
+   - HALF_OPEN → 1 success → CLOSED
 3. **Provider fallback** ([[bagelcode-orchestration-topology]] Hub-Ledger):
-   - Builder.A (Claude Code) OPEN → **Builder.B (Codex) 로 routing**
-   - Verifier (Gemini) OPEN → **local lint mode 로 degrade** (정적 검사만, vision 빠짐)
+   - Builder.A (Claude Code) OPEN → **route to Builder.B (Codex)**
+   - Verifier (Gemini) OPEN → **degrade to local lint mode** (static checks only, vision dropped)
 
-### Transcript 표시
+### Transcript representation
 ```jsonc
 { "kind": "error", "from": "coordinator", "data": {
   "adapter": "claude-code", "code": "rate_limited",
@@ -74,34 +74,34 @@ updated: 2026-05-01
 }}
 ```
 
-### 사용자 surface
-- TUI 우상단 health badge: `🟢 claude-code  🟡 codex  🔴 gemini (degraded)`
-- circuit OPEN 시 토스트: "claude-code 장애로 codex 로 fallback 했어요. /switch 로 강제 변경 가능."
+### User surface
+- TUI top-right health badge: `🟢 claude-code  🟡 codex  🔴 gemini (degraded)`
+- Toast on circuit OPEN: "claude-code failed, falling back to codex. Use /switch to override manually."
 
 ---
 
-## F2 — 모델/API 환경 변경 (연결부 2)
+## F2 — Model/API environment change (connection 2)
 
-### 시나리오
-- Anthropic 이 모델 이름 변경 (`claude-opus-4` → `claude-opus-4-7`)
-- Codex CLI 메이저 버전 업 → flag 변경
-- Gemini API endpoint 마이그레이션
-- 사용자가 도중에 API 키 교체
+### Scenario
+- Anthropic renames a model (`claude-opus-4` → `claude-opus-4-7`)
+- Codex CLI major version bump → flag changes
+- Gemini API endpoint migration
+- User swaps API key mid-session
 
-### 감지
-- adapter 가 startup 시 **capability probe** (`models.list`, `--version`)
-- 응답 schema 가 기대와 다르면 schema_mismatch error
-- ENV 변경 watcher (`.env` mtime polling)
+### Detection
+- adapter performs **capability probe** on startup (`models.list`, `--version`)
+- schema_mismatch error when response schema differs from expectations
+- ENV change watcher (`.env` mtime polling)
 
-### 복구 primitive
-1. **Capability probe at startup** — 시작 시 각 adapter 의 모델 list 확인 → 우리가 요구한 모델이 없으면 alternative 자동 선택
+### Recovery primitive
+1. **Capability probe at startup** — at boot, each adapter checks its model list → if our requested model is missing, automatically pick an alternative
    ```
-   요구: "claude-opus-4-7"  →  없음  →  fallback 표 ["claude-opus-4-6", "claude-sonnet-4-6"]
+   requested: "claude-opus-4-7"  →  not found  →  fallback table ["claude-opus-4-6", "claude-sonnet-4-6"]
    ```
-2. **Hot reload of `.env`** — 파일 수정 감지 시 adapter 재초기화 (Anthropic 의 rainbow deployment 영감 — 구·신 동시 가동 필요 없음, 작은 시스템이라 즉시 swap)
-3. **Schema migration table** — protocol version 표기, 미래 호환
+2. **Hot reload of `.env`** — re-init adapters when file modification is detected (inspired by Anthropic's rainbow deployment — no need to run old/new in parallel since the system is small enough for an instant swap)
+3. **Schema migration table** — protocol version stamping for future compatibility
 
-### Transcript 표시
+### Transcript representation
 ```jsonc
 { "kind": "audit", "from": "coordinator", "data": {
   "event": "model_substituted",
@@ -110,34 +110,34 @@ updated: 2026-05-01
 }}
 ```
 
-### 사용자 surface
-- 첫 turn 시작 시 capability summary print
-- ENV 변경 감지 시 inline notice: "Anthropic 키가 교체됐어요. 새 키로 호출합니다."
+### User surface
+- Print capability summary at the start of the first turn
+- Inline notice on ENV change detection: "Anthropic key was swapped. Calling with the new key."
 
 ---
 
-## F3 — 메시지 schema 위반 / 손상 (통신 1)
+## F3 — Message schema violation / corruption (communication 1)
 
-### 시나리오
-- LLM 이 요구한 JSON 대신 markdown 으로 응답
-- `data` 필드 missing / wrong type
-- ULID 형식 깨짐
-- artifact ref 의 sha256 mismatch
+### Scenario
+- LLM responds in markdown instead of the requested JSON
+- `data` field missing / wrong type
+- ULID format broken
+- artifact ref sha256 mismatch
 
-### 감지
-- 모든 transcript write 전 **JSON Schema validator** 통과 (이미 [[bagelcode-transcripts-schema]] §"Append-only 보장")
-- artifact write 시 sha256 자동 계산 + ref 와 대조
+### Detection
+- All transcript writes pass through a **JSON Schema validator** beforehand (already covered in [[bagelcode-transcripts-schema]] §"Append-only guarantees")
+- artifact write auto-computes sha256 + cross-checks against ref
 
-### 복구 primitive
-1. **Strict + Lenient 모드 분리**:
-   - Strict: 검증 실패 → reject + LLM 에게 schema error 반환 + retry 1회 (자기 교정)
-   - Lenient (debate / note): 자유 텍스트 허용
-2. **Coercion layer** — 부분 매칭은 자동 보정 (e.g. JSON-in-markdown extract)
-3. **Inspector 패턴** ([[bagelcode-frontier-orchestration-2026]] §F):
-   - 별도 Verifier 가 "이 메시지 의미가 spec 과 일치?" 검토
-   - 한국어 / 영어 mix 등 미세 손상 catch
+### Recovery primitive
+1. **Strict + Lenient mode separation**:
+   - Strict: validation fail → reject + return schema error to LLM + retry once (self-correction)
+   - Lenient (debate / note): free-form text allowed
+2. **Coercion layer** — partial matches are auto-corrected (e.g. JSON-in-markdown extract)
+3. **Inspector pattern** ([[bagelcode-frontier-orchestration-2026]] §F):
+   - A separate Verifier reviews "does the meaning of this message match the spec?"
+   - Catches subtle corruption like Korean / English mixing
 
-### Transcript 표시
+### Transcript representation
 ```jsonc
 { "kind": "error", "from": "validator", "data": {
   "violator_msg": "01J9...", "violation": "data.acceptance_criteria not array",
@@ -145,61 +145,61 @@ updated: 2026-05-01
 }}
 ```
 
-### 사용자 surface
-- 검증 실패 메시지는 TUI 에 회색 처리 + "schema retry 1/2"
-- 2회 모두 실패 시 사용자에게 raw 텍스트 노출 + 진행 여부 묻기
+### User surface
+- Validation-failed messages are greyed out in the TUI + "schema retry 1/2"
+- After 2 failures, expose the raw text to the user and ask whether to continue
 
 ---
 
-## F4 — 동시성 / 순서 / 중복 (통신 2)
+## F4 — Concurrency / order / duplication (communication 2)
 
-### 시나리오
-- Coordinator + Verifier 가 transcript 에 동시 write → 메시지 분실
-- 같은 메시지 두 번 ack
-- 시각 역전 (시스템 시간 jump)
+### Scenario
+- Coordinator + Verifier write to the transcript simultaneously → message lost
+- The same message gets ack'd twice
+- Time inversion (system clock jump)
 
-### 감지
-- ULID 단조성 break (이전 < 현재 가 아닌 경우)
-- 동일 `id` 두 번 등장
-- `in_reply_to` 가 없는 id 참조
+### Detection
+- ULID monotonicity break (when prev < curr does not hold)
+- Same `id` appearing twice
+- `in_reply_to` referencing a non-existent id
 
-### 복구 primitive
+### Recovery primitive
 1. **Append-only with O_APPEND + flock** — POSIX file advisory lock
-2. **ULID dedup** — id 가 이미 존재하면 두 번째 write 무시 (idempotent)
-3. **순서 reconciliation** — read 시 `id` 정렬, ts 는 신뢰하지 않음
-4. **At-least-once delivery + idempotency** — adapter 가 retry 했는데 응답 받으면 같은 id 로 두 번 쓰지 않음 (UUID seed in adapter call)
+2. **ULID dedup** — if the id already exists, ignore the second write (idempotent)
+3. **Order reconciliation** — at read time, sort by `id`; do not trust ts
+4. **At-least-once delivery + idempotency** — if an adapter retries but receives a response, it does not write twice with the same id (UUID seed in adapter call)
 
-### Transcript 표시
-- 정상이면 표시 X (silent infrastructure)
-- 비정상 발견 시 `kind=audit, event=duplicate_msg_dropped`
+### Transcript representation
+- Not displayed when normal (silent infrastructure)
+- On anomaly: `kind=audit, event=duplicate_msg_dropped`
 
 ---
 
-## F5 — 에이전트 거짓 / 환각 / 무한 루프 (에이전트 자체)
+## F5 — Agent deception / hallucination / infinite loop (agent itself)
 
-### 시나리오
-- Builder 가 코드 만들었다고 하지만 artifacts 없음
-- Verifier 가 PASS 인데 exec 안 함
-- Planner 와 Builder 가 서로 핑퐁만 무한 반복
-- 같은 spec 으로 Builder 가 동일한 잘못된 답 반복 (degeneration-of-thought)
+### Scenario
+- Builder claims it produced code but no artifacts exist
+- Verifier returns PASS but never executed
+- Planner and Builder ping-pong infinitely
+- Builder repeats the same wrong answer for the same spec (degeneration-of-thought)
 
-### 감지
-- **Anti-deception 룰** ([[bagelcode-rubric-scoring]] §"Anti-Deception 룰") — schema 단계에서 강제
-- **stuck_count** (Magentic-One progress-ledger): 같은 메시지 패턴 5+ 반복
-- **Challenger 패턴** ([[bagelcode-frontier-orchestration-2026]] §F): Verifier 가 Builder 결과 도전권
-- **MAR (Multi-Agent Reflexion)**: 단일 reflexion 으로는 degeneration 못 잡음 → cross-provider Verifier 가 핵심
+### Detection
+- **Anti-deception rules** ([[bagelcode-rubric-scoring]] §"Anti-Deception Rules") — enforced at the schema layer
+- **stuck_count** (Magentic-One progress-ledger): same message pattern repeats 5+ times
+- **Challenger pattern** ([[bagelcode-frontier-orchestration-2026]] §F): Verifier has the right to challenge Builder results
+- **MAR (Multi-Agent Reflexion)**: a single reflexion cannot catch degeneration → cross-provider Verifier is essential
 
-### 복구 primitive
-1. **Schema 강제 anti-deception**:
-   - Builder 가 build 했다고 했는데 `artifacts` 비면 → kind=error 자동 발행
-   - Verifier 가 PASS 인데 `exec.exit_code` 없으면 → 자동 0점 + retry instruction
-2. **Cross-provider Verifier** = 같은 군 (Anthropic/OpenAI) 가 자기 결과 검증 못 함 → Gemini/GLM/local 강제
+### Recovery primitive
+1. **Schema-enforced anti-deception**:
+   - Builder claims build but `artifacts` is empty → kind=error auto-emitted
+   - Verifier returns PASS but no `exec.exit_code` → automatic 0 score + retry instruction
+2. **Cross-provider Verifier** = same family (Anthropic/OpenAI) cannot validate its own output → force Gemini/GLM/local
 3. **Stuck escalation**:
-   - progress-ledger.stuck_count ≥ 5 → 사용자에게 자동 escalate
-   - "지금 같은 spec 으로 5번째 시도 중. 진행 / 중단 / spec 수정?"
-4. **Local compensation (ALAS)**: 무한 루프 break 시 **이전 turn 까지 rollback** 하고 instruction 만 변경, 처음부터 다시 X
+   - progress-ledger.stuck_count ≥ 5 → auto-escalate to user
+   - "5th attempt with the same spec. Continue / abort / edit spec?"
+4. **Local compensation (ALAS)**: when breaking an infinite loop, **roll back to the previous turn** and only change the instruction, do not restart from scratch
 
-### Transcript 표시
+### Transcript representation
 ```jsonc
 { "kind": "audit", "from": "coordinator", "data": {
   "event": "stuck_detected", "pattern_repeats": 5,
@@ -211,15 +211,15 @@ updated: 2026-05-01
 }}
 ```
 
-### 사용자 surface
-- TUI 좌하단 "stuck counter" 시각화
-- 5 도달 시 inline modal: "벗어나는 방법: redo / spec_diff / abort"
+### User surface
+- Visualize the "stuck counter" at the bottom-left of the TUI
+- On reaching 5, inline modal: "Ways out: redo / spec_diff / abort"
 
 ---
 
-## 환경 변화 감지 — Heartbeat / Health probe
+## Environmental change detection — Heartbeat / Health probe
 
-각 adapter 에 **per-30s health probe**:
+A **per-30s health probe** for each adapter:
 
 ```typescript
 async function probe(adapter): HealthStatus {
@@ -233,13 +233,13 @@ async function probe(adapter): HealthStatus {
 }
 ```
 
-→ TUI health badge 가 이 데이터로 갱신.
+→ The TUI health badge refreshes from this data.
 
-→ adapter version 변경 감지 시 (e.g. claude code 0.2.71 → 0.2.85) → audit 로 기록 + capability probe 재실행.
+→ When an adapter version change is detected (e.g. claude code 0.2.71 → 0.2.85) → record as audit + re-run capability probe.
 
-## 우선순위 + 마감 안 (스코프)
+## Priority + scope cutoff
 
-| Primitive | 필수 (P0) | 권장 (P1) | 옵션 (P2) |
+| Primitive | Required (P0) | Recommended (P1) | Optional (P2) |
 |---|---|---|---|
 | Schema validator | ✅ | | |
 | Anti-deception rules | ✅ | | |
@@ -250,31 +250,31 @@ async function probe(adapter): HealthStatus {
 | Capability probe at startup | ✅ | | |
 | Stuck escalation | ✅ | | |
 | Hot ENV reload | | ✅ | |
-| Inspector pattern (별도 agent) | | ✅ | |
+| Inspector pattern (separate agent) | | ✅ | |
 | File lock for append | | ✅ | |
 | Idempotency UUID seed | | ✅ | |
 | Hot model substitution | | | ✅ |
-| ALAS local compensation 정교화 | | | ✅ |
+| ALAS local compensation refinement | | | ✅ |
 
-→ P0 만으로도 ICML 2025 의 hierarchical + safeguard = **96.4% 회복** 효과 대부분 확보.
+→ P0 alone secures most of the **96.4% recovery** effect from ICML 2025's hierarchical + safeguard.
 
-## 측정 hook (rubric 에 차원 추가)
+## Measurement hook (add a dimension to the rubric)
 
-[[bagelcode-rubric-scoring]] 의 5차원에 추가 차원 검토:
+Consider an additional dimension on top of [[bagelcode-rubric-scoring]]'s 5 dimensions:
 
-| 신차원 | 측정 |
+| New dimension | Measurement |
 |---|---|
-| **D6. Resilience** | 의도적 fault injection 시 회복률 (e.g. claude adapter kill 후 codex fallback 성공) |
+| **D6. Resilience** | Recovery rate under intentional fault injection (e.g. successful codex fallback after killing the claude adapter) |
 
-→ demo 영상에서 `kill -9 $(pgrep claude-code)` 한 번 보여주면 strong signal.
+→ Showing `kill -9 $(pgrep claude-code)` once in the demo video gives a strong signal.
 
 ## See also
 
 - [[bagelcode]] / [[bagelcode-task-direction]]
-- [[bagelcode-orchestration-topology]] — 이 fault tolerance 가 올라가는 토폴로지
-- [[bagelcode-frontier-orchestration-2026]] — 1차 사료
-- [[bagelcode-transcripts-schema]] — schema validator 의 base
-- [[bagelcode-rubric-scoring]] — D6 Resilience 차원 추가 검토
-- [[bagelcode-agents-fixed]] — adapter 별 health probe 구체화
-- [[kiki-circuit-breaker]] — kiki 의 circuit breaker production 사례
-- [[kiki-scorecard-guards]] — C14 (10초 후 wake), C18 (least-loaded peer) 가드 영감
+- [[bagelcode-orchestration-topology]] — the topology this fault tolerance sits on
+- [[bagelcode-frontier-orchestration-2026]] — primary source
+- [[bagelcode-transcripts-schema]] — base for the schema validator
+- [[bagelcode-rubric-scoring]] — review for adding the D6 Resilience dimension
+- [[bagelcode-agents-fixed]] — per-adapter health probe specifics
+- [[kiki-circuit-breaker]] — kiki's circuit breaker production case
+- [[kiki-scorecard-guards]] — inspiration from C14 (wake after 10s) and C18 (least-loaded peer) guards

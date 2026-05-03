@@ -1,5 +1,5 @@
 ---
-title: 베이글코드 과제 — Crumb 최종 설계 (Schema + Inter-Agent Communication 초점)
+title: Bagelcode Task — Crumb Final Design (Schema + Inter-Agent Communication focus)
 category: concepts
 tags: [bagelcode, crumb, final-design, schema, communication, lead-specialists, socratic, courteval, 2026]
 sources:
@@ -15,25 +15,25 @@ sources:
   - "[[bagelcode-system-architecture]]"
   - "[[bagelcode-verifier-isolation-matrix]]"
 summary: >-
-  Crumb 의 P0 lock — Lead-Specialists 구조 + Socratic + CourtEval + transcript schema + OTel.
-  §1 토폴로지 그림과 §2 "28 kind" 카운트는 system-architecture 가 canonical 로 대체.
+  Crumb's P0 lock — Lead-Specialists structure + Socratic + CourtEval + transcript schema + OTel.
+  §1 topology diagram and §2 "28 kind" count are superseded by system-architecture as canonical.
 created: 2026-05-02
 updated: 2026-05-02
 ---
 
-# Crumb 최종 설계 — Schema + Inter-Agent Communication 초점
+# Crumb Final Design — Schema + Inter-Agent Communication focus
 
-> **lock 된 결정 종합.** 4 outer actor + 7 inner specialist roles + Lead-Specialists 구조 + Socratic 모호성 제거 + CourtEval verifier + 28 kind transcript schema + OTel GenAI alias.
+> **Synthesis of locked decisions.** 4 outer actors + 7 inner specialist roles + Lead-Specialists structure + Socratic ambiguity removal + CourtEval verifier + 28 kind transcript schema + OTel GenAI alias.
 >
-> ★ **2026-05-02 정정**: §1 토폴로지 그림과 §2 "28 kind" 카운트는 [[bagelcode-host-harness-decision]] 후 [[bagelcode-system-architecture]] 가 canonical 로 대체. 본 페이지의 §3-§8 (envelope / state machine / adapter / OTel alias) 는 그대로 유효.
+> ★ **2026-05-02 correction**: §1 topology diagram and §2 "28 kind" count are superseded by [[bagelcode-system-architecture]] as canonical, following [[bagelcode-host-harness-decision]]. §3-§8 of this page (envelope / state machine / adapter / OTel alias) remain valid as written.
 
 ---
 
-## 1. 토폴로지 — Lead-Specialists Hierarchy ★ deprecated, [[bagelcode-system-architecture]] §1-§2 참조
+## 1. Topology — Lead-Specialists Hierarchy ★ deprecated, see [[bagelcode-system-architecture]] §1-§2
 
-> 본 §1 그림은 host-harness-decision (Hybrid: Claude Code skill + headless CLI) 이전 결정. 새 canonical 그림은 system-architecture §1 (default) + §2 (cross-provider mode). 변경 요지: 외부 process 4 → 1 (Claude Code single host) + opt-in cross-provider 시 + Codex CLI 1; 내부 specialist = native Task subagent (depth=1). 아래 텍스트는 archive 보존.
+> The §1 diagram below pre-dates the host-harness-decision (Hybrid: Claude Code skill + headless CLI). The new canonical diagram is system-architecture §1 (default) + §2 (cross-provider mode). Key changes: external processes 4 → 1 (Claude Code single host) + opt-in cross-provider only + Codex CLI 1; internal specialist = native Task subagent (depth=1). The text below is preserved as archive.
 
-### 외부 4 actor (subprocess level) — archive
+### 4 outer actors (subprocess level) — archive
 
 ```
                        USER (TUI / inbox.txt)
@@ -46,83 +46,83 @@ updated: 2026-05-02
                   ┌───────────┼─────────────────────┐
                   ▼           ▼                     ▼
               PLANNER       ENGINEERING       BUILDER.FALLBACK
-              LEAD          LEAD              (Codex 죽었을 때)
+              LEAD          LEAD              (when Codex is dead)
               (Sonnet 4.6,  (Codex GPT-5.5    (Sonnet 4.6,
                Claude Code)  primary           Claude Code)
-                            또는 Sonnet)
+                            or Sonnet)
 ```
 
-### 내부 7 specialist roles (Lead 안 sequential, single spawn)
+### 7 inner specialist roles (sequential within each Lead, single spawn)
 
 ```
-PLANNER LEAD spawn 1회 안에서:
-  Step 1: Socratic round         ← 모호성 제거 (max 3 Q, timeout 30s)
-  Step 2: Concept Designer       ← 기획자 모드 (메커닉 / 룰)
-  Step 3: Researcher              ← 시장 ref / Royal Match류 검토
-  Step 4: Visual Designer         ← 색감 / UX / 모바일 친화
+Within a single PLANNER LEAD spawn:
+  Step 1: Socratic round         ← ambiguity removal (max 3 Q, timeout 30s)
+  Step 2: Concept Designer       ← designer mode (mechanics / rules)
+  Step 3: Researcher              ← market refs / Royal Match-style review
+  Step 4: Visual Designer         ← color / UX / mobile-friendly
   Step 5: Lead synth              ← spec.md + DESIGN.md + tuning.json draft
 
-ENGINEERING LEAD spawn 1회 안에서:
-  Step 1: Builder                 ← 코드 작성 (Phaser HTML5)
+Within a single ENGINEERING LEAD spawn:
+  Step 1: Builder                 ← code authoring (Phaser HTML5)
   Step 2: QA                       ← lint + unit test
   Step 3: Verifier (CourtEval)    ← Grader → Critic → Defender → Re-grade
-  Step 4: Lead synth               ← verify.result + 산출물 정리
+  Step 4: Lead synth               ← verify.result + artifact roll-up
 ```
 
-→ **외부 4 / 내부 7** = quality 유지하면서 토큰 폭증 회피.
+→ **outer 4 / inner 7** = preserve quality while avoiding token explosion.
 
-### 모드 변형 (사용자 선택권)
+### Mode variants (user choice)
 
-| Mode | actor | 토큰 | 용도 |
+| Mode | actors | tokens | use case |
 |---|---|---|---|
-| `--solo` | Coord + Lead 1개 (모두 Claude) | ~25K | Anthropic 키만, 최소 |
-| `--standard` (default) | 외부 4 + 내부 7 sequential | ~65K | 정상 |
-| `--rigorous` | 외부 8 (specialist 진짜 분리) | ~150K | quality demo |
-| `--parallel` | standard + Codex/Claude 동시 builder | ~110K | demo 시연 |
+| `--solo` | Coord + 1 Lead (all Claude) | ~25K | Anthropic key only, minimal |
+| `--standard` (default) | outer 4 + inner 7 sequential | ~65K | normal |
+| `--rigorous` | outer 8 (specialists actually split out) | ~150K | quality demo |
+| `--parallel` | standard + Codex/Claude builders concurrent | ~110K | demo showcase |
 
-→ Anthropic "wrong tradeoff" 교훈 정합 (user-controllable).
+→ Aligned with the Anthropic "wrong tradeoff" lesson (user-controllable).
 
 ---
 
-## 2. Transcript Schema — 38 Kind + 11 Field ★ 정정 (실 schema 기준)
+## 2. Transcript Schema — 38 Kind + 11 Field ★ corrected (matches actual schema)
 
-> 이전 "28 kind" 표기는 P0 이전 카운트. 실 `protocol/schemas/message.schema.json` = **38 kind** (handoff.rollback / tool.call / tool.result / hook + user.pause/resume 분리 등 추가). 38 kind 분류: [[bagelcode-system-architecture]] §3.
+> The earlier "28 kind" notation was a pre-P0 count. The actual `protocol/schemas/message.schema.json` = **38 kind** (additions include handoff.rollback / tool.call / tool.result / hook + the user.pause/resume split). 38-kind classification: [[bagelcode-system-architecture]] §3.
 
 ### (archive) 28 Kind + 11 Field
 
-### Message 구조 (TypeScript)
+### Message structure (TypeScript)
 
 ```typescript
 type Message = {
-  // ── 식별 ──
-  id: ULID                        // 시간순 정렬 + 충돌 방지
+  // ── identity ──
+  id: ULID                        // chronological sort + collision avoidance
   ts: ISO8601                     // human readable
-  session_id: string              // 세션 단위
-  task_id?: string                // ★ session 안 multi-task
+  session_id: string              // session unit
+  task_id?: string                // ★ multi-task within a session
 
-  // ── 라우팅 ──
+  // ── routing ──
   from: ActorId                   // user / coord / planner / engineering / builder.fb
-  to: ActorId | "*"               // "*" = broadcast (관찰만)
-  parent_event_id?: ULID          // ★ DAG 추적
+  to: ActorId | "*"               // "*" = broadcast (observe only)
+  parent_event_id?: ULID          // ★ DAG tracking
   in_reply_to?: ULID              // (alias for parent_event_id, deprecated)
 
-  // ── 분류 ──
-  kind: MessageKind               // 28 kind (아래)
-  topic?: string                  // 자유 태그
-  step?: SpecialistStep            // ★ Lead 내부 step 마킹
+  // ── classification ──
+  kind: MessageKind               // 28 kind (below)
+  topic?: string                  // free-form tag
+  step?: SpecialistStep            // ★ marks the step inside a Lead
 
-  // ── 본문 ──
-  body: string                    // 자유 텍스트 (한 곳에 격리)
-  data?: Record<string, unknown>  // structured payload (kind별)
-  content?: {                     // ★ format 명시
+  // ── body ──
+  body: string                    // free-form text (isolated to one place)
+  data?: Record<string, unknown>  // structured payload (per kind)
+  content?: {                     // ★ explicit format
     format: 'markdown' | 'json' | 'text' | 'xml'
     text: string
   }
 
-  // ── 산출물 ──
-  artifacts?: ArtifactRef[]        // ref만 (sha256 + path)
+  // ── artifacts ──
+  artifacts?: ArtifactRef[]        // ref only (sha256 + path)
 
-  // ── 점수 (★ first-class) ──
+  // ── scores (★ first-class) ──
   scores?: {
     goal_completion: number        // 0-5
     collaboration: number          // 0-5
@@ -134,13 +134,13 @@ type Message = {
     verdict: 'PASS' | 'PARTIAL' | 'FAIL' | 'REJECT'
   }
 
-  // ── 통제 ──
+  // ── control ──
   ack_required?: boolean
   blocking?: boolean
 
-  // ── 메타데이터 (관찰성) ──
+  // ── metadata (observability) ──
   metadata?: {
-    visibility: 'public' | 'private'  // ★ envelope 필터링
+    visibility: 'public' | 'private'  // ★ envelope filtering
     model?: string                    // claude-opus-4-7 / gpt-5.5 / etc.
     turn?: number
     tokens_in?: number
@@ -149,8 +149,8 @@ type Message = {
     cache_write?: number
     latency_ms?: number
     cost_usd?: number                 // PAYG estimate
-    thinking_tokens?: number          // model_thinking (캐시 X)
-    audit_violations?: string[]       // anti-deception 룰 위반
+    thinking_tokens?: number          // model_thinking (no cache)
+    audit_violations?: string[]       // anti-deception rule violations
   }
 }
 
@@ -161,65 +161,65 @@ type SpecialistStep =
   | 'synth'                                           // Lead final
 ```
 
-### 28 Kind 어휘
+### 28 Kind vocabulary
 
 ```
-─── 시스템 (4) ──────────
-session.start            세션 개시 + manifest
-session.end              세션 종료
-agent.wake               actor spawn 명령
-agent.stop               actor 정지
+─── system (4) ──────────
+session.start            session start + manifest
+session.end              session end
+agent.wake               actor spawn command
+agent.stop               actor stop
 
-─── 작업 흐름 (10) ──────
-goal                     사용자 최상위 요청
-question.socratic        ★ 신규 (Planner Lead 가 user 에게 모호성 질문)
-answer.socratic          ★ 신규 (user 응답)
-spec                     Planner Lead 산출 (AC + 룰북)
-spec.update              spec 수정
-build                    Engineering Lead 산출 (코드)
-verify.request           검증 요청
-verify.result            검증 결과 (verdict + scores nested)
-judge.score              ★ 신규 first-class scorecard
-done                     최종 산출 확정
+─── workflow (10) ──────
+goal                     user top-level request
+question.socratic        ★ new (Planner Lead asks user about ambiguity)
+answer.socratic          ★ new (user response)
+spec                     Planner Lead output (AC + rule sheet)
+spec.update              spec revision
+build                    Engineering Lead output (code)
+verify.request           verification request
+verify.result            verification result (verdict + scores nested)
+judge.score              ★ new first-class scorecard
+done                     final delivery confirmed
 
-─── 대화 / 추론 (5) ──────
-agent.thought_summary    ★ 신규 (private CoT 비저장, summary만)
-question                 일반 질문 (Lead → User 또는 cross-Lead)
-answer                   응답
-debate                   다자 토론 entry (CourtEval 내부)
-note                     자유 코멘트 (routing 안 됨)
+─── conversation / reasoning (5) ──────
+agent.thought_summary    ★ new (private CoT not stored, summary only)
+question                 general question (Lead → User or cross-Lead)
+answer                   answer
+debate                   multi-party debate entry (inside CourtEval)
+note                     free-form comment (not routed)
 
-─── Lead 내부 step (5) ──
-step.socratic            ★ 신규 (Planner Lead 가 step 진입 마킹)
-step.concept             ★ 신규
-step.research            ★ 신규
-step.design              ★ 신규
-step.judge               ★ 신규 (Verifier 의 Grader/Critic/Defender)
+─── Lead-internal step (5) ──
+step.socratic            ★ new (Planner Lead marks step entry)
+step.concept             ★ new
+step.research            ★ new
+step.design              ★ new
+step.judge               ★ new (Verifier's Grader/Critic/Defender)
 
-─── 사용자 개입 (4) ───
-user.intervene           일반 개입
-user.veto                특정 메시지 거부
-user.approve             명시 승인
-user.pause / .resume     글로벌 통제
+─── user intervention (4) ───
+user.intervene           generic intervention
+user.veto                reject a specific message
+user.approve             explicit approval
+user.pause / .resume     global control
 
-─── 핸드오프 (2) ──────
-handoff.requested        ★ 신규 (Lead → Lead 명시)
-handoff.accepted         ★ 신규
+─── handoff (2) ──────
+handoff.requested        ★ new (Lead → Lead explicit)
+handoff.accepted         ★ new
 
-─── 산출물 / 메타 (4) ──
-artifact.created         ★ 신규 (separate event)
-ack                      수신 확인
-error                    오류 보고
-audit                    감사 (자동 기록)
+─── artifact / meta (4) ──
+artifact.created         ★ new (separate event)
+ack                      receipt acknowledgement
+error                    error report
+audit                    audit (auto-recorded)
 ```
 
-→ **28 kind**. 어휘 정밀화.
+→ **28 kind**. Vocabulary refined.
 
 ---
 
-## 3. Inter-Agent Communication 규격
+## 3. Inter-Agent Communication spec
 
-### A. Envelope (각 spawn 시 actor 가 받는 것)
+### A. Envelope (what the actor receives at each spawn)
 
 ```xml
 <crumb:envelope session="cat-match-3" turn="4" task="task_main_game">
@@ -231,7 +231,7 @@ audit                    감사 (자동 기록)
   </crumb:contract>
   
   <crumb:task-ledger version="3">
-    <fact>match-3, 60s 제한, 콤보 1.5×</fact>
+    <fact>match-3, 60s limit, combo 1.5×</fact>
     <constraint>mobile-first, Phaser CDN, ≤60KB own code</constraint>
     <decision>vanilla Canvas, no bundler</decision>
   </crumb:task-ledger>
@@ -258,13 +258,13 @@ audit                    감사 (자동 기록)
 </crumb:envelope>
 ```
 
-→ **agent-friendly** (XML, machine-parseable) **+ kind-filtered** (`visibility=public` 만, private 제외) **+ artifact ref only** (body 0).
+→ **agent-friendly** (XML, machine-parseable) **+ kind-filtered** (`visibility=public` only, private excluded) **+ artifact ref only** (zero body).
 
 ### B. Handoff protocol (Lead → Lead)
 
 ```
-Planner Lead 종료 시:
-  ─[1]→ kind=spec (산출물 ref)
+At Planner Lead termination:
+  ─[1]→ kind=spec (artifact ref)
   ─[2]→ kind=artifact.created (game-spec.md)
   ─[3]→ kind=handoff.requested, to=engineering-lead, payload={spec_id}
   ─[4]→ kind=audit (tokens / cost / latency)
@@ -277,25 +277,25 @@ Coordinator wake:
   ▸ spawn engineering-lead with envelope
 ```
 
-→ **명시 handoff** = ambiguity 0 + replay deterministic.
+→ **explicit handoff** = zero ambiguity + replay deterministic.
 
-### C. Socratic round 프로토콜
+### C. Socratic round protocol
 
 ```
-Planner Lead spawn 시작:
+At Planner Lead spawn start:
   
   Step 1 (socratic):
     inside Planner Lead reasoning:
-      "Goal 의 모호성 분석:"
-      "  - target platform 미명시"
-      "  - session 길이 미명시"
-      "  - monetization 의도 미명시"
+      "Goal ambiguity analysis:"
+      "  - target platform unspecified"
+      "  - session length unspecified"
+      "  - monetization intent unspecified"
     
     transcript append × 3:
-      kind=question.socratic, body="타겟 platform?",
+      kind=question.socratic, body="target platform?",
         data={ options: ['iOS Safari', 'Android Chrome', 'both'],
                default: 'both' }
-      kind=question.socratic, body="Session 길이?",
+      kind=question.socratic, body="session length?",
         data={ options: ['60s', 'unlimited', 'level-based'],
                default: '60s' }
       kind=question.socratic, body="Monetization?",
@@ -307,37 +307,37 @@ Planner Lead spawn 시작:
       timeout → use default, kind=audit{event=socratic_default}
   
   Step 2-4 (concept / research / design):
-    inner reasoning (transcript step.* 마킹)
+    inner reasoning (transcript step.* marking)
     no new spawn
   
   Step 5 (synth):
-    final spec.md / DESIGN.md / tuning.json draft 작성
+    author final spec.md / DESIGN.md / tuning.json draft
     transcript append:
       kind=artifact.created × 3
       kind=spec (final)
       kind=handoff.requested → engineering-lead
 ```
 
-### D. CourtEval verifier 프로토콜
+### D. CourtEval verifier protocol
 
 ```
 Engineering Lead spawn → Step 3 (Verifier):
   
   Sub-step 1 (Grader):
     transcript: kind=step.judge, step=grader
-    initial scores 산출 (D1-D6)
+    initial scores produced (D1-D6)
   
   Sub-step 2 (Critic):
     transcript: kind=step.judge, step=critic
-    body: "score 4 too high because contrast 4.2:1 미달"
+    body: "score 4 too high because contrast 4.2:1 below threshold"
     
   Sub-step 3 (Defender):
     transcript: kind=step.judge, step=defender
-    body: "actually contrast 4.5+ on 90% of palette, 1 색만 4.2"
+    body: "actually contrast 4.5+ on 90% of palette, only 1 color at 4.2"
     
   Sub-step 4 (Re-grader):
     transcript: kind=step.judge, step=regrader
-    final scores (Critic+Defender 반영)
+    final scores (incorporating Critic+Defender)
     
   Final:
     kind=judge.score (first-class)
@@ -345,22 +345,22 @@ Engineering Lead spawn → Step 3 (Verifier):
     kind=verify.result (legacy alias)
 ```
 
-→ **CourtEval ACL 2025 차용**. 1 spawn 안 sequential, 토큰 +30%.
+→ **Borrows CourtEval ACL 2025**. Sequential within 1 spawn, +30% tokens.
 
 ### E. Adaptive stopping (NeurIPS 2025 inspired)
 
 ```
-progress-ledger 안:
-  score_history: [24.0, 23.8, 24.0, 24.1]   # 최근 4 round
+Inside progress-ledger:
+  score_history: [24.0, 23.8, 24.0, 24.1]   # last 4 rounds
   
 reducer:
-  if last 2 rounds 의 score 변동 < 1.0:
+  if score variation across last 2 rounds < 1.0:
     next_speaker = "done"
     stop_reason = "score_stable"
     kind=audit, event=adaptive_stop_triggered
 
-→ verifier polish 무한 루프 차단
-→ NeurIPS 2025 multi-agent debate judge 정합
+→ blocks the verifier polish infinite loop
+→ aligns with NeurIPS 2025 multi-agent debate judge
 ```
 
 ---
@@ -376,7 +376,7 @@ type State = {
   invalidatedMsgs: ReadonlySet<MessageId>
   pausedState: boolean
   stuckCount: number
-  scoreHistory: number[]            // adaptive stop 용
+  scoreHistory: number[]            // for adaptive stop
   lastSeen: ULID | null
   hookActive: HookKind | null
 }
@@ -400,18 +400,18 @@ type Effect =
 function reduce(state: State, event: Event): { state: State, effects: Effect[] }
 ```
 
-3 loop variant (같은 reducer, 다른 dispatcher):
+3 loop variants (same reducer, different dispatcher):
 - `liveLoop()` — chokidar + setInterval + dispatchLive
 - `replayLoop()` — read transcript + dispatchReplay (TUI only)
 - `testLoop()` — synchronous, mock dispatcher
 
-→ **transcript.jsonl 만으로 state 100% derive** = replay/test/crash recovery 모두 무료.
+→ **state 100% derivable from transcript.jsonl alone** = replay/test/crash recovery all come for free.
 
 ---
 
-## 5. Adapter Layer (Subprocess + 사용자 구독)
+## 5. Adapter Layer (Subprocess + user subscription)
 
-### 3 adapter (Paperclip-inspired BYO pattern)
+### 3 adapters (Paperclip-inspired BYO pattern)
 
 ```typescript
 interface AgentAdapter {
@@ -445,18 +445,18 @@ class CodexLocalAdapter implements AgentAdapter {
       '--approval-policy', 'never',
       '--sandbox-mode', 'workspace-write',
     ], { cwd: ..., env: ... })
-    proc.stdin.write(toMarkdown(req.sandwich))  // XML → Markdown 변환
+    proc.stdin.write(toMarkdown(req.sandwich))  // XML → Markdown conversion
     return parseStreamJson(proc.stdout)
   }
 }
 ```
 
-→ **OAuth = CLI 자체 처리** (Claude Max + Codex Plus 구독).
-→ **CLAUDE.md / AGENTS.md auto-load 의존 X** (stdin injection).
+→ **OAuth handled by the CLI itself** (Claude Max + Codex Plus subscriptions).
+→ **No dependency on CLAUDE.md / AGENTS.md auto-load** (stdin injection).
 
 ---
 
-## 6. UI / Observability (3 surface)
+## 6. UI / Observability (3 surfaces)
 
 ### TUI (P0, blessed)
 
@@ -464,12 +464,12 @@ class CodexLocalAdapter implements AgentAdapter {
 ┌─ Crumb · cat-match-3 · turn 4/15 · standard preset ─────────┐
 │                                                                │
 │ ▶ TIMELINE (j/k scroll, Enter expand, Tab pane)               │
-│ [00:00] 👤 user      goal       "고양이 매치-3..."              │
-│ [00:32] 🔵 planner-L step.socratic Q: 색약 친화 팔레트?         │
-│ [00:40] 👤 user      answer.socratic "기본 OK, 색약 친화만"    │
-│ [00:43] 🔵 planner-L step.concept 메커닉 정의                  │
-│ [00:55] 🔵 planner-L step.research Royal Match 패턴 검토        │
-│ [01:10] 🔵 planner-L step.design 색감 + UX                      │
+│ [00:00] 👤 user      goal       "cat match-3..."                │
+│ [00:32] 🔵 planner-L step.socratic Q: colorblind-friendly palette? │
+│ [00:40] 👤 user      answer.socratic "default OK, only colorblind-friendly"    │
+│ [00:43] 🔵 planner-L step.concept mechanics defined                  │
+│ [00:55] 🔵 planner-L step.research Royal Match pattern review        │
+│ [01:10] 🔵 planner-L step.design color + UX                      │
 │ [01:25] 🔵 planner-L spec        artifact.created spec.md      │
 │ [01:30] 🟣 eng-L     step.builder game.html (320 LOC)           │
 │ [02:30] 🟣 eng-L     step.qa     lint pass / 5 tests pass       │
@@ -491,9 +491,9 @@ class CodexLocalAdapter implements AgentAdapter {
 └──────────────────────────────────────────────────────────────┘
 ```
 
-### summary.html (P1, 자동 생성, warm-paper)
+### summary.html (P1, auto-generated, warm-paper)
 
-세션 끝 시 `sessions/<id>/summary.html` 자동 생성. transcript inline + iframe game.html + dimension scorecard + cost breakdown.
+At session end, `sessions/<id>/summary.html` is auto-generated. Inline transcript + iframe game.html + dimension scorecard + cost breakdown.
 
 ### Web observer (P2, opt-in)
 
@@ -505,26 +505,26 @@ class CodexLocalAdapter implements AgentAdapter {
 
 ```
 sessions/<ulid>/
-├── manifest.json                  세션 메타
+├── manifest.json                  session metadata
 ├── transcript.jsonl                ★ single SoT (28 kind, replay-deterministic)
 ├── ledgers/
-│   ├── task.json                   누적 사실 (snapshot, transcript-derivable)
-│   └── progress.json               turn 별 (transcript-derivable)
+│   ├── task.json                   accumulated facts (snapshot, transcript-derivable)
+│   └── progress.json               per-turn (transcript-derivable)
 ├── audit/
-│   └── <date>.jsonl                kind=audit 만 분리 (검색 빠름)
-├── inbox.txt                       headless 사용자 개입 fallback
-├── artifacts/                      4 deliverable (kind=artifact.created ref)
+│   └── <date>.jsonl                kind=audit only, separated (faster search)
+├── inbox.txt                       headless user-intervention fallback
+├── artifacts/                      4 deliverables (kind=artifact.created ref)
 │   ├── game.html
 │   ├── spec.md
 │   ├── DESIGN.md
 │   ├── tuning.json
 │   └── screenshots/
-├── agent-workspace/                actor 별 sandbox cwd
+├── agent-workspace/                per-actor sandbox cwd
 │   ├── coordinator/
 │   ├── planner-lead/
 │   ├── engineering-lead/
 │   └── builder-fallback/
-└── summary.html                    P1 자동 생성
+└── summary.html                    P1 auto-generated
 ```
 
 ---
@@ -532,7 +532,7 @@ sessions/<ulid>/
 ## 8. OTel GenAI alias (export ready)
 
 ```jsonc
-// Crumb transcript 매 메시지 → OTel GenAI semantic conventions
+// Crumb transcript: each message → OTel GenAI semantic conventions
 {
   "id": "01J...",                         // span_id
   "ts": "...",                            // start_time_unix_nano
@@ -552,17 +552,17 @@ sessions/<ulid>/
 }
 ```
 
-→ `crumb export --format otel-jsonl` = Datadog / Vertex / Phoenix / Langfuse 어디로든.
+→ `crumb export --format otel-jsonl` = ship anywhere — Datadog / Vertex / Phoenix / Langfuse.
 
 ---
 
 ## See also
 
 - [[bagelcode]] / [[bagelcode-task-direction]]
-- [[bagelcode-frontier-rationale-5-claims]] — 5 frontier claim 분해
-- [[bagelcode-orchestration-topology]] — Hub-Ledger-Spoke 결정
-- [[bagelcode-transcripts-schema]] — schema 1차 spec
+- [[bagelcode-frontier-rationale-5-claims]] — 5 frontier claim breakdown
+- [[bagelcode-orchestration-topology]] — Hub-Ledger-Spoke decision
+- [[bagelcode-transcripts-schema]] — schema 1st-pass spec
 - [[bagelcode-rubric-scoring]] — D1-D5 anti-deception
 - [[bagelcode-fault-tolerance-design]] — F1-F5 mitigation
-- [[bagelcode-observability-frontier-2026]] — OTel GenAI 표준
-- [[bagelcode-tradingagents-paper]] — 학술 backing
+- [[bagelcode-observability-frontier-2026]] — OTel GenAI standard
+- [[bagelcode-tradingagents-paper]] — academic backing

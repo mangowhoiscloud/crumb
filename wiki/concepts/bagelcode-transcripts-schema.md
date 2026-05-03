@@ -1,5 +1,5 @@
 ---
-title: 베이글코드 과제 — Agent Transcripts 스키마 spec (1차)
+title: Bagelcode Task — Agent Transcripts Schema spec (first pass)
 category: concepts
 tags: [bagelcode, schema, transcript, jsonl, protocol, multi-agent, foundation]
 sources:
@@ -10,21 +10,21 @@ created: 2026-05-01
 updated: 2026-05-01
 ---
 
-# Agent Transcripts 스키마 spec (1차)
+# Agent Transcripts Schema spec (first pass)
 
-> **모든 다른 결정의 선결.** 캐싱 경계, 루브릭 측정점, 사용자 개입 surface, .md 인스트럭션 구조 모두 이 스키마 위에 올라간다. 한 번 박히면 변경 비용 큼 → 이번 패스에서 단단하게 잡고 시작.
+> **Prerequisite for every other decision.** Cache boundaries, rubric measurement points, user-intervention surfaces, and .md instruction structure all sit on top of this schema. Once locked, change cost is high → nail it down hard in this pass and start from there.
 >
-> 근거: [[bagelcode-tradingagents-paper]] §4.1-4.2 (structured-by-default + dialogue-as-entry), [[kiki-appmaker-orchestration]] (sandwich), [[kiki-slack-integration]] (intent + notifier 한 줄 이벤트).
+> Rationale: [[bagelcode-tradingagents-paper]] §4.1-4.2 (structured-by-default + dialogue-as-entry), [[kiki-appmaker-orchestration]] (sandwich), [[kiki-slack-integration]] (intent + notifier single-line events).
 
-## 설계 원칙 5개
+## 5 design principles
 
-1. **Append-only JSONL** — 한 줄 = 한 메시지. 파일이 곧 state machine. (Karpathy P5: Git as State Machine 변형)
-2. **Structured-by-default, free-text only inside `.body`** — 라우팅·관찰에 필요한 모든 필드는 schema 안. 자연어는 한 필드에 격리.
-3. **Pull, not broadcast** — 에이전트는 자기에게 필요한 메시지만 query. transcripts 전체를 system prompt 에 매번 넣지 않는다 (캐싱과 직결).
-4. **모든 dialogue 도 structured entry** — debate/Q&A 도 JSONL 한 줄. "에이전트끼리만 알아서" 하는 사이드 채널 금지.
-5. **사용자 = 1급 actor** — 사용자 발화도 같은 JSONL 에 같은 schema 로. 별도 채널 X.
+1. **Append-only JSONL** — one line = one message. The file is the state machine itself. (a Karpathy P5: Git-as-State-Machine variant)
+2. **Structured-by-default, free-text only inside `.body`** — every field needed for routing / observation lives in the schema. Natural language is quarantined to a single field.
+3. **Pull, not broadcast** — agents query only the messages they need. We do not stuff the entire transcripts into the system prompt every time (directly tied to caching).
+4. **All dialogue is also a structured entry** — debates / Q&A are also a single JSONL line. No "agents handle it among themselves" side channels.
+5. **User = first-class actor** — user utterances go into the same JSONL with the same schema. No separate channel.
 
-## 디렉터리 레이아웃
+## Directory layout
 
 ```
 sessions/<session_id>/
@@ -37,7 +37,7 @@ sessions/<session_id>/
 └── checkpoints/           # 캐시 키 / 리플레이용 스냅샷
 ```
 
-## 메시지 schema (JSONL 한 줄 = 한 메시지)
+## Message schema (one JSONL line = one message)
 
 ```typescript
 type Message = {
@@ -79,7 +79,7 @@ type Message = {
 type ActorId = "user" | "coordinator" | "planner" | "builder" | "critic" | string
 ```
 
-## MessageKind (제어 어휘 — 이 셋이 protocol 의 핵심)
+## MessageKind (control vocabulary — this set is the heart of the protocol)
 
 ```
 ─── 시스템 ──────────
@@ -115,11 +115,11 @@ error                 오류 보고
 audit                 감사 항목 (자동 기록, 사람·에이전트 안 읽음)
 ```
 
-→ **20개 안 됨**. Slack-style 9-intent ([[kiki-slack-integration]]) + TradingAgents 5단계 + 사용자 개입 4개 의 합집합.
+→ **Under 20 in total**. Union of Slack-style 9 intents ([[kiki-slack-integration]]) + TradingAgents 5 stages + 4 user-intervention kinds.
 
-## kind 별 `data` schema 요약
+## `data` schema summary per kind
 
-| kind | data 스키마 |
+| kind | data schema |
 |---|---|
 | `goal` | `{ text: string, constraints?: string[], deadline?: string }` |
 | `spec` | `{ acceptance_criteria: string[], non_goals?: string[], questions?: string[] }` |
@@ -129,56 +129,56 @@ audit                 감사 항목 (자동 기록, 사람·에이전트 안 읽
 | `user.veto` | `{ target_msg_id: string, reason: string }` |
 | `debate` | `{ stance: "for"\|"against"\|"neutral", round: number }` |
 
-상세 schema 는 코드의 `protocol/schemas/*.json` (JSON Schema) — 런타임 validation.
+Detailed schemas live in code under `protocol/schemas/*.json` (JSON Schema) — runtime validation.
 
-## Append-only 보장
+## Append-only guarantee
 
-- writer 는 OS-level `O_APPEND` flush
-- reader 는 `tail -F` 스타일 polling (1초 / inotify)
-- 메시지 id 는 **ULID** — 사전순 정렬 = 시간 정렬, 충돌 위험 ε
+- writer flushes via OS-level `O_APPEND`
+- reader polls `tail -F` style (1 second / inotify)
+- message id = **ULID** — lexical sort = chronological sort, collision risk ε
 
-## "사용자 개입" surface 매핑
+## "User intervention" surface mapping
 
-| 개입 모드 | 입력 | transcript 결과 |
+| Intervention mode | Input | Resulting transcript entry |
 |---|---|---|
-| 진행 중 자유 발언 | `> note ...` | `kind=note, from=user` |
-| 결과 거부 | `> /veto <msg_id> "reason"` | `kind=user.veto` |
-| 스펙 재작성 | `> /redo spec` | `kind=user.intervene` + 다음 Planner 가 reset 후 재작성 |
-| 일시정지 | `> /pause` | `kind=user.pause` (모든 에이전트가 wake 시 확인) |
-| 명시 승인 | `> /approve <msg_id>` | `kind=user.approve` (release gate 통과) |
+| Free utterance mid-flight | `> note ...` | `kind=note, from=user` |
+| Reject a result | `> /veto <msg_id> "reason"` | `kind=user.veto` |
+| Rewrite the spec | `> /redo spec` | `kind=user.intervene` + the next Planner resets and rewrites |
+| Pause | `> /pause` | `kind=user.pause` (every agent checks on wake) |
+| Explicit approve | `> /approve <msg_id>` | `kind=user.approve` (release gate passes) |
 
-## "사용자 관찰" surface
+## "User observation" surface
 
 3-tier:
 
-1. **Raw JSONL tail** — 로그 친화 사용자 (개발자)
-2. **Pretty TUI** — 메시지를 actor·kind 색상화, 본문 wrap. 좌측 timeline + 우측 입력
-3. **Web observer (옵션)** — JSONL → Server-Sent Events 로 브라우저 스트림
+1. **Raw JSONL tail** — for log-friendly users (developers)
+2. **Pretty TUI** — colorizes messages by actor/kind, wraps the body. Timeline on the left + input on the right
+3. **Web observer (optional)** — JSONL → Server-Sent Events streamed to the browser
 
-→ **3-tier 모두 같은 transcript 파일 1개에서 도출.** 별도 인프라 X.
+→ **All 3 tiers derive from the same single transcript file.** No separate infrastructure.
 
-## TradingAgents 패턴과 매핑
+## Mapping to the TradingAgents pattern
 
-| TradingAgents §4.2 | 우리 과제 |
+| TradingAgents §4.2 | Our task |
 |---|---|
-| Analyst report (structured) | `kind=spec` (Planner 가 만든 구조화 보고) |
-| Trader decision (structured) | `kind=build` (Builder 가 만든 산출) |
-| Researcher debate → facilitator structured entry | `kind=debate` 여러 줄 + `kind=verify.result` 하나 |
-| Risk Mgmt debate → adjustment | `kind=user.intervene` 또는 `kind=user.veto` |
+| Analyst report (structured) | `kind=spec` (structured report produced by Planner) |
+| Trader decision (structured) | `kind=build` (output produced by Builder) |
+| Researcher debate → facilitator structured entry | multiple `kind=debate` lines + a single `kind=verify.result` |
+| Risk Mgmt debate → adjustment | `kind=user.intervene` or `kind=user.veto` |
 | Fund Manager final | `kind=done` |
 
-→ **5단계가 우리에겐 Goal → Spec → Build → Verify → Done.** 같은 골격.
+→ **The 5 stages map to Goal → Spec → Build → Verify → Done for us.** Same skeleton.
 
-## Sandwich 와 transcript 의 관계
+## Relation between Sandwich and transcript
 
-[[kiki-appmaker-orchestration]] 의 4-section sandwich 가 system prompt 라면, transcript 는 그 sandwich 가 채워나가는 conversation memory:
+If [[kiki-appmaker-orchestration]]'s 4-section sandwich is the system prompt, then the transcript is the conversation memory that sandwich fills in:
 
-- **§1 Engineering-team contract** ↔ MessageKind 어휘 (어떤 메시지를 누가 어떤 순서로)
-- **§2 Stage template** ↔ kind별 산출 schema
-- **§3 Tool execution footer** ↔ artifacts/checkpoints 디렉터리 규약
-- **§4 Routing enforcement** ↔ transcript validator (잘못된 kind/from/to 조합 reject)
+- **§1 Engineering-team contract** ↔ MessageKind vocabulary (which message goes by whom in what order)
+- **§2 Stage template** ↔ per-kind output schema
+- **§3 Tool execution footer** ↔ artifacts/checkpoints directory convention
+- **§4 Routing enforcement** ↔ transcript validator (rejects wrong kind/from/to combos)
 
-## 실제 예 (전체 흐름 1개)
+## Real-world example (one full flow)
 
 ```jsonl
 {"id":"01J9...","ts":"2026-05-02T01:00:00Z","session_id":"s1","from":"user","to":"coordinator","kind":"goal","body":"todo REST API in Python"}
@@ -193,20 +193,20 @@ audit                 감사 항목 (자동 기록, 사람·에이전트 안 읽
 {"id":"01J9...","ts":"2026-05-02T01:02:31Z","session_id":"s1","from":"coordinator","to":"user","kind":"done","body":"shipping app.py + tests"}
 ```
 
-→ 평가자가 이 한 파일만 봐도 의사결정 추적 가능. JSONL 제출 요건과 정합.
+→ The evaluator can trace decision-making just by looking at this single file. Aligned with the JSONL submission requirement.
 
-## 미정 / 후속
+## Open / follow-up
 
-- [ ] `data` 의 정확한 JSON Schema 작성 (코드 구현 단계에서)
-- [ ] ULID lib 선택 (Python: `python-ulid`, Node: `ulid`) — 어느 언어로 가는지 따라
-- [ ] 동시 writer (Coordinator + Critic 동시 쓰기) lock 전략 — append-only + flush + 재시도면 충분 vs file lock
+- [ ] Write the exact JSON Schema for `data` (during code implementation)
+- [ ] Pick a ULID library (Python: `python-ulid`, Node: `ulid`) — depends on which language we go with
+- [ ] Concurrent-writer (Coordinator + Critic writing simultaneously) lock strategy — append-only + flush + retry sufficient vs file lock
 
 ## See also
 
 - [[bagelcode]] / [[bagelcode-task-direction]]
-- [[bagelcode-tradingagents-paper]] — 1차 근거
-- [[bagelcode-caching-strategy]] — 이 schema 위에 캐시 경계
-- [[bagelcode-rubric-scoring]] — `verify.result.dimensions` 의 차원 정의
-- [[bagelcode-paperclip-vs-alternatives]] — 이 schema 를 외부 framework 에 맞출지 자체 운영할지
+- [[bagelcode-tradingagents-paper]] — primary source
+- [[bagelcode-caching-strategy]] — cache boundaries on top of this schema
+- [[bagelcode-rubric-scoring]] — definition of dimensions in `verify.result.dimensions`
+- [[bagelcode-paperclip-vs-alternatives]] — should we adapt this schema to an external framework or run it ourselves
 - [[kiki-appmaker-orchestration]] — sandwich identity (4-section)
-- [[kiki-slack-integration]] — 9-intent + Pipeline notifier
+- [[kiki-slack-integration]] — 9 intents + Pipeline notifier
