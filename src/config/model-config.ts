@@ -89,14 +89,8 @@ export const PROVIDER_HARNESS: Record<ProviderId, Harness> = {
   'gemini-cli-local': 'gemini-cli',
 };
 
-/** All actors recognized by Crumb (5 outer). */
-export const ACTORS = [
-  'coordinator',
-  'planner-lead',
-  'builder',
-  'verifier',
-  'builder-fallback',
-] as const;
+/** All actors recognized by Crumb (4 outer). */
+export const ACTORS = ['coordinator', 'planner-lead', 'builder', 'verifier'] as const;
 
 /** Effort levels — left/right cycle in TUI. */
 export const EFFORT_LEVELS: Effort[] = ['low', 'med', 'high'];
@@ -151,7 +145,6 @@ export function defaultConfig(): ModelConfig {
       'planner-lead': { harness: 'claude-code', model: 'claude-opus-4-7', effort: 'high' },
       builder: { harness: 'claude-code', model: 'claude-opus-4-7', effort: 'high' },
       verifier: { harness: 'claude-code', model: 'claude-opus-4-7', effort: 'high' },
-      'builder-fallback': { harness: 'claude-code', model: 'claude-sonnet-4-6', effort: 'high' },
     },
     providers: {
       'claude-local': { enabled: true },

@@ -76,7 +76,7 @@ Counter (per [[bagelcode-budget-guardrails]]): max `respec_count <= 3` per sessi
 |---|---|
 | Builder claims `phaser_loaded: true` but qa.result.phaser_loaded=false | Trust qa.result. D2=0. audit_violations += "builder_self_assessment_attempt" |
 | Spec AC ambiguous (e.g., "fun gameplay") | D1 score reflects best interpretation; mention in feedback; verdict can still PASS if other dims compensate |
-| build event missing entirely (builder crashed mid-spawn) | Cannot grade. Verdict = REJECT. handoff.rollback to builder-fallback or coordinator hook |
+| build event missing entirely (builder crashed mid-spawn) | Cannot grade. Verdict = REJECT. handoff.rollback to builder (reducer adapter-swaps to claude-local on circuit OPEN) or coordinator hook |
 
 ## See also
 

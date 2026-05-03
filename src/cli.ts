@@ -225,10 +225,7 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
  */
 export interface CrumbEventRejection {
   rejected: true;
-  violation:
-    | 'forged_system_event_attempt'
-    | 'forged_qa_result_attempt'
-    | 'fallback_self_assessment_attempt';
+  violation: 'forged_system_event_attempt' | 'forged_qa_result_attempt';
   audit_id: string;
 }
 
@@ -240,11 +237,7 @@ export async function applyEventFirewall(
   const forgedSystem = draft.from === 'system';
   const forgedQaResult = draft.kind === 'qa.result';
   if (forgedSystem || forgedQaResult) {
-    const violation = forgedQaResult
-      ? ctx.actor === 'builder-fallback'
-        ? 'fallback_self_assessment_attempt'
-        : 'forged_qa_result_attempt'
-      : 'forged_system_event_attempt';
+    const violation = forgedQaResult ? 'forged_qa_result_attempt' : 'forged_system_event_attempt';
     const audit = await writer.append({
       session_id: ctx.sessionId,
       from: 'system',

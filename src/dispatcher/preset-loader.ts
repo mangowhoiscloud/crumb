@@ -22,7 +22,7 @@ import type { Harness, Provider } from '../protocol/types.js';
 export type { Harness, Provider };
 
 export interface ActorBinding {
-  /** Actor name (coordinator | planner-lead | builder | verifier | builder-fallback). */
+  /** Actor name (coordinator | planner-lead | researcher | builder | verifier). */
   name: string;
   /** Path to sandwich markdown file. */
   sandwich: string;

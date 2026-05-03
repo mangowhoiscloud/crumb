@@ -103,24 +103,6 @@ describe('applyEventFirewall — forged event blocking', () => {
     expect(allBodies).not.toContain('totally legit ground truth');
   });
 
-  it('uses fallback_self_assessment_attempt tag for builder-fallback actor', async () => {
-    const { writer, sessionId } = await makeWriter();
-    const draft: DraftMessage = {
-      session_id: sessionId,
-      from: 'builder-fallback',
-      kind: 'qa.result',
-      body: 'self-assessment',
-      data: { exec_exit_code: 0 },
-    };
-    const result = await applyEventFirewall(draft, writer, {
-      sessionId,
-      actor: 'builder-fallback',
-    });
-    expect(result.rejected).toBe(true);
-    if (!result.rejected) throw new Error('unreachable');
-    expect(result.violation).toBe('fallback_self_assessment_attempt');
-  });
-
   it('passes through legitimate actor events (kind=build from builder)', async () => {
     const { writer, transcriptPath, sessionId } = await makeWriter();
     const draft: DraftMessage = {
@@ -139,26 +121,6 @@ describe('applyEventFirewall — forged event blocking', () => {
     const events = await readEvents(transcriptPath);
     expect(events).toHaveLength(1);
     expect(events[0].kind).toBe('build');
-  });
-
-  it('passes through legitimate kind=audit from builder-fallback', async () => {
-    const { writer, transcriptPath, sessionId } = await makeWriter();
-    const draft: DraftMessage = {
-      session_id: sessionId,
-      from: 'builder-fallback',
-      kind: 'audit',
-      body: 'fallback_activated',
-      data: { event: 'fallback_activated', reason: 'builder_circuit_open' },
-    };
-    const result = await applyEventFirewall(draft, writer, {
-      sessionId,
-      actor: 'builder-fallback',
-    });
-    expect(result.rejected).toBe(false);
-    const events = await readEvents(transcriptPath);
-    expect(events).toHaveLength(1);
-    expect(events[0].from).toBe('builder-fallback');
-    expect(events[0].kind).toBe('audit');
   });
 });
 

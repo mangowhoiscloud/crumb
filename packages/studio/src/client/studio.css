@@ -36,7 +36,6 @@
   --actor-researcher: #5E4674;
   --actor-builder: #5C7A0E;
   --actor-verifier: #B23A60;
-  --actor-builder-fallback: #A89178;
   --actor-validator: #A85A1F;
   --actor-system: #A0876B;
 
@@ -75,7 +74,6 @@
   --actor-researcher: #79628c;
   --actor-builder: #c2ef4e;
   --actor-verifier: #fa7faa;
-  --actor-builder-fallback: #62666d;
   --actor-validator: #ffb287;
   --actor-system: #34343a;
 }

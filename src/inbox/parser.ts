@@ -36,7 +36,6 @@ const ACTOR_NAMES: ReadonlySet<Actor> = new Set([
   'planner-lead',
   'builder',
   'verifier',
-  'builder-fallback',
   'validator',
   'system',
 ]);

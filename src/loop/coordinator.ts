@@ -247,8 +247,8 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
   //     letting the next event get reduced + dispatched WITHOUT waiting for the
   //     prior spawn's subprocess to exit.
   //   • Effects within a single event remain sequential — reducer cases like
-  //     judge.score FAIL emit `[append(audit), spawn(builder-fallback)]` where
-  //     the audit append must land before the fallback spawn reads transcript.
+  //     judge.score FAIL emit `[append(audit:adapter_swapped), spawn(builder)]`
+  //     where the audit append must land before the respawned builder reads transcript.
   //
   // Why this matters: previously `processing = processing.then(...)` serialized
   // the entire pipeline behind every spawn dispatch, which awaited subprocess
@@ -357,7 +357,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
           //
           // INVARIANT (C1 from post-#104 audit, reaffirmed): the within-IIFE
           // sequential `await dispatch(eff)` is sufficient to guarantee that
-          // ordered effects (e.g. `[append(audit), spawn(builder-fallback)]`)
+          // ordered effects (e.g. `[append(audit:adapter_swapped), spawn(builder)]`)
           // observe the right transcript prefix when the spawn reads it. The
           // chain is:
           //   dispatch(append) → writer.append() → fs/promises appendFile()

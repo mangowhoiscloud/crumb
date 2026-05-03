@@ -81,7 +81,7 @@ describe('reducer', () => {
     ]);
   });
 
-  it('routes spec → builder-fallback when codex circuit OPEN', () => {
+  it('routes spec → builder with claude-local adapter when codex circuit OPEN', () => {
     const s0 = initialState('sess-test');
     s0.progress_ledger.circuit_breaker['builder'] = {
       state: 'OPEN',
@@ -284,10 +284,11 @@ describe('reducer', () => {
     expect(effects[0]).toMatchObject({ type: 'spawn', actor: 'builder' });
   });
 
-  it('routes verify.result FAIL with builder circuit OPEN → audit + builder-fallback spawn', () => {
-    // v0.3.1: agents/builder-fallback.md §"in" promises kind=audit
-    // event=fallback_activated as an input the actor reads. Without this
-    // emission the sandwich's documented input never arrives.
+  it('routes verify.result FAIL with builder circuit OPEN → audit(adapter_swapped) + respawn builder on claude-local', () => {
+    // PR-Prune-2: builder-fallback removed. Circuit OPEN now swaps the
+    // builder's adapter to claude-local instead of spawning a separate
+    // fallback actor. The state mutation sets adapter_override.builder so
+    // every subsequent builder spawn picks up the swap deterministically.
     //
     // from='verifier' (not 'builder') matters: the reducer's circuit-breaker
     // recovery branch resets the failure streak on any non-error event from
@@ -305,11 +306,14 @@ describe('reducer', () => {
       kind: 'verify.result',
       scores: { aggregate: 12, verdict: 'FAIL', feedback: 'AC#3 broken' },
     });
-    const { effects } = reduce(s0, verify);
+    const { state, effects } = reduce(s0, verify);
 
-    // Expect: append(audit fallback_activated) FIRST, then spawn(builder-fallback).
+    // adapter_override.builder is now set so future spawns pick claude-local.
+    expect(state.progress_ledger.adapter_override['builder']).toBe('claude-local');
+
+    // Expect: append(audit adapter_swapped) FIRST, then spawn(builder).
     // Order matters — the audit must land on the transcript before the spawn so
-    // the fallback subprocess actually sees it on read.
+    // the respawned builder subprocess actually sees it on read.
     const audit = effects.find((e) => e.type === 'append');
     const spawn = effects.find((e) => e.type === 'spawn');
     expect(audit).toBeDefined();
@@ -320,19 +324,21 @@ describe('reducer', () => {
       from: 'system',
       kind: 'audit',
       data: {
-        event: 'fallback_activated',
+        event: 'adapter_swapped',
+        actor: 'builder',
         reason: 'builder_circuit_open',
         consecutive_failures: 3,
         last_failure_id: '01H0000000000000000000099A',
+        new_adapter: 'claude-local',
       },
     });
     expect(audit.message.metadata).toMatchObject({
       deterministic: true,
-      tool: 'reducer-fallback-route@v1',
+      tool: 'reducer-adapter-swap@v1',
     });
     expect(spawn).toMatchObject({
       type: 'spawn',
-      actor: 'builder-fallback',
+      actor: 'builder',
       adapter: 'claude-local',
     });
   });
@@ -1070,18 +1076,17 @@ describe('reducer', () => {
   // v0.4 P1 #6 + #7: circuit breaker dead-end termination
   // ────────────────────────────────────────────────────────────────────
 
-  it('v0.4 P1 #6: judge.score FAIL with builder + builder-fallback both OPEN → done(all_builders_open)', () => {
+  it('v0.4 P1 #6: judge.score FAIL with builder OPEN AND adapter already swapped to claude-local → done(builder_circuit_open)', () => {
+    // PR-Prune-2: replaces the prior "builder + builder-fallback both OPEN" guard.
+    // Once adapter_override.builder is already claude-local, there's no further
+    // adapter to fall back to — terminate.
     const s0 = initialState('sess-test');
     s0.progress_ledger.circuit_breaker['builder'] = {
       state: 'OPEN',
       consecutive_failures: 3,
       last_failure_id: '01HBLDFAIL',
     };
-    s0.progress_ledger.circuit_breaker['builder-fallback'] = {
-      state: 'OPEN',
-      consecutive_failures: 3,
-      last_failure_id: '01HFALLFAIL',
-    };
+    s0.progress_ledger.adapter_override['builder'] = 'claude-local';
     const judge = fixed({
       from: 'verifier',
       kind: 'judge.score',
@@ -1092,12 +1097,12 @@ describe('reducer', () => {
     expect(state.done).toBe(true);
     const doneEff = effects.find((e) => e.type === 'done') as { type: 'done'; reason: string };
     expect(doneEff).toBeDefined();
-    expect(doneEff.reason).toBe('all_builders_open');
-    // No spawn-builder-fallback effect should slip through.
+    expect(doneEff.reason).toBe('builder_circuit_open');
+    // No spawn effect should slip through.
     expect(effects.find((e) => e.type === 'spawn')).toBeUndefined();
   });
 
-  it('v0.4 P1 #6: judge.score FAIL with only builder OPEN still spawns builder-fallback (regression guard)', () => {
+  it('v0.4 P1 #6: judge.score FAIL with only builder OPEN, no override yet → adapter swap + respawn builder', () => {
     const s0 = initialState('sess-test');
     s0.progress_ledger.circuit_breaker['builder'] = {
       state: 'OPEN',
@@ -1112,9 +1117,10 @@ describe('reducer', () => {
     const { state, effects } = reduce(s0, judge);
 
     expect(state.done).toBe(false);
+    expect(state.progress_ledger.adapter_override['builder']).toBe('claude-local');
     const spawn = effects.find((e) => e.type === 'spawn') as { type: 'spawn'; actor: string };
     expect(spawn).toBeDefined();
-    expect(spawn.actor).toBe('builder-fallback');
+    expect(spawn.actor).toBe('builder');
   });
 
   it('v0.4 P1 #7: qa.result with verifier OPEN → done(verifier_unavailable)', () => {

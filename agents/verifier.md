@@ -61,9 +61,10 @@ emitted `judge.score` (and on any explicit `handoff.rollback`) to one of:
 | `Important` — spec is right, build needs a tightly-scoped fix (e.g. missing entry redirector, wrong tween easing) | respawn `builder` with your `suggested_change` injected as a one-shot `sandwich_append` |
 | `Minor` — cosmetic, optional polish | same as Important |
 
-The reducer ignores any `to=builder-fallback` you might emit — `builder-fallback`
-is reserved for circuit-breaker recovery (3+ consecutive `kind=error` from
-builder), not for verifier feedback. Picking it on a healthy circuit is a no-op.
+PR-Prune-2: there is no separate `builder-fallback` actor. Circuit-breaker
+recovery (3+ consecutive `kind=error` from builder) is handled by the reducer
+swapping the builder's adapter to `claude-local` and respawning the SAME builder
+actor. Don't emit `to=builder-fallback` — the schema rejects it.
 
 ## D1–D6 Source-of-Truth Matrix
 

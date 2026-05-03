@@ -1,6 +1,6 @@
 # Game Design Contract
 
-> The binding game-design contract for Crumb. Replaces the former `design/DESIGN.md` (root) and the never-shipped `agents/specialists/game-stack-constraint.md` planning. Inline-read by `agents/researcher.md` (video evidence schema), `agents/planner-lead.md` step.design (synth output format), `agents/builder.md` (envelope), `agents/builder-fallback.md` (envelope), and `agents/verifier.md` (evidence validation).
+> The binding game-design contract for Crumb. Replaces the former `design/DESIGN.md` (root) and the never-shipped `agents/specialists/game-stack-constraint.md` planning. Inline-read by `agents/researcher.md` (video evidence schema), `agents/planner-lead.md` step.design (synth output format), `agents/builder.md` (envelope), and `agents/verifier.md` (evidence validation).
 >
 > Extends `wiki/concepts/bagelcode-mobile-game-tech-2026.md` (Phaser stack rationale) with the v0.3.0 video-evidence schema introduced when `researcher` was promoted to its own actor.
 
@@ -412,7 +412,6 @@ Planner-lead's final synth combines step.research + step.design into `artifacts/
 | `researcher` | §1 envelope (rejects out-of-envelope mechanic suggestions) + §3 video evidence schema (output format) + §4 synth schema (output format) | Sandwich inline-specialist |
 | `planner-lead` step.design | §1 envelope (rejects visual choices that violate it) + §5 DESIGN.md synth format | Sandwich inline-specialist |
 | `builder` | §1 envelope + §2 forbidden (binding constraint while writing `artifacts/game/**`) + §5 (reads `artifacts/DESIGN.md` per format) | Sandwich §"Inputs" |
-| `builder-fallback` | Same as builder | Fallback substitute |
 | `verifier` | §1 + §2 (D6.portability via qa.result lookup) + §3.3/§4 evidence schema (D5 anti-deception rule) | CourtEval D5/D6 input |
 
 ## §6.5 LLM playthrough — verifier responsibility (v0.3.1)
