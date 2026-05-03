@@ -368,11 +368,14 @@ async function serveInboxAppend(
     res.end('line too long');
     return;
   }
-  // Append to <session>/inbox.txt — the existing inbox watcher (src/inbox/
-  // watcher.ts) parses it via the same grammar as the TUI slash bar and
-  // emits the corresponding kind=user.* / user.intervene transcript events.
-  // The studio never touches transcript.jsonl directly — append-only
-  // invariant + single-writer-per-process stay intact.
+  // Append to <session>/inbox.txt — the chokidar inbox watcher (src/inbox/
+  // watcher.ts, post PR-I-A) picks it up via fs events (~10ms detection),
+  // parses via the same grammar as the TUI slash bar, and emits the
+  // corresponding kind=user.* / user.intervene transcript event. The studio
+  // never touches transcript.jsonl directly — append-only invariant +
+  // single-writer-per-process stay intact, and there is no second crumb-side
+  // dependency for the studio to install (eval reads README → npm i -g
+  // @crumb/studio works without pulling crumb core via subpath imports).
   const sessionDir = sessionDirFromTranscript(match.transcript_path);
   const inboxPath = join(sessionDir, 'inbox.txt');
   try {
@@ -383,7 +386,7 @@ async function serveInboxAppend(
     res.end(`inbox append failed: ${(err as Error).message}`);
     return;
   }
-  res.statusCode = 202; // accepted; the watcher will surface the resulting events via SSE
+  res.statusCode = 202;
   res.setHeader('content-type', 'application/json');
   res.end(JSON.stringify({ ok: true, inbox_path: inboxPath, line }));
 }

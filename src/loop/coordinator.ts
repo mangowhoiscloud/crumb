@@ -310,7 +310,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
       if (resolved) return;
       resolved = true;
       handle?.close();
-      inboxHandle?.stop();
+      void inboxHandle?.stop();
       void artifactHandle?.close();
       releaseLease(opts.sessionDir);
       // Emit summary + exports asynchronously; resolve outer promise after.
@@ -321,7 +321,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
       if (resolved) return;
       resolved = true;
       handle?.close();
-      inboxHandle?.stop();
+      void inboxHandle?.stop();
       void artifactHandle?.close();
       releaseLease(opts.sessionDir);
       rejectOuter(err);

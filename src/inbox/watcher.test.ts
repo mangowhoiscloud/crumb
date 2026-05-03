@@ -8,6 +8,11 @@ import { startInboxWatcher } from './watcher.js';
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
+// Force chokidar polling in tests for deterministic timing across CI runners
+// (Linux inotify, macOS FSEvents, Windows ReadDirectoryChangesW all behave
+// slightly differently on the trigger latency for fast back-to-back appends).
+const POLLING = { usePolling: true, pollIntervalMs: 30 };
+
 describe('inbox watcher', () => {
   it('appends each new line as a transcript event', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'crumb-inbox-'));
@@ -21,14 +26,13 @@ describe('inbox watcher', () => {
       inboxPath,
       sessionId: 'sess-watcher',
       writer,
-      pollIntervalMs: 50,
+      ...POLLING,
     });
 
-    // Append two lines mid-session
     appendFileSync(inboxPath, '/pause @builder waiting\n');
     appendFileSync(inboxPath, '@planner-lead 콤보 짧게\n');
     await sleep(800);
-    handle.stop();
+    await handle.stop();
 
     const lines = readFileSync(transcriptPath, 'utf-8')
       .split('\n')
@@ -61,12 +65,12 @@ describe('inbox watcher', () => {
       inboxPath,
       sessionId: 'sess-watcher',
       writer,
-      pollIntervalMs: 50,
+      ...POLLING,
     });
 
     appendFileSync(inboxPath, '\n# comment line\n   \n/approve\n');
     await sleep(800);
-    handle.stop();
+    await handle.stop();
 
     const lines = readFileSync(transcriptPath, 'utf-8').split('\n').filter(Boolean);
     expect(lines).toHaveLength(1);
@@ -85,21 +89,57 @@ describe('inbox watcher', () => {
       inboxPath,
       sessionId: 'sess-watcher',
       writer,
-      pollIntervalMs: 30,
+      ...POLLING,
     });
 
-    // Write "/pause" without trailing newline first; should NOT emit yet.
     appendFileSync(inboxPath, '/pause');
     await sleep(200);
     let lineCount = readFileSync(transcriptPath, 'utf-8').split('\n').filter(Boolean).length;
     expect(lineCount).toBe(0);
 
-    // Now terminate it — should emit.
     appendFileSync(inboxPath, '\n');
     await sleep(500);
     lineCount = readFileSync(transcriptPath, 'utf-8').split('\n').filter(Boolean).length;
     expect(lineCount).toBe(1);
 
-    handle.stop();
+    await handle.stop();
+  });
+
+  // PR-I-A regression — guards against the chokidar coalesce bug where two
+  // rapid appends within one tick window get reported as a single 'change'
+  // event and the second batch is silently dropped. The dirty-flag re-tick
+  // loop in watcher.ts must catch the second batch even though no new fs
+  // event fired for it.
+  it('does not lose lines when many appends arrive rapidly during a slow drain', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'crumb-inbox-burst-'));
+    const inboxPath = join(dir, 'inbox.txt');
+    const transcriptPath = join(dir, 'transcript.jsonl');
+    writeFileSync(inboxPath, '');
+    writeFileSync(transcriptPath, '');
+
+    const writer = new TranscriptWriter({ path: transcriptPath, sessionId: 'sess-burst' });
+    const handle = startInboxWatcher({
+      inboxPath,
+      sessionId: 'sess-burst',
+      writer,
+      ...POLLING,
+    });
+
+    // Fire 25 appends back-to-back. With the old `await ticking; return;`
+    // pattern any append that landed during the first tick's drain loop was
+    // dropped silently — the new dirty-flag re-tick guarantees all 25 land
+    // in the transcript.
+    for (let i = 0; i < 25; i++) {
+      appendFileSync(inboxPath, `/note burst-${i}\n`);
+    }
+    await sleep(1500);
+    await handle.stop();
+
+    const lines = readFileSync(transcriptPath, 'utf-8').split('\n').filter(Boolean);
+    expect(lines).toHaveLength(25);
+    // Order is preserved (TranscriptWriter is a single-process Promise chain).
+    for (let i = 0; i < 25; i++) {
+      expect(JSON.parse(lines[i]).body).toBe(`burst-${i}`);
+    }
   });
 });

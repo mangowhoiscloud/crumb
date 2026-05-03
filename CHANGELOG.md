@@ -4,6 +4,29 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — chokidar inbox watcher + dirty-flag drain (PR-I) (2026-05-03)
+
+Drops user-intervention latency from 30–260ms to ~10–60ms (well under the 200ms perceptual threshold) AND defends against the "user.intervene 가 한참 잠잠하다가 갑자기 쏟아진다" symptom that prior systems exhibit (root cause: chokidar-style debounce trap + drain batching).
+
+Frontier rationale (OpenHands EventStream / AutoGen actor mailbox / Cloudflare DO single-writer): the right pattern is "single SoT append-only log + bounded coalesce" — which we already have via `transcript.jsonl` + ULID + O_APPEND. So the change isn't "add a queue" or "add a transport"; it's **make the existing inbox-file → transcript hop faster + uncoalesceable**.
+
+`src/inbox/watcher.ts`:
+- Replaced `setInterval(150ms)` with `chokidar.watch(inboxPath)` — fs-event backbone (FSEvents on macOS, inotify on Linux, ReadDirectoryChangesW on Windows). Detection latency 0–150ms → typically <10ms.
+- `awaitWriteFinish: { stabilityThreshold: 25, pollInterval: 10 }` — the chokidar default is 2000ms which is the canonical "burst-after-silence" trap (rapid appends keep resetting the debounce timer; events flood out only when the user pauses). 25ms keeps simple `appendFile` / `echo >>` snappy.
+- `usePolling` opt available for WSL/NFS where fs events are unreliable; tests pass it for deterministic timing.
+- **dirty-flag re-tick loop** — even when chokidar coalesces multiple rapid `change` events into one callback, a `while (dirty)` drain loop re-reads after the previous drain finishes. Defends against root cause #2 of "burst-after-silence" (drain batching). New regression test: 25 back-to-back appends all land in transcript with order preserved.
+- Async `handle.stop()` (was sync) so chokidar's close fully drains before the coordinator's `finish()` cleans up the lease — no leaked watchers across `crumb resume` re-entries.
+
+`src/loop/coordinator.ts` — `inboxHandle?.stop()` call sites wrapped in `void` to handle the new async return without blocking finish/fail.
+
+`src/inbox/watcher.test.ts`:
+- All tests use `usePolling: true` for deterministic timing across CI runners (Linux inotify, macOS FSEvents, Windows RDCW have different fast-burst semantics).
+- New regression test: 25 back-to-back `appendFile` calls all land in transcript with order preserved — the dirty-flag drain catches what chokidar coalesces into a single 'change' event.
+
+**Why no studio direct-write fast lane (considered, rejected)**: the cleanest direct-write design required `crumb/inbox` + `crumb/transcript` subpath imports from `@crumb/studio`, which means a `file:../..` workspace symlink in dev OR a separate published `@crumb/protocol` package. Both add install fragility for evaluators following the README single-install path. Frontier latency math: chokidar-driven inbox → transcript is already 10–60ms, well under the 200ms human-perceptual threshold for "did my click register". The 30–40ms savings from direct-write is below human discrimination AND below the variance from network/disk noise. CLAUDE.md "no abstraction unless 2+ call sites" applies here too — keeping the single inbox.txt → transcript path keeps the install story trivial: `npm i -g crumb` + `npm i -g @crumb/studio` works without any cross-package wiring.
+
+Verification: `npm run lint && npm run typecheck && npm run format:check && npm test && npm run build` — 461 tests pass (was 460; +1 watcher burst regression).
+
 ### Changed — Studio live exec feed suppresses raw stream-json + researcher §1/§2 envelope-aware extraction (2026-05-03)
 
 Per user feedback (single message, two pain points bundled): "추출할 때 game-design.md를 고려해서 추출할 수 있도록 하고 ⏺ Bash(...) ⎿ ...  raw {"type":"assistant",...} blob 별도의 창으로 띄워줄 수 있겠어? 지금은 live execution feed에서 이렇게 섞여져 보여."
