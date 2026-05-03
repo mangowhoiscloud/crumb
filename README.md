@@ -11,9 +11,9 @@
 
 Crumb treats multi-agent collaboration as an **observable execution protocol**, not just a chat interface. Every message, tool call, artifact, user intervention, deterministic QA result, judge score, and reasoning summary is recorded as a **replay-deterministic JSONL transcript** (39 kinds × 11 fields × 12 specialist steps × 8 actors).
 
-Built for the [Bagelcode 신작팀 AI 개발자 과제 전형](https://career.bagelcode.com/ko/o/208045) (2026-05-03 deadline). See [README.ko.md](./README.ko.md) for Korean.
+Built for the [Bagelcode New Title Team AI Developer recruitment task](https://career.bagelcode.com/ko/o/208045) (2026-05-03 deadline). See [README.ko.md](./README.ko.md) for Korean.
 
-### Mail verbatim 정조준 (recruiter ctrl-F)
+### Mail verbatim alignment (recruiter ctrl-F)
 
 | Mail keyword | Where it lands in Crumb |
 |---|---|
@@ -147,7 +147,7 @@ Cross-platform env knobs:
 | `crumb replay <session-dir>` | Re-derive state from `transcript.jsonl` (proves determinism) |
 | `crumb resume <session-id\|dir>` | Re-derive state + surface mid-flight resume command |
 | `crumb doctor` | Full environment check (3 host OAuth + adapter health + preset gating) |
-| `crumb config <자연어>` | Preset recommendation from natural-language description |
+| `crumb config <natural-language>` | Preset recommendation from natural-language description |
 | `crumb debug <session-id\|dir>` | F1-F7 routing fault diagnosis from a transcript |
 | `crumb ls` | List `sessions/` with event counts |
 | `npx crumb-studio [--port 7321] [--bind 127.0.0.1] [--no-open]` | Live observability studio (HTTP + SSE) — see "Live studio" section above |
@@ -155,12 +155,12 @@ Cross-platform env knobs:
 ## Architecture (v0.1, high level)
 
 ```
-USER (자연어) ─ goal/intervene ───▶ COORDINATOR (host harness 자체)
+USER (natural language) ─ goal/intervene ───▶ COORDINATOR (host harness itself)
                                         │ Task tool spawn (depth=1)
               ┌──────────────────┬───────┴────────┬──────────────┬─────────────────┐
               ▼                  ▼                ▼              ▼                 ▼
         PLANNER LEAD       RESEARCHER ★       BUILDER ★      VERIFIER ★       BUILDER FALLBACK
-        (Socratic +        (v0.3.0:             (sandwich +    (CourtEval        (Codex 죽었을 때)
+        (Socratic +        (v0.3.0:             (sandwich +    (CourtEval        (when Codex dies)
          Concept;          gemini-sdk          5 skill —      inline 4 sub-
          then handoff      Gemini 3.1 Pro      tdd-iron-law,  step: grader/
          to researcher;    @ 10fps native      verification-  critic/
@@ -200,7 +200,7 @@ For the full canonical spec, see [wiki/concepts/bagelcode-system-architecture-v0
 | Preset | Binding | Use case |
 |---|---|---|
 | **(no preset)** ambient | Every actor follows entry host (e.g. claude-code + claude-opus-4-7) | Simplest path; whatever you have authenticated |
-| **`bagelcode-cross-3way`** | builder=codex+gpt-5.5-codex / verifier=gemini-cli+gemini-3-1-pro / rest=ambient | Bagelcode mail verbatim ("Claude Code, Codex, Gemini CLI 등 동시 사용"). 3-provider cross-assemble |
+| **`bagelcode-cross-3way`** | builder=codex+gpt-5.5-codex / verifier=gemini-cli+gemini-3-1-pro / rest=ambient | Bagelcode mail verbatim ("Claude Code, Codex, Gemini CLI 등 동시 사용" — *use Claude Code, Codex, Gemini CLI etc. simultaneously*). 3-provider cross-assemble |
 | **`mock`** | All actors = mock adapter | CI / no auth / deterministic demo |
 | **`sdk-enterprise`** | API key direct (subscription bypass) | Production; ToS-safe (avoids Anthropic 3rd-party OAuth restriction) |
 | **`solo`** | Single entry host, single model | Minimal-setup demo |

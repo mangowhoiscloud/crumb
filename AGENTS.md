@@ -10,14 +10,14 @@
 
 ## What is this repo
 
-**Crumb** is a multi-agent execution harness for casual game prototyping. A user pitches a game idea in one line; Coordinator (host harness 자체) routes through Planner Lead → Builder → deterministic qa_check → Verifier (CourtEval), recorded as a **replay-deterministic JSONL transcript** (39 kinds × 11 fields × 12 specialist steps × 8 actors).
+**Crumb** is a multi-agent execution harness for casual game prototyping. A user pitches a game idea in one line; Coordinator (the host harness itself) routes through Planner Lead → Builder → deterministic qa_check → Verifier (CourtEval), recorded as a **replay-deterministic JSONL transcript** (39 kinds × 11 fields × 12 specialist steps × 8 actors).
 
-Built for the [Bagelcode 신작팀 AI 개발자 과제 전형](https://career.bagelcode.com/ko/o/208045) (2026-05-03 deadline). See [README.md](./README.md) / [README.ko.md](./README.ko.md) for human onboarding.
+Built for the [Bagelcode New Title Team AI Developer recruitment task](https://career.bagelcode.com/ko/o/208045) (2026-05-03 deadline). See [README.md](./README.md) / [README.ko.md](./README.ko.md) for human onboarding.
 
 ## Position in the stack
 
 ```
-USER (자연어)
+USER (natural language)
    ▾  Multi-host 4 entry — pick the one your environment authenticates:
 [Claude Code]  [Codex CLI]  [Gemini CLI]  [headless `crumb run`]
    ▾  Each host's entry imports / references this AGENTS.md, then routes to the matching sandwich
@@ -105,7 +105,7 @@ Each entry imports / references this AGENTS.md and the matching `agents/*.md` sa
 | Preset | Binding | Use case |
 |---|---|---|
 | **(no preset)** ambient | Every actor follows the entry host | Simplest path — whatever you have authenticated |
-| **`bagelcode-cross-3way`** | builder=codex+gpt-5.5-codex / verifier=gemini-cli+gemini-3-1-pro / rest=ambient | 3-provider cross-assemble (Bagelcode mail's "Claude Code, Codex, Gemini CLI 등 동시 사용") |
+| **`bagelcode-cross-3way`** | builder=codex+gpt-5.5-codex / verifier=gemini-cli+gemini-3-1-pro / rest=ambient | 3-provider cross-assemble (Bagelcode mail's "Claude Code, Codex, Gemini CLI 등 동시 사용" — *use Claude Code, Codex, Gemini CLI etc. simultaneously*) |
 | **`mock`** | All actors = mock adapter, deterministic | CI / no auth / deterministic demo |
 | **`sdk-enterprise`** | API key direct (subscription bypass) | Production / ToS-safe / enterprise key holders |
 | **`solo`** | Single entry host, single model | Minimal-setup demo |
@@ -210,7 +210,7 @@ crumb ls
 crumb doctor
 
 # Recommend a preset from natural-language environment description
-crumb config "Codex 만 인증된 환경에서 단일 host 데모"
+crumb config "single-host demo with only Codex authenticated"
 
 # Live studio (browser console — single-binary HTTP + SSE on 127.0.0.1:7321)
 npx crumb-studio
@@ -252,7 +252,7 @@ Every architecture decision in this repo is grounded in `wiki/`. Before changing
 - `wiki/concepts/bagelcode-verifier-isolation-matrix.md` — 20-source × 4-dimension matrix backing actor-level cross-provider opt-in
 - `wiki/concepts/bagelcode-final-design-2026.md` — §3-§9 (envelope / cache / OTel) still valid in v0.1
 - `wiki/concepts/bagelcode-orchestration-topology.md` — Hub-Ledger-Spoke
-- `wiki/concepts/bagelcode-transcripts-schema.md` — schema 1차 spec (38→39 kind evolution)
+- `wiki/concepts/bagelcode-transcripts-schema.md` — schema first-draft spec (38→39 kind evolution)
 - `wiki/concepts/bagelcode-fault-tolerance-design.md` — F1-F5
 - `wiki/concepts/bagelcode-budget-guardrails.md` — runaway prevention (count / wall-clock / token)
 
@@ -272,8 +272,8 @@ Every architecture decision in this repo is grounded in `wiki/`. Before changing
 ## References (navigate from here)
 
 ### Identity siblings
-- [`CLAUDE.md`](./CLAUDE.md) — Claude Code-specific augmentation (`@AGENTS.md` import + `.skills/` 24 매핑 + Korean policy + progress)
-- [`GEMINI.md`](./GEMINI.md) — Gemini CLI-specific augmentation (verifier multimodal 자리 + extension link)
+- [`CLAUDE.md`](./CLAUDE.md) — Claude Code-specific augmentation (`@AGENTS.md` import + `.skills/` 24-skill mapping + Korean policy + progress)
+- [`GEMINI.md`](./GEMINI.md) — Gemini CLI-specific augmentation (verifier multimodal slot + extension link)
 
 ### Host entries (one per harness)
 - [`.claude/skills/crumb/SKILL.md`](./.claude/skills/crumb/SKILL.md) — Claude Code
