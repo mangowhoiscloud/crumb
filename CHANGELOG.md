@@ -4,6 +4,24 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Audit Q5: studio append-handler fan-out (8 → 1 dispatcher) (2026-05-03)
+
+Post-#106 audit Q5 cleanup. The studio client (`packages/studio/src/client/studio.js`) had **8 independent** `es.addEventListener('append', ...)` registrations on the same EventSource. Each parsed `e.data` separately (8× JSON.parse cost per event) and re-filtered by `session_id` independently (8× `if (d.session_id === activeSession)` checks). For high-throughput sessions (multi-file PWA build emits 20+ artifact.created events back-to-back) this was measurable.
+
+Now: a single dispatcher parses `e.data` once and fans out to handlers registered via `onAppendMsg(fn)`. Order of registration is preserved (the cache-updater registers first, so downstream renderers see the freshly-pushed event in `eventCache` when their handler runs). Per-handler errors are caught + logged so one broken consumer doesn't break others — same isolation pattern as Q2's selectSession hook array.
+
+7 sites converted (the cache updater stays as the first `onAppendMsg` registration since it's the source of truth for `eventCache`):
+
+- weave / DAG ripple animation
+- live-feed `appendFeedLine`
+- per-actor log stream attach on agent.wake
+- output-tab refresh on artifact.created
+- Resume button refresh
+- transcript-view re-render
+- coordinator-visibility note → feed line
+
+Verification: 453/453 sweep green; lint/typecheck/format/build clean. Same render outputs (cache → swimlane → scorecard → session list) but with 1× JSON.parse instead of 8×.
+
 ### Added — Video research toggle (Gemini-only) end-to-end (studio → server → CLI → coordinator → reducer) (2026-05-03)
 
 Per user feedback: "세션을 만들 때 gemini sdk나 Gemini CLI가 활성화 되어 있으면 custom binding에 비디오 인코딩 활성화/비활성화 토글 넣고 활성화되면 research에서 비디오 인코딩하도록 프롬프트 수정 및 보강하자. 대신 gemini 쪽이 활성화가 안되어있으면 패스하고 말이야."
