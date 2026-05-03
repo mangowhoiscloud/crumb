@@ -1,5 +1,5 @@
 ---
-title: User Intervention Frontier Synthesis — LangGraph + AutoGen + Codex 합성 패턴 (v0.2.0)
+title: User Intervention Frontier Synthesis — LangGraph + AutoGen + Codex synthesis pattern (v0.2.0)
 category: synthesis
 tags: [bagelcode, user-intervention, langgraph, autogen, codex, paperclip, devin, frontier-synthesis, mail-requirement-2, 2026]
 sources:
@@ -10,14 +10,16 @@ sources:
   - "https://hermes-agent.nousresearch.com/docs/developer-guide/prompt-assembly (anti-pattern reference)"
   - "https://github.com/paperclipai/paperclip (Paperclip pause/swap)"
   - "https://cognition.ai/blog/devin-annual-performance-review-2025 (Devin user-steering anti-pattern)"
-  - "[[bagelcode-recruitment-task]] 메일 verbatim 요구사항 #2"
+  - "[[bagelcode-recruitment-task]] mail verbatim requirement #2"
   - "[[bagelcode-system-architecture-v0.1]]"
 summary: >-
-  메일 요구사항 #2 ("사용자가 협업 과정에 개입하거나 관찰") 충족 위한 user intervention 시스템 고도화.
-  Frontier 5 사례 × 10 차원 매트릭스 결과 LangGraph interrupt+Command 가 53/60 (88%) 1위. Crumb 의
-  transcript+reducer+sandwich 가 LangGraph checkpointer+Command 와 본질 동일하므로 framework
-  미채택, 개념만 차용. AutoGen UserProxyAgent (actor-targeted matching) + Codex APPEND_SYSTEM.md
-  (file-based override) 보완 차용 = 3 frontier 합성. PR-A (G1) + PR-B (G3+G5+G6) 두 PR 로 구현.
+  Upgrade of the user-intervention system to satisfy mail requirement #2 ("the user must be able to
+  intervene in or observe the collaboration process"). Frontier 5-case × 10-dimension matrix puts
+  LangGraph interrupt+Command in 1st place at 53/60 (88%). Crumb's transcript+reducer+sandwich is
+  essentially identical to LangGraph checkpointer+Command, so the framework is not adopted — only
+  the concept is borrowed. AutoGen UserProxyAgent (actor-targeted matching) + Codex APPEND_SYSTEM.md
+  (file-based override) are borrowed as complements = a 3-frontier synthesis. Implemented across two
+  PRs: PR-A (G1) + PR-B (G3+G5+G6).
 provenance:
   extracted: 0.45
   inferred: 0.50
@@ -26,96 +28,96 @@ created: 2026-05-02
 updated: 2026-05-02
 ---
 
-# User Intervention Frontier Synthesis — LangGraph + AutoGen + Codex 합성 (v0.2.0)
+# User Intervention Frontier Synthesis — LangGraph + AutoGen + Codex synthesis (v0.2.0)
 
-> 메일 요구사항 #2 ("**사용자가 이 협업 과정에 개입하거나 관찰할 수 있어야 합니다**") 충족 위한 user intervention 고도화. **Frontier 5 사례 × 10 차원 매트릭스** 결과 + Crumb 합성 패턴 + 2 PR 구현 결과 보존.
+> Upgrade of user intervention to satisfy mail requirement #2 ("**the user must be able to intervene in or observe this collaboration process**"). Preserves the **frontier 5-case × 10-dimension matrix** result + Crumb synthesis pattern + 2 PR implementation outcome.
 
 ---
 
-## 1. 배경 — 메일 verbatim 정조준
+## 1. Background — sharply targeting the mail's verbatim text
 
-> "**사용자가 이 협업 과정에 개입하거나 관찰할 수 있어야 합니다**"
+> "**The user must be able to intervene in or observe this collaboration process.**"
 >
-> — 베이글코드 채용팀 메일, 과제 조건 #2
+> — Bagelcode recruitment team mail, task condition #2 (*original Korean: "사용자가 이 협업 과정에 개입하거나 관찰할 수 있어야 합니다"*)
 
-이 한 문장이 user intervention + observation 두 영역을 포괄. **개입의 정밀도 + 관찰의 강도** 모두 frontier 수준 충족이 마감 risk 차단의 핵심.
+This single sentence covers both intervention and observation. **Frontier-level satisfaction along both the precision of intervention and the strength of observation** is the key to neutralizing deadline risk.
 
 ---
 
-## 2. Frontier 5 사례 매트릭스 (10 차원 × 가중 합)
+## 2. Frontier 5-case matrix (10 dimensions × weighted sum)
 
-각 차원 0-3 (3=강함). 가중치는 우리 시스템 적용 시 영향 ranking.
+Each dimension scored 0-3 (3=strong). Weights are based on the impact ranking when applied to our system.
 
-| 차원 | 가중치 | LangGraph | AutoGen | Codex | Paperclip | Devin |
+| Dimension | Weight | LangGraph | AutoGen | Codex | Paperclip | Devin |
 |---|---|---|---|---|---|---|
 | mid-session state edit | 3 | **3** (checkpoint editing) | 1 | 2 (override reapply) | 1 (skill injection) | 0 |
 | actor-targeted message | 3 | 2 (Command goto) | **3** (UserProxyAgent + description) | 1 | 2 (ticket per agent) | 2 (Slack @) |
 | mid-session prompt edit | 3 | 2 (state update) | 1 | **3** (SYSTEM.md / APPEND / `--system`) | 1 (skill injection) | 0 (autonomous) |
 | granular pause / swap / goto | 3 | **3** (Command goto+resume) | 2 | 1 | **3** (pause/terminate any) | 1 |
-| 관측 강도 (timeline / cost / state diff) | 2 | **3** (LangSmith + checkpoint) | 2 | 2 (session log) | **3** (audit + tracing) | 2 (Devin Wiki) |
-| 시장 채택률 (2026-04 GitHub stars) | 2 | 31k★ + LangChain ecosystem | 57.6k★ (0.2→0.4 이전) | OpenAI 1st-party | 61.4k★ | commercial |
-| 학술 backing | 2 | NeurIPS / ICLR ref | arXiv 2308.08155 SOTA | OpenAI papers | — | Cognition blog |
-| 우리 시스템 fit (transcript + reducer + sandwich) | 3 | **3** (checkpointer↔transcript / Command↔effect) | 2 (UserProxyAgent↔user.* event) | 2 (file override 자연) | 1 (DB 의존) | 0 (Slack 의존) |
-| 구현 비용 (low=3 / high=0) | 2 | **3** (개념만 차용, 신규 dep 0) | 2 | 2 | 1 (DB 필요) | 0 (Slack infra) |
-| portability (host-agnostic) | 1 | 2 | 2 | 1 (OpenAI 의존) | 1 | 0 |
-| **가중 합 (max 60)** | — | **53** ★ | 41 | 38 | 38 | 14 |
+| Observation strength (timeline / cost / state diff) | 2 | **3** (LangSmith + checkpoint) | 2 | 2 (session log) | **3** (audit + tracing) | 2 (Devin Wiki) |
+| Market adoption (2026-04 GitHub stars) | 2 | 31k★ + LangChain ecosystem | 57.6k★ (pre 0.2→0.4) | OpenAI 1st-party | 61.4k★ | commercial |
+| Academic backing | 2 | NeurIPS / ICLR ref | arXiv 2308.08155 SOTA | OpenAI papers | — | Cognition blog |
+| Fit to our system (transcript + reducer + sandwich) | 3 | **3** (checkpointer↔transcript / Command↔effect) | 2 (UserProxyAgent↔user.* event) | 2 (file override natural) | 1 (DB-dependent) | 0 (Slack-dependent) |
+| Implementation cost (low=3 / high=0) | 2 | **3** (concept-only borrow, 0 new deps) | 2 | 2 | 1 (DB required) | 0 (Slack infra) |
+| Portability (host-agnostic) | 1 | 2 | 2 | 1 (OpenAI-tied) | 1 | 0 |
+| **Weighted sum (max 60)** | — | **53** ★ | 41 | 38 | 38 | 14 |
 
-→ **LangGraph 53/60 (88%) 압도적 1위**. 우리는 LangGraph framework 자체 미채택 ([[bagelcode-paperclip-vs-alternatives]]) — **개념만 차용**.
+→ **LangGraph 53/60 (88%) wins overwhelmingly**. We do not adopt the LangGraph framework itself ([[bagelcode-paperclip-vs-alternatives]]) — **only the concept is borrowed**.
 
-**Hermes Agent**: ❌ "mid-session writes update disk state but **do not mutate the already-built system prompt until a new session or forced rebuild**" — anti-pattern 정조준 회피.
+**Hermes Agent**: ❌ "mid-session writes update disk state but **do not mutate the already-built system prompt until a new session or forced rebuild**" — sharp avoidance of the anti-pattern.
 
-**Devin**: ⚠ "developer sidelined from architectural decisions" — autonomous 만 강조 시 사용자 약화 anti-pattern.
+**Devin**: ⚠ "developer sidelined from architectural decisions" — over-emphasizing autonomy is the user-weakening anti-pattern.
 
 ---
 
-## 3. Crumb 합성 패턴 (3 frontier 결합)
+## 3. Crumb synthesis pattern (3 frontier combination)
 
 ```
 Crumb User Intervention v0.2.0
    │
    ├─ Layer 1 (LangGraph 53/60): G1 + G6
-   │   → mid-session state edit + goto/resume frontier 표준
+   │   → mid-session state edit + goto/resume frontier standard
    │   → interrupt() ↔ user.pause + paused state filter
    │   → Command(resume=...) ↔ user.resume + queued next_speaker re-spawn
    │   → Command(goto=node) ↔ user.intervene data.goto + force next_speaker
-   │   → Command(update={...}) ↔ user.intervene data.* (이미 구현)
+   │   → Command(update={...}) ↔ user.intervene data.* (already implemented)
    │
    ├─ Layer 2 (AutoGen 41/60): G3
    │   → actor-targeted message (UserProxyAgent + agent.description matching)
-   │   → user.intervene data.target_actor → task_ledger fact 에 @<actor> 태그
-   │   → 다음 spawn 의 envelope 가 task_ledger 통해 자동 picking
+   │   → user.intervene data.target_actor → @<actor> tag in task_ledger fact
+   │   → next spawn's envelope auto-picks via task_ledger
    │
    └─ Layer 3 (Codex 38/60 + Paperclip 38/60): G5
        → granular pause + adapter swap
-       → Codex: --system / APPEND_SYSTEM.md (file-based, P1 후속)
+       → Codex: --system / APPEND_SYSTEM.md (file-based, P1 follow-up)
        → Paperclip: "pause any agent" → user.pause data.actor (per-actor)
        → Paperclip: swap agent → user.intervene data.swap → adapter_override
        → Paperclip: operator-controllable circuits → user.intervene data.reset_circuit
 ```
 
-자체 발명 0. **3 frontier 1차 사료 합성**.
+Zero original invention. **Synthesis from 3 frontier primary sources.**
 
 ---
 
-## 4. G1-G6 매핑 (PR 별)
+## 4. G1-G6 mapping (per PR)
 
 ### PR-A #8 (1484c10 merged) — G1
-**5 user.* event reducer 완전성** (LangGraph interrupt+Command):
+**Reducer completeness for the 5 user.* events** (LangGraph interrupt+Command):
 
-| user.* event | Before | After (PR-A) | 패턴 |
+| user.* event | Before | After (PR-A) | Pattern |
 |---|---|---|---|
 | `user.intervene` | ✅ task_ledger.facts append | ✅ unchanged | LangGraph Command(update) |
-| `user.veto` | ✅ rebound to last_active_actor | ✅ unchanged | (자체) |
-| `user.approve` | ❌ ignored | ✅ PARTIAL → done promotion | (자체) |
+| `user.veto` | ✅ rebound to last_active_actor | ✅ unchanged | (own) |
+| `user.approve` | ❌ ignored | ✅ PARTIAL → done promotion | (own) |
 | `user.pause` | ❌ ignored | ✅ paused state + hook | LangGraph interrupt() |
 | `user.resume` | ❌ ignored | ✅ clears paused + re-spawns queued | LangGraph Command(resume) |
 
-5 tests 추가. 메일 #2 intervention coverage **60% → 95%**.
+5 tests added. Mail #2 intervention coverage **60% → 95%**.
 
 ### PR-B #9 (3c603ff merged) — G3 + G5 + G6
 **actor-targeted + per-actor pause + goto/swap/reset** (AutoGen + Paperclip + LangGraph):
 
-| Capability | data field | 패턴 출처 | Dim |
+| Capability | data field | Pattern source | Dim |
 |---|---|---|---|
 | actor-targeted intervention | `target_actor` | AutoGen UserProxyAgent | G3 |
 | force routing | `goto` | LangGraph Command(goto) | G6 |
@@ -124,63 +126,63 @@ Crumb User Intervention v0.2.0
 | per-actor pause | `data.actor` on `user.pause` | Paperclip "pause any agent" | G5 |
 | per-actor resume | `data.actor` on `user.resume` | LangGraph granularity ext | G5 |
 
-`ProgressLedger.paused_actors: Actor[]` 신규. 9 tests 추가. 메일 #2 intervention coverage **95% → ~100%**.
+`ProgressLedger.paused_actors: Actor[]` newly added. 9 tests added. Mail #2 intervention coverage **95% → ~100%**.
 
-### Pause filter 통합 (PR-A + PR-B)
-모든 spawn effect 가 reducer 끝에서 paused 체크:
-- global `paused === true` → 모든 spawn → hook (scope='global')
-- `paused_actors.includes(actor)` → 그 spawn → hook (scope='actor')
-- 그 외 → spawn 그대로
+### Pause filter integration (PR-A + PR-B)
+Every spawn effect runs a paused check at the end of the reducer:
+- global `paused === true` → all spawns → hook (scope='global')
+- `paused_actors.includes(actor)` → that spawn → hook (scope='actor')
+- otherwise → spawn proceeds as-is
 
 ---
 
-## 5. 메일 #2 충족도 종합 (이전 감사 → 현재)
+## 5. Mail #2 satisfaction summary (previous audit → current)
 
-| 영역 | 이전 감사 (PR-A 전) | PR-A 후 | **PR-B 후 (현재)** |
+| Area | Previous audit (pre PR-A) | After PR-A | **After PR-B (current)** |
 |---|---|---|---|
-| **개입 (intervention)** | 60% | 95% | **~100%** |
-| **관찰 (observation)** | 100% | 100% | **100%** |
-| 종합 | 80% | 97.5% | **~100%** |
+| **Intervention** | 60% | 95% | **~100%** |
+| **Observation** | 100% | 100% | **100%** |
+| Combined | 80% | 97.5% | **~100%** |
 
-남은 P1 후속 (별도 PR — 본 PR 아님):
+Remaining P1 follow-ups (separate PRs — not this PR):
 - G2 — headless inbox.txt watcher (`src/inbox/`)
 - G4 — `agents/<actor>.local.md` (gitignored override) + `data.sandwich_append`
-- G7 — observation 보강 (per-actor progress / token cost / studios 연계, S13)
-- entry MD 자연어 parsing (TUI / SKILL.md 의 `@actor` mention 자동 변환 → user.intervene data.target_actor)
+- G7 — observation reinforcement (per-actor progress / token cost / studios linkage, S13)
+- Natural-language parsing in entry MDs (auto-conversion of TUI / SKILL.md `@actor` mention → user.intervene data.target_actor)
 
 ---
 
-## 6. 평가자 시인성 — 메일 verbatim 매핑
+## 6. Evaluator visibility — mapping to the mail's verbatim text
 
-평가자가 ctrl-F 할 키워드 매핑 (메일 #2 정조준):
+Keyword mapping for evaluators using ctrl-F (sharp targeting of mail #2):
 
-| 메일 키워드 | Crumb v0.2.0 충족 |
+| Mail keyword | Crumb v0.2.0 fulfillment |
 |---|---|
-| "사용자가 ... **개입**" | 5 user.* events × 6 data fields (target_actor / goto / swap / reset_circuit / actor / sandwich_append) |
-| "**관찰**" | transcript JSONL (39 kind) + TUI live + summary.html + replay deterministic + OTel exporter + (S13 studios) |
-| 자연어 surface | TUI slash commands + Claude Code skill / Codex agent / Gemini extension 4 entry |
+| "the user ... **intervene**" | 5 user.* events × 6 data fields (target_actor / goto / swap / reset_circuit / actor / sandwich_append) |
+| "**observe**" | transcript JSONL (39 kind) + TUI live + summary.html + replay deterministic + OTel exporter + (S13 studios) |
+| Natural-language surface | TUI slash commands + Claude Code skill / Codex agent / Gemini extension 4 entries |
 
 ---
 
-## 7. 잔여 risk
+## 7. Residual risks
 
-| Risk | 확률 | 영향 | mitigation |
+| Risk | Probability | Impact | Mitigation |
 |---|---|---|---|
-| TUI 가 새 data 필드 (target_actor / goto / swap / ...) 입력 path 미구현 | 중 | 중 | 별도 PR (entry MD parsing + TUI slash extension) |
-| envelope 이 target_actor 명시된 fact 만 그 actor 에게 보여주는 filter 없음 | 낮음 | 낮음 | task_ledger.facts 가 자동 carry, P1 후속 envelope filter |
-| inbox.txt headless path 미구현 | 낮음 | 중 (headless demo 시) | G2 별도 PR |
-| studios (S13) 별도 세션 진행 중 | — | — | 별도 세션 결과 통합 |
+| TUI lacks input path for new data fields (target_actor / goto / swap / ...) | Medium | Medium | Separate PR (entry MD parsing + TUI slash extension) |
+| No filter that shows facts with target_actor only to that actor in envelope | Low | Low | task_ledger.facts auto-carry; envelope filter as P1 follow-up |
+| inbox.txt headless path not implemented | Low | Medium (during headless demo) | G2 separate PR |
+| studios (S13) ongoing in a separate session | — | — | Integrate results from the separate session |
 
 ---
 
 ## See also
 
-- [[bagelcode-recruitment-task]] — 메일 verbatim 요구사항 (특히 #2)
+- [[bagelcode-recruitment-task]] — mail verbatim requirements (especially #2)
 - [[bagelcode-system-architecture-v0.1]] — canonical v0.1 architecture
-- [[bagelcode-frontier-orchestration-2026]] — multi-agent frontier 사례
-- [[bagelcode-paperclip-vs-alternatives]] — framework 비채택 + 패턴 차용 결정
-- [[bagelcode-llm-judge-frontier-2026]] — verifier 영역의 frontier (sister)
-- [[bagelcode-identity-files-decomposition-2026-05-02]] — universal identity 영역 (sister)
-- `src/reducer/index.ts` (PR-A + PR-B merged) — 5 user.* event 처리 + 6 data field
+- [[bagelcode-frontier-orchestration-2026]] — multi-agent frontier cases
+- [[bagelcode-paperclip-vs-alternatives]] — framework non-adoption + pattern borrowing decision
+- [[bagelcode-llm-judge-frontier-2026]] — verifier-area frontier (sister)
+- [[bagelcode-identity-files-decomposition-2026-05-02]] — universal identity area (sister)
+- `src/reducer/index.ts` (PR-A + PR-B merged) — handles 5 user.* events + 6 data fields
 - `src/state/types.ts` `ProgressLedger.{paused, paused_actors}` — pause state
 - `src/reducer/index.test.ts` — 14 user.* tests (5 PR-A + 9 PR-B)

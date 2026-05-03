@@ -1,5 +1,5 @@
 ---
-title: 베이글코드 과제 — Paperclip 채택 여부 + 가벼운 대안 비교
+title: Bagelcode Task — Paperclip Adoption + Lightweight Alternatives Comparison
 category: synthesis
 tags: [bagelcode, paperclip, framework, multi-agent, autogen, swarm, crewai, agent-squad, decision]
 sources:
@@ -13,168 +13,168 @@ created: 2026-05-01
 updated: 2026-05-01
 ---
 
-# Paperclip 채택 여부 + 가벼운 대안 비교
+# Paperclip Adoption + Lightweight Alternatives Comparison
 
-> 이미 갖고 있는 [[kiki-appmaker]] 가 Paperclip 위에서 도는 시스템이라, "Paperclip 그대로 가져오면 빠르겠다"는 유혹이 있다. 하지만 **README 즉시 동작 + 마감 2일** 제약 아래선 큰 도움이 안 된다는 결론이 무게. 이 페이지는 후보 5개 비교 + 권장.
+> Since [[kiki-appmaker]] (which we already have) runs on top of Paperclip, there's a tempting "just bring Paperclip in and we're fast" angle. But under the **README-runs-immediately + 2-day deadline** constraint, the conclusion leans toward "not much help." This page is a comparison of 5 candidates + recommendation.
 
-## 결론 한 줄 (선결정)
+## One-line conclusion (decided up front)
 
-**자체 구현 (transcript JSONL + 얇은 Coordinator) 권장.** Paperclip 은 과제 ref 로만 인용. 대안 framework 들도 채택 X. 이유는 §"Trade-off 표" 참조.
+**Recommend a custom build (transcript JSONL + thin Coordinator).** Cite Paperclip only as a reference in the submission. Don't adopt the alternative frameworks either. See §"Trade-off table" for the reasoning.
 
-## 후보 5개
+## The 5 candidates
 
-| # | Framework | 한 줄 | 의존성 무게 | 라이선스 |
+| # | Framework | One-liner | Dependency weight | License |
 |---|---|---|---|---|
-| 1 | **Paperclip** | Node.js + React + 임베디드 Postgres orchestration | 무거움 (DB + 웹) | MIT |
-| 2 | **OpenAI Swarm** | 핸드오프 추상화만, 클라이언트사이드 stateless | **가장 가벼움** | MIT |
-| 3 | **Microsoft AutoGen** | 다층 (Core/AgentChat/Extensions), 유지보수 모드 | 중-무거움 | MIT (CLA 있음) |
-| 4 | **CrewAI** | Crews + Flows, Pydantic 기반 정의 | 중간 | MIT |
-| 5 | **Agent Squad** | SupervisorAgent 중심 conversation routing | 가벼움 | Apache-2.0 |
+| 1 | **Paperclip** | Node.js + React + embedded Postgres orchestration | Heavy (DB + web) | MIT |
+| 2 | **OpenAI Swarm** | Handoff abstraction only, client-side stateless | **Lightest** | MIT |
+| 3 | **Microsoft AutoGen** | Multi-tier (Core/AgentChat/Extensions), maintenance mode | Medium-heavy | MIT (CLA required) |
+| 4 | **CrewAI** | Crews + Flows, Pydantic-based definitions | Medium | MIT |
+| 5 | **Agent Squad** | SupervisorAgent-centric conversation routing | Light | Apache-2.0 |
 
 ## 1. Paperclip ([github.com/paperclipai/paperclip](https://github.com/paperclipai/paperclip))
 
-### 정의
-"OpenClaw가 직원이라면 Paperclip은 회사" — Node.js 서버 + React UI + 임베디드 Postgres. heartbeat / issue / agent / routine 4-primitive.
+### Definition
+"If OpenClaw is an employee, Paperclip is the company" — Node.js server + React UI + embedded Postgres. Heartbeat / issue / agent / routine 4-primitive.
 
-### 강점
-- ✅ Issue + 댓글 + 첨부 + audit log → 무거운 multi-agent 회사 운영 가능
-- ✅ org chart, 예산, governance, approval flow → 진짜 조직 운영 도구
-- ✅ MCP 서버 별도 (Paperclip MCP) — 외부 에이전트가 자연어로 통제 가능
-- ✅ [[kiki-appmaker]] 의 production path 그 자체 (sandwich + 17-agent + bkit)
+### Strengths
+- ✅ Issue + comments + attachments + audit log → can run a heavy multi-agent company
+- ✅ Org chart, budget, governance, approval flow → a real organization-operations tool
+- ✅ Separate MCP server (Paperclip MCP) — external agents can control it via natural language
+- ✅ Production path of [[kiki-appmaker]] itself (sandwich + 17-agent + bkit)
 
-### 약점 (과제 컨텍스트)
-- ❌ **README 즉시 동작 위험 큼** — Node.js 20+ / pnpm 9.15+ / 임베디드 Postgres 부팅 필요
-- ❌ **과제 스코프 초과** — 회사 운영 도구를 가져와서 2-에이전트 데모로 쓰는 건 미스매치
-- ❌ **베이글코드 톤 부합 X** — 블로그가 강조한 "단순 UI, 3일 빌드, 각 팀 자율" 과 반대 방향
-- ❌ **인증/secrets 셋업** — 평가자가 OpenAI/Anthropic 키 + 컨테이너 + DB 셋업 부담
-- ❌ "AI 코딩 에이전트로 직접 만들었음" 신호가 약함 — 기성 framework 위에 얇게 얹으면 평가자가 의심할 수 있음
+### Weaknesses (in the task context)
+- ❌ **High risk that the README won't run immediately** — needs Node.js 20+ / pnpm 9.15+ / embedded Postgres boot
+- ❌ **Out of scope for the task** — bringing in an organization-operations tool to use as a 2-agent demo is a mismatch
+- ❌ **Doesn't match Bagelcode's tone** — opposite direction from what the blog emphasized: "simple UI, 3-day build, team autonomy"
+- ❌ **Auth/secrets setup** — burdens evaluators with OpenAI/Anthropic keys + container + DB setup
+- ❌ Weak signal of "I built this myself with AI coding agents" — putting a thin layer on top of an existing framework can make evaluators skeptical
 
-### 차용 가치 (자산만 빌리고 framework 는 X)
-- Issue lifecycle 발상 → 우리 transcript `kind` 어휘에 흡수
-- Heartbeat scheduler 발상 → 단순 polling loop 로 충분
-- Sandwich identity → 이미 [[kiki-appmaker-orchestration]] 에서 추출 완료
+### Borrowable value (take only the assets, skip the framework)
+- Issue lifecycle idea → absorb into our transcript `kind` vocabulary
+- Heartbeat scheduler idea → a simple polling loop is enough
+- Sandwich identity → already extracted in [[kiki-appmaker-orchestration]]
 
 ## 2. OpenAI Swarm ([github.com/openai/swarm](https://github.com/openai/swarm))
 
-### 정의
-교육용 경량 framework. 두 추상화: **Agent (instructions + tools)** + **Handoff (다음 agent 반환)**. 클라이언트사이드, stateless.
+### Definition
+Educational lightweight framework. Two abstractions: **Agent (instructions + tools)** + **Handoff (returns the next agent)**. Client-side, stateless.
 
-### 강점
-- ✅ **가장 가벼움** — 한 파일 안에서 데모 가능
-- ✅ Stateless 설계 → 우리 transcript JSONL append-only 와 자연스럽게 결합
-- ✅ Python 3.10+ 외 의존성 거의 없음
+### Strengths
+- ✅ **Lightest** — can demo inside a single file
+- ✅ Stateless design → naturally combines with our transcript JSONL append-only
+- ✅ Almost no dependencies beyond Python 3.10+
 
-### 약점
-- ❌ OpenAI Chat Completions 전용 → Claude/Gemini 호출 추상화 별도 필요
-- ❌ "Educational" 명시 — 프로덕션용 아님 → 베이글코드의 "다양한 에이전트 동시 사용" 톤과 반(half)부합
+### Weaknesses
+- ❌ OpenAI Chat Completions only → needs separate abstraction to call Claude/Gemini
+- ❌ Explicitly "Educational" — not for production → only half-fits Bagelcode's "use multiple agents simultaneously" tone
 
-### 차용 가치
-- **Handoff 패턴** — 우리 `kind=agent.wake` + `to=<next>` 와 정확히 동형. spec 작성 영감.
-- 클라이언트사이드 stateless → 우리 디자인 전제 확정
+### Borrowable value
+- **Handoff pattern** — exactly isomorphic to our `kind=agent.wake` + `to=<next>`. Inspires the spec.
+- Client-side stateless → confirms our design premise
 
 ## 3. Microsoft AutoGen ([github.com/microsoft/autogen](https://github.com/microsoft/autogen))
 
-### 정의
-Core / AgentChat / Extensions 3-tier. 비동기 메시지 + GroupChat + human-in-the-loop.
+### Definition
+3-tier Core / AgentChat / Extensions. Async messages + GroupChat + human-in-the-loop.
 
-### 강점
-- ✅ 멀티 LLM provider 추상화 잘 됨
-- ✅ GroupChat → multi-agent debate 패턴 (TradingAgents §4.2 III/IV) 직접 매핑
+### Strengths
+- ✅ Multi-LLM provider abstraction is well done
+- ✅ GroupChat → directly maps to multi-agent debate patterns (TradingAgents §4.2 III/IV)
 
-### 약점
-- ❌ **유지보수 모드** (2025년 Microsoft Agent Framework 권장) → 채점자가 "왜 deprecated 라이브러리?" 의심 가능
-- ❌ 의존성 트리 큼 (Pydantic v2 + asyncio + 다중 SDK) → README 동작 위험
-- ❌ 추상화가 두꺼워서 "직접 만든 것" 신호 약화
+### Weaknesses
+- ❌ **Maintenance mode** (Microsoft Agent Framework recommended in 2025) → graders may suspect "why a deprecated library?"
+- ❌ Large dependency tree (Pydantic v2 + asyncio + multiple SDKs) → README-runs risk
+- ❌ Thick abstraction weakens the "I built this myself" signal
 
 ## 4. CrewAI ([github.com/crewaiinc/crewai](https://github.com/crewaiinc/crewai))
 
-### 정의
-역할극 기반 (Role / Goal / Backstory) + Crews (팀) + Flows (DAG). Pydantic 정의.
+### Definition
+Role-playing based (Role / Goal / Backstory) + Crews (teams) + Flows (DAG). Pydantic definitions.
 
-### 강점
-- ✅ Role-playing 추상화 → kiki engineering-team 12-agent 와 표현력 비슷
-- ✅ 기업 사용 사례 (Oracle, Deloitte 등) → 안정성
+### Strengths
+- ✅ Role-playing abstraction → expressive power similar to kiki's engineering-team 12-agent
+- ✅ Enterprise use cases (Oracle, Deloitte, etc.) → stability
 
-### 약점
-- ❌ **무거움** — 가장 큰 의존성 트리
-- ❌ Backstory / Role-playing 추상화 → 베이글코드가 강조한 "단순함" 과 반대 톤
-- ❌ Flow DAG → 과제의 단순 핑퐁에 과함
+### Weaknesses
+- ❌ **Heavy** — largest dependency tree
+- ❌ Backstory / Role-playing abstraction → opposite tone from the "simplicity" Bagelcode emphasized
+- ❌ Flow DAG → overkill for the task's simple ping-pong
 
 ## 5. Agent Squad ([github.com/2FastLabs/agent-squad](https://github.com/2FastLabs/agent-squad))
 
-### 정의
-SupervisorAgent 중심 conversation routing. agent-as-tools.
+### Definition
+SupervisorAgent-centric conversation routing. agent-as-tools.
 
-### 강점
-- ✅ Lightweight 명시
-- ✅ Supervisor → 우리 Coordinator 와 1:1 매핑
+### Strengths
+- ✅ Explicitly lightweight
+- ✅ Supervisor → 1:1 mapping with our Coordinator
 
-### 약점
-- ❌ Conversational chatbot 지향 → "코딩 에이전트가 작업 결과 산출" 시나리오 약함
-- ❌ 인지도 낮아 평가자에게 untested 인상
+### Weaknesses
+- ❌ Conversational chatbot oriented → weak for "coding agents produce work outputs" scenarios
+- ❌ Low awareness — gives evaluators an "untested" impression
 
-## Trade-off 표 (과제 5개 평가 차원)
+## Trade-off table (5 evaluation dimensions for the task)
 
-| | Paperclip | Swarm | AutoGen | CrewAI | Agent Squad | **자체 구현** |
+| | Paperclip | Swarm | AutoGen | CrewAI | Agent Squad | **Custom build** |
 |---|---|---|---|---|---|---|
-| README 즉시 동작 | ❌ | ✅ | ⚠ | ⚠ | ✅ | **✅** |
-| 의존성 무게 | 重 | 軽 | 重 | 中 | 軽 | **最軽** |
-| Multi-LLM (Claude/Codex/Gemini) | 도구 | 약 | ✅ | ✅ | ✅ | **✅ (우리가 짠다)** |
-| Transcripts 스키마 자유도 | 제약 | 자유 | 제약 | 제약 | 제약 | **✅ 최대** |
-| 베이글코드 톤 부합 | ❌ | ⚠ | ❌ | ❌ | ⚠ | **✅** |
-| "AI 코딩 에이전트로 만들었음" 신호 | ❌ | ⚠ | ❌ | ❌ | ⚠ | **✅** |
-| 캐싱 제어권 | 약 | ✅ | ⚠ | 약 | ⚠ | **✅** |
-| 루브릭 자동 채점 hooking | 약 | ✅ | ⚠ | 약 | ⚠ | **✅** |
-| 마감 (2-3일) 안전성 | ❌ | ✅ | ⚠ | ⚠ | ✅ | **✅** |
+| README runs immediately | ❌ | ✅ | ⚠ | ⚠ | ✅ | **✅** |
+| Dependency weight | Heavy | Light | Heavy | Med | Light | **Lightest** |
+| Multi-LLM (Claude/Codex/Gemini) | tooling | weak | ✅ | ✅ | ✅ | **✅ (we write it)** |
+| Transcripts schema freedom | constrained | free | constrained | constrained | constrained | **✅ maximal** |
+| Bagelcode tone fit | ❌ | ⚠ | ❌ | ❌ | ⚠ | **✅** |
+| "Built with AI coding agents" signal | ❌ | ⚠ | ❌ | ❌ | ⚠ | **✅** |
+| Caching control | weak | ✅ | ⚠ | weak | ⚠ | **✅** |
+| Rubric auto-scoring hookability | weak | ✅ | ⚠ | weak | ⚠ | **✅** |
+| Deadline (2-3 day) safety | ❌ | ✅ | ⚠ | ⚠ | ✅ | **✅** |
 
-→ 모든 축에서 **자체 구현 ≥ Swarm > Agent Squad > 나머지**.
+→ Across every axis, **custom build ≥ Swarm > Agent Squad > the rest**.
 
-## 자체 구현이란 (얼마나 작나)
+## What "custom build" is (how small is it)
 
-[[bagelcode-transcripts-schema]] + [[bagelcode-caching-strategy]] + [[bagelcode-rubric-scoring]] 위에 얇은 Coordinator:
+A thin Coordinator on top of [[bagelcode-transcripts-schema]] + [[bagelcode-caching-strategy]] + [[bagelcode-rubric-scoring]]:
 
 ```
-약 800-1500 LOC 추정
+~800-1500 LOC estimate
 - protocol/schemas/*.json     (~100 LOC, JSON Schema)
 - protocol/validator.ts/py    (~100 LOC)
-- coordinator.ts/py           (~250 LOC, 라우터 + JSONL writer)
+- coordinator.ts/py           (~250 LOC, router + JSONL writer)
 - adapters/{claude,codex,gemini}.ts/py  (~150 LOC each)
-- agents/*.md                 (~100 LOC each, sandwich 4섹션)
+- agents/*.md                 (~100 LOC each, sandwich 4 sections)
 - ui/tui.ts/py                (~150 LOC, blessed/textual)
-- score/rubric.ts/py          (~150 LOC, 차원 채점)
+- score/rubric.ts/py          (~150 LOC, dimension scoring)
 ```
 
-→ **Swarm 보다 작을 수 있다** (Swarm 도 OpenAI Chat 추상화 빼면 비슷한 규모).
+→ **Could be smaller than Swarm** (Swarm too is comparable in size once you remove the OpenAI Chat abstraction).
 
-## Paperclip 을 ref 로만 두는 이유 (제출 시 README 인용)
+## Why we keep Paperclip as a reference only (README citation on submission)
 
-> "이 도구는 [Paperclip](https://github.com/paperclipai/paperclip) 의 issue/heartbeat/sandwich 패턴에서 영감을 받았으나, **과제 마감과 README 동작 보장**을 위해 framework 자체는 채택하지 않고 **transcript JSONL + 얇은 Coordinator** 로 같은 골격을 깎아냈습니다. Paperclip 의 무게를 그대로 가져오면 평가자가 1분 안에 실행하기 어렵기 때문입니다."
+> "This tool is inspired by [Paperclip](https://github.com/paperclipai/paperclip)'s issue/heartbeat/sandwich pattern, but **to guarantee task deadline and README operability**, we did not adopt the framework itself; instead we carved out the same skeleton with a **transcript JSONL + thin Coordinator**. Bringing Paperclip's full weight as-is would make it hard for evaluators to run it within a minute."
 
-→ 이 한 문단이 **"왜 자체 구현?"** 에 대한 정확한 답. 평가자에게도 의사결정 근거 명료.
+→ This single paragraph is the precise answer to **"why a custom build?"** It also makes the decision rationale clear to evaluators.
 
-## TradingAgents 와의 정합
+## Alignment with TradingAgents
 
-[[bagelcode-tradingagents-paper]] 도 framework 채택이 아니라 **자체 protocol** 설계. 우리도 같은 길:
+[[bagelcode-tradingagents-paper]] also designs its **own protocol** rather than adopting a framework. Same path for us:
 
-| TradingAgents | 우리 |
+| TradingAgents | Us |
 |---|---|
-| MetaGPT 영감 + 자체 protocol | Paperclip 영감 + 자체 transcript |
-| ReAct prompting | sandwich + ReAct 변형 |
-| Quick/Deep 모델 분리 | Coordinator(Haiku) + Planner(Opus) + Builder(Codex) + Critic(Gemini) |
+| Inspired by MetaGPT + own protocol | Inspired by Paperclip + own transcript |
+| ReAct prompting | sandwich + ReAct variant |
+| Quick/Deep model split | Coordinator(Haiku) + Planner(Opus) + Builder(Codex) + Critic(Gemini) |
 
-→ 학술 논문도 framework 안 쓰고 깎아 만든다. 우리도 그 노선.
+→ Even academic papers carve their own without using a framework. Same line for us.
 
-## 후속 (이 결정 이후)
+## Follow-ups (after this decision)
 
-- [x] Paperclip GitHub 를 references 에 추가 ← 본 페이지가 그 역할
-- [ ] Swarm `Agent + Handoff` API 한 번 훑고 우리 `kind=agent.wake` 와 차이점만 흡수
-- [ ] CrewAI 의 Role/Goal Pydantic 모델 형식 → 우리 sandwich §1 contract YAML 표현 영감
-- [ ] AutoGen 안 본다 (시간 낭비)
+- [x] Add the Paperclip GitHub to references ← this page serves that role
+- [ ] Skim Swarm's `Agent + Handoff` API once and absorb only what differs from our `kind=agent.wake`
+- [ ] CrewAI's Role/Goal Pydantic model form → inspires our sandwich §1 contract YAML expression
+- [ ] Don't look at AutoGen (waste of time)
 
 ## See also
 
-- [[bagelcode]] / [[bagelcode-task-direction]] — 본 결정이 영향
-- [[bagelcode-transcripts-schema]] — 자체 구현의 핵심
-- [[bagelcode-caching-strategy]] / [[bagelcode-rubric-scoring]] — 자체 구현 위에 올라감
-- [[bagelcode-tradingagents-paper]] — 자체 protocol 설계의 학술 근거
-- [[kiki-appmaker]] / [[kiki-appmaker-orchestration]] — Paperclip 위 production 사례 (자산만 차용)
+- [[bagelcode]] / [[bagelcode-task-direction]] — affected by this decision
+- [[bagelcode-transcripts-schema]] — heart of the custom build
+- [[bagelcode-caching-strategy]] / [[bagelcode-rubric-scoring]] — built on top of the custom build
+- [[bagelcode-tradingagents-paper]] — academic basis for designing one's own protocol
+- [[kiki-appmaker]] / [[kiki-appmaker-orchestration]] — production case on top of Paperclip (we borrow only the assets)
