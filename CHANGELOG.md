@@ -4,6 +4,40 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — qa-runner per-`PersistenceProfile` smoke (Phase 7 — local-only Dexie + edge-orm wrangler probe, 2026-05-03)
+
+Closes the `task_ledger.persistence_profile` deferred-reader from PR #154 (feat/agent-specs-game-genres). qa-runner now reads the profile from `QaCheckEffect`, dispatches to a per-profile smoke runner, and surfaces the result in `qa.result.data.persistence_check`. Verifier reads it as supplemental D2 evidence: `status === 'fail'` forces `exec_exit_code = 1`; `partial` and `skipped` do not penalize (PARTIAL = "evidence absent", per `agents/specialists/game-design.md` §1.4 fallback semantics).
+
+Profiles wired in this PR:
+
+- **`local-only`** — real smoke. Spawns a static server, navigates to the artifact in headless Chromium, runs the §1.4.local-only contract `(a/b/c)` as a string-evaluated Dexie probe (`db.runs.add(...)` returns numeric id; `db.runs.orderBy('score').reverse().limit(10).toArray()` returns array). Independent of whether the artifact actually wires up Dexie — verifies the runtime can import + use it.
+- **`edge-orm`** — `wrangler` on-PATH probe (`which wrangler` shell-out). `partial` regardless of presence: full `wrangler dev` spawn + `/api/runs` HTTP probe + D1 migration apply is a follow-up. Soft fallback documented in §1.4.edge-orm; verifier reads PARTIAL as "evidence absent" rather than a contradiction.
+- **`postgres-anon`** — `skipped` (deferred). The §1.2 docker-postgres path exists in the spec but is not yet integrated into qa-runner. Follow-up PR.
+- **`firebase-realtime`** — `skipped` (P0 제외). Reserved profile name only.
+- **un-flagged session** — `skipped` (no profile set). Backward-compatible with pre-v0.4 behavior.
+
+Wiring:
+
+- `src/effects/qa-persistence.ts` (new, ~210 LOC) — `runPersistenceCheck(artifactPath, profile?)` returning `PersistenceCheckResult`. Reuses `withStaticServer` + dynamic playwright import (same contract as `qa-check-playwright.ts`).
+- `src/effects/qa-check.ts` — `runQaCheck` signature gains `persistenceProfile?: PersistenceProfile` param; calls `runPersistenceCheck` post-Playwright; exec_exit_code aggregation factors in `persistence_check.status === 'fail'`.
+- `src/effects/types.ts` — `QaCheckEffect.persistence_profile?: PersistenceProfile`.
+- `src/reducer/index.ts` — `case 'build'` populates `persistence_profile` from `state.task_ledger.persistence_profile` (defined in PR #154).
+- `src/dispatcher/qa-runner.ts` — passes `effect.persistence_profile` through to `runQaCheck`; surfaces `result.persistence_check` in `qa.result.data.persistence_check` so the verifier sees per-profile evidence on every emitted `qa.result`.
+
+Tests:
+
+- `src/effects/qa-persistence.test.ts` (5 tests) — undefined profile / postgres-anon defer / firebase defer / edge-orm partial / local-only structured-result-no-throw.
+- `src/reducer/index.test.ts` (+2 tests) — build → qa_check carries `persistence_profile` from task_ledger; un-flagged build omits the field.
+
+Quality gate: typecheck ✓ / lint:all 0 errors ✓ / 474 tests ✓ (+7) / format ✓ / build ✓.
+
+NOT in this PR — deferred (separate follow-ups):
+
+- Full `wrangler dev` smoke for `edge-orm` (spawn + HTTP probe + D1 migration apply).
+- `postgres-anon` qa-runner integration (§1.2 docker spawn).
+- Studio picker UI (Phase 6, blocked on the in-flight studio big-bang).
+- preset `.toml` `[actors.builder].persistence_profile` override.
+
 ### Changed — Truthful Quickstart + lifecycle scripts (setup/update/uninstall/reset) + version single-source (2026-05-03)
 
 Packaging + bootstrap rewrite so a fresh-clone evaluator (or any other user) can go from `git clone` to a passing mock-adapter run in two commands, with no global symlinks and no false promises.
