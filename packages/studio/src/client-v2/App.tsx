@@ -1,0 +1,164 @@
+/**
+ * M2 — Studio v2 dockview shell.
+ *
+ * Per the migration plan §0 prime directive ("preserve the visual,
+ * elevate everything underneath"), this shell renders the same panel
+ * arrangement the v1 vanilla bundle has today — sidebar (Brand +
+ * Adapters + Sessions placeholders) on the left, main area (view-pane
+ * + bottom-group with Narrative + Feed siblings) on the right, status
+ * bar across the bottom.
+ *
+ * dockview is configured to NOT show its default Material chrome.
+ * Tab bars, panel headers, and resize handles are styled to match
+ * v1's hairline borders + cream surfaces (see styles/globals.css).
+ *
+ * Panels are intentionally empty placeholders here — M3 fills the
+ * sidebar, M4 fills Pipeline / Waterfall / Map, M5 wires Narrative +
+ * Feed to SSE + inbox POST, M6 fills Scorecard / Logs / Output /
+ * Transcript / DesignCheck.
+ */
+
+import { useEffect, useState } from 'react';
+import {
+  DockviewReact,
+  type DockviewApi,
+  type DockviewReadyEvent,
+  type IDockviewPanelProps,
+} from 'dockview-react';
+
+import { BrandMark } from './components/BrandMark';
+import { ThemeToggle } from './components/ThemeToggle';
+import { DensityToggle } from './components/DensityToggle';
+import { Sidebar } from './panels/Sidebar';
+import { ViewPane } from './panels/ViewPane';
+import { Narrative } from './panels/Narrative';
+import { Feed } from './panels/Feed';
+import { DetailRail } from './panels/DetailRail';
+
+interface SessionsSnapshot {
+  sessions: Array<{ session_id: string; goal: string | null }>;
+}
+
+const PANEL_COMPONENTS: Record<string, React.FC<IDockviewPanelProps>> = {
+  sidebar: Sidebar,
+  viewPane: ViewPane,
+  narrative: Narrative,
+  feed: Feed,
+  detailRail: DetailRail,
+};
+
+/** dockview ready handler — assemble the v1-equivalent topology in code. */
+function onReady(event: DockviewReadyEvent): void {
+  const api: DockviewApi = event.api;
+
+  // Sidebar (left column).
+  const sidebar = api.addPanel({
+    id: 'sidebar',
+    component: 'sidebar',
+    title: 'Sessions',
+    initialWidth: 240,
+  });
+
+  // Main view pane (sits to the right of sidebar).
+  const viewPane = api.addPanel({
+    id: 'viewPane',
+    component: 'viewPane',
+    title: 'Pipeline',
+    position: { referencePanel: sidebar.id, direction: 'right' },
+  });
+
+  // Narrative — bottom-left of the view pane.
+  api.addPanel({
+    id: 'narrative',
+    component: 'narrative',
+    title: 'Agent Narrative',
+    position: { referencePanel: viewPane.id, direction: 'below' },
+    initialHeight: 220,
+  });
+
+  // Feed — sibling of Narrative in the same group; user can drag a tab
+  // out into a floating window per §6.4 (free via dockview popout).
+  api.addPanel({
+    id: 'feed',
+    component: 'feed',
+    title: 'Live Execution Feed',
+    position: { referencePanel: 'narrative', direction: 'within' },
+  });
+
+  // Detail rail (right edge of the view pane). M4 swaps content based
+  // on selection (event-detail / node-inspector / outlier histograms).
+  api.addPanel({
+    id: 'detailRail',
+    component: 'detailRail',
+    title: 'Detail',
+    position: { referencePanel: viewPane.id, direction: 'right' },
+    initialWidth: 320,
+  });
+}
+
+export function App() {
+  const [snapshot, setSnapshot] = useState<SessionsSnapshot | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/sessions')
+      .then((r) => r.json() as Promise<SessionsSnapshot>)
+      .then((j) => {
+        if (!cancelled) setSnapshot(j);
+      })
+      .catch(() => {
+        /* M2 placeholder — error UI lands in M3 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div
+      className="flex h-full flex-col"
+      style={{ background: 'var(--canvas)', color: 'var(--ink)' }}
+    >
+      <header
+        className="flex items-center gap-3 border-b px-4 py-2"
+        style={{ borderColor: 'var(--hairline)', background: 'var(--surface-1)' }}
+      >
+        <BrandMark size={26} />
+        <span
+          className="text-[14px] font-extrabold tracking-wide"
+          style={{ fontFamily: 'var(--font-brand)' }}
+        >
+          CRUMB
+          <span style={{ marginLeft: 4, color: 'var(--ink-subtle)', fontWeight: 700 }}>STUDIO</span>
+        </span>
+        <span style={{ flex: 1 }} />
+        <span style={{ color: 'var(--ink-subtle)', fontSize: 12 }}>
+          v2 preview · {snapshot ? `${snapshot.sessions.length} sessions` : 'loading…'}
+        </span>
+        <DensityToggle />
+        <ThemeToggle />
+      </header>
+
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <DockviewReact
+          components={PANEL_COMPONENTS}
+          onReady={onReady}
+          className="dockview-theme-abyss"
+        />
+      </div>
+
+      <footer
+        className="flex items-center gap-3 border-t px-4 py-1.5 text-xs"
+        style={{
+          borderColor: 'var(--hairline)',
+          background: 'var(--surface-1)',
+          color: 'var(--ink-subtle)',
+        }}
+      >
+        <span>Status: M2 dockview shell</span>
+        <span style={{ flex: 1 }} />
+        <span>⌘B sidebar · Drag tabs to dock · Drag a tab out for popout</span>
+      </footer>
+    </div>
+  );
+}
