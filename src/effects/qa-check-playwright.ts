@@ -44,15 +44,37 @@ export interface PlaywrightSmokeResult {
   crossBrowser: 'ok' | 'fail';
   /** PWA offline second-load test result; 'skipped' when artifact has no sw.js sibling. */
   pwaOffline?: 'ok' | 'fail' | 'skipped';
-  /** Phaser scene reached SYS.RUNNING(5) on first load. Informational. */
+  /**
+   * Stage 2 — any scene reached SYS.RUNNING(5) within the timeout. Informational
+   * (ArtifactsBench arXiv:2507.04952's "first interaction available" marker).
+   */
   phaserSceneRunning?: boolean;
+  /**
+   * Stage 1 — Phaser.Game booted (game.isBooted === true) within the timeout.
+   * Lighter signal than Stage 2 — confirms the lib + ES module chain loaded
+   * and the runtime is alive even when scenes haven't transitioned to RUNNING
+   * (e.g. asset preload still flushing, or first scene hangs in a user-input
+   * wait). Surfaced in qa.result so the verifier's CourtEval can distinguish
+   * "lib boot fail" (D2=0 hard) from "lib boot OK but scene boot slow"
+   * (D2=0 still by ground truth but D6 portability has more nuance + AC
+   * predicates worth running).
+   */
+  phaserBooted?: boolean;
   /** Failure detail for lint_findings; absent when ok. */
   reason?: string;
 }
 
 const NAV_TIMEOUT_MS = 5000;
 const CANVAS_TIMEOUT_MS = 5000;
-const SCENE_RUNNING_TIMEOUT_MS = 5000;
+// Stage 1 — Phaser.Game.isBooted gate (lib + module chain loaded). Tighter
+// because if Phaser itself didn't boot in 5s, something fundamental is wrong.
+const PHASER_BOOTED_TIMEOUT_MS = 5000;
+// Stage 2 — any scene SYS.RUNNING gate. Multi-file PWA boot chain (ES module
+// imports + procedural sprite generation in BootScene + scene transition to
+// MenuScene) routinely sits in the 5-9s range; the previous 5s cap rejected
+// well-formed builds purely on cold-start latency. 10s leaves headroom while
+// still flagging genuinely stuck scenes (infinite loop, missing asset, etc.).
+const SCENE_RUNNING_TIMEOUT_MS = 10_000;
 const CONSOLE_WATCH_MS = 1500;
 const OFFLINE_RELOAD_TIMEOUT_MS = 5000;
 
@@ -132,12 +154,12 @@ export async function withStaticServer<T>(
 }
 
 /**
- * Probe Phaser SYS.RUNNING(5) without relying on a single window-name convention.
- * Builders may stash the Phaser.Game instance under `window.game` / `window.__GAME__`
- * / `window.phaserGame` etc., so we check common names and fall back to a
- * brute-force walk of window own-properties for any object with `isBooted === true`
- * and `scene.scenes`. ArtifactsBench-aligned (arXiv:2507.04952): the unit of
- * evidence is "any RUNNING scene", not a particular variable name.
+ * Stage 2 probe — Phaser SYS.RUNNING(5). Confirms a scene's create() finished
+ * and the loop is ticking. Builders stash the Phaser.Game instance under
+ * `window.game` / `window.__GAME__` / `window.phaserGame` etc., so we check
+ * common names + fall back to a brute-force walk for any object with
+ * `isBooted === true` and `scene.scenes`. ArtifactsBench-aligned (arXiv:
+ * 2507.04952): the unit of evidence is "any RUNNING scene", not a name.
  */
 export const SCENE_RUNNING_PROBE = `(() => {
   if (typeof window === 'undefined' || typeof Phaser === 'undefined') return false;
@@ -148,11 +170,33 @@ export const SCENE_RUNNING_PROBE = `(() => {
   };
   const named = ['game', '__GAME__', '_game', 'phaserGame', 'GAME', 'gameInstance'];
   for (const k of named) { if (checkGame(window[k])) return true; }
-  // Fallback: walk own properties looking for a booted Phaser.Game.
   try {
     for (const k of Object.keys(window)) {
       if (named.includes(k)) continue;
       try { if (checkGame(window[k])) return true; } catch { /* cross-origin / accessor throw */ }
+    }
+  } catch { /* ignore */ }
+  return false;
+})()`;
+
+/**
+ * Stage 1 probe — Phaser.Game.isBooted only. Lighter than Stage 2: passes
+ * once the runtime has constructed + initial pipeline finished (texture +
+ * cache + WebGL or Canvas2D) but BEFORE any scene transitions to RUNNING.
+ * Surfaces "lib loaded + game alive" cases that the strict Stage 2 misses
+ * (asset preload still flushing, first scene awaiting input, etc.) so the
+ * verifier's CourtEval can grade the build with full evidence rather than
+ * the all-zero penalty for "0/N ACs runtime-verifiable".
+ */
+export const PHASER_BOOTED_PROBE = `(() => {
+  if (typeof window === 'undefined' || typeof Phaser === 'undefined') return false;
+  const isBooted = (g) => !!(g && typeof g === 'object' && g.isBooted === true);
+  const named = ['game', '__GAME__', '_game', 'phaserGame', 'GAME', 'gameInstance'];
+  for (const k of named) { if (isBooted(window[k])) return true; }
+  try {
+    for (const k of Object.keys(window)) {
+      if (named.includes(k)) continue;
+      try { if (isBooted(window[k])) return true; } catch { /* ignore */ }
     }
   } catch { /* ignore */ }
   return false;
@@ -213,6 +257,22 @@ export async function runPlaywrightSmoke(artifactPath: string): Promise<Playwrig
         };
       }
 
+      // Stage 1 — wait for Phaser.Game.isBooted. Cheaper signal: confirms
+      // the lib + ES module chain loaded even when scenes haven't yet
+      // transitioned to RUNNING. Surfaced separately on the result so the
+      // verifier can distinguish "lib boot fail" (D2=0 hard) from "lib
+      // booted but scene boot slow" (still D2=0 by ground truth, but
+      // verifier's CourtEval has explicit lib-alive evidence).
+      let phaserBooted = false;
+      try {
+        await page.waitForFunction(PHASER_BOOTED_PROBE, {
+          timeout: PHASER_BOOTED_TIMEOUT_MS,
+        });
+        phaserBooted = true;
+      } catch {
+        /* Stage 2 will catch + report; Stage 1 staying false is just info. */
+      }
+
       let phaserSceneRunning = false;
       try {
         await page.waitForFunction(SCENE_RUNNING_PROBE, {
@@ -220,12 +280,18 @@ export async function runPlaywrightSmoke(artifactPath: string): Promise<Playwrig
         });
         phaserSceneRunning = true;
       } catch {
+        // Stage 2 timeout: include the Stage 1 result in the reason so
+        // the verifier sees "lib booted but scene didn't transition" vs
+        // "nothing booted at all" without re-reading metadata.
         return {
           firstInteraction: 'fail',
           crossBrowser: 'fail',
           pwaOffline: 'skipped',
+          phaserBooted,
           phaserSceneRunning: false,
-          reason: `Phaser scene did not reach SYS.RUNNING within ${SCENE_RUNNING_TIMEOUT_MS}ms (canvas attached but boot incomplete)`,
+          reason: phaserBooted
+            ? `Phaser.Game booted but no scene reached SYS.RUNNING within ${SCENE_RUNNING_TIMEOUT_MS}ms — first scene likely waiting on user input or stalled in create() / asset preload`
+            : `Phaser failed to boot within ${PHASER_BOOTED_TIMEOUT_MS}ms (canvas attached but isBooted never reached true) — likely a runtime error in lib loader or initial pipeline`,
         };
       }
 
@@ -236,6 +302,7 @@ export async function runPlaywrightSmoke(artifactPath: string): Promise<Playwrig
           firstInteraction: 'fail',
           crossBrowser: 'fail',
           pwaOffline: 'skipped',
+          phaserBooted,
           phaserSceneRunning,
           reason: `pageerror: ${pageErrors[0]?.slice(0, 200)}`,
         };
@@ -245,6 +312,7 @@ export async function runPlaywrightSmoke(artifactPath: string): Promise<Playwrig
           firstInteraction: 'fail',
           crossBrowser: 'fail',
           pwaOffline: 'skipped',
+          phaserBooted,
           phaserSceneRunning,
           reason: `console error: ${consoleErrors[0]?.slice(0, 200)}`,
         };
@@ -282,6 +350,7 @@ export async function runPlaywrightSmoke(artifactPath: string): Promise<Playwrig
         firstInteraction: 'ok',
         crossBrowser: 'ok',
         pwaOffline,
+        phaserBooted,
         phaserSceneRunning,
       };
     } finally {

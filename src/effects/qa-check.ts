@@ -65,8 +65,16 @@ export interface QaResult {
    * ArtifactsBench (arXiv:2507.04952) multi-step "first_interaction" verification.
    */
   pwa_offline_boot?: 'ok' | 'fail' | 'skipped';
-  /** Phaser scene reached SYS.RUNNING(5) on first load. Informational. */
+  /** Phaser scene reached SYS.RUNNING(5) on first load. Stage 2 — informational. */
   phaser_scene_running?: boolean;
+  /**
+   * Phaser.Game booted (game.isBooted === true) on first load. Stage 1 —
+   * lighter signal than phaser_scene_running. Lets the verifier's CourtEval
+   * tell apart "lib boot fail" (D2=0 hard, no AC runtime) from "lib booted
+   * but scene boot slow / awaiting input" (D2=0 by ground-truth lookup but
+   * D6 portability has more nuance + AC predicates may have run).
+   */
+  phaser_booted?: boolean;
   /**
    * v0.3.5 — per-AC deterministic results from `qa-interactive.ts`. Empty
    * array = caller passed no `ac_predicates` (legacy spec or all-subjective);
@@ -244,6 +252,7 @@ export async function runQaCheck(
   let crossBrowserSmoke: QaResult['cross_browser_smoke'] = 'skipped';
   let pwaOfflineBoot: QaResult['pwa_offline_boot'] = 'skipped';
   let phaserSceneRunning: QaResult['phaser_scene_running'];
+  let phaserBooted: QaResult['phaser_booted'];
   const requirePlaywright = process.env.CRUMB_QA_REQUIRE_PLAYWRIGHT === '1';
   const playwrightOptional = process.env.CRUMB_QA_PLAYWRIGHT_OPTIONAL === '1';
   let playwrightUnavailable = false;
@@ -254,6 +263,7 @@ export async function runQaCheck(
     crossBrowserSmoke = smoke.crossBrowser;
     pwaOfflineBoot = smoke.pwaOffline ?? 'skipped';
     phaserSceneRunning = smoke.phaserSceneRunning;
+    phaserBooted = smoke.phaserBooted;
     if (smoke.firstInteraction === 'fail') {
       findings.push(`playwright smoke failed: ${smoke.reason ?? 'unknown'}`);
     }
@@ -344,6 +354,7 @@ export async function runQaCheck(
     cross_browser_smoke: crossBrowserSmoke,
     pwa_offline_boot: pwaOfflineBoot,
     ...(phaserSceneRunning !== undefined ? { phaser_scene_running: phaserSceneRunning } : {}),
+    ...(phaserBooted !== undefined ? { phaser_booted: phaserBooted } : {}),
     ...(acResults.length > 0
       ? { ac_results: acResults, ac_pass_count: acPassCount, ac_total: acResults.length }
       : {}),
