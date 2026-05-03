@@ -1739,13 +1739,14 @@ function renderAdapterPicker() {
   const sel = $('new-session-adapter');
   if (!sel) return;
   const current = sel.value;
-  const opts = ['<option value="">(default — preset or ambient)</option>'];
+  // Disabled options just fade in CSS (no inline " (not installed)" suffix
+  // or bracketed labels) per UX feedback — the fade is the affordance.
+  const opts = ['<option value="">default — preset or ambient</option>'];
   for (const a of adapterCache) {
     const installed = a.installed && a.authenticated !== false;
-    const label = a.display_name + (installed ? '' : ' (not installed)');
     opts.push(
       '<option value="' + escapeHTML(a.id) + '"' + (installed ? '' : ' disabled') + '>' +
-      escapeHTML(label) + '</option>'
+      escapeHTML(a.display_name) + '</option>'
     );
   }
   sel.innerHTML = opts.join('');
@@ -1838,7 +1839,7 @@ selectSession = function(id) {
 const PRESETS = [
   {
     id: '',                 // ambient
-    label: '(ambient)',
+    label: 'ambient',
     description: 'follow the entry host (whatever you have authed)',
     requires: [],
   },
@@ -1913,17 +1914,20 @@ function renderPresetChips() {
 function renderBindingsGrid() {
   const root = $('new-session-bindings');
   if (!root) return;
+  // Per UX feedback: disabled options just fade out (CSS opacity 0.4) — no
+  // bracketed " (×)" suffix and no parentheses on "ambient". The fade is the
+  // affordance; extra glyphs add visual noise.
   root.innerHTML = ACTORS_FOR_BINDING.map(actor => {
     const adapterOptions = adapterCache.map(a => {
       const disabled = !a.installed || a.authenticated === false;
       return '<option value="' + escapeHTML(a.id) + '"' + (disabled ? ' disabled' : '') + '>' +
-        escapeHTML(a.display_name + (disabled ? ' (×)' : '')) + '</option>';
+        escapeHTML(a.display_name) + '</option>';
     }).join('');
     const modelOptions = adapterCache.flatMap(a => a.models.map(m => m)).filter((m, i, arr) => arr.indexOf(m) === i)
       .map(m => '<option value="' + escapeHTML(m) + '">' + escapeHTML(m) + '</option>').join('');
     return '<span class="bg-actor">' + escapeHTML(actor) + '</span>' +
-      '<select data-actor="' + escapeHTML(actor) + '" data-kind="adapter"><option value="">(ambient)</option>' + adapterOptions + '</select>' +
-      '<select data-actor="' + escapeHTML(actor) + '" data-kind="model"><option value="">(default)</option>' + modelOptions + '</select>';
+      '<select data-actor="' + escapeHTML(actor) + '" data-kind="adapter"><option value="">ambient</option>' + adapterOptions + '</select>' +
+      '<select data-actor="' + escapeHTML(actor) + '" data-kind="model"><option value="">default</option>' + modelOptions + '</select>';
   }).join('');
   root.querySelectorAll('select').forEach(el => {
     el.addEventListener('change', () => {

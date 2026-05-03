@@ -4,6 +4,27 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Custom binding UI polish + audit C2 parent_event_id wiring (2026-05-03)
+
+User feedback: "비활성화면 그냥 색만 지금처럼 페이드아웃시키면 되지 굳이 선을 그을 필요는 없어. ambient에 괄호를 열고닫을 필요도 없고 말이야." Plus closing the audit C2 P0 finding from the post-PR-#104 audit pass.
+
+**UI polish (`packages/studio/src/client/studio.{html,css,js}`)**
+
+- `.preset-chip.disabled` no longer applies `text-decoration: line-through` — fade-out (opacity 0.4) is the only affordance, per UX feedback. Less visual noise.
+- `(ambient)` parentheses removed everywhere (preset chip label, advanced bindings dropdown, top adapter dropdown). Now just `ambient`.
+- Disabled adapter options in the bindings dropdown no longer carry the `(×)` suffix; `(not installed)` removed from the top adapter dropdown labels. Same fade-out-only convention.
+
+**Audit C2 fix (`src/reducer/index.ts`)**
+
+The post-#104 pipeline audit flagged that two reducer-emitted append effects were missing message-level `parent_event_id`:
+
+- `fallback_activated` audit (line 358-374) — emitted on judge.score FAIL + builder circuit OPEN. Now sets `message.parent_event_id = event.id` so studio's detail-pane thread nav (`detail-prev` / `detail-next`) walks correctly from the audit back to the originating judge.score.
+- `handoff_unrouted` note (PR #103, lines 615-633) — emitted for any `handoff.requested` whose `(from, to)` pair lacks reducer routing. Same fix; `data.parent_event_id` removed (was redundant since the message-level field now carries it).
+
+Both fixes are observability-only — no routing/spawn change. Studio detail pane now correctly threads parent → audit/note → children for these synthetic events.
+
+**Verification**: 48/48 reducer specs + lint + typecheck + format + build all clean.
+
 ### Changed — Researcher prompt: named-game lock-in (high-priority research for real game titles cited in goal) (2026-05-03)
 
 Per user feedback: "리서쳐가 레퍼런스 조사할 때 사용자가 전달한 게임 이름이 실제로 존재하면 그 작품 참고율과 자료 조사 비율을 확 높이는 방향". Previously the researcher would land on generic genre proxies even when the user explicitly named an existing game ("레바의 모험 버서커 모드", "Vampire Survivors 같은") — wasting the implicit ground truth.
