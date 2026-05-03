@@ -161,7 +161,6 @@ const ACTOR_TID: Record<Actor, number> = {
   researcher: 9,
   builder: 4,
   verifier: 5,
-  'builder-fallback': 6,
   validator: 7,
   system: 8,
 };

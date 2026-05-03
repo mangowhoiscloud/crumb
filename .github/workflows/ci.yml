@@ -122,10 +122,13 @@ jobs:
           # v3: engineering-lead.md split into builder.md + verifier.md.
           # v3.3: researcher promoted from inline-read specialist to standalone actor
           #       so multimodal video understanding can bind to gemini-sdk independently.
+          # PR-Prune-2: builder-fallback removed — circuit OPEN now triggers an
+          #       adapter swap on the same builder actor (zero spawns ever observed
+          #       in production sessions, so the separate actor was dead code).
           # See wiki/concepts/bagelcode-system-architecture-v3.md §3 + AGENTS.md §"Actors".
-          for f in agents/coordinator.md agents/planner-lead.md agents/researcher.md agents/builder.md agents/verifier.md agents/builder-fallback.md; do
+          for f in agents/coordinator.md agents/planner-lead.md agents/researcher.md agents/builder.md agents/verifier.md; do
             test -f "$f" || (echo "Missing required sandwich: $f" && exit 1)
           done
-          # game-design.md is the binding contract inline-read by 4+ actors.
+          # game-design.md is the binding contract inline-read by 4 actors.
           test -f agents/specialists/game-design.md || (echo "Missing game-design contract" && exit 1)
-          echo "All 6 sandwich files + game-design contract present (v3.3)"
+          echo "All 5 sandwich files + game-design contract present (post-PR-Prune-2)"

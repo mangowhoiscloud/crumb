@@ -27,6 +27,69 @@ Follow-ups (separate PRs):
 
 Verification: `npm run lint:all && npm run typecheck && npm run format:check && npm test && npm run build` — all pass; `node dist/index.js --version` prints `0.4.0`; `npm run setup` is idempotent on a clean checkout.
 
+### Added — Genre + persistence profile axes (4×4 matrix) + 2 new specialists (Bundles 1+2, 2026-05-03)
+
+Extends Crumb from a single-genre prototype harness (Phaser-portrait casual mobile) to a 4-genre × 4-persistence matrix while keeping the un-flagged default (`auto-detect` × `local-only`) bit-identical to prior behavior. Lifts the §2 Three.js ban for the opt-in `flash-3d-arcade` profile only and lifts the §1.1 "no worker tier" rule for the opt-in `edge-orm` persistence profile only.
+
+**Genre profiles** (`task_ledger.genre_profile`, CLI `--genre`):
+
+| Profile | Stack | Use case | Lifts forbidden? |
+|---|---|---|---|
+| `casual-portrait` (default) | Phaser 3.80 portrait 320–428 | match-3 / merge / clicker / tap-runner | no |
+| `pixel-arcade` | Phaser 3.80 + `pixelArt: true` + locked palette + integer-snapped | top-down arcade / pixel platformer / shmup | no |
+| `sidescroll-2d` | Phaser 3.80 ArcadePhysics + landscape 16:9 + parallax + state machine | side-scrolling platformer / shmup / autoscroll runner | no |
+| `flash-3d-arcade` | Three.js r170 CDN + WebGL2 + landscape 16:9 | low-poly racer / asteroid shooter / dogfight | **yes — Three.js opt-in only** |
+| `auto-detect` (CLI default) | researcher proposes via named-game lock-in + confidence gate | n/a | n/a |
+
+**Persistence profiles** (`task_ledger.persistence_profile`, CLI `--persistence`):
+
+| Profile | Tier | Default? |
+|---|---|---|
+| `local-only` (new default) | IndexedDB + Dexie | yes (replaces silent "no persistence") |
+| `postgres-anon` | Supabase + anon-auth + RLS (existing §1.2) | activates on leaderboard markers |
+| `edge-orm` | Cloudflare D1 + Drizzle ORM + Worker | opt-in; lifts §1.1 "no worker tier" |
+| `firebase-realtime` | reserved (P0 제외) | n/a |
+
+**Two new specialists** (`agents/specialists/`) — closes the gamestudio-subagents prompt-structure gap (compressed from upstream `technical_artist.md` + `game_feel_developer.md`):
+- `technical-artist.md` — per-profile shaders / particle pools / post-FX / lighting (read by `planner-lead` step.design + `builder` render-system file emission).
+- `game-vibe.md` — per-profile juice timings / shake tiers / hit-stop rules + `JuiceManager.js` constants binding (read by `builder` + `verifier` D5.vibe rubric grading).
+
+**Spec layer** (`agents/specialists/game-design.md`):
+- §1.3 genre profile axis (4 profiles, with adaptations per profile).
+- §1.4 persistence profile axis (4 profiles; absorbs §1.2 as one).
+- §2 Forbidden table now profile-aware (Three.js exception under §1.3.D, Worker tier exception under §1.4.edge-orm).
+- §6 actor reads table updated.
+
+**Existing specs deepened** for genre awareness:
+- `concept-designer.md`: per-profile mechanic templates (B/C/D in addition to A defaults).
+- `visual-designer.md`: per-profile palette + HUD guidance (B/C/D landscape, profile-D bloom-safe palette).
+- `researcher.md`: step 3.5 emits `kind=note` with `data.proposed_genre_profile + confidence` when `task_ledger.genre_profile = "auto-detect"`; profile D forced back to A on weak evidence (confidence < 0.85) per anti-deception T1.
+- `planner-lead.md`: step.design resolves profile (auto-detect path reads researcher note + asks socratic when confidence < 0.7) and inline-reads `technical-artist.md` for profiles B/C/D; frontmatter `inline_specialists` updated.
+- `builder.md`: step 1 selects file-tree template per `task_ledger.genre_profile` + `persistence_profile`; emits `src/systems/JuiceManager.js` per `game-vibe.md`; frontmatter `inline_specialists` adds `technical-artist.md` + `game-vibe.md`.
+- `verifier.md`: frontmatter `inline_specialists` adds `game-design.md` + `game-vibe.md` for D5.vibe rubric grading.
+
+**Runtime plumbing** (Bundle 2):
+- `src/state/types.ts`: `GenreProfile` / `PersistenceProfile` union types + enum arrays + type guards. `TaskLedger` gains optional `genre_profile + persistence_profile`.
+- `src/reducer/index.ts`: `case 'goal'` reads `event.data.{genre_profile,persistence_profile}` via type guards (defensive).
+- `src/loop/coordinator.ts`: `RunOptions` adds `genreProfile + persistenceProfile`; goal event builds data object up-front so multiple optional fields don't fight over the spread.
+- `src/cli.ts`: `--genre <profile>` + `--persistence <profile>` flags on `cmdRun`, validated against the enum (typo dies at CLI boundary). Help text updated.
+- `src/reducer/index.test.ts`: 3 new tests — explicit profile populates, invalid value rejected, absence leaves `task_ledger` undefined.
+
+**Wiki research** (3 entries committed earlier in the branch):
+- `wiki/references/bagelcode-gamestudio-subagents-deep-2026-05-03.md` — byte-by-byte read of 8 pamirtuna/gamestudio-subagents personas; 2 specialist gaps identified.
+- `wiki/references/bagelcode-genre-stack-frontier-2026-05-03.md` — 2026 frontier evidence per genre (Phaser 94% LLM-friendliness, Three.js 270×/337× download lead, PixelLab AI, Drizzle+D1, Dexie offline-first).
+- `wiki/synthesis/bagelcode-genre-profile-decision-2026-05-03.md` — decision: 4×4 matrix + opt-in Three.js / Worker bans lifted, 9-phase migration.
+
+**NOT in this branch — deferred**:
+- `packages/studio/*` — coordinating with the parallel studio big-bang update; Studio profile picker is Phase 6 (separate PR after big-bang merge).
+- qa-runner per-persistence smoke tests (Dexie eval / `wrangler dev` PARTIAL fallback) — Phase 7 follow-up PR.
+- preset `.toml` schema `[actors.builder].genre_profile` override — CLI flag is the primary user-facing surface.
+- `metadata.genre_profile` on every emitted event — Studio observability enhancement.
+
+Quality gate (verified at every commit): typecheck ✓ / lint 0 errors / 466 tests + 3 new ✓ / format ✓ / build ✓.
+
+References: [pamirtuna/gamestudio-subagents](https://github.com/pamirtuna/gamestudio-subagents) (193⭐), [Phaser blog 2026-04 vs Kaplay/Excalibur](https://phaser.io/news/2026/04/phaser-vs-kaplay-vs-excalibur-2d-web-game-framework), [utsubo Three.js 2026](https://www.utsubo.com/blog/threejs-2026-what-changed), [Drizzle D1 docs](https://orm.drizzle.team/docs/connect-cloudflare-d1), [Dexie.org 2026](https://dexie.org/), [PixelLab AI](https://www.pixellab.ai/).
+
 ### Docs — Studio handoff page (2026-05-03)
 
 `wiki/synthesis/bagelcode-studio-handoff-2026-05-03.md` — comprehensive handoff for the next session/stream picking up Studio work. Captures: live state (running server / `main` HEAD), today's PR ledger (open + merged), post-#145/#146 architecture summary (4-pane layout + theme system + observability layers), prioritized pending work (F4 / F5 / F6 / PR-O3 / PR-O4 / PR-O5 / W2 / W3 / W4), worktree filesystem snapshot, 6 known pitfalls (CI registration delay, `crumb-dash` cruft, font fallback, splitter convention, scorecard radar token reads, light-theme actor lane discipline), inheritor decision tree, and critical references read order. No code changes.

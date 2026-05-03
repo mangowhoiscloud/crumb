@@ -46,9 +46,8 @@ sandwich = "agents/builder.md"
 [actors.verifier]
 sandwich = "agents/verifier.md"
 
-# builder-fallback: 명시 없음 → ambient
-[actors.builder-fallback]
-sandwich = "agents/builder-fallback.md"
+# PR-Prune-2: builder-fallback removed — circuit OPEN handling now swaps
+# adapter_override.builder = 'claude-local' on the same builder actor.
 
 # Effects (deterministic, no LLM)
 [effects.qa_check]
@@ -79,6 +78,6 @@ sub_steps               = ["grader", "critic", "defender", "regrader"]
 # Routing rules
 [routing]
 flow              = ["coordinator", "planner-lead", "researcher", "planner-lead", "builder", "qa_check", "verifier"]
-escalate_on_fail  = "builder-fallback"
+escalate_on_fail  = "adapter-swap"  # PR-Prune-2: swap builder adapter on circuit OPEN
 escalate_on_stuck = 5
 adaptive_stop     = true

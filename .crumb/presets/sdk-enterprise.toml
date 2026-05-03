@@ -40,13 +40,6 @@ provider = "google"
 model    = "gemini-3-1-pro"
 auth     = "api-key"
 
-[actors.builder-fallback]
-sandwich = "agents/builder-fallback.md"
-harness  = "anthropic-sdk"
-provider = "anthropic"
-model    = "claude-sonnet-4-6"
-auth     = "api-key"
-
 [effects.qa_check]
 tool     = "qa-check-effect@v1"
 harness  = "none"
@@ -71,6 +64,6 @@ sub_steps                = ["grader", "critic", "defender", "regrader"]
 
 [routing]
 flow                = ["coordinator", "planner-lead", "builder", "qa_check", "verifier"]
-escalate_on_fail    = "builder-fallback"
+escalate_on_fail    = "adapter-swap"  # PR-Prune-2: swap builder adapter to claude-local on circuit OPEN
 escalate_on_stuck   = 5
 adaptive_stop       = true

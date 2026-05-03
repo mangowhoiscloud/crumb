@@ -66,7 +66,7 @@ export interface DispatcherDeps {
   /**
    * Per-harness enabled flag from .crumb/config.toml [providers.*].
    * When binding.harness maps to a disabled provider, dispatcher falls back to
-   * builder-fallback adapter (claude-local) and emits kind=note explaining the substitution.
+   * the claude-local adapter (Anthropic ambient) and emits kind=note explaining the substitution.
    */
   providersEnabled?: Record<string, boolean>;
   /** Bridge: hook effects surface as user prompts (TUI/CLI). */
@@ -91,7 +91,6 @@ const ACTOR_TO_SANDWICH: Partial<Record<Actor, string>> = {
   'planner-lead': 'agents/planner-lead.md',
   builder: 'agents/builder.md',
   verifier: 'agents/verifier.md',
-  'builder-fallback': 'agents/builder-fallback.md',
   coordinator: 'agents/coordinator.md',
   // v0.3.1 fix: missing researcher entry caused baseSandwichPath to fall back
   // to '' → resolve(repoRoot, '') = repoRoot (a directory) → readFile threw
@@ -795,7 +794,6 @@ const EMITTING_ACTORS: ReadonlySet<Actor> = new Set([
   'planner-lead',
   'builder',
   'verifier',
-  'builder-fallback',
   'researcher',
 ]);
 
@@ -852,8 +850,8 @@ export function parseInlineRefs(content: string): { skills: string[]; specialist
  * tend to PRINT JSON to stdout instead of invoking the CLI (observed: run
  * 01KQMCSC, planner-lead exit 0 in 41s with stdout containing valid JSON
  * blocks but zero transcript events). Verifier + coordinator already had
- * 1-line mentions of `crumb event`; planner-lead / builder / builder-fallback
- * / researcher had zero. This fix makes the protocol always available.
+ * 1-line mentions of `crumb event`; planner-lead / builder / researcher had
+ * zero. This fix makes the protocol always available.
  *
  * v0.3.1 — also inlines specialist + skill files declared in the base sandwich's
  * YAML frontmatter (`inline_skills`, `inline_specialists`). The actor sandbox

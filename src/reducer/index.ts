@@ -8,6 +8,7 @@
 
 import type { Actor, Message, Scores, Verdict } from '../protocol/types.js';
 import type { CrumbState } from '../state/types.js';
+import { isGenreProfile, isPersistenceProfile } from '../state/types.js';
 import type { Effect } from '../effects/types.js';
 import { checkAntiDeception } from '../validator/anti-deception.js';
 
@@ -29,7 +30,7 @@ const VERIFY_MAX = 5; // max # of judge.score events before done(too_many_verify
 //
 // New defaults: 250K hook, 300K hard. Sized for one full spec → multi-file
 // build → qa_check → CourtEval verifier loop with ~30% headroom for a single
-// builder-fallback retry. CRUMB_TOKEN_BUDGET_HOOK / CRUMB_TOKEN_BUDGET_HARD
+// adapter-swap respawn. CRUMB_TOKEN_BUDGET_HOOK / CRUMB_TOKEN_BUDGET_HARD
 // env vars still override for short demos and CI.
 const TOKEN_BUDGET_HOOK = Number(process.env.CRUMB_TOKEN_BUDGET_HOOK) || 250_000;
 const TOKEN_BUDGET_HARD = Number(process.env.CRUMB_TOKEN_BUDGET_HARD) || 300_000;
@@ -107,9 +108,23 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
       // can route. true → gemini-sdk (programmatic video evidence), false →
       // claude-local / ambient (LLM-driven text research). Replaces the previous
       // gemini-sdk text-only stub which emitted empty reference_games[] regardless.
-      const goalData = (event.data ?? {}) as { video_refs?: unknown };
+      const goalData = (event.data ?? {}) as {
+        video_refs?: unknown;
+        genre_profile?: unknown;
+        persistence_profile?: unknown;
+      };
       const refs = Array.isArray(goalData.video_refs) ? goalData.video_refs : [];
       next.goal_has_video_refs = refs.some((r) => typeof r === 'string' && r.length > 0);
+      // v0.4: explicit profile pre-selection from CLI flags / Studio picker.
+      // When absent, leave undefined so planner-lead resolves via researcher
+      // proposal (genre) + leaderboard-marker trigger logic (persistence).
+      // See agents/specialists/game-design.md §1.3 / §1.4.
+      if (isGenreProfile(goalData.genre_profile)) {
+        next.task_ledger.genre_profile = goalData.genre_profile;
+      }
+      if (isPersistenceProfile(goalData.persistence_profile)) {
+        next.task_ledger.persistence_profile = goalData.persistence_profile;
+      }
       next.progress_ledger.next_speaker = 'planner-lead';
       effects.push({
         type: 'spawn',
@@ -355,11 +370,11 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           data: { aggregate, scores: sanitized },
         });
       } else if (verdict === 'FAIL' || verdict === 'REJECT') {
-        // PR-G2/G4 — three-way routing on FAIL:
-        //   1. Both circuits OPEN          → done(all_builders_open)
-        //   2. Builder circuit OPEN         → spawn(builder-fallback)   [infra path — different LLM]
-        //   3. Builder CLOSED + Critical    → rollback(planner-lead)    [spec needs change]
-        //   4. Builder CLOSED + Important/Minor (or unspecified) → spawn(builder) w/ sandwich_append
+        // PR-Prune-2 — three-way routing on FAIL:
+        //   1. Builder circuit OPEN, adapter swap exhausted → done(builder_circuit_open)
+        //   2. Builder circuit OPEN, swap available         → adapter swap to claude-local + respawn builder
+        //   3. Builder CLOSED + Critical                    → rollback(planner-lead) [spec needs change]
+        //   4. Builder CLOSED + Important/Minor             → spawn(builder) w/ sandwich_append
         //
         // The verifier MAY hint at a deviation type via judge.score
         // data.deviation.type ∈ {Critical, Important, Minor}, mirroring the
@@ -367,15 +382,22 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         // Important (respawn builder) — the prior behavior of always going
         // to planner-lead overspecified the fix and burned a full plan-cycle
         // for trivial issues like "missing entry redirector".
+        //
+        // Pre-PR-Prune-2 design used a separate `builder-fallback` actor for
+        // path (2). That actor was never spawned in 30+ days of production
+        // sessions — the same effect (different LLM) is achieved by
+        // overriding `adapter_override.builder = 'claude-local'` and
+        // respawning the original builder. One actor, one sandwich.
         const eng = next.progress_ledger.circuit_breaker['builder'];
-        const fallback = next.progress_ledger.circuit_breaker['builder-fallback'];
-        if (eng?.state === 'OPEN' && fallback?.state === 'OPEN') {
-          next.done = true;
-          effects.push({ type: 'done', reason: 'all_builders_open' });
-          break;
-        }
         if (eng?.state === 'OPEN') {
-          next.progress_ledger.next_speaker = 'builder-fallback';
+          const currentOverride = next.progress_ledger.adapter_override['builder'];
+          if (currentOverride === 'claude-local') {
+            next.done = true;
+            effects.push({ type: 'done', reason: 'builder_circuit_open' });
+            break;
+          }
+          next.progress_ledger.adapter_override['builder'] = 'claude-local';
+          next.progress_ledger.next_speaker = 'builder';
           effects.push({
             type: 'append',
             message: {
@@ -383,22 +405,23 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
               from: 'system',
               parent_event_id: event.id,
               kind: 'audit',
-              body: `fallback_activated — builder circuit OPEN (${eng.consecutive_failures} consecutive failures)`,
+              body: `adapter_swapped — builder circuit OPEN (${eng.consecutive_failures} consecutive failures), swapping adapter to claude-local`,
               data: {
-                event: 'fallback_activated',
+                event: 'adapter_swapped',
+                actor: 'builder',
                 reason: 'builder_circuit_open',
                 consecutive_failures: eng.consecutive_failures,
                 last_failure_id: eng.last_failure_id,
-                substituting_adapter: 'claude-local',
+                new_adapter: 'claude-local',
               },
-              metadata: { deterministic: true, tool: 'reducer-fallback-route@v1' },
+              metadata: { deterministic: true, tool: 'reducer-adapter-swap@v1' },
             },
           });
           effects.push({
             type: 'spawn',
-            actor: 'builder-fallback',
+            actor: 'builder',
             adapter: 'claude-local',
-            sandwich_appends: collectSandwichAppends(next, 'builder-fallback'),
+            sandwich_appends: collectSandwichAppends(next, 'builder'),
           });
         } else {
           // PR-G2 — deviation-typed routing.
@@ -875,8 +898,12 @@ function pickAdapter(
   const override = state.progress_ledger.adapter_override[actor];
   if (override) return override;
   if (actor === 'builder') {
+    // PR-Prune-2: when circuit OPENs the FAIL handler sets
+    // adapter_override.builder='claude-local', so the override branch above
+    // already handles the swap. This defensive check covers the rare case
+    // where state is restored mid-flight with circuit OPEN but no override.
     const eng = state.progress_ledger.circuit_breaker['builder'];
-    if (eng?.state === 'OPEN') return 'claude-local'; // fallback to builder-fallback uses claude
+    if (eng?.state === 'OPEN') return 'claude-local';
     return 'codex-local';
   }
   if (actor === 'verifier') {

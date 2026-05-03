@@ -46,7 +46,7 @@ export class MockAdapter implements Adapter {
 
     if (req.actor === 'planner-lead') {
       await writePlannerSequence(writer, req, wakeId);
-    } else if (req.actor === 'builder' || req.actor === 'builder-fallback') {
+    } else if (req.actor === 'builder') {
       await writeBuilderSequence(writer, req, wakeId);
     } else if (req.actor === 'verifier') {
       await writeVerifierSequence(writer, req, wakeId);

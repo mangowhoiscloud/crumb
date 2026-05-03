@@ -10,7 +10,7 @@
 
 ## What is this repo
 
-**Crumb** is a multi-agent execution harness for casual game prototyping. A user pitches a game idea in one line; Coordinator (the host harness itself) routes through Planner Lead → Builder → deterministic qa_check → Verifier (CourtEval), recorded as a **replay-deterministic JSONL transcript** (35 kinds × 11 fields × 13 specialist steps × 9 actors).
+**Crumb** is a multi-agent execution harness for casual game prototyping. A user pitches a game idea in one line; Coordinator (the host harness itself) routes through Planner Lead → Builder → deterministic qa_check → Verifier (CourtEval), recorded as a **replay-deterministic JSONL transcript** (35 kinds × 11 fields × 13 specialist steps × 8 actors).
 
 Built for the [Bagelcode New Title Team AI Developer recruitment task](https://career.bagelcode.com/ko/o/208045) (2026-05-03 deadline). See [README.md](./README.md) / [README.ko.md](./README.ko.md) for human onboarding.
 
@@ -24,7 +24,7 @@ USER (natural language)
 COORDINATOR (host inline)
    ▾  Task tool spawn (depth=1, host-native primitive)
 PLANNER LEAD ─▶ BUILDER ─▶ qa_check effect (no LLM) ─▶ VERIFIER ─▶ done
-                                                     (BUILDER FALLBACK on circuit OPEN)
+                          (adapter swap to claude-local on circuit OPEN, same builder)
    ▾
 transcript.jsonl (35 kind × 11 field, append-only, ULID sorted)
    ▾
@@ -45,7 +45,7 @@ These are non-negotiable across every host harness:
 6. **ULID for message IDs.** Never use sequential or random UUIDs. ULIDs preserve sort order = transcript chronology.
 7. **Append-only transcript.** Use `O_APPEND` (and `flock` once landed). Never modify existing lines.
 8. **Sandbox cwd per actor.** Each actor's working dir is `sessions/<id>/agent-workspace/<actor>/`. Use `--add-dir` for read scope.
-9. **Actor split (v0.1 + v0.3.0).** `engineering-lead` was split into `builder` + `verifier` (v0.1) so the cross-provider boundary runs at the actor level. `researcher` was promoted from a planner inline-read specialist into its own actor (v0.3.0) so the multimodal video-LLM 2026 frontier (Gemini 3.1 Pro) can be bound to a dedicated SDK adapter without forcing the rest of planner-lead onto the same provider. The 9 actors are: `user / coordinator / planner-lead / researcher / builder / verifier / builder-fallback / validator / system`.
+9. **Actor split (v0.1 + v0.3.0 + PR-Prune-2).** `engineering-lead` was split into `builder` + `verifier` (v0.1) so the cross-provider boundary runs at the actor level. `researcher` was promoted from a planner inline-read specialist into its own actor (v0.3.0) so the multimodal video-LLM 2026 frontier (Gemini 3.1 Pro) can be bound to a dedicated SDK adapter without forcing the rest of planner-lead onto the same provider. PR-Prune-2 removed `builder-fallback` (zero spawns ever in production sessions; circuit-OPEN handling now performs an adapter swap on the same builder actor). The 8 actors are: `user / coordinator / planner-lead / researcher / builder / verifier / validator / system`.
 10. **Multi-host × 3-tuple actor binding.** Each actor binds to `(harness × provider × model)` via the active preset. No actor is hard-coded to a specific harness — even the user's preferred verifier provider must come from preset config or ambient fallback.
 11. **`provider × harness × model` is user-controlled.** Crumb suggests via `crumb doctor` but never forces a default. If a preset omits an actor, it follows ambient (the entry host).
 
@@ -58,12 +58,11 @@ These are non-negotiable across every host harness:
 | `researcher` | `agents/researcher.md` | Video-evidence extractor (v0.3.0). Ingests gameplay clips via gemini-sdk (Gemini 3.1 Pro, native YouTube URL, 10fps frame sampling) → emits `step.research.video` × N + `step.research` synthesis. Bound to gemini-sdk adapter when video_refs present; ambient text-only fallback otherwise. |
 | `builder` | `agents/builder.md` | Phaser 3.80 multi-file PWA implementer (`artifacts/game/{index.html, src/, sw.js, manifest.webmanifest}`). Emits `kind=build`; QA is OUT of reach. |
 | `verifier` | `agents/verifier.md` | CourtEval (Grader → Critic → Defender → Re-grader, ACL 2025) inline 4 sub-step. Reads `qa.result` for D2/D6 + `step.research` evidence_refs for D5 (v0.3.0 anti-deception). |
-| `builder-fallback` | `agents/builder-fallback.md` | Builder substitute. Activates when `circuit_breaker.builder.state === 'OPEN'`. |
 
-Plus 2 specialists (planner-internal inline, no separate Task spawn) + 1 contract spec (read by 4+ actors):
+Plus 2 specialists (planner-internal inline, no separate Task spawn) + 1 contract spec (read by 4 actors):
 - `agents/specialists/concept-designer.md` — planner step.concept inline-read
 - `agents/specialists/visual-designer.md` — planner step.design inline-read
-- `agents/specialists/game-design.md` — binding game-design contract: §1 envelope (Phaser 3.80 multi-file PWA) + §1.2 optional postgres-anon-leaderboard persistence profile + §3 video evidence schema (researcher) + §5 DESIGN.md synth format (planner). Inline-read by researcher / planner-lead / builder / builder-fallback / verifier.
+- `agents/specialists/game-design.md` — binding game-design contract: §1 envelope (Phaser 3.80 multi-file PWA) + §1.2 optional postgres-anon-leaderboard persistence profile + §3 video evidence schema (researcher) + §5 DESIGN.md synth format (planner). Inline-read by researcher / planner-lead / builder / verifier.
 
 And 5 procedural skills (sandwich-loaded inline):
 - `skills/tdd-iron-law.md` — RED-GREEN-REFACTOR Iron Law (superpowers)
@@ -77,13 +76,13 @@ And 5 procedural skills (sandwich-loaded inline):
 Source: `protocol/schemas/message.schema.json`.
 
 ```
-35 kinds × 11 fields × 13 specialist steps × 9 actors
+35 kinds × 11 fields × 13 specialist steps × 8 actors
   + scores D1–D6 source-of-truth matrix (verifier-llm / qa-check-effect / reducer-auto — single origin per dim; D3/D5 LLM and auto components are combined deterministically by combineDimScore)
   + metadata 14 fields (incl. v0.1: harness / provider / adapter_session_id / cache_carry_over /
     deterministic / cross_provider)
 ```
 
-Each transcript line carries: `id` (ULID) / `ts` (ISO-8601) / `session_id` / `from` (one of 9 actors) / `kind` / `body` / optional `data` / `artifacts` / `scores` / `metadata`. Replay-deterministic; `crumb replay <session-dir>` re-derives identical state.
+Each transcript line carries: `id` (ULID) / `ts` (ISO-8601) / `session_id` / `from` (one of 8 actors) / `kind` / `body` / optional `data` / `artifacts` / `scores` / `metadata`. Replay-deterministic; `crumb replay <session-dir>` re-derives identical state.
 
 ## Multi-host entries
 
@@ -224,7 +223,7 @@ tail -f ~/.crumb/projects/<project-id>/sessions/<session-id>/transcript.jsonl | 
 
 ### File map
 
-- `agents/*.md`                  — 6 actor sandwiches: `coordinator.md`, `planner-lead.md`, `researcher.md`, `builder.md`, `verifier.md`, `builder-fallback.md` (NOT auto-loaded by agent CLIs; injected via stdin / `--system-prompt`)
+- `agents/*.md`                  — 5 actor sandwiches: `coordinator.md`, `planner-lead.md`, `researcher.md`, `builder.md`, `verifier.md` (NOT auto-loaded by agent CLIs; injected via stdin / `--system-prompt`)
 - `agents/specialists/*.md`      — 3 planner-internal specialist files (concept-designer / researcher / visual-designer); inlined into the planner-lead spawn, no extra Task spawn
 - `agents/_event-protocol.md`    — How subprocess agents emit transcript events via `crumb event`
 - `skills/*.md`                  — 5 procedural workflow skills referenced by agent sandwiches
@@ -282,7 +281,7 @@ Every architecture decision in this repo is grounded in `wiki/`. Before changing
 - `.gemini/settings.json` — Gemini CLI `contextFileName` config (loads AGENTS.md auto)
 
 ### Sandwiches (6 actors + 2 specialists + 1 contract + 5 skills)
-- [`agents/coordinator.md`](./agents/coordinator.md), [`planner-lead.md`](./agents/planner-lead.md), [`builder.md`](./agents/builder.md), [`verifier.md`](./agents/verifier.md), [`builder-fallback.md`](./agents/builder-fallback.md)
+- [`agents/coordinator.md`](./agents/coordinator.md), [`planner-lead.md`](./agents/planner-lead.md), [`builder.md`](./agents/builder.md), [`verifier.md`](./agents/verifier.md)
 - [`agents/specialists/`](./agents/specialists/) — concept-designer / researcher / visual-designer
 - [`skills/`](./skills/) — tdd-iron-law / verification-before-completion / code-review-protocol / parallel-dispatch / subagent-spawn
 - [`agents/_event-protocol.md`](./agents/_event-protocol.md) — `crumb event` emit spec

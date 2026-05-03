@@ -241,7 +241,8 @@ export const KIND_REGISTRY: Record<Kind, KindInfo> = {
   'handoff.rollback': {
     kind: 'handoff.rollback',
     category: 'handoff',
-    description: 'FAIL verdict 시 planner-lead OR builder-fallback 으로 회귀.',
+    description:
+      'FAIL verdict 시 planner-lead 회귀 (Critical) 또는 builder 재실행 (Important/Minor; circuit OPEN 시 reducer 가 adapter swap).',
     emitter: 'coordinator',
     parent: 'judge.score (FAIL)',
     ref: 'v0.1 §4.2',

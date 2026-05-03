@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mangowhoiscloud/crumb/protocol/schemas/message.schema.json",
   "title": "Crumb Transcript Message",
-  "description": "Single transcript.jsonl line. v0.3.0: 35 kinds (4 system + 10 workflow + 2 dialogue + 6 step + 5 user + 2 handoff + 5 meta + 1 version) × 11 identification/routing/classification fields × 9 from × 13 step. OTel GenAI alias-able via metadata.gen_ai. 5-layer hierarchy (project → session → run → turn → step → event) with run_id/turn_id in metadata.crumb. researcher actor + step.research.video added in v0.3.0 for the multimodal video-evidence path (gemini-sdk binding). See wiki/concepts/bagelcode-system-architecture-v0.1.md §3.",
+  "description": "Single transcript.jsonl line. v0.3.0: 35 kinds (4 system + 10 workflow + 2 dialogue + 6 step + 5 user + 2 handoff + 5 meta + 1 version) × 11 identification/routing/classification fields × 8 from × 13 step. OTel GenAI alias-able via metadata.gen_ai. 5-layer hierarchy (project → session → run → turn → step → event) with run_id/turn_id in metadata.crumb. researcher actor + step.research.video added in v0.3.0 for the multimodal video-evidence path (gemini-sdk binding). PR-Prune-2 removed builder-fallback actor (8 from instead of 9). See wiki/concepts/bagelcode-system-architecture-v0.1.md §3.",
   "type": "object",
   "required": ["id", "ts", "session_id", "from", "kind"],
   "properties": {
@@ -20,7 +20,7 @@
     "task_id": { "type": "string" },
     "from": {
       "type": "string",
-      "description": "v0.3.0: 9 actors. engineering-lead split into builder + verifier (v0.1, cross-provider boundary). researcher promoted from inline-read specialist to standalone actor (v0.3.0, multimodal video understanding via gemini-sdk).",
+      "description": "v0.3.0: 8 actors. engineering-lead split into builder + verifier (v0.1, cross-provider boundary). researcher promoted from inline-read specialist to standalone actor (v0.3.0, multimodal video understanding via gemini-sdk). PR-Prune-2 removed builder-fallback (zero spawns ever in production sessions; circuit-OPEN handling now done by adapter swap on the same builder actor).",
       "enum": [
         "user",
         "coordinator",
@@ -28,7 +28,6 @@
         "researcher",
         "builder",
         "verifier",
-        "builder-fallback",
         "validator",
         "system"
       ]

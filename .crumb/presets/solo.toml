@@ -24,9 +24,6 @@ sandwich = "agents/builder.md"
 [actors.verifier]
 sandwich = "agents/verifier.md"
 
-[actors.builder-fallback]
-sandwich = "agents/builder-fallback.md"
-
 [effects.qa_check]
 tool     = "qa-check-effect@v1"
 harness  = "none"
@@ -51,6 +48,6 @@ sub_steps                = ["grader", "critic", "defender", "regrader"]
 
 [routing]
 flow                = ["coordinator", "planner-lead", "builder", "qa_check", "verifier"]
-escalate_on_fail    = "builder-fallback"
+escalate_on_fail    = "adapter-swap"  # PR-Prune-2: swap builder adapter on circuit OPEN
 escalate_on_stuck   = 5
 adaptive_stop       = true

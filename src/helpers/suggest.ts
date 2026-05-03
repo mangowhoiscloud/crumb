@@ -135,7 +135,7 @@ export function suggestNext(transcript: Message[], state: CrumbState): Suggestio
       return {
         primary: {
           action: '/redo with hint',
-          rationale: `verdict=${verdict} · planner-lead OR builder-fallback 회귀 필요. user.intervene 으로 hint 전달.`,
+          rationale: `verdict=${verdict} · planner-lead 회귀 OR builder 재실행 (circuit OPEN 시 reducer 가 adapter swap). user.intervene 으로 hint 전달.`,
           command: 'crumb event --kind user.intervene --body "<수정 hint>"',
           weight: 1.0,
         },

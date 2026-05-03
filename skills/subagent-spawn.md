@@ -86,11 +86,11 @@ Reason: keeping specialists inline avoids depth=2 violation AND saves token cost
 
 Same inline pattern — verifier's grader/critic/defender/regrader are 4 step.judge events within ONE verifier spawn, not 4 spawns.
 
-## Cross-provider builder fallback
+## Cross-provider builder adapter swap (PR-Prune-2)
 
 If `--preset bagelcode-cross-3way` and Codex CLI unavailable (S15 doctor check FAIL):
-- Coordinator routes to `builder-fallback` (which uses ambient harness, typically claude-code)
-- transcript audit log: "codex_unavailable_using_fallback"
+- Reducer sets `adapter_override.builder = 'claude-local'` and respawns the SAME builder actor (no separate fallback actor — PR-Prune-2 collapsed that path)
+- transcript audit log: `kind=audit, data.event=adapter_swapped`
 - judge.score.metadata.cross_provider may be false → audit_violations += "self_bias_risk_same_provider" (warn-only)
 
 ## See also

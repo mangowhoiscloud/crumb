@@ -14,7 +14,6 @@ export const ACTOR_COLOR: Record<Actor, string> = {
   researcher: '#0F8A8A', // 🔍 teal (v0.3.0 — visually distinct from planner blue)
   builder: '#7A4FB8', // 🟣 purple
   verifier: '#D2691E', // 🟠 orange
-  'builder-fallback': '#B8456E', // 🌹 rose
   validator: '#6E6357', // ⚙ gray (validator surfaces audit only)
   system: '#6E6357', // ⚙ gray
 };
@@ -26,7 +25,6 @@ export const ACTOR_GLYPH: Record<Actor, string> = {
   researcher: '🔍',
   builder: '🟣',
   verifier: '🟠',
-  'builder-fallback': '🌹',
   validator: '⚙',
   system: '⚙',
 };
@@ -52,7 +50,6 @@ export const CDS_CSS = `
   --actor-planner-lead: #3B6FB6;
   --actor-builder: #7A4FB8;
   --actor-verifier: #D2691E;
-  --actor-builder-fallback: #B8456E;
   --actor-system: #6E6357;
   --actor-validator: #6E6357;
   --radius-sm: 6px;

@@ -1,7 +1,7 @@
 # bagelcode-cross-3way (★ default, recommended)
 #
 # 메일 verbatim 정조준: "Claude Code, Codex, Gemini CLI 등 다양한 에이전트를 동시에 사용".
-# coordinator/planner-lead/builder-fallback = ambient (entry harness 따라감).
+# coordinator/planner-lead = ambient (entry harness 따라감).
 # builder    = Codex                 (구현)
 # verifier   = Gemini CLI            (검증, multimodal screenshot grading)
 # researcher = Gemini SDK (v0.3.0, ★)  (gameplay video → mechanic extraction;
@@ -61,9 +61,9 @@ harness  = "gemini-cli"
 provider = "google"
 model    = "gemini-3-1-pro"
 
-# builder-fallback: 명시 없음 → ambient (Codex 죽었을 때 같은 sandwich, Claude 변형)
-[actors.builder-fallback]
-sandwich = "agents/builder-fallback.md"
+# PR-Prune-2: builder-fallback actor removed. circuit OPEN handling now swaps
+# adapter_override.builder = 'claude-local' on the same builder actor, so a
+# Codex outage transparently falls back to Claude-Code with the SAME sandwich.
 
 # Effects (deterministic, no LLM)
 [effects.qa_check]
@@ -84,8 +84,8 @@ subagent_spawn                = "skills/subagent-spawn.md"
 concept = "agents/specialists/concept-designer.md"
 design  = "agents/specialists/visual-designer.md"
 # game-design.md (envelope + video evidence schema + DESIGN.md synth format) 는
-# 4+ actor 가 inline-read 하는 binding contract — researcher / planner-lead /
-# builder / builder-fallback / verifier 모두 사용.
+# 4 actor 가 inline-read 하는 binding contract — researcher / planner-lead /
+# builder / verifier 모두 사용.
 contract = "agents/specialists/game-design.md"
 
 # Verifier mode (CourtEval inline 4 sub-step)
@@ -99,6 +99,6 @@ sub_steps                = ["grader", "critic", "defender", "regrader"]
 # phase B (resumed planner: Design + Synth) → builder → qa_check → verifier.
 [routing]
 flow              = ["coordinator", "planner-lead", "researcher", "planner-lead", "builder", "qa_check", "verifier"]
-escalate_on_fail  = "builder-fallback"
+escalate_on_fail  = "adapter-swap"  # PR-Prune-2: swap builder adapter to claude-local on circuit OPEN
 escalate_on_stuck = 5
 adaptive_stop     = true
