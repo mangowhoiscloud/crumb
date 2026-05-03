@@ -4,6 +4,22 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Audit cleanup: C1 invariant doc + C3 session_id consistency + Q2 selectSession hooks + Q6 dead wrapper (2026-05-03)
+
+Four small audit-driven cleanups bundled. None change behavior; all reduce future bug surface.
+
+**C1 invariant document (`src/loop/coordinator.ts`)** — the post-#104 audit flagged a theoretical race where `dispatch(append-audit)` returns before the file is observable to a freshly-spawned subprocess. Verified by tracing the chain:
+
+`dispatch(append) → writer.append() → fs/promises appendFile()` — `appendFile` resolves AFTER the kernel's `write(2)` returns, which commits bytes to the OS page cache. Subsequent reads in the same OS (the spawn's subprocess inherits parent's filesystem namespace) see the bytes immediately — fsync is not required for cross-process visibility, only for crash durability. So the within-IIFE sequential `await dispatch(eff)` IS sufficient. Comment added in coordinator.ts so future readers (or audit passes) don't re-flag this.
+
+**C3 session_id consistency (`src/reducer/index.ts`)** — anti-deception audit append used `event.session_id`, while `fallback_activated` audit and `handoff_unrouted` note (PR #103) used `next.session_id`. Equal in single-session operation but inconsistent. Unified on `next.session_id` (the state-derived form, anchoring on the reducer's source of truth per Hub-Ledger-Spoke).
+
+**Q2 selectSession hook pattern (`packages/studio/src/client/studio.js`)** — replaced 5-deep monkey-patch chain with `sessionSelectHooks: Function[]` + `onSessionSelect(hook)` API. `selectSession` runs the canonical render set then fans out to registered hooks. Stack traces stay shallow; hook errors are caught + logged so one broken hook doesn't break others.
+
+**Q6 dead wrapper (`packages/studio/src/client/studio.js`)** — removed `const _origAppendFeedLine = appendFeedLine` indirection; the wrapper just renamed `appendFeedLine` without redefining it. Direct call now.
+
+Verification: 453/453 sweep green; lint+typecheck+format+build all clean.
+
 ### Fixed / Docs — token budget 5× + pre-verifier no-scoring frontier doc (PR-G1+G6) (2026-05-03)
 
 Live session `01KQNEYQT53P5JFGD0944NBZ9D` (Reba Berserker, 17-file Phaser 3.80 PWA) consumed 111,951 tokens before the verifier could even wake. The reducer's `TOKEN_BUDGET_HARD = 50_000` fired `done(token_exhausted)` mid-build → `state.done = true` → coordinator's `if (state.done) return;` (`src/loop/coordinator.ts:273`) skipped every subsequent reduce, including the verifier's `kind=judge.score`. Result: `validator/anti-deception.ts` never got invoked for that session — the `from='validator', kind='audit'` event was missing even though the verifier self-reported `audit_violations: ["self_bias_risk_same_provider"]` in its judge.score metadata. Root cause = budget too low, not the validator pipeline itself.

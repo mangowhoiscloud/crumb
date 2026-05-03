@@ -281,7 +281,12 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         effects.push({
           type: 'append',
           message: {
-            session_id: event.session_id,
+            // C3 — use next.session_id as the canonical source for all reducer-
+            // synthesized append effects. event.session_id and next.session_id
+            // are equal in single-session operation but state-derived form is
+            // the invariant we want to anchor on (see coordinator §"Hub-Ledger-
+            // Spoke" — state is the single source of truth, events flow through).
+            session_id: next.session_id,
             from: 'validator',
             kind: 'audit',
             parent_event_id: event.id,

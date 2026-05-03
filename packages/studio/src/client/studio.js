@@ -182,12 +182,30 @@ function renderSessionList() {
   });
 }
 
+// Q2: hooks pattern replaces 5-deep `selectSession` monkey-patch chain.
+// External callers register via `onSessionSelect(hook)`; selectSession runs
+// the canonical render set, then fans out to registered hooks. Stack traces
+// stay shallow (was: _origSelectSession → _origSelectForLogs → _origSelectForFeed
+// → _origSelectSessionFinal → _origSelectSessionForAdapter → selectSession,
+// 6 levels deep). Order of registration determines order of invocation.
+const sessionSelectHooks = [];
+function onSessionSelect(hook) {
+  sessionSelectHooks.push(hook);
+}
 function selectSession(id) {
   activeSession = id;
   renderSessionList();
   renderHeader();
   renderSwimlane();
   renderScorecard();
+  for (const hook of sessionSelectHooks) {
+    try {
+      hook(id);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[studio] sessionSelect hook failed:', err);
+    }
+  }
 }
 
 function renderHeader() {
@@ -719,12 +737,10 @@ es.addEventListener('session_start', e => {
 });
 
 // On session select, also reflect into DAG + console enable.
-const _origSelectSession = selectSession;
-selectSession = function(id) {
-  _origSelectSession(id);
+onSessionSelect((id) => {
   setConsoleEnabled(Boolean(id));
   renderDag();
-};
+});
 
 // Initial DAG render after first paint.
 setTimeout(renderDag, 0);
@@ -896,11 +912,9 @@ document.addEventListener('click', e => {
 
 // Refresh the logs sidebar when session changes / new agent.wake arrives so
 // the freshly-spawned actor shows up immediately.
-const _origSelectForLogs = selectSession;
-selectSession = function(id) {
-  _origSelectForLogs(id);
+onSessionSelect(() => {
   if (activeView === 'logs') renderLogActorList();
-};
+});
 
 // ─── v3.5 console — Output tab + new-session form + live execution feed ───
 //
@@ -1162,12 +1176,10 @@ es.addEventListener('append', e => {
 });
 
 // Hook session select to (re)open feed log streams.
-const _origSelectForFeed = selectSession;
-selectSession = function(id) {
-  _origSelectForFeed(id);
+onSessionSelect(() => {
   refreshFeedLogStreams();
   refreshOutputTab();
-};
+});
 
 // ── (2) New-session form (＋ button) — POST /api/crumb/run ──
 
@@ -1536,14 +1548,13 @@ es.addEventListener('append', e => {
 // host-inline (v3 invariant) so it doesn't emit `agent.wake`/`agent.stop`
 // during normal routing — only on rollback/stop/done. Without this attribution
 // the coordinator lane appears silent even though routing is happening.
-const _origAppendFeedLine = appendFeedLine;
 es.addEventListener('append', e => {
   const d = JSON.parse(e.data);
   if (activeSession && d.session_id !== activeSession) return;
   const m = d.msg;
   if (m && m.from === 'system' && m.kind === 'note' && /dispatch\.spawn/.test(m.body || '')) {
     const target = m.data?.actor || '?';
-    _origAppendFeedLine({
+    appendFeedLine({
       ts: m.ts,
       actor: 'coordinator',
       body: `→ route: spawn(${target}) via ${m.data?.adapter || '?'} [host-inline routing]`,
@@ -1553,12 +1564,10 @@ es.addEventListener('append', e => {
 });
 
 // Init: refresh resume button on session select.
-const _origSelectSessionFinal = selectSession;
-selectSession = function(id) {
-  _origSelectSessionFinal(id);
+onSessionSelect(() => {
   refreshResumeButton();
   if (activeView === 'transcript') renderTranscriptView();
-};
+});
 
 // ─── v3.5 Stream-JSON renderer — Claude-Code-style narrative bubbles ────────
 
@@ -1828,11 +1837,7 @@ $('adapter-refresh')?.addEventListener('click', () => {
 });
 
 // Re-render adapter list when active session changes (in-use highlight).
-const _origSelectSessionForAdapter = selectSession;
-selectSession = function(id) {
-  _origSelectSessionForAdapter(id);
-  renderAdapterList();
-};
+onSessionSelect(() => renderAdapterList());
 
 // ── New session form: preset chips + advanced bindings grid ──────────────
 
