@@ -4,6 +4,38 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — Studio agent narrative panel (split from live exec feed) with horizontal resize splitter (2026-05-03)
+
+Per user feedback after PR #113 ("이걸 보여주는 별도의 창을 만들어서 raw가 아니라 사용자가 봤을 때 유의미한 데이터를 출력하도록 개선해. live execution feed 말고 다른 창으로 둬서 live execution feed 위에 두면 될듯 해. 두 창의 높이는 session의 가로처럼 조절할 수도 있고."): PR #113 suppressed raw stream-json blobs from the live execution feed but lost the meaningful narrative content along with the noise. The user wanted the rendered Claude-Code-style ⏺/⎿/✓ bubbles to live in their own panel above the existing feed, not be hidden entirely.
+
+**New layout** (`packages/studio/src/client/studio.{html,css,js}`)
+
+```
+┌──────────────────────────────────────────┐
+│  Agent narrative (top)                   │  ← #console-narrative-section
+│   ⏺ assistant-text / ⏺ tool_use          │     stream-json bubbles only
+│   ⎿ tool_result / ✓ turn complete         │
+├──── horizontal resize handle (drag) ─────┤  ← #feedstack-resize (4px)
+│  Live execution feed (bottom)            │  ← #console-feed-section
+│   agent.wake / error / handoff /         │     coordinator-level events,
+│   plain log / system messages            │     plain stdout/stderr
+└──────────────────────────────────────────┘
+```
+
+- New `<section class="console-narrative">` above the existing `console-feed`. Same toolbar surface area (title + status + grep input + ↑↓ nav + pause + clear) so the user has identical controls per panel.
+- New `appendNarrativeLine()` mirrors `appendFeedLine()` (timestamp / actor / body row, repeat-collapse with 60s window + ×N badge, top-down newest-first, grep-aware) but writes into `#console-narrative-body` and respects its own `narrativePaused` flag. Kept as a separate function rather than parameterizing `appendFeedLine()` so the two panels can diverge later (column widths, max-lines, repeat window) without coupling — Karpathy "no premature abstraction."
+- `attachFeedLogStream` chunk handler now routes stream-json bubbles to `appendNarrativeLine()` and everything else (plain log lines, adapter banners, stderr) to `appendFeedLine()` — bubble vs non-bubble was already the discriminator added in PR #113, this PR moves the bubble destination.
+- `grepState.narrative` added so the narrative panel's grep nav is independent of the feed's. `bindGrepInput` / `gotoGrepMatch` already accept a panel key — only registration was needed.
+- `onSessionSelect` hook wipes the narrative panel on session change so the new session doesn't see the previous session's bubbles. Live feed already gets re-populated from the per-session log stream so its content is session-bound.
+
+**Horizontal resize splitter** (`#feedstack-resize`, between the two panels)
+
+- `makeResizable()` extended with an optional `axis = 'x' | 'y'` parameter. Default stays `'x'` so existing sessions-resize / detail-resize handles keep working. y-axis variant reads `clientY` instead of `clientX`.
+- New handle is 4px tall, full-width, `cursor: row-resize`, hovers to `--primary` like the column handles. Drag-down grows the narrative panel (`narrative_h = start + dy`); the live feed shrinks to fit. Clamped to `[80, viewport - 300]` so neither pane disappears past the controls.
+- Persisted as `--narrative-h` on `<body>` + `localStorage.crumb.narrative-h`. Default 220px (matches the prior single-panel feed cap so the layout looks identical on first load).
+
+Verification: `npm run lint:all && npm run typecheck && npm run format:check && npm test && npm run build` — 460/460 tests pass, lint clean, format clean. Studio HTML re-inlined to 156 KB (was 147 KB; +9 KB for the narrative panel + handler wiring).
+
 ### Added — `/cancel` user verb + cancel_spawn effect: mid-spawn SIGTERM via dispatcher.AbortController (R2) (2026-05-03)
 
 Closes the second wire-layer gap from the 15-system frontier survey: mid-spawn user intervention. After R1 (chokidar swap, PR #122), the idle case responds in ~5-10ms, but the mid-spawn case — running subprocess does not see `user.intervene` until the spawn naturally completes — was still on the order of 30s to 30min (`PER_SPAWN_TIMEOUT_MS`). The dispatcher already had an `AbortController` per spawn (`src/dispatcher/live.ts:setupSpawnTimers`); it just wasn't reachable from `user.intervene`.

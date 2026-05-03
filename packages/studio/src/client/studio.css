@@ -1221,7 +1221,36 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   background: #fff;
 }
 
-/* v3.5 — live execution feed (terminal-like) right above the input */
+/* v3.5 — live execution feed (terminal-like) right above the input.
+ * v0.4.2 — Agent narrative panel sits above; horizontal resize handle
+ * between them writes to --narrative-h (default 220px). */
+.console-narrative {
+  border-top: 1px solid var(--hairline);
+  background: var(--canvas);
+  display: flex;
+  flex-direction: column;
+  height: var(--narrative-h, 220px);
+  min-height: 80px;
+}
+.console-narrative-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 14px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+}
+.resize-handle-feedstack {
+  height: 4px;
+  width: 100%;
+  cursor: row-resize;
+  background: transparent;
+  flex: 0 0 auto;
+}
+.resize-handle-feedstack:hover,
+.resize-handle-feedstack.dragging {
+  background: var(--primary, #4a90e2);
+}
 .console-feed {
   border-top: 1px solid var(--hairline);
   background: var(--canvas);
