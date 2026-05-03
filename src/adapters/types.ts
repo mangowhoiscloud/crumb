@@ -70,6 +70,16 @@ export interface SpawnRequest {
    */
   onStdoutActivity?: () => void;
   /**
+   * Optional raw stdout chunk sink. Adapters call this with every Buffer
+   * received from the child's stdout — the dispatcher uses it to live-tail
+   * the spawn log into `<session>/agent-workspace/<actor>/spawn-*.log`
+   * while the spawn is still running, so the studio's Logs tab can stream
+   * progress instead of seeing an empty file until the spawn exits.
+   */
+  onStdoutChunk?: (buf: Buffer) => void;
+  /** Optional raw stderr chunk sink. Same lifecycle as `onStdoutChunk`. */
+  onStderrChunk?: (buf: Buffer) => void;
+  /**
    * Optional progress callback. Adapters parse their CLI's stream-json
    * output (claude-local: `--output-format stream-json`, codex-local:
    * `experimental_json`, gemini-local: `--show-progress` events) into a

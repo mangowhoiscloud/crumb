@@ -22,6 +22,7 @@ import {
   checkAdapterHealth,
   makeLineSplitter,
   parseCodexStreamProgress,
+  parseCodexStreamUsage,
   resolvePrompt,
 } from './_shared.js';
 
@@ -55,6 +56,7 @@ export class CodexLocalAdapter implements Adapter {
       child.stdout.on('data', (b) => {
         stdout += b.toString();
         req.onStdoutActivity?.();
+        req.onStdoutChunk?.(b);
         if (onProgress) {
           splitter.feed(b, (line) => {
             const evt = parseCodexStreamProgress(line);
@@ -65,6 +67,7 @@ export class CodexLocalAdapter implements Adapter {
       child.stderr.on('data', (b) => {
         stderr += b.toString();
         req.onStdoutActivity?.();
+        req.onStderrChunk?.(b);
       });
       child.on('error', reject);
       const detachAbort = attachAbortHandler(child, req.signal);
@@ -76,11 +79,21 @@ export class CodexLocalAdapter implements Adapter {
             if (evt) onProgress({ ...evt, elapsed_ms: Date.now() - t0 });
           });
         }
+        // v0.5 PR-XProvider — extract usage from the experimental_json stream
+        // so the dispatcher's agent.stop metadata gets real tokens/cost data
+        // for codex actors. Without this, every studio panel that reads
+        // metadata.tokens_in/out/cost_usd showed "0 / —" for codex builders
+        // (waterfall tooltip, header metrics, scorecard, cost strip,
+        // resource bar — see G8 audit issues #1/2/6/8/9). Best-effort: when
+        // parseCodexStreamUsage returns null, omit usage entirely (existing
+        // legacy behavior).
+        const usage = parseCodexStreamUsage(stdout) ?? undefined;
         resolve({
           exitCode: code ?? -1,
           stdout,
           stderr,
           durationMs: Date.now() - start,
+          ...(usage ? { usage } : {}),
         });
       });
       // Inject sandwich via stdin

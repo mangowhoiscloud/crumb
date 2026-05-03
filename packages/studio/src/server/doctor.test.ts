@@ -58,4 +58,20 @@ describe('probeAdapters', () => {
       }
     }
   });
+
+  it('always reports auth_state for every adapter', async () => {
+    const adapters = await probeAdapters();
+    for (const a of adapters) {
+      expect(a.auth_state).toMatch(/^(ok|expired|missing|unknown)$/);
+    }
+  });
+
+  it('keeps authenticated boolean in sync with auth_state', async () => {
+    const adapters = await probeAdapters();
+    for (const a of adapters) {
+      if (a.auth_state === 'ok') expect(a.authenticated).toBe(true);
+      else if (a.auth_state === 'unknown') expect(a.authenticated).toBeNull();
+      else expect(a.authenticated).toBe(false);
+    }
+  });
 });

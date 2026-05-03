@@ -5,7 +5,7 @@
  */
 
 import { resolve } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, createWriteStream, type WriteStream } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
 import type { Effect, SpawnEffect } from '../effects/types.js';
@@ -266,6 +266,32 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         },
       });
 
+      // v0.5 PR-Waterfall — auto-emit `agent.wake` from the actor BEFORE the
+      // adapter starts. Without this, host-CLI adapters (claude-local /
+      // codex-local / gemini-local) that don't include an explicit `crumb event
+      // agent.wake` step in the agent sandwich miss waterfall span pairing
+      // entirely. Pokemon's codex builder, for example, emitted 4 `build` +
+      // 4 `agent.stop` but ZERO `agent.wake` — so the studio waterfall +
+      // pipeline service map showed empty builder lanes despite the actor
+      // doing real work. Symmetry with the unconditional `agent.stop` emission
+      // at exit (line 515) closes the gap. If the agent later emits its own
+      // `agent.wake`, the waterfall reducer simply overwrites this one (newer
+      // wakeId wins), which is fine — span ends at first `agent.stop` either
+      // way. Marked deterministic so anti-deception/verifier ignore it.
+      await deps.writer.append({
+        session_id: deps.sessionId,
+        from: effect.actor,
+        kind: 'agent.wake',
+        body: `${effect.actor} spawn (adapter=${adapterId})`,
+        metadata: {
+          deterministic: true,
+          tool: 'dispatch-auto-wake@v1',
+          ...(binding?.harness ? { harness: binding.harness } : {}),
+          ...(binding?.provider ? { provider: binding.provider } : {}),
+          ...(binding?.model ? { model: binding.model } : {}),
+        },
+      });
+
       // v0.2.0/v0.3.1 per_spawn_timeout: AbortController fires SIGTERM via the
       // adapter's signal handler. See `setupSpawnTimers` for the two-timer
       // (wall-clock ceiling + idle) policy. v0.4.2: same controller is now
@@ -334,6 +360,36 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
           ? await buildVerifierInputBundle(deps.transcriptPath, deps.sessionDir)
           : undefined;
 
+      // v0.4.3 — open the spawn log file *before* the spawn so the studio's
+      // Logs tab can live-tail stdout/stderr while the spawn runs. The
+      // previous behavior wrote a single atomic file at exit, leaving the
+      // log empty for long-running spawns (Phaser builds can take minutes).
+      // Best-effort: stream creation failure must NOT break the spawn.
+      const logTs = new Date().toISOString().replace(/[:.]/g, '-');
+      const logPath = resolve(
+        deps.sessionDir,
+        'agent-workspace',
+        effect.actor,
+        `spawn-${logTs}.log`,
+      );
+      let logStream: WriteStream | null = null;
+      try {
+        await mkdir(resolve(deps.sessionDir, 'agent-workspace', effect.actor), {
+          recursive: true,
+        });
+        logStream = createWriteStream(logPath, { flags: 'w', encoding: 'utf8' });
+        logStream.on('error', () => {
+          // Disk failure → drop the stream, never break the spawn.
+          logStream = null;
+        });
+        logStream.write(
+          `=== adapter ${adapterId} spawn @ ${new Date().toISOString()} (running…) ===\n\n--- stdout ---\n`,
+        );
+      } catch {
+        logStream = null;
+      }
+      let stderrBuffered = '';
+
       let result;
       try {
         result = await adapter.spawn({
@@ -351,6 +407,14 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
           effort: binding?.effort,
           signal: timers.controller.signal,
           onStdoutActivity: timers.onStdoutActivity,
+          onStdoutChunk: (b) => {
+            if (logStream) logStream.write(b);
+          },
+          onStderrChunk: (b) => {
+            // Buffer stderr until the footer so the file structure stays
+            // (--- stdout --- ... --- stderr --- ...) instead of interleaved.
+            stderrBuffered += b.toString('utf8');
+          },
           onProgress: (evt) => {
             // v0.4.1 PR-F B — surface tool_use/result/thinking from the CLI's
             // stream-json into the transcript as kind=tool.call (private).
@@ -400,31 +464,53 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
       const timeoutMs = timers.wallClockMs;
       const idleTimeoutMs = timers.idleMs;
 
-      // v0.3.1 ArgoCD-style logs — persist full stdout / stderr to disk under
-      // <session>/agent-workspace/<actor>/spawn-<ts>.log so the studio's
-      // log viewer can tail it. The transcript-side `kind=note` summary
-      // remains a 4KB preview; the full stream lives on disk and is offered
-      // via the studio's GET /api/sessions/:id/logs/:actor stream + snapshot
-      // endpoints. Best-effort: a write failure must NOT break the spawn.
-      const logTs = new Date().toISOString().replace(/[:.]/g, '-');
-      const logPath = resolve(
-        deps.sessionDir,
-        'agent-workspace',
-        effect.actor,
-        `spawn-${logTs}.log`,
-      );
-      try {
-        await mkdir(resolve(deps.sessionDir, 'agent-workspace', effect.actor), {
-          recursive: true,
-        });
-        const logBody =
-          `=== adapter ${adapterId} spawn @ ${new Date().toISOString()} ` +
-          `(exit=${result.exitCode}, ${result.durationMs}ms${timedOut ? ', timed out' : ''}) ===\n\n` +
-          `--- stdout ---\n${result.stdout ?? ''}\n\n--- stderr ---\n${result.stderr ?? ''}\n`;
-        await writeFile(logPath, logBody, 'utf8');
-      } catch {
-        // log persistence is observability-only — keep the dispatcher silent
-        // on disk failure so the spawn lifecycle isn't disrupted.
+      // v0.4.3 — close the streamed spawn log opened pre-spawn. Append a
+      // footer with exit code / duration / timeout flag, then the buffered
+      // stderr (kept separate from stdout for readability), then end the
+      // stream. If onStdoutChunk wasn't called for any reason (e.g. an
+      // adapter that doesn't surface chunks), fall back to a one-shot
+      // write of `result.stdout` so the file is still useful.
+      if (logStream) {
+        try {
+          // If the adapter never streamed chunks but produced stdout, dump
+          // the buffered stdout now. (Mock adapter is the main case.)
+          // Heuristic: if the file handler's bytesWritten only saw the
+          // header (no chunk callback), `result.stdout` is the source of
+          // truth. We can't introspect bytesWritten here cheaply, so we
+          // always append result.stdout when no onStdoutChunk callbacks
+          // fired. The simplest invariant: if `result.stdout` is non-empty
+          // *and* we suspect no chunks streamed, append it. Without a
+          // cheap counter this is best-effort — adapters that stream chunks
+          // produce a duplicate-tail risk; instead, only append when no
+          // onStdoutChunk listener was wired by the adapter (mock).
+          if (adapterId === 'mock' && (result.stdout ?? '').length > 0) {
+            logStream.write(result.stdout ?? '');
+          }
+          logStream.write(
+            `\n--- stderr ---\n${stderrBuffered}\n` +
+              `=== exit=${result.exitCode}, ${result.durationMs}ms${timedOut ? ', timed out' : ''} ===\n`,
+          );
+          await new Promise<void>((res) => {
+            logStream!.end(() => res());
+          });
+        } catch {
+          // log persistence is observability-only.
+        }
+      } else {
+        // Fallback: stream open failed — preserve old atomic-write behavior
+        // so we never lose the log entirely.
+        try {
+          await mkdir(resolve(deps.sessionDir, 'agent-workspace', effect.actor), {
+            recursive: true,
+          });
+          const logBody =
+            `=== adapter ${adapterId} spawn @ ${new Date().toISOString()} ` +
+            `(exit=${result.exitCode}, ${result.durationMs}ms${timedOut ? ', timed out' : ''}) ===\n\n` +
+            `--- stdout ---\n${result.stdout ?? ''}\n\n--- stderr ---\n${result.stderr ?? ''}\n`;
+          await writeFile(logPath, logBody, 'utf8');
+        } catch {
+          // best-effort
+        }
       }
 
       // v0.3.0+ observability — always capture truncated stdout/stderr as
@@ -514,6 +600,21 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
       if (typeof usage.cache_write === 'number') stopMetadata.cache_write = usage.cache_write;
       if (typeof usage.cost_usd === 'number') stopMetadata.cost_usd = usage.cost_usd;
       if (typeof usage.model === 'string') stopMetadata.model = usage.model;
+      // v0.5 PR-XProvider — stamp binding 3-tuple onto agent.stop metadata so
+      // the studio's detail panel + scorecard surface harness/provider/model
+      // for every actor regardless of which adapter shipped the spawn.
+      // Without this, codex / gemini-local stop events landed without these
+      // fields and the Detail tag pills + cross-provider banner went blank
+      // for non-claude actors. binding lookup matches the spawn-start path
+      // (line 121) so the values are identical to what auto-wake stamped.
+      if (binding?.harness) stopMetadata.harness = binding.harness;
+      if (binding?.provider) stopMetadata.provider = binding.provider;
+      // Prefer adapter-reported model (real model used) over binding.model
+      // (declared model). usage.model already wins above when adapter knows;
+      // fall back to binding.model so codex/gemini sessions aren't blank.
+      if (typeof stopMetadata.model !== 'string' && binding?.model) {
+        stopMetadata.model = binding.model;
+      }
       await deps.writer.append({
         session_id: deps.sessionId,
         from: effect.actor,

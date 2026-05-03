@@ -535,6 +535,99 @@ metadata:
 
 **Verifier rule (anti-deception)**: when `evidence_summary.videos_analyzed > 0`, every `design_lesson` MUST have non-empty `evidence_refs`. Empty refs → `validator/anti-deception.ts` forces `D5=0` (same firewall pattern as qa.result D2/D6).
 
+## §4.5 `controls` schema — input mapping (v0.5 PR-Controls, BINDING)
+
+Every spec MUST emit a `controls` block in `kind=spec.data.controls` so the
+deterministic qa-check can drive the game without guessing. The block is
+also embedded into `spec.md` §"Controls" verbatim and `tuning.json` mirrors
+the same structure for the builder to read.
+
+The motivation: pre-v0.5, qa-check's Stage 2 SYS.RUNNING wait failed silently
+on any game whose first scene was a MenuScene waiting for user input
+(pokemon's MenuScene blocked Phaser scene boot timer indefinitely). Path-3
+fix: spec declares the keys/buttons that advance from MenuScene; qa-check's
+fallback input loop synthesizes those keypresses if Stage 2 stalls.
+
+```yaml
+# kind=spec.data.controls (BINDING, every session)
+controls:
+  start: ["Space", "Enter"]              # at least 1 key MUST advance from MenuScene
+                                         # (Playwright qa-runner uses page.keyboard.press)
+  actions:                                # game-specific action map (informational)
+    basic: "J"                            # primary game action (tap / attack / select)
+    special1: "U"                         # optional
+    special2: "I"                         # optional
+    pause: "Escape"
+  pointer_fallback: true                  # whether mouse-click on canvas also advances
+                                         # (true → qa-runner can use page.click('canvas'))
+```
+
+**Builder rule** (binding when `controls.start` is empty or omitted): force
+direct boot — `BootScene → GameScene` skipping any MenuScene — so the spec's
+omission can't wedge the qa-check Stage 2 SYS.RUNNING wait. If MenuScene
+exists by design, `controls.start` MUST list at least one synthesizable key.
+
+**qa-check rule** (deterministic, see `src/effects/qa-check-playwright.ts`):
+when Stage 2 (`SYS.RUNNING(5)`) fails but Stage 1 (`Phaser.Game.isBooted`)
+passed, the runner reads `spec.controls.start[]`, presses each key in turn
+(or `page.click('canvas')` if `pointer_fallback=true` and no key works),
+then retries the SYS.RUNNING wait once. This bridges the "MenuScene waits
+for input → boot times out" footgun without forcing builders to remove menu
+screens. If even the fallback fails, qa.result records
+`first_interaction='fail_after_input_synthesis'` and verifier still cites
+boot regression.
+
+## §4.6 Mandatory commercial-polish ACs (v0.5 PR-Polish, BINDING)
+
+Every spec MUST include these three ACs in `data.acceptance_criteria`. They
+are commercial-grade demo gates that the cat-puzzle session
+01KQMS9E5M1Z7TEF32E81YXAGT and pokemon session 01KQQ9VHWKXRR5M8N6P2SC0QFG
+both lacked, and the verifier scored both as PASS-eligible despite
+outputs that didn't feel premium. Each one closes one frontier-observed gap
+in spec→build→verify pipeline (game-feel research literature: Schreiber 2022
+*Game Balance* §11 / Steve Swink *Game Feel* 2008 §3.2 / Vlambeer Juice
+2012 GDC talk; ICML 2024 *AgentBoard* §3.2 first-impression metric).
+
+### AC-Polish-1 — first 5-second feedback hook
+
+> Within 5 seconds of the first user input (key from `controls.start[]` OR
+> `pointer_fallback` click), the game MUST render at least 3 simultaneous
+> feedback channels: visual particle / animation, audio (≥1 SFX or BGM
+> tick), and HUD response (score / counter / state change).
+
+`predicate_js`: query the game state object for at least one tween in
+flight, at least one Web Audio voice scheduled within the last 200ms, and
+at least one HUD element with a non-zero value.
+
+### AC-Polish-2 — idle ambient motion
+
+> When the player has been idle for ≥ 2s on any non-modal scene
+> (MenuScene/GameScene), at least one element on screen MUST be animating
+> (parallax tile / mascot idle bob / particle drift / pulse). A frozen
+> idle frame is unacceptable for commercial-grade casual.
+
+`predicate_js`: poll the canvas pixel buffer twice with a 250ms gap; verify
+≥0.5% of pixels differ between samples.
+
+### AC-Polish-3 — research lesson traceback
+
+> For every `step.research` lesson cited in `evidence_refs[]` (e.g.
+> "L1-motion-timing-stack", "L2-palette-and-touch-ergonomics"), the
+> builder's emitted code MUST contain at least one literal value or
+> identifier matching the lesson's `applicable_constraint`. Verifier
+> reads `step.research.lessons[].applicable_constraint` strings and
+> grep-matches against the bundle's src/** files.
+
+`predicate_js` is null (subjective AC graded by verifier reading
+`step.research`); enforced in code by anti-deception Rule 10
+(see `src/validator/anti-deception.ts`).
+
+These three ACs are non-negotiable. Planner-lead emits them as part of the
+`data.acceptance_criteria` array even when the user's goal doesn't mention
+polish — they are the floor, not the ceiling. AC-Polish-1 and AC-Polish-2
+SHOULD be compiled into `data.ac_predicates` (deterministic). AC-Polish-3
+stays subjective and is enforced via Rule 10 D1 cap.
+
 ## §5 `artifacts/DESIGN.md` synth output format (planner-lead step.design)
 
 Planner-lead's final synth combines step.research + step.design into `artifacts/DESIGN.md`. This is the binding document the builder reads to write the multi-file PWA under `artifacts/game/`.

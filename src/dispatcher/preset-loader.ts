@@ -213,14 +213,102 @@ export function loadPresetByName(name: string, projectRoot: string = process.cwd
 /**
  * Load preset + apply .crumb/config.toml override + return providers-enabled map.
  * Use this in the runtime path; tests can call loadPreset() directly.
+ *
+ * v0.5 PR-Bindings — `cliBindings` is the highest-priority overlay (above
+ * config.toml). One entry per `--bind` CLI flag (or studio "Custom binding"
+ * grid row); each entry can override harness, model, or both. Closes the
+ * ambient + custom binding footgun where the studio's per-actor binding grid
+ * was stored locally but never reached the dispatcher. Resolve order
+ * becomes: cliBindings > config.toml > preset.actors > preset.[defaults] >
+ * ambient > system fallback.
  */
 export async function loadPresetWithConfig(
   name: string,
   projectRoot: string = process.cwd(),
+  cliBindings?: Array<{ actor: string; harness?: string; model?: string }>,
 ): Promise<{ preset: PresetSpec; providersEnabled: Record<string, boolean> }> {
   const preset = loadPresetByName(name, projectRoot);
-  const { actors, providersEnabled } = await applyConfigOverride(preset.actors, projectRoot);
-  return { preset: { ...preset, actors }, providersEnabled };
+  const resolved = await applyConfigOverride(preset.actors, projectRoot);
+  const actors =
+    cliBindings && cliBindings.length > 0
+      ? applyCliBindings(resolved.actors, cliBindings)
+      : resolved.actors;
+  return { preset: { ...preset, actors }, providersEnabled: resolved.providersEnabled };
+}
+
+/**
+ * v0.5 PR-Bindings — overlay --bind CLI flags (or studio binding grid rows)
+ * on top of the already-resolved preset+config map. CLI bindings are the
+ * highest priority (one-off explicit user intent for this session).
+ *
+ * When the binding only sets harness, the model carries through from the
+ * resolved preset/config (or HARNESS_DEFAULT_MODEL if harness changes); when
+ * only model is set, harness stays. Both → full override.
+ */
+function applyCliBindings(
+  actors: Record<string, ActorBinding>,
+  cliBindings: Array<{ actor: string; harness?: string; model?: string }>,
+): Record<string, ActorBinding> {
+  const out: Record<string, ActorBinding> = { ...actors };
+  for (const b of cliBindings) {
+    const existing = out[b.actor];
+    if (!existing) continue; // unknown actor → silent skip (typo guard)
+    const next: ActorBinding = { ...existing };
+    if (b.harness && b.harness !== existing.harness) {
+      next.harness = b.harness as ActorBinding['harness'];
+      const def = HARNESS_DEFAULT_MODEL[next.harness];
+      if (def) {
+        next.provider = def.provider;
+        if (!b.model) next.model = def.model;
+      }
+      next.ambient_resolved = false;
+    }
+    if (b.model) next.model = b.model;
+    out[b.actor] = next;
+  }
+  return out;
+}
+
+/**
+ * v0.5 PR-Bindings — bindings-only mode. When the user picks ambient
+ * (no preset) but supplies per-actor `--bind` flags (or studio binding
+ * rows), construct a synthetic preset whose actors come straight from
+ * the cliBindings overlay. config.toml + ambient still apply for actors
+ * not named in the bindings — those resolve via standard ambient
+ * fallback, identical to "no preset" today.
+ */
+export async function loadBindingsOnly(
+  cliBindings: Array<{ actor: string; harness?: string; model?: string }>,
+  projectRoot: string = process.cwd(),
+): Promise<{ preset: PresetSpec; providersEnabled: Record<string, boolean> }> {
+  const ambient = detectAmbient();
+  const seedActors: Record<string, ActorBinding> = {};
+  for (const b of cliBindings) {
+    if (!b.harness && !b.model) continue;
+    const harness = (b.harness as ActorBinding['harness']) ?? ambient.harness;
+    const def = HARNESS_DEFAULT_MODEL[harness];
+    const model = b.model ?? def?.model ?? ambient.model;
+    const provider = def?.provider ?? ambient.provider;
+    seedActors[b.actor] = {
+      name: b.actor,
+      sandwich: `agents/${b.actor}.md`,
+      harness,
+      provider,
+      model,
+      ambient_resolved: false,
+    };
+  }
+  const { actors, providersEnabled } = await applyConfigOverride(seedActors, projectRoot);
+  // applyConfigOverride won't have run cliBindings as overlay; for bindings-
+  // only mode the seed already IS cliBindings, so no second overlay needed.
+  void actors;
+  return {
+    preset: {
+      meta: { name: 'bindings-only' },
+      actors,
+    },
+    providersEnabled,
+  };
 }
 
 /** List available preset names by scanning .crumb/presets/. */
