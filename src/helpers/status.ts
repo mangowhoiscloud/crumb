@@ -6,7 +6,7 @@
  * See [[bagelcode-system-architecture-v0.1]] §12 (자연어 보조 장치 5종).
  */
 
-import type { Message } from '../protocol/types.js';
+import { DIMENSIONS, type Dimension, type Message } from '../protocol/types.js';
 import type { CrumbState } from '../state/types.js';
 
 const SIGNAL_KINDS = new Set<Message['kind']>([
@@ -173,9 +173,9 @@ function summarize(m: Message): string {
   return '';
 }
 
-function extractDims(m: Message): Record<string, { score: number; source: string }> {
-  const out: Record<string, { score: number; source: string }> = {};
-  for (const k of ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'] as const) {
+function extractDims(m: Message): Record<Dimension, { score: number; source: string }> {
+  const out = {} as Record<Dimension, { score: number; source: string }>;
+  for (const k of DIMENSIONS) {
     const dim = m.scores?.[k];
     if (dim) out[k] = { score: dim.score, source: dim.source };
   }
