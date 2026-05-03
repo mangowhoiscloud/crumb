@@ -32,8 +32,8 @@
 
 import { appendFile, readFile, readdir, stat } from 'node:fs/promises';
 import http from 'node:http';
-import { join } from 'node:path';
-import { URL } from 'node:url';
+import { dirname, join, resolve as pathResolve } from 'node:path';
+import { fileURLToPath, URL } from 'node:url';
 import { watch as fsWatch, createReadStream } from 'node:fs';
 
 import { STUDIO_HTML } from '../studio-html.js';
@@ -87,7 +87,18 @@ export async function startStudioServer(opts: StudioServerOptions = {}): Promise
 
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? bind}`);
-    if (req.method === 'GET' && url.pathname === '/') return serveHtml(res);
+    if (req.method === 'GET' && url.pathname === '/') {
+      // M0 scaffold — `?app=v2` serves the React preview bundle from
+      // dist/client-v2/. Default keeps the v1 vanilla bundle until M7.1.
+      // See wiki/synthesis/bagelcode-studio-big-bang-update-2026-05-03.md §0.0.
+      if (url.searchParams.get('app') === 'v2') return void serveHtmlV2(res);
+      return serveHtml(res);
+    }
+    // M0 scaffold — static handler for v2 bundle assets (vite emits them under
+    // dist/client-v2/assets/). Path traversal blocked by serveV2Asset itself.
+    if (req.method === 'GET' && url.pathname.startsWith('/assets/')) {
+      return void serveV2Asset(res, url.pathname);
+    }
     if (req.method === 'GET' && url.pathname === '/api/sessions') {
       return void serveSessions(res, watcher, hiddenSessions);
     }
@@ -212,6 +223,80 @@ function serveHtml(res: http.ServerResponse): void {
   res.setHeader('content-type', 'text/html; charset=utf-8');
   res.setHeader('cache-control', 'no-cache');
   res.end(STUDIO_HTML);
+}
+
+/**
+ * M0 scaffold — serve the React v2 preview bundle from dist/client-v2/.
+ * Falls back to a friendly placeholder when the bundle hasn't been built
+ * yet (so a fresh-clone before `npm run build` doesn't 404). See
+ * wiki/synthesis/bagelcode-studio-big-bang-update-2026-05-03.md §0.0.
+ */
+async function serveHtmlV2(res: http.ServerResponse): Promise<void> {
+  // Resolve relative to this module's dist location: dist/server.js →
+  // dist/client-v2/index.html sits as a sibling. Walks via fileURLToPath so
+  // npm-link / npm-i-g installs all resolve correctly (no symlinks per
+  // §13.1 portability invariants).
+  const here = fileURLToPath(import.meta.url);
+  const indexPath = pathResolve(dirname(here), 'client-v2', 'index.html');
+  try {
+    const html = await readFile(indexPath, 'utf8');
+    res.setHeader('content-type', 'text/html; charset=utf-8');
+    res.setHeader('cache-control', 'no-cache');
+    res.end(html);
+  } catch {
+    res.statusCode = 503;
+    res.setHeader('content-type', 'text/html; charset=utf-8');
+    res.end(
+      '<!doctype html><meta charset="utf-8"><title>Crumb · v2 not built</title>' +
+        '<style>body{font-family:system-ui;padding:32px;color:#1a1a2e}</style>' +
+        '<h1>v2 preview bundle not built</h1>' +
+        '<p>Run <code>npm run build --workspace=@crumb/studio</code> to populate <code>dist/client-v2/</code>, then reload.</p>' +
+        '<p><a href="/">← back to v1 (default)</a></p>',
+    );
+  }
+}
+
+/**
+ * M0 scaffold — serve a v2 bundle asset from dist/client-v2/assets/.
+ * Path-traversal guarded; only matches /assets/<basename-with-hash>.
+ * Content-type derived from extension (js / css / map / png / svg).
+ */
+async function serveV2Asset(res: http.ServerResponse, urlPath: string): Promise<void> {
+  // urlPath is like "/assets/index-abc123.js"
+  const rel = urlPath.replace(/^\/assets\//, '');
+  if (rel.includes('..') || rel.includes('/')) {
+    res.statusCode = 400;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end('invalid asset path');
+    return;
+  }
+  const here = fileURLToPath(import.meta.url);
+  const assetPath = pathResolve(dirname(here), 'client-v2', 'assets', rel);
+  try {
+    const buf = await readFile(assetPath);
+    const ext = rel.split('.').pop()?.toLowerCase() ?? '';
+    const contentType =
+      ext === 'js' || ext === 'mjs'
+        ? 'application/javascript; charset=utf-8'
+        : ext === 'css'
+          ? 'text/css; charset=utf-8'
+          : ext === 'map'
+            ? 'application/json; charset=utf-8'
+            : ext === 'svg'
+              ? 'image/svg+xml'
+              : ext === 'png'
+                ? 'image/png'
+                : ext === 'woff2'
+                  ? 'font/woff2'
+                  : 'application/octet-stream';
+    res.setHeader('content-type', contentType);
+    res.setHeader('cache-control', 'public, max-age=31536000, immutable');
+    res.end(buf);
+  } catch {
+    res.statusCode = 404;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end(`asset not found: ${rel}`);
+  }
 }
 
 async function serveSessions(

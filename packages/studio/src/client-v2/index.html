@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Crumb · Live Studio (v2 preview)</title>
+    <!--
+      M0 scaffold (chore/studio-vite-scaffold). React 19 + Vite SPA bundle
+      served by the existing Node http server at /?app=v2. The default
+      route still serves the v1 vanilla bundle until M7.1 default flip.
+      See wiki/synthesis/bagelcode-studio-big-bang-update-2026-05-03.md
+      §0.0 cutoff + §7 roadmap.
+
+      No host-coupled paths anywhere — every asset is `/assets/...`
+      relative; the server's static handler maps `/assets/v2/*` to
+      `dist/client-v2/assets/*` per the §13.1 portability invariants.
+
+      Pre-paint theme bootstrap is intentionally OMITTED here — M2 adds
+      it back when dockview + design tokens land. For M0 the page just
+      proves the React shell loads + SSE bridge works.
+    -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>
