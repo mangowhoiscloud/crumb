@@ -238,6 +238,23 @@
     </section>
   </div>
 
+  <section class="console-narrative" id="console-narrative-section">
+    <div class="console-feed-toolbar">
+      <span class="console-feed-title">Agent narrative</span>
+      <span id="console-narrative-status" class="console-feed-status">stream-json bubbles · ⏺ tool / ⎿ result / ✓ turn</span>
+      <input type="text" id="console-narrative-grep" class="feed-grep-input" placeholder="grep…" autocomplete="off">
+      <span class="grep-controls">
+        <span id="console-narrative-grep-count" class="grep-count">—</span>
+        <button id="console-narrative-grep-prev" class="grep-nav" title="Previous match (Shift+Enter)" disabled>↑</button>
+        <button id="console-narrative-grep-next" class="grep-nav" title="Next match (Enter)" disabled>↓</button>
+      </span>
+      <button id="console-narrative-pause" class="ghost-btn">pause</button>
+      <button id="console-narrative-clear" class="ghost-btn">clear</button>
+    </div>
+    <div class="console-narrative-body" id="console-narrative-body"></div>
+  </section>
+  <div class="resize-handle resize-handle-feedstack" id="feedstack-resize" title="Drag to resize narrative / live-feed split"></div>
+
   <section class="console-feed" id="console-feed-section">
     <div class="console-feed-toolbar">
       <span class="console-feed-title">Live execution feed</span>

@@ -36,6 +36,7 @@ const grepState = {
   logs:       { query: '', cursor: 0 },
   transcript: { query: '', cursor: 0 },
   feed:       { query: '', cursor: 0 },
+  narrative:  { query: '', cursor: 0 },
 };
 
 function refreshGrepNav(panelKey, rootEl, countEl, prevBtn, nextBtn, opts = {}) {
@@ -1488,9 +1489,22 @@ onSessionSelect(() => {
 // plain text                        → existing inbox forward as user.intervene
 
 // ── (1) Live execution feed — terminal-like console above the input bar ──
+//
+// v0.4.2 — split into TWO stacked panels with a draggable horizontal handle:
+//   1) Agent narrative (top)    — rendered stream-json bubbles only
+//                                  (⏺ assistant text / ⏺ tool_use /
+//                                  ⎿ tool_result / ✓ turn complete).
+//   2) Live execution feed (bot) — every other transcript event:
+//                                  agent.wake / error / handoff / plain
+//                                  log / system. Same body/grep/pause/clear
+//                                  controls as before.
+// The horizontal handle (`#feedstack-resize`) writes `--narrative-h` to
+// `<body>` and persists in localStorage `crumb.narrative-h`.
 
 let feedPaused = false;
+let narrativePaused = false;
 const FEED_MAX_LINES = 2000; // bumped from 800 — stream-json rendering produces 3-5× line density
+const NARRATIVE_MAX_LINES = 4000; // narrative is denser than the feed (multi-line tool results)
 
 // v0.4.1 PR-F D — newest-first ordering + repeat-collapse badge.
 // Behavior change: feed grows TOP-DOWN (newest at top, oldest scrolling
@@ -1574,6 +1588,87 @@ function appendFeedLine(meta) {
   }
 }
 
+// v0.4.2 — Agent narrative panel writer. Same shape as appendFeedLine
+// (timestamp / actor / body row, repeat-collapse, top-down newest-first,
+// grep-aware) but writes into #console-narrative-body and respects its
+// own pause flag. Kept as a separate function rather than parameterizing
+// appendFeedLine so the two panels can diverge later (column widths,
+// max-lines, repeat window) without coupling.
+function appendNarrativeLine(meta) {
+  const root = $('console-narrative-body');
+  if (!root) return;
+  if (narrativePaused) return;
+  const ts = (meta.ts || new Date().toISOString()).split('T')[1]?.slice(0, 8) || '--:--:--';
+  const top = root.firstChild;
+  const key = feedRepeatKey(meta);
+  if (top && top.dataset && top.dataset.repeatKey === key) {
+    const lastTs = Number(top.dataset.lastTs || 0);
+    const now = Date.now();
+    if (now - lastTs < 60_000) {
+      const count = (Number(top.dataset.repeatCount) || 1) + 1;
+      top.dataset.repeatCount = String(count);
+      top.dataset.lastTs = String(now);
+      let badge = top.querySelector('.feed-repeat-badge');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'feed-repeat-badge';
+        top.appendChild(badge);
+      }
+      badge.textContent = '×' + count;
+      const tsEl = top.querySelector('.feed-ts');
+      if (tsEl) tsEl.textContent = ts;
+      return;
+    }
+  }
+  const cls = ['feed-line'];
+  if (meta.kindClass) cls.push('kind-' + meta.kindClass);
+  if (meta.stderr) cls.push('stderr');
+  const div = document.createElement('div');
+  div.className = cls.join(' ');
+  div.dataset.repeatKey = key;
+  div.dataset.repeatCount = '1';
+  div.dataset.lastTs = String(Date.now());
+  const tsSpan = document.createElement('span');
+  tsSpan.className = 'feed-ts';
+  tsSpan.textContent = ts;
+  const actorSpan = document.createElement('span');
+  actorSpan.className = 'feed-actor';
+  actorSpan.textContent = meta.actor || '';
+  const bodySpan = document.createElement('span');
+  bodySpan.className = 'feed-body';
+  bodySpan.dataset.raw = meta.body || '';
+  if (grepState.narrative?.query) {
+    bodySpan.innerHTML = highlightHTML(meta.body || '', grepState.narrative.query);
+  } else {
+    bodySpan.textContent = meta.body || '';
+  }
+  div.appendChild(tsSpan);
+  div.appendChild(actorSpan);
+  div.appendChild(bodySpan);
+  if (root.firstChild) {
+    root.insertBefore(div, root.firstChild);
+  } else {
+    root.appendChild(div);
+  }
+  while (root.childNodes.length > NARRATIVE_MAX_LINES) root.removeChild(root.lastChild);
+  root.scrollTop = 0;
+  if (grepState.narrative?.query) {
+    refreshGrepNav('narrative', root, $('console-narrative-grep-count'), $('console-narrative-grep-prev'), $('console-narrative-grep-next'));
+  }
+}
+
+function rehighlightNarrative() {
+  const root = $('console-narrative-body');
+  if (!root) return;
+  const q = grepState.narrative?.query;
+  for (const body of root.querySelectorAll('.feed-body')) {
+    const raw = body.dataset.raw ?? body.textContent ?? '';
+    if (q) body.innerHTML = highlightHTML(raw, q);
+    else body.textContent = raw;
+  }
+  refreshGrepNav('narrative', root, $('console-narrative-grep-count'), $('console-narrative-grep-prev'), $('console-narrative-grep-next'), { scroll: !!q });
+}
+
 // Re-highlight every existing feed line (called when the grep query changes).
 function rehighlightFeed() {
   const root = $('console-feed-body');
@@ -1635,6 +1730,21 @@ $('console-feed-clear').addEventListener('click', () => {
 bindGrepInput($('console-feed-grep'), $('console-feed-grep-prev'), $('console-feed-grep-next'), 'feed', rehighlightFeed);
 $('console-feed-grep-prev')?.addEventListener('click', () => gotoGrepMatch('feed', -1, $('console-feed-grep-count')));
 $('console-feed-grep-next')?.addEventListener('click', () => gotoGrepMatch('feed',  1, $('console-feed-grep-count')));
+
+// v0.4.2 — narrative panel controls (mirrors the feed wiring).
+$('console-narrative-pause')?.addEventListener('click', () => {
+  narrativePaused = !narrativePaused;
+  const btn = $('console-narrative-pause');
+  btn.classList.toggle('paused', narrativePaused);
+  btn.textContent = narrativePaused ? 'paused' : 'pause';
+});
+$('console-narrative-clear')?.addEventListener('click', () => {
+  $('console-narrative-body').innerHTML = '';
+  refreshGrepNav('narrative', $('console-narrative-body'), $('console-narrative-grep-count'), $('console-narrative-grep-prev'), $('console-narrative-grep-next'));
+});
+bindGrepInput($('console-narrative-grep'), $('console-narrative-grep-prev'), $('console-narrative-grep-next'), 'narrative', rehighlightNarrative);
+$('console-narrative-grep-prev')?.addEventListener('click', () => gotoGrepMatch('narrative', -1, $('console-narrative-grep-count')));
+$('console-narrative-grep-next')?.addEventListener('click', () => gotoGrepMatch('narrative',  1, $('console-narrative-grep-count')));
 
 // Q5: append-handler fan-out — push every transcript event into the feed.
 onAppendMsg((d) => {
@@ -1701,12 +1811,14 @@ function attachFeedLogStream(actor) {
         appendFeedLine({ ts: new Date().toISOString(), actor: actor, body: line, kindClass: 'system' });
         continue;
       }
-      // Try stream-json (Claude Code shape) first — render Claude-Code-style
-      // ⏺/⎿/✓ narrative bubbles above the per-session chat input.
+      // v0.4.2 — stream-json (Claude Code shape) goes to the agent narrative
+      // panel; everything else (plain log lines, adapter banners, stderr) goes
+      // to the live execution feed below it. Empty arrays from
+      // renderStreamJsonLine still suppress (parsed but no narrative bubbles).
       const bubbles = renderStreamJsonLine(line);
       if (bubbles) {
         for (const b of bubbles) {
-          appendFeedLine({
+          appendNarrativeLine({
             ts: new Date().toISOString(),
             actor: actor,
             body: b.glyph + ' ' + b.body,
@@ -1738,7 +1850,16 @@ onAppendMsg((d) => {
 });
 
 // Hook session select to (re)open feed log streams.
+// v0.4.2 — also wipe the narrative panel so the new session doesn't see
+// the previous session's stream-json bubbles. The live feed already gets
+// re-populated from the per-session log stream so its existing content is
+// session-bound transcript events that appendFeedLine will refresh.
 onSessionSelect(() => {
+  const narBody = $('console-narrative-body');
+  if (narBody) {
+    narBody.innerHTML = '';
+    refreshGrepNav('narrative', narBody, $('console-narrative-grep-count'), $('console-narrative-grep-prev'), $('console-narrative-grep-next'));
+  }
   refreshFeedLogStreams();
   refreshOutputTab();
 });
@@ -1963,20 +2084,25 @@ setActiveView = function(view) {
 // ─── v3.5 Studio hardening: resize, dismiss, resume, transcript ───────
 
 // (1) Draggable pane resize. Persists widths in localStorage so a refresh
-// keeps the user's chosen layout.
-function makeResizable(handleId, onDelta, persistKey, getInitial) {
+// keeps the user's chosen layout. axis='x' (default) for column-resize
+// handles; axis='y' for row-resize handles. v0.4.2: dragging the
+// narrative/feed splitter shrinks the narrative panel as the cursor
+// moves DOWN, so the y-delta is inverted versus the x-axis case.
+function makeResizable(handleId, onDelta, persistKey, getInitial, axis = 'x') {
   const handle = $(handleId);
   if (!handle) return;
-  let startX = 0;
+  let start = 0;
   let startVal = 0;
   let dragging = false;
   const persisted = persistKey ? Number(localStorage.getItem(persistKey)) : NaN;
   if (persisted && persisted > 0) onDelta(persisted, /*absolute*/true);
   const onMove = (e) => {
     if (!dragging) return;
-    const x = e.touches ? e.touches[0].clientX : e.clientX;
-    const dx = x - startX;
-    onDelta(startVal, false, dx);
+    const pos = e.touches
+      ? (axis === 'y' ? e.touches[0].clientY : e.touches[0].clientX)
+      : (axis === 'y' ? e.clientY : e.clientX);
+    const d = pos - start;
+    onDelta(startVal, false, d);
     e.preventDefault();
   };
   const onUp = () => {
@@ -1991,7 +2117,9 @@ function makeResizable(handleId, onDelta, persistKey, getInitial) {
   const onDown = (e) => {
     dragging = true;
     handle.classList.add('dragging');
-    startX = e.touches ? e.touches[0].clientX : e.clientX;
+    start = e.touches
+      ? (axis === 'y' ? e.touches[0].clientY : e.touches[0].clientX)
+      : (axis === 'y' ? e.clientY : e.clientX);
     startVal = getInitial();
     document.addEventListener('mousemove', onMove);
     document.addEventListener('touchmove', onMove, { passive: false });
@@ -2022,6 +2150,21 @@ makeResizable(
   },
   'crumb.detail-w',
   () => parseInt(getComputedStyle(document.body).getPropertyValue('--detail-w'), 10) || 420,
+);
+// v0.4.2 — narrative / feed split (horizontal handle, drag-down grows narrative).
+// Clamp [80, viewport-300] so the user can't shrink past the controls or
+// blow out the live-feed below the input bar's safe space.
+makeResizable(
+  'feedstack-resize',
+  (start, abs, dy) => {
+    const cap = Math.max(120, window.innerHeight - 300);
+    const h = abs ? start : Math.max(80, Math.min(cap, start + (dy ?? 0)));
+    document.body.style.setProperty('--narrative-h', h + 'px');
+    if (!abs) localStorage.setItem('crumb.narrative-h', String(h));
+  },
+  'crumb.narrative-h',
+  () => parseInt(getComputedStyle(document.body).getPropertyValue('--narrative-h'), 10) || 220,
+  'y',
 );
 
 // (2) Click-outside-to-close detail pane. Avoids closing on its own resize handle.
