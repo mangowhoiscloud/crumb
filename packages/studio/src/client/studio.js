@@ -324,7 +324,10 @@ function renderSwimlane() {
     const evts = events.filter((e) => e.from === actor);
     const groups = groupConsecutiveByKind(evts);
     const lastIdx = groups.length - 1;
-    const cells = groups.map((g, i) => renderEvtCell(g, i === lastIdx)).join('');
+    const cursor = getReadCursor(activeSession, actor);
+    const cells = groups
+      .map((g, i) => renderEvtCell(g, i === lastIdx, cursor))
+      .join('');
     return (
       '<div class="lane">' +
       '<div class="lane-label"><span class="glyph" style="background:var(' +
@@ -346,9 +349,79 @@ function renderSwimlane() {
       // so it can wire the paginator.
       const groupIds = (el.dataset.groupIds ?? '').split(',').filter(Boolean);
       const startId = groupIds[0] ?? el.dataset.id;
+      const actor = el.dataset.actor;
+      // Slack-style mark-as-read: clicking acknowledges the entire chip
+      // (single or grouped). Cursor advances to the LATEST event id in
+      // the group, so the badge clears in one click. Frontier convention
+      // — Slack channel click marks all visible messages read; GitHub
+      // notification click clears the dot.
+      const latestId = groupIds[groupIds.length - 1] ?? el.dataset.id;
+      markRead(activeSession, actor, latestId);
+      // Re-render the lanes so the badge clears immediately.
+      renderSwimlane();
       showDetail(startId, groupIds.length > 1 ? groupIds : null);
     });
   });
+}
+
+/**
+ * v0.5 PR-8 — unread state, persisted in localStorage.
+ *
+ * Why localStorage and not a server DB:
+ *   - Crumb Studio is a single-user, single-device read-only observation
+ *     surface. Cross-device sync is not in scope (no auth, no backend
+ *     identity). Slack / GitHub put unread cursors server-side because
+ *     they're multi-device + team-shared; we have neither requirement.
+ *   - localStorage gives us atomic per-(session, lane) cursors with zero
+ *     network hops, zero schema migration, zero server-side write
+ *     amplification. If multi-device later matters, the server can
+ *     mirror these into ~/.crumb/projects/<id>/.studio-read.json behind
+ *     a thin endpoint — same key shape, no client refactor.
+ *
+ * Cursor: per (sessionId, actor) we store the ULID of the latest event
+ * the user has acknowledged (clicked-through). Unread count for a chip
+ * group = events.filter(e => e.id > cursor && belongs to group).length.
+ *
+ * ULID is monotonic-string-sortable, so `>` comparison is correct
+ * chronology — no timestamp parsing.
+ */
+const READ_CURSOR_KEY = 'crumb.studio.readCursor.v1';
+
+function loadReadCursors() {
+  try {
+    const raw = localStorage.getItem(READ_CURSOR_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveReadCursors(cursors) {
+  try {
+    localStorage.setItem(READ_CURSOR_KEY, JSON.stringify(cursors));
+  } catch {
+    // localStorage full or disabled — graceful no-op
+  }
+}
+
+let readCursors = loadReadCursors();
+
+function getReadCursor(sessionId, actor) {
+  return readCursors[sessionId]?.[actor] ?? '';
+}
+
+function markRead(sessionId, actor, lastEventId) {
+  if (!sessionId || !actor || !lastEventId) return;
+  if (!readCursors[sessionId]) readCursors[sessionId] = {};
+  // Only advance the cursor — never rewind. Prevents an out-of-order
+  // click on an older chip from re-marking newer events as unread.
+  const prev = readCursors[sessionId][actor] ?? '';
+  if (lastEventId > prev) {
+    readCursors[sessionId][actor] = lastEventId;
+    saveReadCursors(readCursors);
+  }
 }
 
 /**
@@ -383,7 +456,7 @@ function groupConsecutiveByKind(evts) {
   return groups;
 }
 
-function renderEvtCell(group, isLast) {
+function renderEvtCell(group, isLast, cursor) {
   const cls = ['evt'];
   if (group.deterministic) cls.push('deterministic');
   if (group.audit) cls.push('audit');
@@ -392,10 +465,21 @@ function renderEvtCell(group, isLast) {
   if (count > 1) cls.push('grouped');
   const idsAttr = group.ids.join(',');
   const firstId = group.ids[0];
+  // v0.5 PR-8: badge shows UNREAD count, not total. ULID `>` is
+  // chronological, so any id strictly greater than the cursor is unread.
+  // Single-event chips (count === 1) also get a "1" badge when unread,
+  // matching iMessage/Slack behaviour where a single new message also
+  // gets a dot/number — the user opened the lane after that message
+  // arrived and we want to acknowledge they haven't seen it yet.
+  const unreadCount = cursor
+    ? group.ids.filter((id) => id > cursor).length
+    : group.ids.length;
+  const owner = group.evts[0]?.from ?? '';
   const titleAttr =
     count > 1
-      ? `${group.kind} × ${count} (click to page through)`
-      : group.kind;
+      ? `${group.kind} × ${count}` +
+        (unreadCount > 0 ? ` (${unreadCount} unread, click to page through)` : ' (all read)')
+      : group.kind + (unreadCount > 0 ? ' (unread)' : '');
   return (
     '<span class="' +
     cls.join(' ') +
@@ -403,15 +487,17 @@ function renderEvtCell(group, isLast) {
     escapeHTML(firstId) +
     '" data-group-ids="' +
     escapeHTML(idsAttr) +
+    '" data-actor="' +
+    escapeHTML(owner) +
     '" title="' +
     escapeHTML(titleAttr) +
     '">' +
     escapeHTML(group.kind) +
-    (count > 1
+    (unreadCount > 0
       ? '<span class="evt-count" aria-label="' +
-        count +
-        ' events">' +
-        count +
+        unreadCount +
+        ' unread">' +
+        unreadCount +
         '</span>'
       : '') +
     '</span>'
