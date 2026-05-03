@@ -112,35 +112,6 @@
   <div id="audit-banner"></div>
 
   <!--
-    v0.5 PR-O2 — error budget burndown strip.
-    Three meters mirror the reducer's progress_ledger caps:
-      - respec       (spec.update count vs RESPEC_MAX=3)
-      - verify       (judge.score count vs VERIFY_MAX=5)
-      - tokens       (session_token_total vs CRUMB_TOKEN_BUDGET_HARD=300K)
-    Each meter changes color as it approaches the cap (green → amber →
-    red). Hidden when no session selected. OpenAI Preparedness Framework
-    + Stripe Sigma usage panel convention — let the operator intervene
-    before the automatic cutoff fires.
-  -->
-  <div id="budget-strip" class="budget-strip" style="display:none;">
-    <div class="budget-meter" id="budget-respec">
-      <div class="budget-meter-label">respec</div>
-      <div class="budget-meter-bar"><div class="budget-meter-fill"></div></div>
-      <div class="budget-meter-value">—</div>
-    </div>
-    <div class="budget-meter" id="budget-verify">
-      <div class="budget-meter-label">verify</div>
-      <div class="budget-meter-bar"><div class="budget-meter-fill"></div></div>
-      <div class="budget-meter-value">—</div>
-    </div>
-    <div class="budget-meter" id="budget-tokens">
-      <div class="budget-meter-label">tokens</div>
-      <div class="budget-meter-bar"><div class="budget-meter-fill"></div></div>
-      <div class="budget-meter-value">—</div>
-    </div>
-  </div>
-
-  <!--
     v0.5 PR-5 — connection-state pill. Shows when EventSource fires onerror
     (server restart / laptop sleep / wifi flap). Manual "Reconnect now" hard-
     reloads to re-establish the SSE stream + re-hydrate via /api/sessions.
@@ -186,9 +157,6 @@
       <svg class="dag-svg" id="dag-svg" viewBox="0 0 1100 320" preserveAspectRatio="xMidYMid meet"></svg>
     </section>
 
-    <section class="swimlane" id="swimlane">
-      <div class="empty" id="swim-empty">Waiting for events…</div>
-    </section>
   </div>
 
   <div class="view-pane" id="view-logs">
@@ -268,48 +236,51 @@
   </div>
 
   <!--
-    v0.5 PR-W-Studio-A — feedstack: live execution feed (top) + agent narrative
-    (bottom), swappable orientation (vertical default / horizontal side-by-side
-    via #feedstack-orient toggle), draggable splitter between them.
-    The container is a CSS grid that rewrites grid-template-rows vs
-    grid-template-columns based on data-orient. Splitter axis adapts
-    accordingly (row-resize ↔ col-resize). Sizes persist in localStorage
-    (`crumb.feedstack.feed-h` for vertical, `crumb.feedstack.feed-w` for
-    horizontal, `crumb.feedstack.orient` for the layout mode itself).
+    v0.5 PR-Layout — 4-pane vertical: tabs+content (absorber) | swimlane | narrative | feed
+    splitter-view-swim writes --swimlane-h (drag down → swim shrinks, view-pane absorbs)
+    splitter-swim-narr writes --swimlane-h + --narrative-h (2-var, total preserved)
+    splitter-narr-feed writes --narrative-h + --feed-h (2-var, total preserved)
+    Industry-standard splitter behavior: drag UP narrows upper, drag DOWN narrows lower.
   -->
-  <section class="feedstack" id="feedstack" data-orient="vertical">
-    <section class="console-feed" id="console-feed-section">
-      <div class="console-feed-toolbar">
-        <span class="console-feed-title">Live execution feed</span>
-        <span id="console-feed-status" class="console-feed-status">—</span>
-        <input type="text" id="console-feed-grep" class="feed-grep-input" placeholder="grep…" autocomplete="off">
-        <span class="grep-controls">
-          <span id="console-feed-grep-count" class="grep-count">—</span>
-          <button id="console-feed-grep-prev" class="grep-nav" title="Previous match (Shift+Enter)" disabled>↑</button>
-          <button id="console-feed-grep-next" class="grep-nav" title="Next match (Enter)" disabled>↓</button>
-        </span>
-        <button id="feedstack-orient" class="ghost-btn" title="Toggle layout: vertical (stacked) ↔ horizontal (side-by-side)">⊟</button>
-        <button id="console-feed-pause" class="ghost-btn">pause</button>
-        <button id="console-feed-clear" class="ghost-btn">clear</button>
-      </div>
-      <div class="console-feed-body" id="console-feed-body"></div>
-    </section>
-    <div class="resize-handle resize-handle-feedstack" id="feedstack-resize" title="Drag to resize feed / narrative split"></div>
-    <section class="console-narrative" id="console-narrative-section">
-      <div class="console-feed-toolbar">
-        <span class="console-feed-title">Agent narrative</span>
-        <span id="console-narrative-status" class="console-feed-status">stream-json bubbles · ⏺ tool / ⎿ result / ✓ turn</span>
-        <input type="text" id="console-narrative-grep" class="feed-grep-input" placeholder="grep…" autocomplete="off">
-        <span class="grep-controls">
-          <span id="console-narrative-grep-count" class="grep-count">—</span>
-          <button id="console-narrative-grep-prev" class="grep-nav" title="Previous match (Shift+Enter)" disabled>↑</button>
-          <button id="console-narrative-grep-next" class="grep-nav" title="Next match (Enter)" disabled>↓</button>
-        </span>
-        <button id="console-narrative-pause" class="ghost-btn">pause</button>
-        <button id="console-narrative-clear" class="ghost-btn">clear</button>
-      </div>
-      <div class="console-narrative-body" id="console-narrative-body"></div>
-    </section>
+  <div class="resize-handle resize-handle-pane" id="splitter-view-swim" title="Drag to resize event view (swimlane)"></div>
+
+  <section class="swimlane" id="swimlane">
+    <div class="empty" id="swim-empty">Waiting for events…</div>
+  </section>
+
+  <div class="resize-handle resize-handle-pane" id="splitter-swim-narr" title="Drag to resize swimlane / narrative split"></div>
+
+  <section class="console-narrative" id="console-narrative-section">
+    <div class="console-feed-toolbar">
+      <span class="console-feed-title">Agent narrative</span>
+      <span id="console-narrative-status" class="console-feed-status">stream-json bubbles · ⏺ tool / ⎿ result / ✓ turn</span>
+      <input type="text" id="console-narrative-grep" class="feed-grep-input" placeholder="grep…" autocomplete="off">
+      <span class="grep-controls">
+        <span id="console-narrative-grep-count" class="grep-count">—</span>
+        <button id="console-narrative-grep-prev" class="grep-nav" title="Previous match (Shift+Enter)" disabled>↑</button>
+        <button id="console-narrative-grep-next" class="grep-nav" title="Next match (Enter)" disabled>↓</button>
+      </span>
+      <button id="console-narrative-pause" class="ghost-btn">pause</button>
+      <button id="console-narrative-clear" class="ghost-btn">clear</button>
+    </div>
+    <div class="console-narrative-body" id="console-narrative-body"></div>
+  </section>
+  <div class="resize-handle resize-handle-pane" id="splitter-narr-feed" title="Drag to resize narrative / live-feed split"></div>
+
+  <section class="console-feed" id="console-feed-section">
+    <div class="console-feed-toolbar">
+      <span class="console-feed-title">Live execution feed</span>
+      <span id="console-feed-status" class="console-feed-status">—</span>
+      <input type="text" id="console-feed-grep" class="feed-grep-input" placeholder="grep…" autocomplete="off">
+      <span class="grep-controls">
+        <span id="console-feed-grep-count" class="grep-count">—</span>
+        <button id="console-feed-grep-prev" class="grep-nav" title="Previous match (Shift+Enter)" disabled>↑</button>
+        <button id="console-feed-grep-next" class="grep-nav" title="Next match (Enter)" disabled>↓</button>
+      </span>
+      <button id="console-feed-pause" class="ghost-btn">pause</button>
+      <button id="console-feed-clear" class="ghost-btn">clear</button>
+    </div>
+    <div class="console-feed-body" id="console-feed-body"></div>
   </section>
 
   <section class="console-input" id="console-section">
@@ -331,33 +302,38 @@
   -->
   <div class="detail-header">
     <button class="close" id="detail-close" aria-label="Close detail">×</button>
-    <h3 id="detail-title">Event detail</h3>
-    <div id="detail-pipeline-pos" style="font-size:11px;color:var(--ink-subtle);margin-bottom:8px;font-family:ui-monospace,monospace;"></div>
-    <!--
-      v0.5 PR-9 — cross-actor event paginator (←/→ over all session events,
-      chronological). Always visible when the panel is open; lets the user
-      step through every transcript event regardless of actor lane.
-    -->
-    <div id="detail-event-nav" class="detail-event-nav" style="display:none;"></div>
-    <div id="detail-nav" style="display:flex;gap:6px;margin-bottom:8px;">
-      <button id="detail-prev" style="background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);padding:3px 10px;border-radius:var(--r-sm);font-size:11px;cursor:pointer;">↑ parent</button>
-      <button id="detail-next" style="background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);padding:3px 10px;border-radius:var(--r-sm);font-size:11px;cursor:pointer;">↓ children</button>
+    <div class="detail-title-row">
+      <h3 id="detail-title">Event detail</h3>
+      <span id="detail-group-badge" class="detail-group-badge" style="display:none;"></span>
     </div>
-    <!--
-      v0.5 PR-7 — group paginator. Hidden by default; shown only when the
-      user opened a multi-event chip (consecutive same-kind events on one
-      actor lane). ←/→ buttons + keyboard shortcuts page through the group.
-    -->
-    <div id="detail-group-nav" class="detail-group-nav" style="display:none;"></div>
+    <div id="detail-pipeline-pos" class="detail-pipeline-pos"></div>
+    <!-- PR-K' — cross-actor event paginator stays for single-event nav -->
+    <div id="detail-event-nav" class="detail-event-nav" style="display:none;"></div>
+    <div id="detail-nav" class="detail-thread-nav">
+      <button id="detail-prev" class="detail-nav-btn">↑ parent</button>
+      <button id="detail-next" class="detail-nav-btn">↓ children</button>
+    </div>
   </div>
-  <div class="detail-body">
+
+  <!-- PR-K' single-event view — Datadog-style structured panel -->
+  <div class="detail-body" id="detail-body-single">
+    <div id="detail-tags" class="detail-tags"></div>
+    <div id="detail-audit-banner" class="detail-audit-banner" style="display:none;"></div>
+    <h3>Timing &amp; cost</h3>
+    <div id="detail-resource-bar" class="detail-resource-bar"></div>
     <pre id="detail-meta"></pre>
-    <h3>Body</h3>
+    <h3>
+      Body
+      <button class="detail-copy-btn" id="detail-copy-body" title="Copy">⧉</button>
+    </h3>
     <pre id="detail-body"></pre>
-    <h3>Data</h3>
+    <h3>
+      Data
+      <button class="detail-copy-btn" id="detail-copy-data" title="Copy JSON">⧉</button>
+    </h3>
     <pre id="detail-data"></pre>
     <h3>Conversation thread (parent → this → children)</h3>
-    <div id="detail-thread" style="font-size:11px;font-family:ui-monospace,monospace;max-height:200px;overflow:auto;border:1px solid var(--hairline);border-radius:var(--r-md);padding:8px;background:var(--canvas);"></div>
+    <div id="detail-thread" class="detail-thread"></div>
     <h3>Sandwich preview</h3>
     <div id="sandwich-actor-bar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
     <pre id="sandwich-content" style="display:none;max-height:360px;overflow:auto;"></pre>
@@ -367,6 +343,13 @@
       <button id="detail-msg-send" style="background:var(--primary);color:var(--ink);border:none;border-radius:var(--r-md);padding:6px 12px;font-size:11px;cursor:pointer;">Send</button>
     </div>
     <div id="detail-msg-feedback" style="font-size:10px;color:var(--ink-subtle);margin-top:4px;font-family:ui-monospace,monospace;min-height:12px;"></div>
+  </div>
+
+  <!-- PR-K' multi-event spread view — horizontal cards, one per event in
+       the grouped chip. Hidden until showDetail() opens a group. -->
+  <div class="detail-body detail-body-spread" id="detail-body-spread" style="display:none;">
+    <div id="detail-spread-toolbar" class="detail-spread-toolbar"></div>
+    <div id="detail-spread-cards" class="detail-spread-cards"></div>
   </div>
 </aside>
 
