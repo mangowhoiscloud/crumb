@@ -366,10 +366,37 @@ es.addEventListener('session_start', (e) => {
   if (!activeSession) selectSession(d.session_id);
   else renderSessionList();
 });
+// Q5: single append dispatcher — every previous `es.addEventListener('append', ...)`
+// site (8 of them) parsed e.data independently and re-filtered by session_id.
+// Now: parse once, fan out to registered handlers via `onAppendMsg(fn)`. Each
+// handler receives the parsed envelope `d = { session_id, msg, ... }`. Handler
+// errors are caught + logged so one broken consumer doesn't break others.
+//
+// Order of registration is preserved — the first one registered (the cache
+// updater below) runs before any downstream renderer, so swimlane / scorecard
+// see the freshly-pushed event in eventCache.
+const appendHandlers = [];
+function onAppendMsg(fn) {
+  appendHandlers.push(fn);
+}
 es.addEventListener('append', (e) => {
   const d = JSON.parse(e.data);
+  for (const h of appendHandlers) {
+    try {
+      h(d);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[studio] append handler failed:', err);
+    }
+  }
+});
+
+onAppendMsg((d) => {
   let arr = eventCache.get(d.session_id);
-  if (!arr) { arr = []; eventCache.set(d.session_id, arr); }
+  if (!arr) {
+    arr = [];
+    eventCache.set(d.session_id, arr);
+  }
   arr.push(d.msg);
   // Track actors that have actually spawned so the sandwich preview only
   // surfaces buttons for sandwiches that exist on disk.
@@ -723,10 +750,8 @@ showDetail = function(id) {
 };
 
 // Hook DAG re-render + weaving into the existing append handler. The original
-// es.addEventListener('append', …) above pushes events; we add a parallel
-// listener since EventSource supports multiple handlers per event type.
-es.addEventListener('append', e => {
-  const d = JSON.parse(e.data);
+// Q5: append-handler fan-out (was: independent es.addEventListener('append'))
+onAppendMsg((d) => {
   if (d.session_id === activeSession) {
     weaveOnAppend(d.msg);
   }
@@ -1072,9 +1097,8 @@ bindGrepInput($('console-feed-grep'), $('console-feed-grep-prev'), $('console-fe
 $('console-feed-grep-prev')?.addEventListener('click', () => gotoGrepMatch('feed', -1, $('console-feed-grep-count')));
 $('console-feed-grep-next')?.addEventListener('click', () => gotoGrepMatch('feed',  1, $('console-feed-grep-count')));
 
-// Wire the existing append SSE handler to also push to the feed.
-es.addEventListener('append', e => {
-  const d = JSON.parse(e.data);
+// Q5: append-handler fan-out — push every transcript event into the feed.
+onAppendMsg((d) => {
   if (activeSession && d.session_id !== activeSession) return;
   const line = feedLineFromTranscriptEvent(d.msg);
   if (line) appendFeedLine(line);
@@ -1166,9 +1190,8 @@ function attachFeedLogStream(actor) {
   feedLogSource.push(src);
 }
 
-// When a new agent.wake arrives for the active session, attach its log stream too.
-es.addEventListener('append', e => {
-  const d = JSON.parse(e.data);
+// Q5: append-handler fan-out — attach log stream when a new agent wakes.
+onAppendMsg((d) => {
   if (d.session_id !== activeSession) return;
   if (d.msg.kind === 'agent.wake' && d.msg.from && !feedLogActorSet.has(d.msg.from)) {
     attachFeedLogStream(d.msg.from);
@@ -1383,9 +1406,8 @@ $('output-open').addEventListener('click', () => {
   if (iframe.src) window.open(iframe.src, '_blank');
 });
 
-// Refresh Output tab when artifact.created events arrive.
-es.addEventListener('append', e => {
-  const d = JSON.parse(e.data);
+// Q5: append-handler fan-out — refresh Output tab when artifact.created arrives.
+onAppendMsg((d) => {
   if (d.session_id !== activeSession) return;
   if (d.msg.kind === 'artifact.created' && activeView === 'output') {
     refreshOutputTab();
@@ -1509,7 +1531,8 @@ $('resume-btn')?.addEventListener('click', async () => {
   await sendInboxLine(activeSession, line, $('console-feedback'));
   setTimeout(refreshResumeButton, 1000);
 });
-es.addEventListener('append', () => refreshResumeButton());
+// Q5: append-handler fan-out — refresh resume button on every append.
+onAppendMsg(() => refreshResumeButton());
 
 // (4) Transcript viewer — pretty-printed jsonl, filterable, copyable.
 function renderTranscriptView() {
@@ -1544,11 +1567,9 @@ setActiveView = function(view) {
   _origSetActiveView2(view);
   if (view === 'transcript') renderTranscriptView();
 };
-es.addEventListener('append', e => {
-  if (activeView === 'transcript') {
-    const d = JSON.parse(e.data);
-    if (d.session_id === activeSession) renderTranscriptView();
-  }
+// Q5: append-handler fan-out — re-render transcript view on every append.
+onAppendMsg((d) => {
+  if (activeView === 'transcript' && d.session_id === activeSession) renderTranscriptView();
 });
 
 // (5) Coordinator visibility: surface system "dispatch.spawn" notes as
@@ -1556,8 +1577,8 @@ es.addEventListener('append', e => {
 // host-inline (v3 invariant) so it doesn't emit `agent.wake`/`agent.stop`
 // during normal routing — only on rollback/stop/done. Without this attribution
 // the coordinator lane appears silent even though routing is happening.
-es.addEventListener('append', e => {
-  const d = JSON.parse(e.data);
+// Q5: append-handler fan-out — coordinator visibility note → feed line.
+onAppendMsg((d) => {
   if (activeSession && d.session_id !== activeSession) return;
   const m = d.msg;
   if (m && m.from === 'system' && m.kind === 'note' && /dispatch\.spawn/.test(m.body || '')) {
