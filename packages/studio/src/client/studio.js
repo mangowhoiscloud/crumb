@@ -465,12 +465,52 @@ es.addEventListener('state', (e) => {
   if (d.session_id === activeSession) renderHeader();
   renderSessionList();
 });
-es.addEventListener('heartbeat', () => {});
+es.addEventListener('heartbeat', () => {
+  // Heartbeat == healthy connection. If the reconnect pill is showing, hide it.
+  setConnState('connected');
+});
+es.addEventListener('open', () => setConnState('connected'));
+es.addEventListener('session_start', () => setConnState('connected'));
+es.addEventListener('append', () => setConnState('connected'));
 es.onerror = () => {
-  // EventSource auto-reconnects; surface a soft hint via the title.
-  document.title = 'Crumb · Live (reconnecting…)';
-  setTimeout(() => { document.title = 'Crumb · Live Studio'; }, 2000);
+  // EventSource auto-reconnects (HTML5 spec: ~3s default). Surface a visible
+  // pill + manual "Reconnect now" affordance so the user knows the connection
+  // dropped and can force a re-fetch instead of waiting on the browser
+  // heuristic (which can stretch when the laptop wakes from sleep).
+  setConnState('reconnecting');
 };
+
+/**
+ * v0.5 PR-5: connection-state pill + manual reconnect button. The browser's
+ * EventSource already auto-reconnects, but during long disconnects (laptop
+ * sleep / wifi flap / Studio restart via `crumb studio --restart`) the user
+ * needs a visible signal + a one-click recovery instead of a hard page reload.
+ *
+ * States:
+ *   - connected:    pill hidden
+ *   - reconnecting: pill shows "Reconnecting…" + "Reconnect now" button
+ */
+function setConnState(state) {
+  const pill = document.getElementById('conn-state-pill');
+  if (!pill) return;
+  if (state === 'connected') {
+    pill.style.display = 'none';
+    document.title = 'Crumb · Live Studio';
+  } else if (state === 'reconnecting') {
+    pill.style.display = 'flex';
+    document.title = 'Crumb · Live (reconnecting…)';
+  }
+}
+const connRetryBtn = document.getElementById('conn-state-retry');
+if (connRetryBtn) {
+  connRetryBtn.addEventListener('click', () => {
+    // Hard reload: easiest correct path. EventSource has no public re-open
+    // and our handlers are wired to the original `es` const, so a reload
+    // re-runs the setup with a clean slate. Studio's HTTP-pull endpoints
+    // (/api/sessions, /api/sessions/:id/snapshot) re-hydrate state.
+    location.reload();
+  });
+}
 
 fetch('/api/sessions').then(r => r.json()).then(payload => {
   for (const s of payload.sessions ?? []) {

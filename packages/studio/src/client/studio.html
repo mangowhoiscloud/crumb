@@ -111,6 +111,18 @@
 
   <div id="audit-banner"></div>
 
+  <!--
+    v0.5 PR-5 — connection-state pill. Shows when EventSource fires onerror
+    (server restart / laptop sleep / wifi flap). Manual "Reconnect now" hard-
+    reloads to re-establish the SSE stream + re-hydrate via /api/sessions.
+    Hidden by default; revealed by setConnState('reconnecting') in studio.js.
+  -->
+  <div id="conn-state-pill" class="conn-state-pill" style="display:none;">
+    <span class="conn-state-dot"></span>
+    <span class="conn-state-text">Reconnecting…</span>
+    <button id="conn-state-retry" type="button" class="conn-state-retry">Reconnect now</button>
+  </div>
+
   <section class="scorecard-bar" id="scorecard-bar">
     <div class="scorecard-strip" id="scorecard"></div>
   </section>
