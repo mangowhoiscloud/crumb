@@ -96,6 +96,139 @@ Treating them as one redesign is intentional: they share stack decisions (vanill
 6. **Goal empty → spawn button disabled.** ⌘↵ shortcut bound when button is enabled.
 7. **Selected model card panel lives below bindings**, updates on every binding change. Shows the actor whose model card is being inspected (focus-driven).
 
+### Option-list / row design — the visual unit
+
+The current dropdown rendering (bare `<select>` and unstyled chip strings) is the weakest visual surface in the form. Frontier AI-tool studios converge on a **rich row** with consistent left-icon → label-stack → right-accessory grid. Mined from Raycast / Linear / Claude / Cohere DESIGN.md files in [VoltAgent/awesome-design-md](https://github.com/VoltAgent/awesome-design-md) (which packages design systems in [Google Stitch DESIGN.md format](https://stitch.withgoogle.com/docs/design-md/format/)), and from Datadog DRUIDS + Google AI Studio + Anthropic Console listbox patterns:
+
+| Source | Row pattern | Crumb mapping |
+|---|---|---|
+| **Raycast `command-palette-row`** ([DESIGN.md L222-228](https://github.com/VoltAgent/awesome-design-md/blob/main/design-md/raycast/DESIGN.md)) | `transparent → surface-card` on hover/selected · `padding 6px 10px` · `rounded.sm` · 3-zone grid: `app-icon-tile` (left) + label (center) + keycap shortcut (right) | preset-chip + harness-row template |
+| **Raycast `store-extension-card`** | `surface` background · 1px hairline · `rounded.md` · `padding 16px` · 3-zone: 48px icon + name/by-author/description stack + install button | model-row (richer variant: model name + provider tag + 1-line capability blurb + "selected" pill) |
+| **Linear surface-3 dropdown** ([DESIGN.md L377](https://github.com/VoltAgent/awesome-design-md/blob/main/design-md/linear.app/DESIGN.md)) | Dropdown menus live on `surface-3` (one notch above their parent) — visual lift = "this is a popover layer". Item rows: ink-subtle text default, ink on hover, no chrome borders. | harness-dropdown + model-dropdown popover surface |
+| **Claude `rounded.sm` (6px)** ([DESIGN.md L439](https://github.com/VoltAgent/awesome-design-md/blob/main/design-md/claude/DESIGN.md)) | Dropdown items use the smallest radius (6px) — distinct from cards (12-16px). Tight, high-density. | applied to all in-popover row corners |
+| **Cohere `capability-card`** ([DESIGN.md L160-165](https://github.com/VoltAgent/awesome-design-md/blob/main/design-md/cohere/DESIGN.md)) | Thin-line geometric illustration + 24px heading + body + text link. Used for product/model summaries with checkmark bullet rows. | selected-model panel (capability badges + provider chip + price-tier dot) |
+| **Datadog DRUIDS Listbox / Combobox** ([DRUIDS components](https://druids.datadoghq.com/components)) | Item row = lead icon (16px) + primary label + secondary label + status dot + trailing meta. Selected = surface-2 lift + 2px brand accent left rule. | harness-row health badge (green/red dot from `crumb doctor`) |
+| **Google AI Studio model picker** ([ai.google.dev](https://ai.google.dev/gemini-api/docs/models)) | Per-row capability strip: context window pill, modality icons (text/image/audio/video), output cap, price tier | model-row: badge strip below name |
+| **Anthropic Console model dropdown** ([console.anthropic.com](https://console.anthropic.com/workbench)) | Model name + size tier badge (Opus / Sonnet / Haiku) + monospace ID line below, all in a single row, ⌘K-searchable | applied to model-row layout |
+
+#### Crumb option-row spec (DESIGN.md format)
+
+Three row variants, sized for their context:
+
+```yaml
+# preset-chip (top-level cascade, "ambient / solo / cross-3way / mock / sdk-enterprise")
+preset-chip:
+  height: 32px
+  padding: 6px 12px
+  rounded: 999px              # full pill
+  default:
+    background: transparent
+    border: 1px solid hairline
+    text: ink-subtle
+  selected:
+    background: surface-2
+    border: 1px solid accent
+    text: ink
+  states:
+    - hover: background → surface-1
+    - disabled (preset's actor not authenticated): opacity 0.4, cursor not-allowed,
+      tooltip: "<adapter> not authenticated — run crumb doctor"
+  layout: [optional-icon · label · health-dot-cluster]
+
+# harness-row (mid-cascade, "claude-code / codex / gemini-cli / gemini-sdk / mock")
+harness-row:
+  height: 44px
+  padding: 8px 12px
+  rounded: 6px                # claude DESIGN.md L439
+  layout:
+    grid: 28px-icon | flex-grow-stack | 80px-meta | 12px-trailing-dot
+    icon: provider monogram (Anthropic spike / OpenAI gear / Gemini star / mock M)
+    stack:
+      primary: "Claude Code"                       # body-md, ink
+      secondary: "anthropic · claude-sonnet-4-6"   # body-sm, ink-subtle, monospace tail
+    meta: latest model count badge ("3 models")
+    trailing-dot: health (green/amber/red from doctor) — Datadog DRUIDS convention
+  states:
+    - default: transparent
+    - hover: surface-card (raycast convention)
+    - selected: surface-2 + 2px accent left rule (Datadog DRUIDS)
+    - unhealthy: dot turns red, row stays clickable, on-click opens install hint
+                 inline rather than spawning
+
+# model-row (deepest cascade, populated by chosen harness)
+model-row:
+  height: 56px            # taller — needs capability badge strip
+  padding: 10px 12px
+  rounded: 6px
+  layout:
+    grid: 28px-icon | flex-grow-stack | trailing-checkmark
+    icon: same provider monogram (matches parent harness)
+    stack:
+      primary: "claude-sonnet-4-6"                 # body-md, mono ID
+      secondary-row: capability-badge-strip
+        - context: "200K ctx"                       # caption pill, surface-1 bg
+        - modality: text/image/audio/video icons    # 14px outline icons
+        - tier: "$$$" or "$" price tier dot
+        - thinking: ✓ if reasoning-mode supports thinking
+    trailing-checkmark: 16px filled circle when selected
+  states:
+    - default: transparent
+    - hover: surface-card
+    - selected: surface-2 + 2px accent left rule
+    - filtered out (model not in chosen harness): never rendered
+```
+
+#### Listbox container
+
+```yaml
+listbox-popover:
+  background: surface-3        # linear.app convention — popover lift
+  border: 1px solid hairline
+  rounded: 12px                # outer card radius (claude rounded.lg)
+  padding: 4px
+  max-height: 360px
+  overflow-y: auto
+  shadow: depth-2              # lifted from page
+  ring-on-open: 2px accent at 30% opacity, animated 200ms ease-out
+  empty-state: "No <thing> matching '<query>' — see install hints"  # WAI-ARIA live-region
+  loading: skeleton row × 3 (Datadog DRUIDS convention)
+  search-affordance: top input row (when row count > 8) with ⌘F focus + fuzzy match
+```
+
+#### Cascading reveal animation
+
+Mined from Raycast palette + Linear command-K + Datadog monitor flow:
+
+1. Harness popover opens — 200ms `ease-out`, `transform: scaleY(0.96 → 1) + opacity (0 → 1)` from anchor top edge.
+2. Selecting a harness dispatches `binding:harness:changed` → model listbox **reveals from disabled to enabled** with `200ms` color transition (text from `ink-subtle` → `ink`, border from `hairline-soft` → `hairline`), and a 100ms shimmer on the model-row stack (Datadog DRUIDS "data-loaded" pulse).
+3. Selecting a model dispatches `binding:model:changed` → selected-model card panel below bindings cross-fades (200ms), and a faint accent flash (1 frame) on the chosen row.
+
+No animation longer than 200ms anywhere — Linear / Raycast / Datadog convention. Honor `prefers-reduced-motion` (collapse all transitions to 0ms).
+
+#### Density tiers
+
+Per AI Studio / Workbench convention, expose two density modes:
+- **Comfortable** (default for new users): row heights as above (32 / 44 / 56), `padding` generous.
+- **Compact** (power users, `localStorage['crumb.studio.density'] === 'compact'`): drop heights by 25% (24 / 36 / 44), tighten typography to `body-sm`.
+
+Toggle in the Studio top-right gear menu, mirroring Datadog Notebook density toggle.
+
+### Companion artifact — `packages/studio/DESIGN.md`
+
+To make this redesign reproducible by AI agents (Claude / Cursor / Codex), publish a Crumb-specific `DESIGN.md` at `packages/studio/DESIGN.md` following the [Stitch format](https://stitch.withgoogle.com/docs/design-md/format/) and the 9-section template from [VoltAgent/awesome-design-md](https://github.com/VoltAgent/awesome-design-md):
+
+1. Visual Theme & Atmosphere
+2. Color Palette & Roles
+3. Typography Rules
+4. Component Stylings (carries the row specs above + waterfall bar + DAG node + detail panel)
+5. Layout Principles
+6. Depth & Elevation (surface ladder: canvas → surface-1 → surface-2 → surface-3 → surface-card)
+7. Do's and Don'ts
+8. Responsive Behavior
+9. Agent Prompt Guide
+
+Lands as PR-S1's first commit (before any TS/JS changes) so subsequent PRs can be reviewed against the contract. Alpine + Open Props vendor inlining mentioned in the stack section consumes the tokens defined here.
+
 ### Backend payload shape
 
 Expand the existing endpoint to accept explicit per-actor bindings:
@@ -197,7 +330,8 @@ Five-PR sequence, in order. Each PR is independently mergeable and CI-green.
 
 | PR | Branch | Scope | Verify gate adds |
 |---|---|---|---|
-| **PR-S1** | `feat/studio-new-session-cascade` | Replace top-level adapter dropdown with per-actor cascade. Add Alpine.js + WAI-ARIA combobox. Goal becomes textarea. Backend accepts `bindings` payload + writes ephemeral preset.toml. | `lint:knip` ignore for `alpinejs`/`fuse.js`. New unit tests for `serveCrumbRun()` bindings → preset.toml mapping. |
+| **PR-S0** | `docs/studio-design-md` | Publish `packages/studio/DESIGN.md` (Stitch 9-section format) — color tokens, typography, surface ladder, preset-chip / harness-row / model-row / listbox-popover specs. No code change. Contract for S1-S3. | docs-only. |
+| **PR-S1** | `feat/studio-new-session-cascade` | Replace top-level adapter dropdown with per-actor cascade. Add Alpine.js + WAI-ARIA combobox. Goal becomes textarea. Backend accepts `bindings` payload + writes ephemeral preset.toml. Implements row variants per DESIGN.md. | `lint:knip` ignore for `alpinejs`/`fuse.js`. New unit tests for `serveCrumbRun()` bindings → preset.toml mapping. |
 | **PR-S2** | `feat/studio-model-card-panel` | Capability badge strip + selected model card side panel. Pull capability metadata from `MODEL_CATALOG` (existing) + extended capability fields (`context_window`, `modalities`, `price_tier`, `thinking`). | New JSON Schema validation for capability fields. |
 | **PR-S3** | `feat/studio-command-palette` | ⌘K command palette (Linear/Raycast pattern), preset fuzzy-search via fuse.js, keyboard-first spawn. | E2E test: ⌘K → "cross" → enter → bindings pre-filled. |
 | **PR-V1** | `feat/studio-pipeline-dagre-layout` | Replace hardcoded `DAG_NODES` positions with dagre-computed layout. No visual regression for existing 9-node graph. Add validator actor without code change to `DAG_NODES`. | Snapshot test: dagre layout for known transcript = stable across runs. |
@@ -217,6 +351,8 @@ These resolve before PR-S1 lands.
 ## References
 
 ### Frontier patterns
+- [VoltAgent/awesome-design-md](https://github.com/VoltAgent/awesome-design-md) — 71 site DESIGN.md files in [Google Stitch format](https://stitch.withgoogle.com/docs/design-md/format/); cloned to `~/workspace/awesome-design-md/`. Mined: Raycast `command-palette-row` / `store-extension-card`, Linear `surface-3` dropdown, Claude `rounded.sm` dropdown items, Cohere `capability-card`, Lovable AI-builder feel.
+- [Stitch DESIGN.md overview](https://stitch.withgoogle.com/docs/design-md/overview/) · [format reference](https://stitch.withgoogle.com/docs/design-md/format/)
 - [Datadog Monitor querying](https://docs.datadoghq.com/dashboards/querying/)
 - [DRUIDS — Datadog's design system](https://www.datadoghq.com/blog/engineering/druids-the-design-system-that-powers-datadog/) · [components catalog](https://druids.datadoghq.com/components)
 - [Google AI Studio model catalog](https://ai.google.dev/gemini-api/docs/models)
