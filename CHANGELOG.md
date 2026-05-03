@@ -4,6 +4,26 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — DAG runtime data overlay: per-actor badges + edge throughput/latency encoding (PR-J') (2026-05-03)
+
+PR-J (chip-swimlane → Gantt waterfall) was abandoned per user feedback ("main 의 chip 디자인 마음에 듦"). Replaced with the lighter-touch Candidate 4 from the same frontier observability survey: keep main's chip event dashboard intact, instead bind runtime data onto the existing DAG nodes + edges. Frontier convergence: LangSmith / Langfuse / Phoenix per-step token + cost + latency badges (under-node), Datadog Service Map throughput-as-thickness (edge), AWS X-Ray latency-as-color (slow edges turn red).
+
+`packages/studio/src/client/studio.js`:
+- New `aggregateActorRuntime(events)` — single-pass over the cached transcript. Per actor: `events`, `tokens_in`, `tokens_out`, `cost_usd`, `latency_ms_total`, `latency_ms_p95`. `qa_check` is a synthetic actor: `from='system'` events with `metadata.tool='qa-check-effect@v1'` are remapped to it (mirrors the existing `rippleFromActor()` convention).
+- New `aggregateEdgeRuntime(events)` — derives per-edge `count` + `avg_latency_ms` from consecutive event pairs that match a static `DAG_EDGES` entry. Same `from='system' → 'qa_check'` remap.
+- New `formatActorBadge(stats)` — compact `12.3k tok · $0.18 · 8.1s p95` line that drops zero/missing fields so the badge stays terse (≤ 24 chars).
+- `renderDag()` now renders a `<text class="dag-node-badge">` line under each node and `<text class="edge-count">×N</text>` above each traversed edge midpoint. Edge `stroke-width` is computed inline (`min(4.4, 1.4 + log2(1+count) * 0.9)`) so the thickest edge is visible without dominating the canvas. Slow edges (`avg_latency_ms > 5000`) get an `.edge-slow` class for red overlay.
+
+`packages/studio/src/client/studio.css`:
+- `.dag-node-badge` — 9px ui-monospace, fill `--ink-tertiary`, opacity 0.85; brightens to `--ink-muted` opacity 1.0 when the node is `.active` or `.recent`.
+- `.dag-edge-group.edge-traversed` — bumps edge opacity to 1.0 (untraversed stay at the static class's baseline).
+- `.dag-edge-group.edge-slow .dag-edge` — red stroke override for high-latency edges.
+- `.edge-count` — 8px badge above edge midpoint.
+
+Result: the Pipeline DAG (PR-H structural correctness) now answers "where is the time + tokens + money going" without leaving the topology view. Chip swimlane (PR-7 + PR-8 unread badges) stays unchanged — main's UX preserved verbatim.
+
+Verification: `npm run lint && npm run typecheck && npm run format:check && npm test && npm run build` — 466 tests pass. Live verified at http://127.0.0.1:7321/.
+
 ### Added — Studio cancel button on live session rows (R5) (2026-05-03)
 
 R2 (PR #123) added the `/cancel` user verb + `cancel_spawn` effect end-to-end (parser → reducer → dispatcher AbortController → SIGTERM), but the only way to invoke it was typing `/cancel` into the Studio's console-input bar. R5 surfaces it as a one-click button on each live session row, mirroring the existing PR-G7-B Resume button shape but with destructive accent (`--audit-fg`) so the lossy mid-edit kill is visually distinct from the additive Resume action.

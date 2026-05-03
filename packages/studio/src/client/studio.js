@@ -1046,6 +1046,114 @@ function nodeShapePath(n, r = 26) {
   }
 }
 
+/**
+ * Aggregate per-actor runtime stats from the active session's transcript.
+ * Same shape as metrics.ts ActorTotals but computed inline so renderDag
+ * doesn't need a round-trip through the SSE state event (which fires only
+ * on full state recompute; renderDag fires on every weave). Returns a
+ * Map<actor, {events, tokens_in, tokens_out, cost_usd, latency_ms_total,
+ * latency_ms_p95}>; missing actors yield undefined so the badge layer can
+ * just skip them.
+ */
+function aggregateActorRuntime(events) {
+  const acc = new Map();
+  const latByActor = new Map();
+  for (const e of events) {
+    let bucket = acc.get(e.from);
+    if (!bucket) {
+      bucket = {
+        events: 0,
+        tokens_in: 0,
+        tokens_out: 0,
+        cost_usd: 0,
+        latency_ms_total: 0,
+        latency_samples: 0,
+      };
+      acc.set(e.from, bucket);
+      latByActor.set(e.from, []);
+    }
+    bucket.events += 1;
+    const md = e.metadata;
+    if (!md) continue;
+    if (typeof md.tokens_in === 'number') bucket.tokens_in += md.tokens_in;
+    if (typeof md.tokens_out === 'number') bucket.tokens_out += md.tokens_out;
+    if (typeof md.cost_usd === 'number') bucket.cost_usd += md.cost_usd;
+    if (typeof md.latency_ms === 'number') {
+      bucket.latency_ms_total += md.latency_ms;
+      bucket.latency_samples += 1;
+      latByActor.get(e.from).push(md.latency_ms);
+    }
+  }
+  // Compute p95 per actor (sorted, take 95th percentile or max if <20 samples).
+  for (const [actor, samples] of latByActor.entries()) {
+    if (samples.length === 0) continue;
+    samples.sort((a, b) => a - b);
+    const idx = Math.min(samples.length - 1, Math.floor(samples.length * 0.95));
+    acc.get(actor).latency_ms_p95 = samples[idx];
+  }
+  return acc;
+}
+
+/**
+ * Aggregate per-edge stats: how many times this edge was traversed in the
+ * active session + average latency of the destination actor's events on
+ * that traversal. Used to thicken edges that fire often (Datadog Service
+ * Map "throughput=line thickness" idiom) and tint slow edges red (X-Ray
+ * heatmap idiom). Heuristic: an edge `(from → to)` is "traversed" when an
+ * event from `to` follows an event from `from` within the cached events,
+ * AND that pair matches a static DAG_EDGES entry.
+ */
+function aggregateEdgeRuntime(events) {
+  const counts = new Map(); // "from→to" → traversal count
+  const latencies = new Map(); // "from→to" → [latency_ms samples on `to` events]
+  // Build a fast lookup: which edges exist in the static DAG.
+  const validEdges = new Set(DAG_EDGES.map(([from, to]) => from + '→' + to));
+  // System events with metadata.tool=qa-check-effect@v1 represent the qa_check
+  // node in the DAG, mirror studio's rippleFromActor logic.
+  const remap = (e) =>
+    e.from === 'system' && e.metadata?.tool === 'qa-check-effect@v1' ? 'qa_check' : e.from;
+  for (let i = 1; i < events.length; i++) {
+    const fromActor = remap(events[i - 1]);
+    const toActor = remap(events[i]);
+    if (fromActor === toActor) continue;
+    const key = fromActor + '→' + toActor;
+    if (!validEdges.has(key)) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const lat = events[i].metadata?.latency_ms;
+    if (typeof lat === 'number') {
+      let arr = latencies.get(key);
+      if (!arr) {
+        arr = [];
+        latencies.set(key, arr);
+      }
+      arr.push(lat);
+    }
+  }
+  const result = new Map();
+  for (const [key, count] of counts.entries()) {
+    const arr = latencies.get(key) ?? [];
+    const avg = arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+    result.set(key, { count, avg_latency_ms: avg });
+  }
+  return result;
+}
+
+/**
+ * Format a per-node runtime badge string. Compact, monospace, ≤ ~24 chars
+ * so it fits below a 26px-radius node without wrapping.
+ *   `12.3k tok · $0.18 · 8.1s p95`
+ * Drops fields that are zero/absent so the badge stays terse.
+ */
+function formatActorBadge(stats) {
+  if (!stats) return '';
+  const parts = [];
+  const tokTotal = (stats.tokens_in ?? 0) + (stats.tokens_out ?? 0);
+  if (tokTotal > 0) parts.push(formatTokens(tokTotal) + ' tok');
+  if (stats.cost_usd > 0) parts.push(formatCost(stats.cost_usd));
+  if (stats.latency_ms_p95) parts.push((stats.latency_ms_p95 / 1000).toFixed(1) + 's p95');
+  return parts.join(' · ');
+}
+
 function renderDag() {
   const svg = $('dag-svg');
   if (!svg) return;
@@ -1056,32 +1164,59 @@ function renderDag() {
       '<text x="' + (p.x + 10) + '" y="' + (p.y + 16) + '" class="phase-label">' + escapeHTML(p.label) + '</text>' +
     '</g>'
   ).join('');
+  const events = activeSession ? (eventCache.get(activeSession) ?? []) : [];
+  // PR-J' (Candidate 4) — per-edge runtime aggregation drives stroke width
+  // (count) and color shift (avg latency). Untraversed edges keep their
+  // baseline static styling so the structural DAG remains legible.
+  const edgeStats = aggregateEdgeRuntime(events);
   // Edges (typed) — typed dasharray + label rendered above the midpoint.
   const edgesSvg = DAG_EDGES.map(([from, to, type, label]) => {
     const a = DAG_NODES[from], b = DAG_NODES[to];
     if (!a || !b) return '';
     const d = edgePath(a, b, from, to);
+    const stats = edgeStats.get(from + '→' + to);
+    // Datadog "edge thickness = throughput" — clamp 1.4–4.4px so the
+    // thickest edge is visible without dominating the canvas.
+    const strokeWidth = stats ? Math.min(4.4, 1.4 + Math.log2(1 + stats.count) * 0.9) : 1.4;
+    // X-Ray-style latency tint: opacity 0.55 baseline → 1.0 when traversed.
+    // Slow edges (avg > 5000ms) get an extra red overlay via the
+    // .edge-slow class.
+    const extraCls = [];
+    if (stats) extraCls.push('edge-traversed');
+    if (stats?.avg_latency_ms && stats.avg_latency_ms > 5000) extraCls.push('edge-slow');
     const labelSvg = label
       ? '<text class="edge-label edge-label-' + type + '" x="' + edgeLabelPos(a, b, from, to).x + '" y="' + edgeLabelPos(a, b, from, to).y + '">' + escapeHTML(label) + '</text>'
       : '';
-    return '<g class="dag-edge-group">' +
-      '<path class="dag-edge edge-' + type + '" d="' + d + '" marker-end="url(#dag-arrow-' + type + ')" />' +
-      labelSvg +
+    const countBadge = stats && stats.count > 1
+      ? '<text class="edge-count" x="' + edgeLabelPos(a, b, from, to).x + '" y="' + (edgeLabelPos(a, b, from, to).y - 11) + '">×' + stats.count + '</text>'
+      : '';
+    return '<g class="dag-edge-group ' + extraCls.join(' ') + '">' +
+      '<path class="dag-edge edge-' + type + '" d="' + d + '" stroke-width="' + strokeWidth.toFixed(2) + '" marker-end="url(#dag-arrow-' + type + ')" />' +
+      labelSvg + countBadge +
     '</g>';
   }).join('');
-  const events = activeSession ? (eventCache.get(activeSession) ?? []) : [];
   const lastEvt = events[events.length - 1];
   const lastActor = lastEvt?.from;
   const recentActors = new Set(events.slice(-8).map(e => e.from));
   const isDone = events.some(e => e.kind === 'done');
+  // PR-J' (Candidate 4) — per-actor runtime aggregation drives the badge
+  // line under each node (LangSmith / Langfuse / Phoenix idiom).
+  const actorStats = aggregateActorRuntime(events);
   const nodesSvg = Object.entries(DAG_NODES).map(([actor, n]) => {
     const cls = ['dag-node', 'node-' + actor.replace(/[^a-z_]/gi, '-'), 'shape-' + (n.shape || 'circle')];
     if (lastActor === actor) cls.push('active');
     else if (recentActors.has(actor)) cls.push('recent');
     if (actor === 'done' && isDone) cls.push('active');
+    // qa_check is a synthetic node — system events with the qa-check-effect tool
+    // get aggregated under the qa_check key via aggregateActorRuntime's remap.
+    const badge = formatActorBadge(actorStats.get(actor));
+    const badgeSvg = badge
+      ? '<text class="dag-node-badge" x="' + n.x + '" y="' + (n.y + 32) + '">' + escapeHTML(badge) + '</text>'
+      : '';
     return '<g class="' + cls.join(' ') + '" data-actor="' + actor + '">' +
       '<path d="' + nodeShapePath(n) + '" />' +
       '<text x="' + n.x + '" y="' + (n.y + 4) + '">' + escapeHTML(n.label) + '</text>' +
+      badgeSvg +
     '</g>';
   }).join('');
   // Arrowhead defs — one per edge type so the head color matches the stroke.
