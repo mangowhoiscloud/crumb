@@ -24,7 +24,7 @@
 
 import { useMemo, useState } from 'react';
 import { useTranscriptStream, type TranscriptEvent } from '../hooks/useTranscriptStream';
-import { useActiveSession } from '../stores/selection';
+import { useActiveSession, setSelectedNodeActor } from '../stores/selection';
 
 interface ThreadEntry {
   user: TranscriptEvent;
@@ -244,11 +244,36 @@ export function InboxThread() {
                     {t.actorEvents.map((e) => (
                       <div
                         key={e.id}
+                        // Click-through to DetailRail. Each actor row in the
+                        // Tier 3 fold becomes a button: setSelectedNodeActor
+                        // → DetailRail's mode-1 picks it up and renders
+                        // NodeInspector (binding + recent events + sandwich
+                        // preview). Same drill-down convention as Pipeline
+                        // node click — actor scope is the right unit.
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => e.from && setSelectedNodeActor(e.from)}
+                        onKeyDown={(ev) => {
+                          if (ev.key === 'Enter' || ev.key === ' ') {
+                            ev.preventDefault();
+                            if (e.from) setSelectedNodeActor(e.from);
+                          }
+                        }}
+                        onMouseEnter={(ev) => {
+                          ev.currentTarget.style.background = 'var(--surface-2)';
+                        }}
+                        onMouseLeave={(ev) => {
+                          ev.currentTarget.style.background = 'transparent';
+                        }}
                         style={{
                           padding: '2px 4px',
                           fontSize: 10,
                           borderRadius: 'var(--r-sm)',
+                          cursor: 'pointer',
+                          background: 'transparent',
+                          transition: 'background 80ms ease',
                         }}
+                        title={`${e.from} · ${e.kind} · click to open in DetailRail`}
                       >
                         <span style={{ color: 'var(--ink-tertiary)' }}>{formatTime(e.ts)}</span>{' '}
                         <span style={{ color: 'var(--primary)', fontWeight: 500 }}>{e.from}</span>{' '}
