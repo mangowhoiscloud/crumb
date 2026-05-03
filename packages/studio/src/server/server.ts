@@ -89,11 +89,11 @@ export async function startStudioServer(opts: StudioServerOptions = {}): Promise
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? bind}`);
     if (req.method === 'GET' && url.pathname === '/') {
-      // M0 scaffold — `?app=v2` serves the React preview bundle from
-      // dist/client-v2/. Default keeps the v1 vanilla bundle until M7.1.
-      // See wiki/synthesis/bagelcode-studio-big-bang-update-2026-05-03.md §0.0.
-      if (url.searchParams.get('app') === 'v2') return void serveHtmlV2(res);
-      return serveHtml(res);
+      // M7.1 — default flipped to v2 (React + dockview shell).
+      // `?app=v1` keeps the legacy vanilla bundle reachable as an escape
+      // hatch until M8 deletes it entirely. See migration plan §7 row M7.1.
+      if (url.searchParams.get('app') === 'v1') return serveHtml(res);
+      return void serveHtmlV2(res);
     }
     // M0 scaffold — static handler for v2 bundle assets (vite emits them under
     // dist/client-v2/assets/). Path traversal blocked by serveV2Asset itself.
@@ -244,10 +244,11 @@ function serveHtml(res: http.ServerResponse): void {
 }
 
 /**
- * M0 scaffold — serve the React v2 preview bundle from dist/client-v2/.
- * Falls back to a friendly placeholder when the bundle hasn't been built
- * yet (so a fresh-clone before `npm run build` doesn't 404). See
- * wiki/synthesis/bagelcode-studio-big-bang-update-2026-05-03.md §0.0.
+ * Serve the React v2 bundle from dist/client-v2/. M7.1 made this the
+ * default; `/?app=v1` keeps the legacy vanilla bundle reachable until
+ * M8 deletes it. Falls back to a friendly placeholder when the bundle
+ * hasn't been built yet (so a fresh-clone before `npm run build` shows
+ * a useful message instead of a 404). See migration plan §7 row M7.1.
  */
 async function serveHtmlV2(res: http.ServerResponse): Promise<void> {
   // Resolve relative to this module's dist location: dist/server.js →
@@ -265,11 +266,11 @@ async function serveHtmlV2(res: http.ServerResponse): Promise<void> {
     res.statusCode = 503;
     res.setHeader('content-type', 'text/html; charset=utf-8');
     res.end(
-      '<!doctype html><meta charset="utf-8"><title>Crumb · v2 not built</title>' +
+      '<!doctype html><meta charset="utf-8"><title>Crumb · Studio bundle not built</title>' +
         '<style>body{font-family:system-ui;padding:32px;color:#1a1a2e}</style>' +
-        '<h1>v2 preview bundle not built</h1>' +
+        '<h1>Studio bundle not built</h1>' +
         '<p>Run <code>npm run build --workspace=@crumb/studio</code> to populate <code>dist/client-v2/</code>, then reload.</p>' +
-        '<p><a href="/">← back to v1 (default)</a></p>',
+        '<p><a href="/?app=v1">use legacy vanilla shell (escape hatch)</a></p>',
     );
   }
 }
