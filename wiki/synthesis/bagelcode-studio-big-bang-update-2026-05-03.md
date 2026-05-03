@@ -15,6 +15,78 @@ tags: [studio, migration, big-bang, react, dockview, datadog, frontier]
 
 > One coherent rebuild that swaps Studio's vanilla-JS chassis for a React-native stack while preserving every section, every connection, and every datum surfaced today. Folds in the Datadog-grade redesign (PR #143), the inheritor backlog from the handoff (F4–F6, PR-O3–O5, W2–W4), and the cleanup queued in the Prune stream (chore/prune-dead-schema-kinds). Implementation is **gated on Prune-1/2/3 merging first** — the schema delta must settle before we redraw component boundaries on top of it.
 
+## 0.0 Vanilla → Big-bang cutoff (executed 2026-05-03)
+
+User directive 2026-05-03: *"빅뱅 왜 진행안했어. 지금 바닐라 어디까지 구현하고 빅뱅할래. 체계적으로 잡아."* — concern that the main agent was over-accumulating vanilla improvements while the React migration sat in plan limbo. Trigger criteria (Prune-1/2/3 merged + user explicit approval) all satisfied as of this commit. **M0 starts immediately**; no further vanilla feature work is queued except what is already shipping.
+
+### Vanilla last-call (cutoff frozen)
+
+These PRs land on vanilla because they are already in flight, address concrete user-requested defects, and feed the M2 baseline snapshot:
+
+| PR | Status | Why it stays on vanilla |
+|---|---|---|
+| #161 `feat(studio): adapter auth detail — plan tier + login expiry + .env support` | rebased, CI re-running | User-requested, implemented + once-CI-passing. The .env loader pre-reqs §13.1 portability work, so landing now means M0 starts with the correct auth-resolution chain. |
+| #164 `feat(studio): relocate sidebar toggle next to CRUMB STUDIO wordmark` | merged | Hamburger now matches Image #16 spec — captured in M2 visual baseline. |
+
+### Defers to big-bang — no longer on vanilla
+
+| Item | Lands as | Was tempted to vanilla? |
+|---|---|---|
+| Cascading new-session form (preset-chip + harness-row + model-row + multi-line goal + capability badges + selected model card panel + ⌘K palette + density toggle) | **M3** `feat/studio-v2-sidebar` | Yes — branch `feat/new-session-cascade` was started and **abandoned** at this cutoff. Full §6 spec lives in M3. |
+| F5 adapter modal advanced | M3 `<AdapterDoctorDialog>` | Yes — defer |
+| F6 block tear-off | M5 (free via dockview popout) | Yes — defer |
+| PR-O4 aggregate strip + sparkline | M6 (Tremor SparkAreaChart) | Yes — defer |
+| PR-O5 trace tree + cross-provider chip + lifecycle gauge | M6 | Yes — defer |
+| Service Map view | M4 `<ServiceMap>` | Never on vanilla — defer |
+| Critical-path overlay | M4 (toggle shared across viz tabs) | Never on vanilla — defer |
+| BubbleUp drag-select outlier mode | M4 (Waterfall) | Never on vanilla — defer |
+| W3 design_check Studio surface | M6 `<DesignCheckPanel>` | Reducer-side W3 still ships independently; UI surface defers |
+
+**Rule**: any new feature work that would land in `packages/studio/src/client/studio.{html,css,js}` must instead target `packages/studio/src/client-v2/` (the M0 scaffold output). The legacy bundle accepts only bug fixes that block the M2 baseline snapshot.
+
+### 0.0.1 Vanilla last-call exception — parallel-stream PR-O4 sparklines
+
+While the cutoff was being committed, another stream pushed `feat/aggregate-strip-sparkline` (`feat(studio): score-trajectory sparklines + per-actor metric tooltips (PR-O4)`) — a +55 LoC CSS / +122 LoC JS additive change to the v1 vanilla bundle. The plan accommodates it without rolling back:
+
+| Concern | Resolution |
+|---|---|
+| Does it land on vanilla? | Yes — additive only, no schema or layout shift, fits the M2 visual baseline. |
+| Does it duplicate M6 work? | Logic-wise yes (sparklines render score history); structurally no (vanilla DOM vs Tremor SparkAreaChart). M6 ports the **derivation formulas** (D1-D6 history extraction, per-actor token/cost/latency rollup) **verbatim**, then re-renders via Tremor — same numbers, different chrome. |
+| What carries forward to M2/M3/M6? | (a) Visual baseline snapshot in M2 captures the sparkline + tooltip pixel-for-pixel as the target chrome v2 must match. (b) Derivation helpers (`scoreHistoryFor()` / `aggregateActorRuntime()` from this PR) move into `packages/studio/src/server/metrics.ts` as part of the §17 audit's "client recompute → server-derived" fix in M1. M6's `<Scorecard>` panel reads the same `metrics.per_actor` + `metrics.score_history` fields the v1 implementation needed. |
+| Is the cutoff broken? | No. The cutoff says "vanilla last-call (cutoff frozen)" — PR-O4 was already in-flight before the cutoff committed. It joins #161 + #164 as a third vanilla last-call. Future PR-O5 / F5 / etc. still defer per the original list. |
+
+**Action when PR-O4 lands**: M2 baseline snapshot includes the sparklines; M6 mapping table gets a row pointing at the exact formula source so re-implementation has one place to reference; CHANGELOG `[Unreleased]` records "PR-O4 sparklines (vanilla last-call) — formulas migrate to server in M1, render to Tremor in M6".
+
+**Generalized policy**: any future parallel-stream vanilla PR that lands during the M0–M2 window is accepted only if (a) additive, (b) visually consistent with the M2 baseline target, and (c) its derivation logic is portable to server/Tremor in M1/M6. Anything that re-shapes the layout, introduces a new on-disk path, or duplicates schema is rejected — defer to a v2 panel instead. M-series PRs cite the parallel PR's commit SHA when they re-implement so the lineage is traceable.
+
+### 0.0.2 Remaining backlog → M-series absorption (no parallel vanilla queue)
+
+User directive 2026-05-03: *"안전이라고 고칠 걸 안고치는 보수적인 자세 취하지마. 완전 스택을 갈아엎는 빅뱅인만큼 과감할 땐 과감해야 해."*
+
+The inheritor handoff named four items still queued: **F6 / W3 / W4 / PR-O5**. None of them get a parallel vanilla PR — they're absorbed by M-series PRs that ship as part of this migration. Concrete absorption:
+
+| Backlog | Absorbed by | How |
+|---|---|---|
+| **F6** Block tear-off | **M5** | dockview's built-in popout (`window.open` + `BroadcastChannel`) gives this for free. The standalone F6 ticket evaporates; what was a "4-6h risky custom-window-management ticket" becomes one configuration property on the dockview API. No vanilla F6 work — that would be wasted code. |
+| **PR-O5** trace tree + cross-provider chip + per-spawn lifecycle gauge | **M6** | Tree component is shadcn `<Tree>` over recursive `tool.call → tool.result` walk. Cross-provider chip + lifecycle gauge mount inside `<Scorecard>`. No vanilla PR-O5 — the v1 monolith's render path can't accommodate the recursive tree without architectural surgery. M6 does both surgeries simultaneously. |
+| **W3** design_check effect | **independent reducer-side PR + M6 surface** | Reducer/dispatcher half ships as a chore PR touching `src/dispatcher/qa-runner.ts` + `protocol/schemas/message.schema.json` — that's another stream's territory and runs in parallel with M-series. Studio surface (`<DesignCheckPanel>`) lands in **M6** ready to read whatever payload the reducer emits. If reducer-W3 ships before M6, the panel renders results from day one. If after, the empty-state placeholder stays until reducer-W3 merges + transcripts produce design_check events. Either order works. |
+| **W4** retry policy with cache-hit monitoring | **independent reducer-side PR** | Pure reducer concern — nothing for the migration to do. M-series doesn't block on it; reducer stream lands when ready. |
+
+**The bold framing**: every backlog item that touches Studio UI is *the migration's job*, not parallel work. The conservative "ship F6/PR-O5 on vanilla in parallel and re-port later" plan is rejected — it doubles the work and leaves the v1 monolith dirtier at M8 deletion time. The migration earns its scope by absorbing this backlog, not by tip-toeing around it.
+
+**Conflict-resolution rule**: if a parallel reducer/dispatcher stream lands a schema change that affects an M-PR's reads, the M-PR rebases on top and adapts the read shape. Migration receives, never dictates.
+
+### Big-bang execution order — locked
+
+- **M0 (NEXT)** `chore/studio-vite-scaffold` — Vite + React 19 + TypeScript scaffold at `packages/studio/src/client-v2/`. `?app=v2` route serves the new bundle; default `?app=v1` keeps vanilla live until M7.1.
+- **M1** `chore/studio-server-extract` — server.ts + siblings under `src/server/`.
+- **M2** `feat/studio-v2-shell-dockview` — dockview + shadcn + Tailwind v4 + Open Props + DESIGN.md (Stitch 9-section) publish + density toggle + visual baseline snapshot pinned.
+- **M3 → M11** per §7 roadmap.
+
+CI gates land alongside their M-PR per §13.3.1: M0 adds absolute-path / symlink scan + Vite-build budget; M2 adds visual snapshot diff + a11y AA; M3 onwards add per-panel snapshot baselines.
+
+The `[Unreleased]` CHANGELOG section gains a "v1 → v2 transition" subsection at this cutoff so the inheritor can read git history and know exactly when the vanilla → React fork happened.
+
 ## 0. Prime directive — preserve the visual, elevate everything underneath
 
 The current Studio's **visual layout is the production target**. Per user directive (2026-05-03 amendment): "전반적으로 현재 시각적인 레이아웃을 기반으로 프로덕션레벨로 기능성과 퀄리티를 올린다고 인지해." The migration is a **chassis swap, not a redesign** — the chassis (vanilla DOM mutation, hand-rolled splitters, monolithic studio.js) is replaced; the body (panel arrangement, colors, typography, scorecard composition, DAG layout geometry, swimlane row order, narrative + feed structure, slash bar quick-action chips, conn-state reconnect banner, splitter tooltips, view-tab list) is preserved pixel-equivalent.
@@ -379,7 +451,7 @@ The migration is paced so the live `npx crumb-studio` keeps working at every ste
 | **M4** | `feat/studio-v2-pipeline-waterfall-map` | `<Pipeline>` (swimlane + interactive React Flow DAG with dagre seed layout, drag/pan/zoom/click → `<NodeInspector>`, layout persistence) + `<Waterfall>` (with **BubbleUp drag-select outlier mode**) + `<ServiceMap>` (edge aggregation + cross-provider tint) + **Critical-path overlay** toggle shared across all three viz tabs + `<DetailRail>` tri-mode (event detail / node inspector / outlier baseline-vs-selection histograms). SSE stream → query cache. | `?app=v2` user can: drag pipeline nodes; click → inspect/edit binding; switch to Waterfall, drag-select outliers; switch to Map, hover an edge to see req/s + p50/p95 + error rate; toggle critical-path overlay across all three views |
 | **M5** | `feat/studio-v2-bottom-panels` | `<AgentNarrative>` + `<LiveFeed>` as independently dockable panels. `<SlashBar>` → inbox POST. Both panels tear-off into popout windows. | User can drag Narrative tab out into a separate window; Feed alone in main, popout-Narrative continues to receive SSE |
 | **M6** | `feat/studio-v2-scorecard-budget-trace` | `<Scorecard>` (composite + radar + drilldown + Tremor SparkAreaChart for D1-D6 sparklines per PR-O4 + **per-actor lifecycle gauge** per observability plan P3 + **cross-provider chip** per PR-O5 P7) + `<ErrorBudgetStrip>` (PR-O2 reborn) + **`<DesignCheckPanel>` Detail Rail mode** (W3 surface — palette/touch/motion violations) + `<Logs>` + `<Output>` + `<Transcript>` + **tool-call trace tree** (PR-O5 — recursive collapsible tree of tool.call → tool.result with token + duration per node). | `?app=v2` reaches parity with v1 + adds D1-D6 sparkline + lifecycle gauge + cross-provider chip + design-check audit + trace tree |
-| **M7** | `feat/studio-v2-versions-panel` | Per §14.4: `<VersionsList>` panel + `/api/projects/:pid/versions` + `/api/projects/:pid/versions/:v/artifact/*` endpoints + `<Output>` Source toggle (Session \| Version) + `<Scorecard>` reads version manifest scorecard when version mode active. | Versions browseable; archived release artifacts viewable; manifest sha256 cited in Output header |
+| **M7** | `feat/studio-v2-versions-panel` | Per §14.6: `<VersionsList>` panel + `/api/projects/:pid/versions` + `/api/projects/:pid/versions/:v/artifact/*` endpoints + `<Output>` Source toggle (Session \| Version) + `<Scorecard>` reads version manifest scorecard when version mode active. | Versions browseable; archived release artifacts viewable; manifest sha256 cited in Output header |
 | **M7.1** | `feat/studio-v2-default-on` | Flip default to v2. `?app=v1` continues to work as escape hatch. CHANGELOG entry; docs update. | `npx crumb-studio` opens v2 by default |
 | **M8** | `chore/studio-v1-removal` | Delete `studio.{html,css,js}` + `inline-client.mjs` + `studio-html.generated.ts`. Keep server unchanged. | Bundle drops legacy ~260KB blob |
 | **M9** | `feat/studio-v2-pipeline-annotations` | n8n parity polish: user-added Sticky-Note nodes on the Pipeline canvas (text labels, draggable, persisted), "Save as project default layout" affordance, "Export layout JSON" / "Import layout JSON" actions in the Pipeline toolbar, Pipeline minimap toggle in palette. | Power users can annotate the canvas, share layouts across machines |
@@ -662,11 +734,70 @@ User directive verbatim, 2026-05-03 amendment:
 
 This is a hard gate at M8 — no soft-deprecation, no co-existence period after parity is reached, no "we'll clean it up later" debt accumulation.
 
-## 14. On-disk hierarchy + write/read parity (project → session → version)
+## 14. Project / session / version model + write/read parity
 
-User directive 2026-05-03: *"아웃풋 저장 위치와 읽는 위치 일치도 고려해. 계층도도 세션, 프로젝트, 버전 고려하고."* The migration must codify a single hierarchy diagram, every artifact path must have a single writer + every reader resolves through the same canonical helper, and the **version layer** (project-scoped, not session-scoped) must be a first-class browseable surface in Studio (currently missing).
+User directives 2026-05-03 (back-and-forth):
+1. *"아웃풋 저장 위치와 읽는 위치 일치도 고려해. 계층도도 세션, 프로젝트, 버전 고려하고."*
+2. *"write/read parity (project→session→version) 이건 session->project(output)->version이야. 혼동하지마."*
+3. *"아니다. project/version/ session이 맞나? 모르겠네. 합리적으로 판단해봐. 레퍼런스들은 어떻게 푸는지 보고."*
 
-### 14.1 Canonical hierarchy
+Both prior framings (`project → session → version` and `session → project → version`) confused storage with lifecycle. This rewrite picks one canonical model after surveying frontier references and aligning to Crumb's actual code.
+
+### 14.0 Reference survey — how comparable tools model this
+
+| Tool | Tier-1 | Tier-2 | Tier-3 | Comment |
+|---|---|---|---|---|
+| **Lovable** ([lovable.dev](https://lovable.dev)) | project | version | — | No separate "session". Each prompt produces a new version; iteration history IS the version tree. |
+| **v0.dev** ([v0.dev](https://v0.dev)) | project | version | — | Same as Lovable. Linear undo across versions. |
+| **Replit Agent** ([replit.com](https://replit.com)) | repl (project) | agent run | — | "Run" is one execution. Versions implicit via repl forks. |
+| **n8n** ([n8n.io](https://n8n.io)) | workflow | execution | — | Workflow is durable, executions are runs. No third tier. |
+| **Cursor agent** | project (repo) | task | — | Project = git repo; task = one agent conversation. Versions implicit via git commits. |
+| **GitHub Actions** | workflow | run | — | Run = one execution. Versions = release tags (separate concept). |
+| **Datadog APM** | service | trace | — | Trace = one request. No "version" per se (deployments tagged separately). |
+| **Crumb** | project | { **session, version** } | — | **3 distinct concepts** because Crumb separates *running attempts* (mutable transcripts) from *released milestones* (immutable artifact snapshots). Lovable/v0 collapse this; Crumb deliberately doesn't. |
+
+**Reading**: most modern AI-builder tools collapse to two tiers because they treat each prompt as both a session and a version. Crumb keeps them separate so a user can experiment across multiple sessions, then pick one to release as a version — the released artifact survives even if the source session is deleted. This is the right design for the multi-actor execution model where one session may take 5+ minutes and produce many checkpoints before the user decides "this is the milestone."
+
+### 14.1 The canonical model (storage + flow in one diagram)
+
+The hierarchy is **two-tier**: project owns sessions and versions as **siblings**. The flow is **session → version (snapshot)** within the project's namespace.
+
+```
+PROJECT  (the game; identity = sha256(cwd) OR pinned `.crumb/project.toml`)
+│
+├── sessions/                  mutable runs — many sessions per project
+│   └── <ulid>/
+│       ├── transcript.jsonl   append-only (single writer: src/transcript/writer.ts)
+│       ├── meta.json          lifecycle status patches (single writer: src/session/meta.ts)
+│       ├── inbox.txt          user.intervene write target
+│       ├── artifacts/         builder writes here; Studio Output reads
+│       └── agent-workspace/<actor>/   per-actor sandboxed cwd
+│
+└── versions/                  immutable milestones — fewer than sessions
+    └── <vN-or-label>/
+        ├── manifest.json      { source_session, source_event_id, scorecard,
+        │                       sha256_per_file, … }
+        └── artifacts/         frozen copy of source session's artifacts
+                              (durable: outlives source session deletion)
+```
+
+**Cardinality**: `1 project : N sessions : M versions` where `M ≤ N` (every version originates from one session; not every session graduates to a version).
+
+**Flow operation**: `crumb release <session-ulid>` reads `sessions/<sid>/artifacts/` + the session's last `judge.score` event, writes a new `versions/<vN>/{manifest.json, artifacts/}`, and appends `kind=version.released` to the source session's transcript. No session is mutated; a new version directory appears.
+
+**Both questions answered by one model**:
+- *Where is data stored?* → `<crumb-home>/projects/<id>/{sessions/, versions/}/...` (project-keyed, two children).
+- *How does data flow?* → `session.artifacts → snapshotArtifacts() → version.artifacts` (within the project's namespace).
+
+There is no "session inside version" or "version inside session" — they are independent siblings under the project, related only by the snapshot operation that copies bytes from one to the other.
+
+### 14.2 Why this beats the alternatives we considered
+
+- **`project → session → version` (versions nested under each session)**: forces every version to die with its source session, breaks the "durable milestone outlives source session" property, complicates `crumb versions` enumeration (would need to walk all sessions). Rejected.
+- **`session → project → version` (project as a side-effect of sessions)**: implies project is just a label, but Crumb pins `project_id` via `.crumb/project.toml` for stable identity across cwd changes — project is more durable than its sessions. Rejected.
+- **Two-tier project + version (Lovable model)**: collapses session and version, loses the running-attempt-vs-released-milestone distinction. Rejected because Crumb's multi-actor multi-minute execution model needs the running-attempt concept to be observable + interventable independently of versioning.
+
+### 14.3 On-disk hierarchy (the same picture as §14.1, in `src/paths.ts` terms)
 
 ```
 $CRUMB_HOME                           ← env override CRUMB_HOME, default os.homedir()/.crumb
@@ -713,9 +844,9 @@ Every path is discovered through `src/paths.ts` helpers — never built ad hoc:
 | `getVersionsDir(cwd)` | `<projectDir>/versions` | release + browse |
 | `sessionDirFromTranscript(path)` | reverses transcript path back to `<sessionRoot>` | Studio server's artifact serve |
 
-The migration must NOT introduce any second resolver. A new React panel that needs an artifact path posts to `GET /api/sessions/:id/artifact/*` (existing) or `GET /api/projects/:pid/versions/:v/artifact/*` (NEW — see §14.4); the server resolves through `src/paths.ts`.
+The migration must NOT introduce any second resolver. A new React panel that needs an artifact path posts to `GET /api/sessions/:id/artifact/*` (existing) or `GET /api/projects/:pid/versions/:v/artifact/*` (NEW — see §14.6); the server resolves through `src/paths.ts`.
 
-### 14.2 Write/read parity matrix — every artifact path
+### 14.4 Write/read parity matrix — every artifact path
 
 | Path | Writer (only one) | Reader(s) | Studio API endpoint | Studio panel |
 |---|---|---|---|---|
@@ -726,14 +857,14 @@ The migration must NOT introduce any second resolver. A new React panel that nee
 | `<versionsDir>/<v>/manifest.json` | `src/session/version.ts:writeManifest()` (CLI `crumb release`) | Studio Versions panel (M6+, NEW) | `/api/projects/:pid/versions` (NEW), `/api/projects/:pid/versions/:v/manifest` (NEW) | Versions panel (NEW) |
 | `<versionsDir>/<v>/artifacts/**` | `snapshotArtifacts()` (CLI `crumb release`) | Studio Output panel "Version" mode (M6+, NEW) | `/api/projects/:pid/versions/:v/artifact/*` (NEW) | Output, Versions panel |
 
-### 14.3 Bug surfaced by this audit — `snapshotArtifacts` is not recursive
+### 14.5 Bug surfaced by this audit — `snapshotArtifacts` is not recursive
 
 `src/session/version.ts:149-167` — `snapshotArtifacts()` only walks **top-level** files via `readdir(srcDir)` (no `withFileTypes`, no recursion). A multi-file Phaser PWA (`artifacts/game/index.html` + `artifacts/game/src/main.js` + `artifacts/game/manifest.webmanifest` + …) gets only the top-level entries snapshotted; nested files are silently dropped from the version. This is a **real release-data-loss bug**, independent of the migration. Lands as a small fix:
 
 - **PR `fix/session-version-recursive-snapshot`**: switch `readdir(srcDir, { withFileTypes: true, recursive: true })` (Node ≥18.17) or hand-rolled recursion for older targets; preserve `sha256_per_file` keyed by relative path. Test with a fixture that has nested subdirs.
 - Lands independently of the migration.
 
-### 14.4 Versions surface in Studio (NEW — M7 deliverable)
+### 14.6 Versions surface in Studio (NEW — M7 deliverable)
 
 Studio currently has no Versions browser. The user can release a session via `crumb release` (writes `<versionsDir>/<v>/manifest.json` + snapshot), but Studio's Output panel only resolves session-scoped artifacts. The migration adds:
 
@@ -749,12 +880,12 @@ This lands as M7 on the roadmap (after M6 parity, before M8 legacy removal). Doc
 
 The previous M7 "default flip" rolls forward to **M7.1** (`feat/studio-v2-default-on`) — same content, renumbered to make room for the versions deliverable.
 
-### 14.5 Data-stewardship invariants codified
+### 14.7 Data-stewardship invariants codified
 
 Cross-cutting rules that any new code (migration or otherwise) must obey:
 
 - ❌ Never construct a path under `$CRUMB_HOME` outside `src/paths.ts`. Adding a fourth tier (e.g., `runs/`) requires a `chore(paths):` PR that updates `paths.ts` + every consumer in lockstep.
-- ❌ Never copy via symlink for the version snapshot — `snapshotArtifacts` uses `copyFile` exactly because the version must survive source session deletion (§14.1 footnote).
+- ❌ Never copy via symlink for the version snapshot — `snapshotArtifacts` uses `copyFile` exactly because the version must survive source session deletion (§14.1 + §14.3 footnote).
 - ❌ Never write the same logical artifact via two writers (e.g., dispatcher writes `artifacts/game.html` AND a post-process script also writes there). Single writer per path.
 - ❌ Never break the "transcript path is the canonical session-id resolver" rule (`sessionDirFromTranscript` is the only reverse mapping; if you need the session-id from any other surface, derive it from the transcript path the watcher already has).
 - ✅ Studio reads via `<sessionId>` token in URL → server resolves through `watcher.snapshot()` → `sessionDirFromTranscript()` → real path. Adding a new artifact endpoint follows the same chain.
@@ -763,7 +894,7 @@ User directive verbatim, 2026-05-03 amendment:
 
 > 아웃풋 저장 위치와 읽는 위치 일치도 고려해. 계층도도 세션, 프로젝트, 버전 고려하고.
 
-Both halves resolved: the matrix in §14.2 makes write/read parity explicit per path, and the hierarchy in §14.1 codifies project → session → version as the canonical 3-tier shape.
+Both halves resolved: the matrix in §14.4 makes write/read parity explicit per path, and §14.1 codifies the canonical project / { sessions, versions } two-tier shape with session → version snapshot flow.
 
 ## Trigger criteria — when to start M0
 
