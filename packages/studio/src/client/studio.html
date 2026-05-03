@@ -290,6 +290,12 @@
     <button id="detail-prev" style="background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);padding:3px 10px;border-radius:var(--r-sm);font-size:11px;cursor:pointer;">↑ parent</button>
     <button id="detail-next" style="background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);padding:3px 10px;border-radius:var(--r-sm);font-size:11px;cursor:pointer;">↓ children</button>
   </div>
+  <!--
+    v0.5 PR-7 — group paginator. Hidden by default; shown only when the
+    user opened a multi-event chip (consecutive same-kind events on one
+    actor lane). ←/→ buttons + keyboard shortcuts page through the group.
+  -->
+  <div id="detail-group-nav" class="detail-group-nav" style="display:none;"></div>
   <pre id="detail-meta"></pre>
   <h3>Body</h3>
   <pre id="detail-body"></pre>

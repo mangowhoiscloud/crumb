@@ -245,6 +245,17 @@ function selectSession(id) {
   renderSessionList();
   renderHeader();
   renderSwimlane();
+  // v0.5 PR-7: cascade fade-in from LEFT (chronologically first events).
+  // Add the marker class, then strip it after the animation lifetime so a
+  // subsequent chip-append (chunk arrival) doesn't re-trigger the cascade.
+  document.querySelectorAll('.lane-events').forEach((el) => {
+    el.classList.add('session-switch-cascade');
+  });
+  setTimeout(() => {
+    document.querySelectorAll('.lane-events').forEach((el) => {
+      el.classList.remove('session-switch-cascade');
+    });
+  }, 400);
   renderScorecard();
   for (const hook of sessionSelectHooks) {
     try {
@@ -284,6 +295,20 @@ function renderHeader() {
   } else banner.classList.remove('show');
 }
 
+/**
+ * Swimlane render — left-to-right chronological per actor lane.
+ *
+ * v0.5 PR-7: consecutive same-kind events are collapsed into ONE chip with
+ * a count badge (top-right superscript, message-app convention). Clicking
+ * any chip opens the detail panel; if the chip is a group, the detail
+ * panel exposes a paginator (← N/M →, plus ←/→ keyboard) so the user can
+ * page through every grouped event without losing context.
+ *
+ * Frontier convergence (Slack unread badge / WhatsApp message bubble /
+ * VS Code Problems panel collapsed-duplicate / Datadog log facet count):
+ * count badge is offset to top-right corner with a subtle accent so it
+ * doesn't compete with the chip's primary kind label.
+ */
 function renderSwimlane() {
   const root = $('swimlane');
   if (!activeSession) {
@@ -295,28 +320,102 @@ function renderSwimlane() {
     root.innerHTML = '<div class="empty">Waiting for events…</div>';
     return;
   }
-  const lanes = ACTOR_LANE_ORDER.map(actor => {
-    const evts = events.filter(e => e.from === actor);
-    const cells = evts.map((e, i) => renderEvtCell(e, i === evts.length - 1)).join('');
-    return '<div class="lane">' +
-      '<div class="lane-label"><span class="glyph" style="background:var(' + ACTOR_VAR[actor] + ');"></span>' + actor + '</div>' +
-      '<div class="lane-events">' + (cells || '<span style="color:var(--ink-tertiary); font-size:11px;">—</span>') + '</div>' +
-    '</div>';
+  const lanes = ACTOR_LANE_ORDER.map((actor) => {
+    const evts = events.filter((e) => e.from === actor);
+    const groups = groupConsecutiveByKind(evts);
+    const lastIdx = groups.length - 1;
+    const cells = groups.map((g, i) => renderEvtCell(g, i === lastIdx)).join('');
+    return (
+      '<div class="lane">' +
+      '<div class="lane-label"><span class="glyph" style="background:var(' +
+      ACTOR_VAR[actor] +
+      ');"></span>' +
+      actor +
+      '</div>' +
+      '<div class="lane-events">' +
+      (cells || '<span style="color:var(--ink-tertiary); font-size:11px;">—</span>') +
+      '</div>' +
+      '</div>'
+    );
   });
   root.innerHTML = lanes.join('');
-  root.querySelectorAll('.evt').forEach(el => {
-    el.addEventListener('click', () => showDetail(el.dataset.id));
+  root.querySelectorAll('.evt').forEach((el) => {
+    el.addEventListener('click', () => {
+      // data-group-ids is a comma-joined string. Single-event chips have a
+      // 1-id list; multi-event groups have N. Pass the list to showDetail
+      // so it can wire the paginator.
+      const groupIds = (el.dataset.groupIds ?? '').split(',').filter(Boolean);
+      const startId = groupIds[0] ?? el.dataset.id;
+      showDetail(startId, groupIds.length > 1 ? groupIds : null);
+    });
   });
 }
 
-function renderEvtCell(evt, isLast) {
+/**
+ * Collapse runs of consecutive events that share `from + kind` into a
+ * single group descriptor. Non-consecutive same-kind events stay separate
+ * — preserves chronology + the visual rhythm of "actor X did A, then B,
+ * then more A".
+ */
+function groupConsecutiveByKind(evts) {
+  const groups = [];
+  for (const e of evts) {
+    const prev = groups[groups.length - 1];
+    if (prev && prev.kind === e.kind) {
+      prev.ids.push(e.id);
+      prev.evts.push(e);
+      if (e.metadata?.deterministic) prev.deterministic = true;
+      if (e.kind === 'audit' || (e.metadata?.audit_violations?.length ?? 0) > 0) {
+        prev.audit = true;
+      }
+    } else {
+      groups.push({
+        kind: e.kind,
+        ids: [e.id],
+        evts: [e],
+        deterministic: !!e.metadata?.deterministic,
+        audit:
+          e.kind === 'audit' ||
+          (e.metadata?.audit_violations?.length ?? 0) > 0,
+      });
+    }
+  }
+  return groups;
+}
+
+function renderEvtCell(group, isLast) {
   const cls = ['evt'];
-  if (evt.metadata?.deterministic) cls.push('deterministic');
-  if (evt.kind === 'audit' || (evt.metadata?.audit_violations?.length ?? 0) > 0) cls.push('audit');
+  if (group.deterministic) cls.push('deterministic');
+  if (group.audit) cls.push('audit');
   if (isLast) cls.push('fresh');
-  return '<span class="' + cls.join(' ') + '" data-id="' + escapeHTML(evt.id) + '" title="' + escapeHTML(evt.kind) + '">' +
-    escapeHTML(evt.kind) +
-  '</span>';
+  const count = group.ids.length;
+  if (count > 1) cls.push('grouped');
+  const idsAttr = group.ids.join(',');
+  const firstId = group.ids[0];
+  const titleAttr =
+    count > 1
+      ? `${group.kind} × ${count} (click to page through)`
+      : group.kind;
+  return (
+    '<span class="' +
+    cls.join(' ') +
+    '" data-id="' +
+    escapeHTML(firstId) +
+    '" data-group-ids="' +
+    escapeHTML(idsAttr) +
+    '" title="' +
+    escapeHTML(titleAttr) +
+    '">' +
+    escapeHTML(group.kind) +
+    (count > 1
+      ? '<span class="evt-count" aria-label="' +
+        count +
+        ' events">' +
+        count +
+        '</span>'
+      : '') +
+    '</span>'
+  );
 }
 
 function renderScorecard() {
@@ -342,11 +441,35 @@ function dimCard(label, score, source) {
   '</div>';
 }
 
-function showDetail(id) {
+/**
+ * v0.5 PR-7 — group paginator state. Persists across showDetail() calls so
+ * the ←/→ keyboard shortcuts can drive page navigation. Set whenever a
+ * grouped chip is opened; cleared when a single-event chip opens.
+ */
+let detailGroup = null; // { ids: [...], index: number } | null
+
+function showDetail(id, groupIds) {
   if (!activeSession) return;
   const events = eventCache.get(activeSession) ?? [];
-  const evt = events.find(e => e.id === id);
+  const evt = events.find((e) => e.id === id);
   if (!evt) return;
+
+  // Wire / refresh the group paginator.
+  if (groupIds && groupIds.length > 1) {
+    const idx = groupIds.indexOf(id);
+    detailGroup = { ids: groupIds, index: idx >= 0 ? idx : 0 };
+  } else if (
+    detailGroup &&
+    detailGroup.ids.includes(id) &&
+    detailGroup.ids.length > 1
+  ) {
+    // Re-entry into the same group (e.g., paginator nudge) — keep the
+    // group, just sync the index.
+    detailGroup.index = detailGroup.ids.indexOf(id);
+  } else {
+    detailGroup = null;
+  }
+
   const fields = [
     'id: ' + evt.id,
     'ts: ' + evt.ts,
@@ -356,17 +479,94 @@ function showDetail(id) {
     evt.metadata?.harness ? 'harness: ' + evt.metadata.harness : '',
     evt.metadata?.provider ? 'provider: ' + evt.metadata.provider : '',
     evt.metadata?.model ? 'model: ' + evt.metadata.model : '',
-    evt.metadata?.tokens_in != null ? 'tokens: ' + evt.metadata.tokens_in + ' → ' + (evt.metadata.tokens_out ?? 0) : '',
-    evt.metadata?.cost_usd != null ? 'cost: $' + evt.metadata.cost_usd.toFixed(4) : '',
-    evt.metadata?.latency_ms != null ? 'latency: ' + evt.metadata.latency_ms + 'ms' : '',
-  ].filter(Boolean).join('\\n');
+    evt.metadata?.tokens_in != null
+      ? 'tokens: ' +
+        evt.metadata.tokens_in +
+        ' → ' +
+        (evt.metadata.tokens_out ?? 0)
+      : '',
+    evt.metadata?.cost_usd != null
+      ? 'cost: $' + evt.metadata.cost_usd.toFixed(4)
+      : '',
+    evt.metadata?.latency_ms != null
+      ? 'latency: ' + evt.metadata.latency_ms + 'ms'
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\\n');
   $('detail-meta').textContent = fields;
   $('detail-body').textContent = evt.body ?? '(empty)';
-  $('detail-data').textContent = evt.data ? JSON.stringify(evt.data, null, 2) : '(none)';
+  $('detail-data').textContent = evt.data
+    ? JSON.stringify(evt.data, null, 2)
+    : '(none)';
+  renderDetailGroupNav();
   renderSandwichBar();
   $('sandwich-content').style.display = 'none';
   $('detail').classList.add('open');
 }
+
+/**
+ * Group paginator UI — only visible when detailGroup is set. Shows
+ * "← N/M →" plus the kind label and accepts ←/→ keyboard shortcuts via
+ * the document-level handler below. WhatsApp/Slack message-thread
+ * paginator + Datadog log facet pager convention.
+ */
+function renderDetailGroupNav() {
+  const root = $('detail-group-nav');
+  if (!root) return;
+  if (!detailGroup) {
+    root.style.display = 'none';
+    root.innerHTML = '';
+    return;
+  }
+  const { ids, index } = detailGroup;
+  const kind =
+    eventCache.get(activeSession)?.find((e) => e.id === ids[index])?.kind ??
+    '?';
+  root.style.display = '';
+  root.innerHTML =
+    '<button id="detail-group-prev" class="detail-group-btn" ' +
+    (index === 0 ? 'disabled' : '') +
+    ' title="Previous in group (←)">←</button>' +
+    '<span class="detail-group-pos">' +
+    escapeHTML(kind) +
+    ' &nbsp;<strong>' +
+    (index + 1) +
+    '</strong>/' +
+    ids.length +
+    '</span>' +
+    '<button id="detail-group-next" class="detail-group-btn" ' +
+    (index === ids.length - 1 ? 'disabled' : '') +
+    ' title="Next in group (→)">→</button>';
+  const prev = document.getElementById('detail-group-prev');
+  const next = document.getElementById('detail-group-next');
+  if (prev) prev.addEventListener('click', () => navDetailGroup(-1));
+  if (next) next.addEventListener('click', () => navDetailGroup(1));
+}
+
+function navDetailGroup(delta) {
+  if (!detailGroup) return;
+  const nextIdx = detailGroup.index + delta;
+  if (nextIdx < 0 || nextIdx >= detailGroup.ids.length) return;
+  detailGroup.index = nextIdx;
+  showDetail(detailGroup.ids[nextIdx], detailGroup.ids);
+}
+
+// Keyboard ←/→ for group pagination — only fires when the detail panel is
+// open and not focused on an input/textarea (so typing isn't hijacked).
+document.addEventListener('keydown', (e) => {
+  if (!detailGroup) return;
+  if (!$('detail')?.classList.contains('open')) return;
+  const tag = (document.activeElement?.tagName ?? '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea') return;
+  if (e.key === 'ArrowLeft') {
+    navDetailGroup(-1);
+    e.preventDefault();
+  } else if (e.key === 'ArrowRight') {
+    navDetailGroup(1);
+    e.preventDefault();
+  }
+});
 
 function renderSandwichBar() {
   const bar = $('sandwich-actor-bar');
