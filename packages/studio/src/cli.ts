@@ -22,6 +22,7 @@
  */
 
 import { posix, sep } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 import { openBrowser } from './open-browser.js';
 import { startStudioServer } from './server.js';
@@ -39,6 +40,16 @@ interface Args {
    * which ephemeral port the detached child grabbed when 7321 was occupied.
    */
   portFile?: string;
+  /**
+   * v0.5 PR-5: stale Studio recovery. `--kill` exits after killing whatever
+   * is on the port (no spawn). `--restart` does the kill, then spawns a fresh
+   * Studio in the same invocation. Both lookups go through `lsof -ti :PORT`
+   * so they only target listeners on the requested port — never unrelated
+   * processes. POSIX-only; Windows users should rely on the existing
+   * EADDRINUSE walk (PR #117) or kill manually.
+   */
+  kill?: boolean;
+  restart?: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -58,6 +69,10 @@ function parseArgs(argv: string[]): Args {
       a.homes.push(argv[++i]!);
     } else if (arg === '--port-file' && argv[i + 1]) {
       a.portFile = argv[++i]!;
+    } else if (arg === '--kill') {
+      a.kill = true;
+    } else if (arg === '--restart') {
+      a.restart = true;
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
@@ -92,6 +107,9 @@ Options:
   --poll-interval <ms>  Polling interval when chokidar polling is active (default 250)
   --port-file <path>    Write {port, bind, url} JSON once listening (v0.5 —
                         used by 'crumb run' to discover ephemeral ports)
+  --kill                Kill whatever is on --port and exit. POSIX (lsof).
+  --restart             Kill whatever is on --port, then spawn a fresh
+                        Studio in the same invocation. POSIX (lsof).
   -h, --help            Show this help
 
 Env (precedence: --home > CRUMB_HOMES > CRUMB_HOME > $HOME/.crumb):
@@ -107,8 +125,55 @@ Examples:
 `);
 }
 
+/**
+ * v0.5 PR-5 — kill any listener on `port` via `lsof -ti :port | xargs kill`.
+ *
+ * Returns the list of PIDs that were killed (empty array when port was free).
+ * POSIX-only — `lsof` is not on Windows by default; on Windows the
+ * EADDRINUSE walk (PR #117) handles port conflicts instead.
+ */
+function killListenersOnPort(port: number): number[] {
+  if (process.platform === 'win32') return [];
+  const list = spawnSync('lsof', ['-ti', `:${port}`], { encoding: 'utf8' });
+  const pids = (list.stdout ?? '')
+    .split('\n')
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  for (const pid of pids) {
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      // already gone — ignore
+    }
+  }
+  return pids;
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+
+  // v0.5 PR-5: stale-Studio recovery (--kill / --restart) runs before
+  // spawning a new server so we never collide with the listener we are
+  // about to evict.
+  if (args.kill || args.restart) {
+    const killed = killListenersOnPort(args.port);
+    if (killed.length === 0) {
+      // eslint-disable-next-line no-console
+      console.log(`  \x1b[33m⚠\x1b[0m  No listener found on port ${args.port}.`);
+    } else {
+      // eslint-disable-next-line no-console
+      console.log(
+        `  \x1b[32m✓\x1b[0m  Sent SIGTERM to ${killed.length} pid(s) on port ${args.port}: ${killed.join(', ')}`,
+      );
+    }
+    if (args.kill) {
+      // --kill exits here; --restart falls through to the regular spawn path.
+      return;
+    }
+    // Brief settle before binding so the kernel releases the port.
+    await new Promise((r) => setTimeout(r, 250));
+  }
+
   const opts: Parameters<typeof startStudioServer>[0] = {
     port: args.port,
     bind: args.bind,

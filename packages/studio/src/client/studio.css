@@ -834,6 +834,54 @@ section.scorecard {
 }
 .welcome-banner-close:hover { color: var(--ink); }
 
+/*
+ * v0.5 PR-5 — connection-state pill. Sticky-top with red pulse so the user
+ * notices the disconnect immediately (laptop wake, Studio restart, wifi flap).
+ * Manual reconnect button avoids waiting on EventSource's slow auto-retry
+ * heuristic when reality has already moved on.
+ */
+.conn-state-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(224, 72, 72, 0.12);
+  border-bottom: 1px solid rgba(224, 72, 72, 0.45);
+  color: #e04848;
+  padding: 8px 24px;
+  font-size: 12px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  letter-spacing: 0.2px;
+}
+.conn-state-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e04848;
+  box-shadow: 0 0 8px rgba(224, 72, 72, 0.7);
+  animation: conn-state-pulse 1.2s ease-in-out infinite;
+  flex: 0 0 auto;
+}
+@keyframes conn-state-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.conn-state-text { flex: 1 1 auto; }
+.conn-state-retry {
+  background: rgba(224, 72, 72, 0.15);
+  color: #e04848;
+  border: 1px solid rgba(224, 72, 72, 0.4);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.conn-state-retry:hover {
+  background: rgba(224, 72, 72, 0.3);
+  color: #ffffff;
+}
+
 .empty {
   color: var(--ink-tertiary);
   padding: 40px 24px;
