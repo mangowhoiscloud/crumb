@@ -76,6 +76,60 @@ The inheritor handoff named four items still queued: **F6 / W3 / W4 / PR-O5**. N
 
 **Conflict-resolution rule**: if a parallel reducer/dispatcher stream lands a schema change that affects an M-PR's reads, the M-PR rebases on top and adapts the read shape. Migration receives, never dictates.
 
+### 0.0.4 Parallel-work matrix (slop-free, deps explicit)
+
+User directive 2026-05-03 ("LLM이 placeholder나 하드코딩, 슬롭을 만들지 않으면서 병렬"). Documents which M-PRs can run concurrently without each producing slop because of shared mutable surfaces. Read this before spawning a sub-agent on a new M-PR.
+
+#### Parallel-safe groups (different panels, different SSE channels, different file scopes)
+
+| Group | M-PRs | Shared surface | Why slop-safe |
+|---|---|---|---|
+| **A** Sidebar reads | M3 (Adapter+Session) | TanStack Query cache + SSE state events | Single QueryClient owner; SSE bridge is read-only |
+| **B** Bottom panels | M5-Narrative + M5-Feed + M5b-SlashBar | `useTranscriptStream` rolling window | Feed and Narrative use the same hook with different filters; SlashBar writes to inbox.txt only via `POST /api/sessions/:id/inbox` |
+| **C** Status / health | M10 self-check + HealthBadge | `/api/health` extension | Server route + Status Bar surface; doesn't touch any panel |
+| **D** Plan amendments | docs PRs only | wiki/* | Pure markdown; never touches code |
+
+Each group's PRs can land in any internal order. Cross-group: must respect direct dependencies (§0.0.3).
+
+#### Direct dependencies (parallel forbidden — sequence enforced)
+
+| If you're touching… | …then this must merge first |
+|---|---|
+| `<DetailRail>` content (panel-shared) | M4a Pipeline NodeInspector wiring |
+| `panels/Pipeline.tsx` selection sync | M4a (selection store slice) |
+| `M7.1 default-flip` (`?app=v1\|v2` gate) | M7 versions panel routes |
+| `M8 legacy removal` | M7.1 flipped, all M-PRs merged |
+| `M11 1.0.0 bump` | M0–M10 + post-migration cleanup PR |
+
+#### Slop-prevention checks (every parallel PR must pass)
+
+Re-states §8.1 quality bar with the parallelism-specific risks called out:
+
+| Risk | Mitigation in PR template |
+|---|---|
+| Hard-coded color / spacing | Token-only — fail CI if `grep -E "#[0-9a-f]{3,6}\\|rgb\\(" packages/studio/src/client-v2/panels/<this PR>/` returns hits outside the brand mark SVG |
+| Placeholder copy left in production | `grep -E "TODO\\|FIXME\\|XXX\\|placeholder" packages/studio/src/client-v2/` returns 0 hits |
+| Mock data in prod | No `const MOCK_*` constants in panel files; mock fixtures live under `__test__/` only |
+| Schema drift | `protocol/types.ts` import only; never re-declare types in panels |
+| Re-derived metrics | No `Math.*` over event arrays in panels — read from `metrics.per_actor` (server-derived per §17 audit) |
+| i18n leak | All user-visible strings extracted to `strings.ts` (per §8.1) |
+| Inline JSX color literals | Style attributes read from CSS vars only |
+| `console.log` in prod | Banned by `lint` rule (`no-console: ['error']`); CI fails |
+
+A PR that introduces parallel work but doesn't run its own slop-prevention check is rejected even if CI is green — the goal is no regression from the migration's quality bar.
+
+#### Watcher / sync workflow (when running parallel PRs)
+
+The migration uses a sub-agent to monitor + merge + sync between PRs. Lifecycle:
+
+1. **Spawn watcher** with the PR numbers to track + merge order.
+2. Watcher polls `gh pr view` every 30 s; merges on `mergeStateStatus=CLEAN` + zero failing checks.
+3. After each merge, watcher rebases the next stacked PR on `origin/main` (`git rebase origin/main` + `git push --force-with-lease`) — but only if the rebase is conflict-free.
+4. On conflict (e.g., lockfile drift like the one observed at M4a), watcher escalates back to the main agent with a clear conflict report. Main agent runs `npm install` to regenerate the lockfile + amends + force-pushes.
+5. Loop until all queued PRs merge or 25 min budget elapses.
+
+The watcher's job is wait + merge + sync. Code changes (lockfile regeneration, conflict resolution, schema repair) belong to the main agent because they require judgment.
+
 ### Big-bang execution order — locked
 
 - **M0 (NEXT)** `chore/studio-vite-scaffold` — Vite + React 19 + TypeScript scaffold at `packages/studio/src/client-v2/`. `?app=v2` route serves the new bundle; default `?app=v1` keeps vanilla live until M7.1.
@@ -453,7 +507,7 @@ The migration is paced so the live `npx crumb-studio` keeps working at every ste
 | **M6** | `feat/studio-v2-scorecard-budget-trace` | `<Scorecard>` (composite + radar + drilldown + Tremor SparkAreaChart for D1-D6 sparklines per PR-O4 + **per-actor lifecycle gauge** per observability plan P3 + **cross-provider chip** per PR-O5 P7) + `<ErrorBudgetStrip>` (PR-O2 reborn) + **`<DesignCheckPanel>` Detail Rail mode** (W3 surface — palette/touch/motion violations) + `<Logs>` + `<Output>` + `<Transcript>` + **tool-call trace tree** (PR-O5 — recursive collapsible tree of tool.call → tool.result with token + duration per node). | `?app=v2` reaches parity with v1 + adds D1-D6 sparkline + lifecycle gauge + cross-provider chip + design-check audit + trace tree |
 | **M7** | `feat/studio-v2-versions-panel` | Per §14.6: `<VersionsList>` panel + `/api/projects/:pid/versions` + `/api/projects/:pid/versions/:v/artifact/*` endpoints + `<Output>` Source toggle (Session \| Version) + `<Scorecard>` reads version manifest scorecard when version mode active. | Versions browseable; archived release artifacts viewable; manifest sha256 cited in Output header |
 | **M7.1** | `feat/studio-v2-default-on` | Flip default to v2. `?app=v1` continues to work as escape hatch. CHANGELOG entry; docs update. | `npx crumb-studio` opens v2 by default |
-| **M8** | `chore/studio-v1-removal` | Delete `studio.{html,css,js}` + `inline-client.mjs` + `studio-html.generated.ts`. Keep server unchanged. | Bundle drops legacy ~260KB blob |
+| **M8** | `chore/studio-v1-removal` | (1) Delete `studio.{html,css,js}` + `inline-client.mjs` + `studio-html.{ts,generated.ts}` (the `src/server/studio-html.ts` bridge too). (2) **Rename `packages/studio/src/client-v2/` → `packages/studio/src/client/`** (post-v1-deletion, the "v2" suffix loses meaning per §13.3). (3) **Rename `packages/studio/tsconfig.client-v2.json` → `tsconfig.app.json`** (Vite community convention). (4) Update every import path `./client-v2/` → `./client/` and the `tsc -p` ref in `package.json` `typecheck` script + `vite.config.ts` `root` path. (5) Drop the `?app=v1\|v2` gate from `serveHtml()`; `/` always serves the React bundle. | Bundle drops legacy ~260 KB blob; "v2" naming leak removed for good (§11.4 LLM hygiene); `src/client/` is the single canonical client surface |
 | **M9** | `feat/studio-v2-pipeline-annotations` | n8n parity polish: user-added Sticky-Note nodes on the Pipeline canvas (text labels, draggable, persisted), "Save as project default layout" affordance, "Export layout JSON" / "Import layout JSON" actions in the Pipeline toolbar, Pipeline minimap toggle in palette. | Power users can annotate the canvas, share layouts across machines |
 | **M10** | `feat/studio-v2-self-check` | `crumb doctor --self-check` (pause/resume lifecycle smoke), `/api/health` extended with `pause_resume_lifecycle`, `<HealthBadge>` in Status Bar. Decoupled from migration — can ship before, during, or after. | Fresh-machine user can verify Studio + reducer pause/resume works; QA agent can include this in its auto-verification suite |
 | **M11** | `chore/studio-version-bump-1.0` | User directive 2026-05-03: "이번 빅뱅 마치면 studio 버전업해." Bump `packages/studio/package.json#version` from `0.4.x` → `1.0.0`, root `package.json#version` to match, regenerate the inlined CHANGELOG section. Move `[Unreleased]` content under a new `[1.0.0] — 2026-…` heading with full feature inventory + migration retrospective. Tag the commit `v1.0.0`. **Hard gate** — ships only after M0–M10 + every §8.1 quality bar is met across every panel + the post-migration cleanup PR (§13.3) is merged. By M11 the v1 vanilla bundle is already deleted (M8). | Studio is publishable on npm at v1.0.0; the "extreme production level" claim is honest. |
