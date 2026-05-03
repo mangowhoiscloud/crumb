@@ -15,7 +15,23 @@ tags: [studio, migration, big-bang, react, dockview, datadog, frontier]
 
 > One coherent rebuild that swaps Studio's vanilla-JS chassis for a React-native stack while preserving every section, every connection, and every datum surfaced today. Folds in the Datadog-grade redesign (PR #143), the inheritor backlog from the handoff (F4–F6, PR-O3–O5, W2–W4), and the cleanup queued in the Prune stream (chore/prune-dead-schema-kinds). Implementation is **gated on Prune-1/2/3 merging first** — the schema delta must settle before we redraw component boundaries on top of it.
 
+## 0. Prime directive — preserve the visual, elevate everything underneath
+
+The current Studio's **visual layout is the production target**. Per user directive (2026-05-03 amendment): "전반적으로 현재 시각적인 레이아웃을 기반으로 프로덕션레벨로 기능성과 퀄리티를 올린다고 인지해." The migration is a **chassis swap, not a redesign** — the chassis (vanilla DOM mutation, hand-rolled splitters, monolithic studio.js) is replaced; the body (panel arrangement, colors, typography, scorecard composition, DAG layout geometry, swimlane row order, narrative + feed structure, slash bar quick-action chips, conn-state reconnect banner, splitter tooltips, view-tab list) is preserved pixel-equivalent.
+
+This subordinates every decision in §3 (stack), §5 (topology), §6 (mapping), and §6.1–6.7 (enhancements):
+
+- **Stack picks (dockview / React Flow / shadcn / Tremor)** are means to functional ends (reactive resize, independent docking, interactive Pipeline, dashboard charts) — they must be *styled* to match the current visual rather than ship their default chrome.
+- **Panel topology (§5)** matches the current arrangement 1:1: left sidebar with brand mark + Adapters list + Sessions list, top scorecard strip (composite headline + radar + drilldown), view tabs (Pipeline / Waterfall / Map / Logs / Output / Transcript) above an active view-pane absorber, a per-actor swimlane row below the active view, then the two bottom panels (Agent Narrative + Live Execution Feed) split horizontally, then the slash command bar.
+- **Interactive Pipeline (§6.1)** seeds the React Flow canvas with **the same node positions and edge curves as the current `DAG_NODES` / `edgePath()` output** — drag is additive (the user *can* move things), but a fresh session opens identical to today.
+- **Visible additions** (Service Map tab / Critical-path overlay toggle / BubbleUp drag-select / DesignCheckPanel rail mode / per-actor lifecycle gauge / cross-provider chip / sparkline / trace tree) are **purely additive** — they are reachable via existing surfaces (a new view tab, a toggle in the Pipeline toolbar, a third Detail Rail mode, a chip inside the existing scorecard) and never displace what is visible today.
+- **Functional + quality elevations** (a11y AA, theme parity, density toggle, reactive splitters, independent panel docking, command palette, design-check audit, self-check) all land **under** the current visual without changing what the user sees on first paint.
+
+The **visual baseline reference** is the screenshot the user provided alongside this amendment (Image #12 in the conversation, dated 2026-05-03). M2's first commit captures this baseline as a Playwright visual snapshot in `__visual__/baseline-light.png` + `__visual__/baseline-dark.png`. Every subsequent M-series PR diff-checks against the baseline; visual regression beyond the documented additive surfaces is a hard CI fail.
+
 ## 1. Why big-bang, why now
+
+**TL;DR — the visual is fine; the chassis underneath is what we elevate.**
 
 Today's Studio shipped 12+ PRs in one day on a vanilla-JS monolith (`packages/studio/src/client/studio.{html,css,js}` at 6,694 LoC, no module boundaries). Each PR works, the visible surface is solid (4-pane layout, scorecard hybrid, error-budget burndown, waterfall, branding, theme system), but every additional feature (F4 sidebar toggle / F5 adapter modal / F6 block tear-off / PR-O4 aggregate strip / PR-O5 trace tree) lands as more `innerHTML` strings into the same monolith. Two structural blockers prevent the user-requested next tier:
 
@@ -158,7 +174,9 @@ handler serves `/assets/*` from `dist/client/assets/`. Single-binary `npx crumb-
 preserved — Vite output is bundled into the published npm package via `files` glob.
 ```
 
-## 5. Panel topology (dockview)
+## 5. Panel topology (dockview, styled to match the current visual)
+
+> Reminder per §0: dockview is the **engine**, not the look. Default dockview chrome (Material-style tab bar, drop-zone overlays, splitter handles) is overridden via `dockview.css` to match the existing Crumb visual — same tab bar typography, same 4 px splitter colored to `--hairline`, same panel header padding, same border-radius tokens from `design.md`.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -244,7 +262,9 @@ Per the user's directive ("유저가 표기되는 맵을 손으로 움직여가�
 
 #### Default layout seeding
 
-The 8 actors (post-Prune-2: `coordinator`, `planner-lead`, `researcher`, `builder`, `verifier`, `validator`, `system`, `user`) are positioned via **dagre** (`@dagrejs/dagre` ~50 kB). Direction left→right; rank separator 80 px; node separator 40 px. The dagre output feeds React Flow's `nodes` prop on initial mount; subsequent user drags update `nodes` directly (controlled component pattern — `useNodesState`).
+Per §0 prime directive, the **default node positions match the current `DAG_NODES` geometry exactly** (left→right A-SPEC / B / C / D / E-DONE phase columns; user → coord → planner / researcher → step.research / qa_check → builder / fallback → verifier → judge.score → validator → done). Dagre is computed but its output is **calibrated against the current geometry** via a position-rebase step (M4 first commit) so a fresh session opens identical to today. User drags then deviate from this seed; "Reset layout" restores it.
+
+The 8 actors (post-Prune-2: `coordinator`, `planner-lead`, `researcher`, `builder`, `verifier`, `validator`, `system`, `user`) feed React Flow's `nodes` prop on initial mount; subsequent user drags update `nodes` directly (controlled component pattern — `useNodesState`).
 
 #### Inspector contract
 
