@@ -112,6 +112,35 @@
   <div id="audit-banner"></div>
 
   <!--
+    v0.5 PR-O2 — error budget burndown strip.
+    Three meters mirror the reducer's progress_ledger caps:
+      - respec       (spec.update count vs RESPEC_MAX=3)
+      - verify       (judge.score count vs VERIFY_MAX=5)
+      - tokens       (session_token_total vs CRUMB_TOKEN_BUDGET_HARD=300K)
+    Each meter changes color as it approaches the cap (green → amber →
+    red). Hidden when no session selected. OpenAI Preparedness Framework
+    + Stripe Sigma usage panel convention — let the operator intervene
+    before the automatic cutoff fires.
+  -->
+  <div id="budget-strip" class="budget-strip" style="display:none;">
+    <div class="budget-meter" id="budget-respec">
+      <div class="budget-meter-label">respec</div>
+      <div class="budget-meter-bar"><div class="budget-meter-fill"></div></div>
+      <div class="budget-meter-value">—</div>
+    </div>
+    <div class="budget-meter" id="budget-verify">
+      <div class="budget-meter-label">verify</div>
+      <div class="budget-meter-bar"><div class="budget-meter-fill"></div></div>
+      <div class="budget-meter-value">—</div>
+    </div>
+    <div class="budget-meter" id="budget-tokens">
+      <div class="budget-meter-label">tokens</div>
+      <div class="budget-meter-bar"><div class="budget-meter-fill"></div></div>
+      <div class="budget-meter-value">—</div>
+    </div>
+  </div>
+
+  <!--
     v0.5 PR-5 — connection-state pill. Shows when EventSource fires onerror
     (server restart / laptop sleep / wifi flap). Manual "Reconnect now" hard-
     reloads to re-establish the SSE stream + re-hydrate via /api/sessions.
