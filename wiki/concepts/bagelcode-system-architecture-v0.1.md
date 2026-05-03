@@ -760,8 +760,8 @@ After /crumb debug          → coordinator → fault-detector → kind=note
 
 ## 14. See also
 
-- ★ **[[bagelcode-system-architecture-v0.3.5]]** — v0.3.5 incremental layer (Rule 7 / numerical R4 / judge-input bundle / fallback audit)
-- ★ **[[bagelcode-system-diagrams-v0.3.5]]** — 6 Mermaid (spawn / score / anti-deception / judge-input / routing / preset)
+- ★ **[[bagelcode-system-architecture-v0.4]]** — v0.4 incremental layer (Rule 7 / numerical R4 / judge-input bundle / fallback audit)
+- ★ **[[bagelcode-system-diagrams-v0.4]]** — 6 Mermaid (spawn / score / anti-deception / judge-input / routing / preset)
 - [[bagelcode]] / [[bagelcode-task-direction]] / [[bagelcode-recruitment-task]] — 메일 verbatim
 - [[bagelcode-host-harness-decision]] — Hybrid lock (v0.1 이전)
 - [[bagelcode-system-architecture]] — v2 (본 페이지가 §1-§2 그림 대체)
