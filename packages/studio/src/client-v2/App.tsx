@@ -33,6 +33,9 @@ import { Sidebar } from './panels/Sidebar';
 import { Pipeline } from './panels/Pipeline';
 import { Waterfall } from './panels/Waterfall';
 import { ServiceMap } from './panels/ServiceMap';
+import { Logs } from './panels/Logs';
+import { Output } from './panels/Output';
+import { Transcript } from './panels/Transcript';
 import { Narrative } from './panels/Narrative';
 import { Feed } from './panels/Feed';
 import { DetailRail } from './panels/DetailRail';
@@ -44,6 +47,9 @@ const PANEL_COMPONENTS: Record<string, React.FC<IDockviewPanelProps>> = {
   pipeline: Pipeline,
   waterfall: Waterfall,
   serviceMap: ServiceMap,
+  logs: Logs,
+  output: Output,
+  transcript: Transcript,
   narrative: Narrative,
   feed: Feed,
   detailRail: DetailRail,
@@ -78,6 +84,24 @@ function onReady(event: DockviewReadyEvent): void {
     id: 'serviceMap',
     component: 'serviceMap',
     title: 'Service Map',
+    position: { referencePanel: viewPane.id, direction: 'within' },
+  });
+  api.addPanel({
+    id: 'logs',
+    component: 'logs',
+    title: 'Logs',
+    position: { referencePanel: viewPane.id, direction: 'within' },
+  });
+  api.addPanel({
+    id: 'output',
+    component: 'output',
+    title: 'Output',
+    position: { referencePanel: viewPane.id, direction: 'within' },
+  });
+  api.addPanel({
+    id: 'transcript',
+    component: 'transcript',
+    title: 'Transcript',
     position: { referencePanel: viewPane.id, direction: 'within' },
   });
 
