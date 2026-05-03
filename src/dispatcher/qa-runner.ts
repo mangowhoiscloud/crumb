@@ -10,6 +10,7 @@ import { resolve as resolvePath } from 'node:path';
 import type { QaCheckEffect } from '../effects/types.js';
 import { runQaCheck } from '../effects/qa-check.js';
 import type { ACPredicateItem } from '../effects/qa-interactive.js';
+import type { PersistenceProfile } from '../state/types.js';
 import type { TranscriptWriter } from '../transcript/writer.js';
 
 export interface QaRunnerDeps {
@@ -48,10 +49,11 @@ async function runQaCheckWithTimeout(
   artifactPath: string,
   acPredicates: ACPredicateItem[],
   timeoutMs: number,
+  persistenceProfile?: PersistenceProfile,
 ): Promise<Awaited<ReturnType<typeof runQaCheck>>> {
   let timer: NodeJS.Timeout | undefined;
   try {
-    const work = runQaCheck(artifactPath, acPredicates);
+    const work = runQaCheck(artifactPath, acPredicates, persistenceProfile);
     const sentinel = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new QaCheckTimeoutError(timeoutMs)), timeoutMs);
     });
@@ -71,6 +73,7 @@ export async function runQaCheckEffect(effect: QaCheckEffect, deps: QaRunnerDeps
       artifactPath,
       effect.ac_predicates ?? [],
       QA_CHECK_TIMEOUT_MS,
+      effect.persistence_profile,
     );
   } catch (err) {
     // Even hard failures must produce a qa.result so the verifier can read D2.
@@ -128,6 +131,7 @@ export async function runQaCheckEffect(effect: QaCheckEffect, deps: QaRunnerDeps
             ac_total: result.ac_total,
           }
         : {}),
+      ...(result.persistence_check ? { persistence_check: result.persistence_check } : {}),
       loc_own_bytes: result.loc_own_bytes,
       lint_findings: result.lint_findings,
     },

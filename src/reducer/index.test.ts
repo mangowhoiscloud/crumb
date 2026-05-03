@@ -60,6 +60,37 @@ describe('reducer', () => {
     expect(state.task_ledger.persistence_profile).toBeUndefined();
   });
 
+  it('v0.4 Phase 7: build → qa_check effect carries persistence_profile from task_ledger', () => {
+    const s0 = initialState('sess-test');
+    s0.task_ledger.persistence_profile = 'edge-orm';
+    const build = fixed({
+      id: '01H0000000000000000000000P',
+      from: 'builder',
+      kind: 'build',
+      artifacts: [{ path: 'artifacts/game.html', sha256: 'a'.repeat(64), role: 'src' }],
+    });
+    const { effects } = reduce(s0, build);
+    expect(effects).toHaveLength(1);
+    expect(effects[0]).toMatchObject({
+      type: 'qa_check',
+      persistence_profile: 'edge-orm',
+    });
+  });
+
+  it('v0.4 Phase 7: build without persistence_profile omits the field (un-flagged session)', () => {
+    const s0 = initialState('sess-test');
+    const build = fixed({
+      id: '01H0000000000000000000000Q',
+      from: 'builder',
+      kind: 'build',
+      artifacts: [{ path: 'artifacts/game.html', sha256: 'a'.repeat(64), role: 'src' }],
+    });
+    const { effects } = reduce(s0, build);
+    expect(effects).toHaveLength(1);
+    expect(effects[0]).toMatchObject({ type: 'qa_check' });
+    expect((effects[0] as { persistence_profile?: unknown }).persistence_profile).toBeUndefined();
+  });
+
   it('routes spec → spawn(builder, codex-local) by default', () => {
     const s0 = initialState('sess-test');
     const spec = fixed({

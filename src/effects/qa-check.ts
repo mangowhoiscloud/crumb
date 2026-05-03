@@ -36,9 +36,13 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
 
+import type { PersistenceProfile } from '../state/types.js';
+
 import type { ACPredicateItem, ACResult } from './qa-interactive.js';
+import type { PersistenceCheckResult } from './qa-persistence.js';
 
 export type { ACPredicateItem, ACResult } from './qa-interactive.js';
+export type { PersistenceCheckResult, PersistenceStatus } from './qa-persistence.js';
 
 export interface QaResult {
   /** Overall lint pass — DOCTYPE + viewport + script tag all present. */
@@ -75,6 +79,14 @@ export interface QaResult {
   ac_pass_count?: number;
   /** Length of `ac_results`. */
   ac_total?: number;
+  /**
+   * v0.4 Phase 7 — per-`PersistenceProfile` smoke result. Set when the caller
+   * passes `persistenceProfile` (forwarded from `task_ledger.persistence_profile`
+   * via `QaCheckEffect`). Undefined → smoke skipped (un-flagged session).
+   * `status === 'fail'` contributes to `exec_exit_code = 1`; `partial` and
+   * `skipped` do not. See `agents/specialists/game-design.md` §1.4.
+   */
+  persistence_check?: PersistenceCheckResult;
   /**
    * Bundle bytes — for multi-file (`index.html` entry), this is the recursive sum
    * of every file under the bundle root. For a single-file artifact it is the
@@ -165,6 +177,7 @@ function walkBundle(root: string): { totalBytes: number; fileCount: number } {
 export async function runQaCheck(
   artifactPath: string,
   acPredicates: ACPredicateItem[] = [],
+  persistenceProfile?: PersistenceProfile,
 ): Promise<QaResult> {
   const start = Date.now();
 
@@ -297,10 +310,29 @@ export async function runQaCheck(
     }
   }
 
+  // v0.4 Phase 7 — per-profile persistence smoke (skipped when undefined).
+  // `fail` blocks exec_exit_code; `partial` / `skipped` do not (verifier
+  // reads PARTIAL as "evidence absent", not "evidence contradicts").
+  let persistenceCheck: PersistenceCheckResult | undefined;
+  if (persistenceProfile) {
+    try {
+      const { runPersistenceCheck } = await import('./qa-persistence.js');
+      persistenceCheck = await runPersistenceCheck(artifactPath, persistenceProfile);
+      if (persistenceCheck.status === 'fail') {
+        findings.push(
+          `persistence smoke (${persistenceProfile}) failed: ${persistenceCheck.findings.join('; ')}`,
+        );
+      }
+    } catch (err) {
+      findings.push(`persistence smoke errored: ${(err as Error).message.slice(0, 200)}`);
+    }
+  }
+
   const playwrightFailed = firstInteraction === 'fail';
   const playwrightBlocks = playwrightFailed || (playwrightUnavailable && requirePlaywright);
   const acFailed = acResults.length > 0 && acPassCount < acResults.length;
-  const allOk = lintPassed && !playwrightBlocks && !acFailed;
+  const persistenceFailed = persistenceCheck?.status === 'fail';
+  const allOk = lintPassed && !playwrightBlocks && !acFailed && !persistenceFailed;
 
   return {
     lint_passed: lintPassed,
@@ -315,6 +347,7 @@ export async function runQaCheck(
     ...(acResults.length > 0
       ? { ac_results: acResults, ac_pass_count: acPassCount, ac_total: acResults.length }
       : {}),
+    ...(persistenceCheck ? { persistence_check: persistenceCheck } : {}),
     loc_own_bytes: bundleBytes,
     bundle_file_count: bundleFileCount,
     lint_findings: findings,

@@ -4,7 +4,7 @@
  */
 
 import type { Actor, DraftMessage } from '../protocol/types.js';
-import type { ACPredicateLedgerItem } from '../state/types.js';
+import type { ACPredicateLedgerItem, PersistenceProfile } from '../state/types.js';
 
 export type Effect =
   | SpawnEffect
@@ -117,4 +117,14 @@ export interface QaCheckEffect {
    * alongside the static smoke. Empty when the spec emitted no predicates.
    */
   ac_predicates?: ACPredicateLedgerItem[];
+  /**
+   * v0.4 Phase 7 — persistence profile pulled from
+   * `state.task_ledger.persistence_profile` by the reducer's `build` case.
+   * The dispatcher forwards this to `runQaCheck` which dispatches to
+   * `runPersistenceCheck` for the per-profile smoke. Undefined → no
+   * persistence profile flagged → smoke skipped (un-flagged sessions stay
+   * backward-compatible with pre-v0.4 behavior). See
+   * `agents/specialists/game-design.md` §1.4.
+   */
+  persistence_profile?: PersistenceProfile;
 }

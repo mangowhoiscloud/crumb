@@ -225,6 +225,12 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         ...(next.task_ledger.ac_predicates.length > 0
           ? { ac_predicates: next.task_ledger.ac_predicates }
           : {}),
+        // v0.4 Phase 7 — forward persistence_profile so qa-runner can
+        // dispatch the per-profile smoke (Dexie / wrangler probe / etc.).
+        // See agents/specialists/game-design.md §1.4.
+        ...(next.task_ledger.persistence_profile
+          ? { persistence_profile: next.task_ledger.persistence_profile }
+          : {}),
       });
       break;
     }
