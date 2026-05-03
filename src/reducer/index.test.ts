@@ -1428,8 +1428,6 @@ describe('reducer', () => {
     expect(s.progress_ledger.pending_intervene_ids).toEqual([pause.id]);
     // No spawn this turn; ack still fires.
     expect(r.effects.some((e) => e.type === 'spawn')).toBe(false);
-    expect(
-      r.effects.some((e) => e.type === 'append' && e.message.kind === 'ack'),
-    ).toBe(true);
+    expect(r.effects.some((e) => e.type === 'append' && e.message.kind === 'ack')).toBe(true);
   });
 });
