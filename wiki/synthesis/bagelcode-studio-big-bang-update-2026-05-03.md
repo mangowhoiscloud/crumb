@@ -950,6 +950,60 @@ User directive verbatim, 2026-05-03 amendment:
 
 Both halves resolved: the matrix in §14.4 makes write/read parity explicit per path, and §14.1 codifies the canonical project / { sessions, versions } two-tier shape with session → version snapshot flow.
 
+## 17. Server / client role audit — leak inventory + LLM hygiene
+
+The migration must clarify which surface owns which derivation, where intentional duplication exists, and where leaks need fixing. This section is the source of truth referenced by §0.0.1 carry-over, §6 quality bar, M1 / M3 / M6 PR scopes.
+
+### 17.1 Owners — crumb core vs studio server vs studio client
+
+| Capability | crumb core (write authority) | studio server (read-only observation) | studio client (render only) |
+|---|---|---|---|
+| transcript writes | dispatcher (`O_APPEND`, single writer) | ❌ never | ❌ never |
+| transcript reads | reducer (`reduce()`) | watcher.ts + JsonlTail (SSE push) | useTranscriptStream (rolling window via SSE) |
+| logs (`spawn-*.log`) writes | dispatcher | ❌ never | ❌ never |
+| logs reads | dispatcher (per-actor) | `/api/sessions/:id/logs/:actor[/stream]` | Logs panel (snapshot + M6b live-tail) |
+| artifacts writes | builder spawn under `agent-workspace/` + dispatcher promotes to `artifacts/` | ❌ never | ❌ never |
+| artifacts reads | reducer (`artifact.created`) | `/api/sessions/:id/artifact/*` (iframe serve) | Output panel (sandboxed iframe) |
+| doctor (env probe) | `crumb doctor` CLI (`src/helpers/doctor.ts`) — full env + OAuth probe | `packages/studio/src/server/doctor.ts` — lightweight subprocess matrix | shows result in Sidebar `<AdapterList>` + Status Bar `<HealthBadge>` |
+| session run | `crumb run` CLI | `POST /api/crumb/run` → `npx tsx src/index.ts run` (detached spawn) | `<NewSessionForm>` posts to that endpoint |
+| session resume | `crumb resume` CLI | `POST /api/sessions/:id/resume` → `crumb resume <id> --run` (detached spawn) | resume button posts to that endpoint |
+| inbox writes | inbox/parser.ts consumes via chokidar | `POST /api/sessions/:id/inbox` appends one line to `inbox.txt` (Studio's only on-disk write) | `<SlashBar>` posts to that endpoint |
+| metrics derivation | reducer state | `/api/sessions/:id` returns reducer-derived `metrics.per_actor` | ❌ no client recomputation (M1 fix — see 17.3) |
+
+**The single-writer invariant is the contract.** Studio server has exactly one disk-write path (`inbox.txt` append). Everything else is read-only — including the spawn endpoints, which delegate writes to the spawned subprocess (crumb core), preserving the invariant.
+
+### 17.2 Intentional separations (NOT duplication — keep both, document the scope)
+
+| Pair | Why both exist | What each is for |
+|---|---|---|
+| `src/helpers/doctor.ts` (crumb core) **and** `packages/studio/src/server/doctor.ts` (studio) | Different scopes, different runtime contexts | **Core doctor** = full environment probe (CLI installed? OAuth tokens? API keys? .env loaded? per-platform install hint?) — used by `crumb doctor` CLI + new-machine setup. **Studio doctor** = lightweight subprocess probe matrix surfaced as a 30 s-cached JSON for the `<AdapterList>` panel — must be fast (≤300 ms) so the sidebar render isn't blocked. Studio doctor INVOKES core doctor as a subprocess for the heavyweight checks but caches its own digest. |
+| `src/dispatcher/qa-runner.ts` (writes `qa.result`) **and** `packages/studio/src/server/server.ts` (serves it via API) | Anti-deception invariant 5 | qa.result is dispatcher-only ground truth (no LLM); server only reads it. Studio panels surfacing D2/D6 cite the source per AGENTS.md invariant 4. |
+| `src/protocol/types.ts` (schema source) **and** Studio panel renderers | Schema is canonical | Panels import types from `protocol/types.ts`; never re-declare. The leak in 17.3 #2 is exactly the absence of this discipline. |
+
+### 17.3 Active leaks — fix mapping by M-PR
+
+| # | Leak | Symptom | Fix lands in |
+|---|---|---|---|
+| **1** | Client recomputes metrics the reducer already produced | v1 vanilla `aggregateActorRuntime()` walks event arrays in the browser even though `metrics.per_actor` is derivable server-side. PR-O4 (vanilla last-call) extended this with `scoreHistoryFor()` — also client-side. | **M1** — move both helpers into `packages/studio/src/server/metrics.ts`; expose as `metrics.per_actor` + `metrics.score_history` on the SSE `state` event payload. M6 `<Scorecard>` reads the server-derived fields. |
+| **2** | D1-D6 dimension keys hardcoded in client | Strings like `'spec_fit'`, `'code_quality'`, `'visual_design'` appear in v1 `studio.js` and would re-leak into v2 if a panel inlines them. The schema source is `protocol/types.ts` but never exported as a const. | **M3** — add `export const DIMENSIONS = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'] as const;` + `export const DIMENSION_LABELS: Record<Dimension, string> = { D1: 'spec_fit', ... }` to `protocol/types.ts`; M6 `<Scorecard>` imports both. CI lint rule (sonarjs/no-duplicate-string) catches accidental re-leaks. |
+| **3** | `metrics.per_actor` not on SSE `state` event | Studio client subscribes to `state` events that lack the per-actor rollup, so it has no choice but to recompute. | **M1** — extend `state` event payload with `metrics.per_actor` + `metrics.composite` + `metrics.score_history`. Watcher.ts emits it in `getStateSnapshot()`; client consumes via `useTranscriptStream` `onState`. |
+
+### 17.4 LLM hygiene rules (codified)
+
+The migration is being executed by LLM agents alongside humans. Three rules to keep both honest:
+
+1. **Cite the source on any score render.** Every `<ScoreBadge>` / `<Scorecard>` row tooltip cites `scores.D*.source` (`reducer-auto` / `qa-check-effect` / `verifier-llm`) per AGENTS.md invariant 4. No silent renders. Lint rule: panels under `panels/Scorecard*` MUST import and call `formatScoreSource()`.
+2. **Never re-declare schema types in panels.** Import from `protocol/types.ts` only. Lint rule via `eslint-plugin-import` `no-restricted-paths`: panels can import from `protocol/` and `lib/` but never from each other's local types.
+3. **doctor.ts dual-existence is acknowledged in code comments.** Both files carry a top-of-file JSDoc block referencing this audit (`§17.2`) explaining their distinct scope so a future contributor / LLM doesn't try to "deduplicate" them. M3 polish PR adds the comments if missing.
+
+### 17.5 What's NOT a leak (resist deduplication impulse)
+
+- **Two `metrics.ts` files** (`packages/studio/src/server/metrics.ts` for HTTP-shaped output + `src/reducer/...` internal computation) — server file is a thin SSE-shape adapter; reducer file is pure derivation. Different layers, different concerns.
+- **Two doctor implementations** — see §17.2.
+- **Watcher's artifact disk-walk fallback** — when `artifact.created` is missing from transcript (crash / partial write), watcher walks `artifacts/` directory directly to surface to Output panel. This is intentional fallback for incomplete sessions, not duplication.
+
+Reviewers must reject PRs that "consolidate" any of these without first amending §17.2 to remove the entry.
+
 ## Trigger criteria — when to start M0
 
 Start M0 (`chore/studio-vite-scaffold`) when **all four** of these are true:
