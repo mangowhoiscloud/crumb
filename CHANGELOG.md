@@ -4,6 +4,24 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — Studio cancel button on live session rows (R5) (2026-05-03)
+
+R2 (PR #123) added the `/cancel` user verb + `cancel_spawn` effect end-to-end (parser → reducer → dispatcher AbortController → SIGTERM), but the only way to invoke it was typing `/cancel` into the Studio's console-input bar. R5 surfaces it as a one-click button on each live session row, mirroring the existing PR-G7-B Resume button shape but with destructive accent (`--audit-fg`) so the lossy mid-edit kill is visually distinct from the additive Resume action.
+
+`packages/studio/src/client/studio.{html,css,js}`:
+
+- `renderSessionList()` adds a `.row-cancel` button on each row when `s.live === true`, sitting to the left of the close `×`. Hidden on non-live sessions (paused/done — nothing to cancel). Glyph: `⏹` (square-stop).
+- Click handler POSTs `{line: '/cancel'}` to the existing `/api/sessions/:id/inbox` endpoint. The coordinator's chokidar-watched inbox watcher (R1, PR #122) picks it up in <10ms; parser turns it into `kind=user.intervene, data.cancel='all'`; reducer emits `cancel_spawn` effect; live dispatcher fires `controller.abort()` → SIGTERM on every registered actor's spawn (R2, PR #123).
+- Optimistic UI: button text flips to `…` on click → `✓` on success → resets to `⏹` after 2s. On failure, flips to `!` and resets after 3s with the error logged to console.
+- Click event handler in `.session-row` listener now ignores `.row-cancel` (alongside `.row-close` and `.row-resume`) so the button doesn't double-fire as a session-select.
+- CSS `.session-row .row-cancel`: same shape as `.row-resume` but `color: var(--audit-fg)` and hover background `color-mix(in oklab, var(--audit-fg) 30%, transparent)`. Reads as destructive-but-deliberate.
+
+In practice `.row-resume` and `.row-cancel` are mutually exclusive — resume shows on paused/interrupted/budget-exhausted, cancel only on live. The CSS positions them at the same `right: 30px` slot since at most one can be visible at a time.
+
+Per-actor cancel (`/cancel @builder` instead of bare `/cancel`) is reserved for the console-input bar — adding per-actor button menus to each row would clutter the sidebar UI without a clear use case the bare cancel doesn't already cover.
+
+Verification: lint:all, typecheck, format:check, test (466/466 — no test changes; UI smoke), build — all clean. Studio HTML re-inlined.
+
 ### Added — Studio agent narrative panel (split from live exec feed) with horizontal resize splitter (2026-05-03)
 
 Per user feedback after PR #113 ("이걸 보여주는 별도의 창을 만들어서 raw가 아니라 사용자가 봤을 때 유의미한 데이터를 출력하도록 개선해. live execution feed 말고 다른 창으로 둬서 live execution feed 위에 두면 될듯 해. 두 창의 높이는 session의 가로처럼 조절할 수도 있고."): PR #113 suppressed raw stream-json blobs from the live execution feed but lost the meaningful narrative content along with the noise. The user wanted the rendered Claude-Code-style ⏺/⎿/✓ bubbles to live in their own panel above the existing feed, not be hidden entirely.
