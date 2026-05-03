@@ -142,8 +142,22 @@ function renderSessionList() {
         ? (verdict === 'PASS' ? '✓' : verdict === 'PARTIAL' ? '~' : '✗')
         : (s.metrics?.done ? '·' : '▶');
       const stateTitle = s.state ? `state: ${s.state}${s.done_reason ? ' (' + s.done_reason + ')' : ''}` : '';
+      // PR-G7-B — Resume button on paused / interrupted / budget-exhausted
+      // sessions. Hidden when the session is live (no need) or terminal-pass.
+      // `done_reason` heuristic: budget exhausted → forceable resume.
+      const resumable = !s.live && (
+        s.state === 'paused' || s.state === 'interrupted' || s.state === 'idle' ||
+        (s.done_reason && /token_exhausted|wall_clock|all_builders_open/.test(s.done_reason))
+      );
+      const forceFlag = s.done_reason && /token_exhausted|wall_clock|all_builders_open/.test(s.done_reason);
+      const resumeBtn = resumable
+        ? '<button class="row-resume" data-resume="' + s.id + '"' +
+          (forceFlag ? ' data-force="1"' : '') +
+          ' title="re-enter coordinator loop (force=' + (forceFlag ? 'true' : 'false') + ')">↻</button>'
+        : '';
       return '<div class="' + cls.join(' ') + '" data-id="' + s.id + '" title="' + escapeHTML(stateTitle) + '">' +
         '<button class="row-close" data-close="' + s.id + '" title="dismiss from sidebar (transcript preserved on disk)">×</button>' +
+        resumeBtn +
         '<div><span class="row-dot"></span><span class="row-id">' + escapeHTML(s.id.slice(0, 12)) + '…</span> <span style="color:var(--ink-tertiary);">' + status + '</span></div>' +
         '<div class="row-goal">' + escapeHTML(s.goal ?? '(no goal yet)') + '</div>' +
         '<div class="row-meta">' + cost + ' · ' + (s.metrics?.events ?? 0) + ' evt</div>' +
@@ -157,9 +171,42 @@ function renderSessionList() {
   list.innerHTML = blocks.join('');
   list.querySelectorAll('.session-row').forEach(el => {
     el.addEventListener('click', (e) => {
-      // close button has its own handler — don't double-fire
+      // close + resume buttons have their own handlers — don't double-fire
       if (e.target?.closest?.('.row-close')) return;
+      if (e.target?.closest?.('.row-resume')) return;
       selectSession(el.dataset.id);
+    });
+  });
+  // PR-G7-B — Resume button click handler.
+  list.querySelectorAll('.row-resume').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.resume;
+      const force = btn.dataset.force === '1';
+      btn.disabled = true;
+      btn.textContent = '…';
+      try {
+        const res = await fetch('/api/sessions/' + encodeURIComponent(id) + '/resume', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ force }),
+        });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => '');
+          // eslint-disable-next-line no-alert
+          console.error('[studio] resume failed:', res.status, txt);
+          btn.textContent = '!';
+          setTimeout(() => { btn.disabled = false; btn.textContent = '↻'; }, 3000);
+          return;
+        }
+        // Optimistic UI: row will re-render on next watcher poll once status flips to running.
+        btn.textContent = '✓';
+        setTimeout(() => { btn.disabled = false; btn.textContent = '↻'; }, 2000);
+      } catch (err) {
+        console.error('[studio] resume error:', err);
+        btn.textContent = '!';
+        setTimeout(() => { btn.disabled = false; btn.textContent = '↻'; }, 3000);
+      }
     });
   });
   list.querySelectorAll('.row-close').forEach(btn => {

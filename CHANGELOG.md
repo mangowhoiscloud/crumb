@@ -22,6 +22,37 @@ Now: a single dispatcher parses `e.data` once and fans out to handlers registere
 
 Verification: 453/453 sweep green; lint/typecheck/format/build clean. Same render outputs (cache → swimlane → scorecard → session list) but with 1× JSON.parse instead of 8×.
 
+### Added / Fixed — Intervention routing + Resume (PR-G2/G4/G7) (2026-05-03)
+
+Live session `01KQNEYQT53P5JFGD0944NBZ9D` exposed three coupled gaps observed during pipeline tracing:
+
+1. **`@<actor> body` shorthand silently dropped** — 5 of 6 inbox lines in `01KQNAK1CXTBDEBX2WP2QQK891` recorded a fact and never woke the actor. The reducer treated `target_actor` as a tag for the fact only; spawn required `data.goto`.
+2. **verifier sandwich was self-routing fiction** — `agents/verifier.md:53` told the verifier "you can rollback to planner-lead OR builder-fallback", but the reducer's FAIL branch ignored the verifier's hint and always rolled back to planner-lead (or to builder-fallback only when the circuit was OPEN). `kind=handoff.rollback` had no reducer case at all.
+3. **`crumb resume <id>`** only printed the next-step command instead of re-entering the loop; the studio had no Resume button at all. Budget-exhausted sessions (`token_exhausted`, `wall_clock_exhausted`) had zero one-click recovery path.
+
+`src/reducer/index.ts`:
+- **PR-G2** — verdict=FAIL/REJECT routing now reads `judge.score.scores.deviation.type`. `Critical` → rollback to planner-lead (full respec, prior behavior); `Important`/`Minor` (default) → respawn the original `builder` with verifier feedback + `suggested_change` injected as a one-shot `sandwich_append`. The "1-line redirector" case from session 01KQNEYQT no longer burns a full plan-cycle.
+- **PR-G2** — new `case 'handoff.rollback'` mirrors the same deviation-typed routing for explicit rollback events the verifier emits separately from the verdict path.
+- **PR-G7-A** — `user.intervene` with `target_actor` + `body` (no `goto`/`swap`/`reset_circuit`/`sandwich_append`) now spawns that actor with the body as prompt. Honors per-actor pause + global pause.
+
+`src/loop/coordinator.ts`:
+- **PR-G7-C** — `drainReduce` clears `state.done` before reducing a `user.intervene` / `user.resume` event so a user can unstop a budget-exhausted session that's still in-process. Sessions that already exited the process need PR-G7-B (resume CLI / Studio button) instead.
+
+`src/cli.ts` — **PR-G7-B**: `crumb resume <id> --run` (alias `--auto`) now re-enters the coordinator loop in process. `--force` lets a `done` session re-enter (budget-exhausted retry). Without flags the legacy print-the-command behavior is kept (callers that scrape stdout). New `--adapter` / `--preset` / `--idle-timeout` / `--per-spawn-timeout` flags are forwarded to the re-entry.
+
+`packages/studio/src/server.ts` + client (`studio.html` / `studio.css` / `studio.js`):
+- **PR-G7-B** — new `POST /api/sessions/:id/resume` handler spawns `crumb resume <id> --run` as a detached child. Body `{ adapter?, force? }` forwards `--adapter` / `--force`.
+- **PR-G7-B** — Resume button (`↻`) appears on paused / interrupted / budget-exhausted session rows on hover (sits to the left of the close `×`). Auto-flips `force=true` for `token_exhausted` / `wall_clock` / `all_builders_open` `done_reason`s. Uses `--primary` token tinted with `color-mix` so it reads as an action without competing with the destructive close button.
+
+`agents/verifier.md`:
+- **PR-G4** — sandwich corrected. `to=planner-lead OR builder-fallback` removed (was self-routing fiction); replaced with `to=coordinator` + `data.deviation.type` table (`Critical`/`Important`/`Minor`) so the LLM picks the *type*, the reducer picks the *target*.
+
+`src/protocol/types.ts` — `Scores` interface gains `deviation?: { type? }` + `suggested_change?` fields so the verifier can emit them and the reducer can read them without `as` casts at the call site.
+
+PR-G3 (audit_violations follow-on) was already implemented in `src/validator/anti-deception.ts:180` (`self_bias_score_discounted` — 15% discount on D1/D3-LLM/D5 when same-provider risk fires) per `wiki/synthesis/bagelcode-same-provider-discount-2026-05-03.md`. No additional change required.
+
+Verification: `npm run lint && npm run typecheck && npm run format:check && npm test && npm run build` — 460 tests pass (was 453; +7 new across reducer FAIL deviation routing, handoff.rollback, @actor shorthand spawn, paused-actor-respect).
+
 ### Added — Video research toggle (Gemini-only) end-to-end (studio → server → CLI → coordinator → reducer) (2026-05-03)
 
 Per user feedback: "세션을 만들 때 gemini sdk나 Gemini CLI가 활성화 되어 있으면 custom binding에 비디오 인코딩 활성화/비활성화 토글 넣고 활성화되면 research에서 비디오 인코딩하도록 프롬프트 수정 및 보강하자. 대신 gemini 쪽이 활성화가 안되어있으면 패스하고 말이야."

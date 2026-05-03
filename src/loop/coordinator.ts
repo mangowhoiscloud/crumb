@@ -333,6 +333,16 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
       try {
         while (reduceQueue.length > 0 && !state.done) {
           const msg = reduceQueue.shift()!;
+          // PR-G7-C — user.intervene / user.resume can unstop a session that
+          // hit a budget cap. Clear the done flag BEFORE reducing so the
+          // intervention's reducer case sees a live state and can spawn an
+          // actor. Without this the loop sits at done=true and ignores every
+          // user message (real footgun in 01KQNEYQT53P5JFGD0944NBZ9D where
+          // the verifier emitted handoff.rollback after token_exhausted but
+          // the rollback was queued and never reduced).
+          if ((msg.kind === 'user.intervene' || msg.kind === 'user.resume') && state.done) {
+            state = { ...state, done: false };
+          }
           const { state: nextState, effects } = reduce(state, msg);
           state = nextState;
           const effList = applyOverride(effects);

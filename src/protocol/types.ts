@@ -144,6 +144,16 @@ export interface Scores {
     regrader_msg_id?: string;
   };
   audit_violations?: string[];
+  /**
+   * PR-G2 — verifier-emitted deviation classification used by the reducer's
+   * FAIL/REJECT routing. `Critical` rolls back to planner-lead; `Important`
+   * (default) and `Minor` respawn the original builder with feedback +
+   * suggested_change injected as a one-shot sandwich_append. Mirrors the
+   * code-review-protocol.md taxonomy.
+   */
+  deviation?: { type?: 'Critical' | 'Important' | 'Minor' };
+  /** PR-G2 — concrete fix instruction the builder receives via sandwich_append. */
+  suggested_change?: string;
   // v0.1.x deprecated aliases (kept for replay of old transcripts)
   /** @deprecated use D1 */
   goal_completion?: number;

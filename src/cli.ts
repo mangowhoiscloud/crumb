@@ -490,23 +490,80 @@ async function cmdResume(args: ParsedArgs): Promise<void> {
     ),
   );
 
-  if (state.done) {
+  // PR-G7-B — `crumb resume <id> --run` re-enters the coordinator loop in
+  // process. Without `--run` the legacy print-the-command behavior is kept
+  // (callers that scrape stdout). With `--force` a `done` session also
+  // re-enters — useful when the prior exit was budget-only (token_exhausted /
+  // wall_clock_exhausted) and the user has bumped the budget for the retry.
+  const autoRun = args.flags.has('run') || args.flags.has('auto');
+  const force = args.flags.has('force');
+
+  if (state.done && !force) {
     // eslint-disable-next-line no-console
-    console.log('[resume] session already done — nothing to re-enter');
+    console.log(
+      '[resume] session already done — pass --force to re-enter (budget-exhausted retry)',
+    );
     return;
   }
 
+  if (!autoRun) {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[resume] session is mid-flight; last event was ${state.last_message?.kind ?? '?'}; ` +
+        `next_speaker=${state.progress_ledger.next_speaker ?? '?'}.`,
+    );
+    // eslint-disable-next-line no-console
+    console.log('[resume] re-derived state only. To continue mid-flight, run one of:');
+    // eslint-disable-next-line no-console
+    console.log(`  crumb resume ${state.session_id} --run`);
+    // eslint-disable-next-line no-console
+    console.log(
+      `  crumb run --session ${state.session_id} --goal "${state.task_ledger.goal ?? ''}" --root ${cwd}`,
+    );
+    return;
+  }
+
+  // --run path: re-enter runSession() with the original goal + repo. This
+  // matches the studio's [Resume] button (POST /api/sessions/:id/resume).
+  const goal = state.task_ledger.goal ?? '';
+  const repoRoot = args.flags.get('root') ?? process.env.CRUMB_REPO_ROOT ?? inferRepoRoot() ?? cwd;
+  const adapterOverride = args.flags.get('adapter');
+  const presetName = args.flags.get('preset');
+  const idleTimeoutMs = Number(args.flags.get('idle-timeout') ?? 60_000);
+  const perSpawnTimeoutFlag = args.flags.get('per-spawn-timeout');
+  const perSpawnTimeoutMs = perSpawnTimeoutFlag ? Number(perSpawnTimeoutFlag) : undefined;
   // eslint-disable-next-line no-console
   console.log(
-    `[resume] session is mid-flight; last event was ${state.last_message?.kind ?? '?'}; ` +
-      `next_speaker=${state.progress_ledger.next_speaker ?? '?'}.`,
+    `[resume] re-entering session=${state.session_id} adapter=${adapterOverride ?? '(preset or ambient)'} force=${force}`,
   );
-  // eslint-disable-next-line no-console
-  console.log('[resume] P0: re-derived state only. To continue mid-flight, run:');
-  // eslint-disable-next-line no-console
-  console.log(
-    `  crumb run --session ${state.session_id} --goal "${state.task_ledger.goal ?? ''}" --root ${cwd}`,
-  );
+  await updateMeta(sessionDir, { status: 'running' });
+  const { runSession } = await import('./loop/coordinator.js');
+  try {
+    const { state: finalState } = await runSession({
+      goal,
+      sessionDir,
+      sessionId: state.session_id,
+      repoRoot,
+      adapterOverride,
+      presetName,
+      idleTimeoutMs,
+      perSpawnTimeoutMs,
+    });
+    await updateMeta(sessionDir, {
+      status: finalState.done ? 'done' : 'paused',
+      ended_at: new Date().toISOString(),
+    });
+    // eslint-disable-next-line no-console
+    console.log(
+      `[resume] re-entry exit: done=${finalState.done} next_speaker=${finalState.progress_ledger.next_speaker ?? '?'}`,
+    );
+  } catch (err) {
+    await updateMeta(sessionDir, {
+      status: 'paused',
+      ended_at: new Date().toISOString(),
+    });
+    throw err;
+  }
 }
 
 async function cmdDoctor(): Promise<void> {

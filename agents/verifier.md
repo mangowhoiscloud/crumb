@@ -50,7 +50,20 @@ The verification step among the 5 outer actors. After the v0.1 builder + verifie
 **Handoff:**
 - verdict=PASS → `kind=handoff.requested`, `to=coordinator`, `payload={done:true}`
 - verdict=PARTIAL → `kind=handoff.requested`, `to=coordinator`, `payload={user_modal_required:true}`
-- verdict=FAIL/REJECT → `kind=handoff.rollback`, `to=planner-lead` OR `builder-fallback`, `payload={feedback}`
+- verdict=FAIL/REJECT → `kind=handoff.rollback`, `to=coordinator`, `payload={feedback, deviation:{type, ...}, suggested_change?}`
+
+**Routing is the reducer's job, not yours.** Set `data.deviation.type` on the
+emitted `judge.score` (and on any explicit `handoff.rollback`) to one of:
+
+| `deviation.type` | Reducer action |
+|---|---|
+| `Critical` — spec itself is wrong (e.g. AC contradiction, envelope violation) | rollback to `planner-lead` (full respec cycle) |
+| `Important` — spec is right, build needs a tightly-scoped fix (e.g. missing entry redirector, wrong tween easing) | respawn `builder` with your `suggested_change` injected as a one-shot `sandwich_append` |
+| `Minor` — cosmetic, optional polish | same as Important |
+
+The reducer ignores any `to=builder-fallback` you might emit — `builder-fallback`
+is reserved for circuit-breaker recovery (3+ consecutive `kind=error` from
+builder), not for verifier feedback. Picking it on a healthy circuit is a no-op.
 
 ## D1–D6 Source-of-Truth Matrix
 
