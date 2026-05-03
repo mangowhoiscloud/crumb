@@ -96,7 +96,10 @@ export function NodeInspector() {
   const recentEvents = useMemo<TranscriptEvent[]>(() => {
     if (!actor) return [];
     const filtered: TranscriptEvent[] = [];
-    for (let i = stream.events.length - 1; i >= 0 && filtered.length < 8; i--) {
+    // Pull up to 50 — the inner scroller (max-height 500 px ≈ 6 cards
+    // visible) shows ~6 at a time and scrolls the rest. Higher cap is
+    // fine because the rolling window itself bounds memory upstream.
+    for (let i = stream.events.length - 1; i >= 0 && filtered.length < 50; i--) {
       const e = stream.events[i]!;
       if (e.from !== actor) continue;
       if (!RECENT_EVENT_KINDS_PRIORITY.has(e.kind)) continue;
@@ -238,6 +241,14 @@ export function NodeInspector() {
               gap: 8,
               fontFamily: 'var(--font-mono)',
               fontSize: 11,
+              // Bound the section to roughly 6 cards visible (~84 px
+              // per card × 6 ≈ 500); scroll the rest. Without this the
+              // section grew unbounded and pushed every later section
+              // (binding / spans / active session / sandwich button)
+              // off-screen, forcing rail-wide scrolling.
+              maxHeight: 500,
+              overflowY: 'auto',
+              paddingRight: 4,
             }}
           >
             {recentEvents.map((e) => (
