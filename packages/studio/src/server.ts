@@ -35,6 +35,7 @@ import http from 'node:http';
 import { join } from 'node:path';
 import { URL } from 'node:url';
 import { watch as fsWatch, createReadStream } from 'node:fs';
+import { readFile as readFileAsync } from 'node:fs/promises';
 
 import { STUDIO_HTML } from './studio-html.js';
 import { probeAdapters } from './doctor.js';
@@ -221,37 +222,56 @@ async function serveSessions(
 ): Promise<void> {
   const classified = await watcher.classifiedSnapshot();
   const visible = classified.filter((s) => !hiddenSessions.has(s.session_id));
-  const sessions = visible.map(
-    ({ session_id, project_id, crumb_home, transcript_path, history, classification }) => {
-      const metrics = computeMetrics(history);
-      let goal: string | null = null;
-      let preset: string | null = null;
-      const actorsSeen = new Set<string>();
-      for (const m of history) {
-        if (m.kind === 'goal' && !goal) goal = m.body ?? null;
-        if (m.kind === 'session.start' && !preset) {
-          const data = (m.data ?? {}) as Record<string, unknown>;
-          if (typeof data.preset === 'string') preset = data.preset;
+  const sessions = await Promise.all(
+    visible.map(
+      async ({ session_id, project_id, crumb_home, transcript_path, history, classification }) => {
+        const metrics = computeMetrics(history);
+        let goal: string | null = null;
+        let preset: string | null = null;
+        const actorsSeen = new Set<string>();
+        for (const m of history) {
+          if (m.kind === 'goal' && !goal) goal = m.body ?? null;
+          if (m.kind === 'session.start' && !preset) {
+            const data = (m.data ?? {}) as Record<string, unknown>;
+            if (typeof data.preset === 'string') preset = data.preset;
+          }
+          // Track actors that actually ran so the studio can offer sandwich previews.
+          if (m.kind === 'agent.wake' && m.from) actorsSeen.add(m.from);
         }
-        // Track actors that actually ran so the studio can offer sandwich previews.
-        if (m.kind === 'agent.wake' && m.from) actorsSeen.add(m.from);
-      }
-      return {
-        session_id,
-        project_id,
-        crumb_home,
-        transcript_path,
-        goal,
-        preset,
-        metrics,
-        actors: [...actorsSeen],
-        // v0.3.5: state + last_activity_at for sidebar dot color + sort.
-        state: classification?.state ?? null,
-        last_activity_at: classification?.last_activity_at ?? null,
-        done_reason: classification?.done_reason ?? null,
-        history,
-      };
-    },
+        // Goal fallback: when transcript hasn't yet flushed the `kind=goal` event
+        // (sub-second window between session.start and goal append), the sidebar
+        // would otherwise show the bare ULID. `meta.json` is written atomically
+        // at session start with the goal already populated — read it as a
+        // fallback so the session label appears immediately.
+        if (!goal) {
+          try {
+            const metaRaw = await readFileAsync(
+              join(sessionDirFromTranscript(transcript_path), 'meta.json'),
+              'utf8',
+            );
+            const meta = JSON.parse(metaRaw) as { goal?: unknown };
+            if (typeof meta.goal === 'string' && meta.goal.length > 0) goal = meta.goal;
+          } catch {
+            // meta.json missing or unreadable — leave goal null, sidebar shows ULID.
+          }
+        }
+        return {
+          session_id,
+          project_id,
+          crumb_home,
+          transcript_path,
+          goal,
+          preset,
+          metrics,
+          actors: [...actorsSeen],
+          // v0.3.5: state + last_activity_at for sidebar dot color + sort.
+          state: classification?.state ?? null,
+          last_activity_at: classification?.last_activity_at ?? null,
+          done_reason: classification?.done_reason ?? null,
+          history,
+        };
+      },
+    ),
   );
   // Newest activity first — turns the sidebar into a recently-active feed.
   sessions.sort((a, b) => (b.last_activity_at ?? 0) - (a.last_activity_at ?? 0));
@@ -724,12 +744,14 @@ async function serveCrumbRun(
   let preset: string | undefined;
   let adapter: string | undefined;
   let videoRefs: string[] | undefined;
+  const bindings: Array<{ actor: string; adapter?: string; model?: string }> = [];
   try {
     const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
       goal?: unknown;
       preset?: unknown;
       adapter?: unknown;
       video_refs?: unknown;
+      bindings?: unknown;
     };
     if (typeof body.goal !== 'string' || body.goal.trim().length === 0) {
       res.statusCode = 400;
@@ -749,6 +771,28 @@ async function serveCrumbRun(
         .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
         .map((v) => v.trim());
       if (videoRefs.length === 0) videoRefs = undefined;
+    }
+    // v0.5 PR-Bindings — per-actor `{ adapter?, model? }` overlay from the
+    // studio's advanced bindings grid. Pre-v0.5 these were UI-residue only
+    // ("informational only" comment in studio.js); now they map to repeated
+    // `--bind <actor>=<harness>[:<model>]` CLI flags so the user's intent
+    // actually reaches `src/dispatcher/preset-loader.ts` as the highest-
+    // priority override (above .crumb/config.toml). Closes the
+    // ambient + custom binding footgun the user flagged in G9.
+    if (body.bindings && typeof body.bindings === 'object' && !Array.isArray(body.bindings)) {
+      for (const [actor, raw] of Object.entries(body.bindings as Record<string, unknown>)) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+        const r = raw as { adapter?: unknown; model?: unknown };
+        const adapterStr =
+          typeof r.adapter === 'string' && r.adapter.length > 0 ? r.adapter : undefined;
+        const modelStr = typeof r.model === 'string' && r.model.length > 0 ? r.model : undefined;
+        if (!adapterStr && !modelStr) continue;
+        bindings.push({
+          actor,
+          ...(adapterStr ? { adapter: adapterStr } : {}),
+          ...(modelStr ? { model: modelStr } : {}),
+        });
+      }
     }
   } catch {
     res.statusCode = 400;
@@ -788,6 +832,17 @@ async function serveCrumbRun(
   if (preset) args.push('--preset', preset);
   if (adapter) args.push('--adapter', adapter);
   if (videoRefs && videoRefs.length > 0) args.push('--video-refs', videoRefs.join(','));
+  // v0.5 PR-Bindings — repeated --bind flag, one per actor. Encoding:
+  //   <actor>=<harness>            (adapter only — preserves preset.model)
+  //   <actor>=:<model>             (model only — preserves preset.harness)
+  //   <actor>=<harness>:<model>    (full override)
+  // The CLI parses + forwards to preset-loader as the highest-priority
+  // override (above .crumb/config.toml).
+  for (const b of bindings) {
+    const harnessPart = b.adapter ?? '';
+    const modelPart = b.model ? `:${b.model}` : '';
+    args.push('--bind', `${b.actor}=${harnessPart}${modelPart}`);
+  }
   const child = spawn('npx', args, { cwd: repoRoot, detached: true, stdio: 'ignore' });
   child.unref();
 

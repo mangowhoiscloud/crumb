@@ -1029,6 +1029,23 @@ section.waterfall {
   pointer-events: none;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
+/* v0.5 PR-Waterfall E — inline metric chip (cost or tokens) at the right
+   end of each bar. Helicone / Sentry pattern: action-relevant numbers
+   ride along with the span so hover isn't required. */
+.waterfall-bar-chip {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  font-size: 9px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.28);
+  padding: 0 4px;
+  border-radius: 3px;
+  pointer-events: none;
+  letter-spacing: 0.2px;
+}
 .waterfall-bar.errored {
   background: linear-gradient(180deg, var(--audit-fg) 0%, #c93b66 100%);
 }
@@ -1057,6 +1074,64 @@ section.waterfall {
   background: rgba(255, 255, 255, 0.55);
   cursor: pointer;
   pointer-events: auto;
+}
+/* v0.5 PR-Waterfall E — Layered Cost Strip on top of lanes. SVG path
+   spans the same t0..tMax window as the bars; tokens area underlay
+   (subtle blue), cost line overlay (orange). Strip is sticky so the
+   user can still see cost trajectory while scrolling lanes vertically.
+   OTel GenAI semantic conventions alignment + Phoenix Arize layered
+   chart pattern. */
+.waterfall-cost-strip {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 44px;
+  margin: 0 16px 8px;
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 6px;
+  background: var(--surface);
+}
+.waterfall-cost-svg {
+  grid-column: 2 / 3;
+  width: 100%;
+  height: 36px;
+  display: block;
+}
+.waterfall-cost-tokens {
+  fill: rgba(94, 106, 210, 0.18);
+  stroke: rgba(94, 106, 210, 0.55);
+  stroke-width: 1;
+}
+.waterfall-cost-line {
+  fill: none;
+  stroke: var(--accent-warm, #FFB627);
+  stroke-width: 1.4;
+}
+.waterfall-cost-legend {
+  position: absolute;
+  bottom: 6px;
+  right: 16px;
+  display: flex;
+  gap: 12px;
+  font-size: 9px;
+  font-family: ui-monospace, monospace;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.waterfall-cost-legend-tokens::before {
+  content: "■";
+  color: rgba(94, 106, 210, 0.7);
+  margin-right: 4px;
+}
+.waterfall-cost-legend-cost::before {
+  content: "─";
+  color: var(--accent-warm, #FFB627);
+  margin-right: 4px;
 }
 .waterfall-tick:hover {
   background: var(--ink);
@@ -2427,6 +2502,60 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   background: var(--surface-2);
   color: var(--ink-tertiary);
 }
+
+/* v0.5 PR-Auth — expired credential state. Distinct from `inactive` (= not
+   installed) and `maybe` (= installed, auth not probed). The user has
+   credentials on disk but they're past expiry; click → modal copy reads
+   "re-login" not "first install". Color: alert red so it stands out among
+   the lime/amber/grey adapter dots. */
+.adapter-row.expired .adapter-dot {
+  background: var(--accent-alert, #E04848);
+  box-shadow: 0 0 6px rgba(224, 72, 72, 0.55);
+}
+.adapter-row.expired .adapter-pill {
+  background: rgba(224, 72, 72, 0.14);
+  color: var(--accent-alert, #E04848);
+}
+.adapter-row.expired .adapter-name,
+.adapter-row.expired .adapter-meta { opacity: 0.85; }
+
+/* v0.5 PR-Auth — copyable command block in the adapter setup modal.
+   Click anywhere on the block copies the command to clipboard; the small
+   "⧉ copy" affordance flashes "✓ copied" for 1.2s. Pattern mirrors GitHub
+   gist + DevTools console snippet UX. */
+.adapter-modal-cmd {
+  position: relative;
+  cursor: pointer;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.adapter-modal-cmd:hover {
+  border-color: var(--primary);
+  background: var(--surface-1);
+}
+.adapter-modal-cmd pre {
+  margin: 0;
+  padding: 8px 70px 8px 10px;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.adapter-modal-cmd-copy {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: var(--ink-tertiary);
+  letter-spacing: 0.3px;
+  user-select: none;
+  pointer-events: none;
+}
+.adapter-modal-cmd:hover .adapter-modal-cmd-copy { color: var(--primary); }
 
 /* ───────────────────────────────────────────────────────────────────────── */
 /* New session form — preset chips + per-actor binding chips               */

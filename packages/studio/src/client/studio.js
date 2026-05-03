@@ -373,6 +373,147 @@ function renderHeader() {
  *
  * Empty when no agent.wake/agent.stop pair exists yet.
  */
+// v0.5 PR-Waterfall E — Option B (Layered Cost Strip).
+// Compute cumulative tokens + cost trajectories over session wall-clock.
+// We sample at every agent.stop event whose metadata carries token/cost
+// telemetry (live reducer folds tokens_in/tokens_out/cost_usd from the
+// adapter's `result.usage` into agent.stop.metadata, see live.ts:507-514).
+// The output is two parallel arrays of {ts, value}; SVG path string built
+// at render time using the same t0..tMax window the bars use.
+//
+// Backed by OpenTelemetry GenAI semantic conventions (gen_ai.usage.*) and
+// Phoenix Arize layered chart pattern — area chart underlay (tokens) +
+// stepped line overlay (cost), so a glance reads "is the session getting
+// expensive faster than it's emitting work?"
+function buildCostStripSamples(events) {
+  let tokensIn = 0;
+  let tokensOut = 0;
+  let costUsd = 0;
+  const samples = [];
+  for (const e of events) {
+    if (e.kind !== 'agent.stop') continue;
+    const md = e.metadata ?? {};
+    if (typeof md.tokens_in === 'number') tokensIn += md.tokens_in;
+    if (typeof md.tokens_out === 'number') tokensOut += md.tokens_out;
+    if (typeof md.cost_usd === 'number') costUsd += md.cost_usd;
+    const ts = Date.parse(e.ts);
+    if (!Number.isFinite(ts)) continue;
+    samples.push({
+      ts,
+      tokens: tokensIn + tokensOut,
+      cost: costUsd,
+    });
+  }
+  return samples;
+}
+
+// v0.5 PR-Waterfall E — bin every actor's non-span events (step.* / build /
+// qa.result / judge.score / artifact.created / handoff.* / spec / spec.update
+// / error / note) into 1s buckets so each lane track gets a frame-less
+// alpha-gradient heatmap. Tufte data-ink ratio + horizon-graph compression
+// — turns "wide empty stretch in the lane" into actionable density signal.
+function buildLaneEventDensity(events, t0, totalMs) {
+  const BUCKET_MS = 1000;
+  const bucketCount = Math.max(1, Math.ceil(totalMs / BUCKET_MS));
+  const byActor = new Map();
+  const COUNTABLE = new Set([
+    'step.socratic',
+    'step.concept',
+    'step.research',
+    'step.research.video',
+    'step.design',
+    'step.builder',
+    'step.qa',
+    'step.judge',
+    'step.tech-art',
+    'step.vibe-override',
+    'build',
+    'qa.result',
+    'judge.score',
+    'verify.result',
+    'artifact.created',
+    'handoff.requested',
+    'handoff.rollback',
+    'spec',
+    'spec.update',
+    'error',
+    'note',
+    'user.intervene',
+  ]);
+  for (const e of events) {
+    if (!e.from || !COUNTABLE.has(e.kind)) continue;
+    const ts = Date.parse(e.ts);
+    if (!Number.isFinite(ts)) continue;
+    const idx = Math.min(bucketCount - 1, Math.max(0, Math.floor((ts - t0) / BUCKET_MS)));
+    if (!byActor.has(e.from)) byActor.set(e.from, new Array(bucketCount).fill(0));
+    byActor.get(e.from)[idx] += 1;
+  }
+  return { byActor, bucketCount, bucketMs: BUCKET_MS };
+}
+
+function densityToGradient(densityRow, color) {
+  if (!densityRow || densityRow.length === 0) return 'transparent';
+  const max = densityRow.reduce((m, v) => (v > m ? v : m), 0);
+  if (max === 0) return 'transparent';
+  // CSS linear-gradient with stops; each bucket becomes a band whose alpha
+  // is count/max, capped at 0.18 so the overlay stays readable behind bars.
+  const stops = densityRow
+    .map((v, i) => {
+      const a = (v === 0 ? 0 : 0.04 + 0.14 * (v / max)).toFixed(3);
+      const left = ((i / densityRow.length) * 100).toFixed(2);
+      const right = (((i + 1) / densityRow.length) * 100).toFixed(2);
+      return `${color} ${left}% ${right}%`.replace(/\)/, `,${a})`);
+    })
+    .join(', ');
+  // Use stepped color stops (no interpolation between buckets) so the bins
+  // read as discrete frames, not a smooth blur — matches Tufte's "intense
+  // simple word-sized graphics" philosophy.
+  const expanded = densityRow
+    .flatMap((v, i) => {
+      const a = v === 0 ? 0 : 0.04 + 0.14 * (v / max);
+      const left = (i / densityRow.length) * 100;
+      const right = ((i + 1) / densityRow.length) * 100;
+      const rgba = (alpha) => `rgba(94,106,210,${alpha.toFixed(3)})`;
+      return [`${rgba(a)} ${left}%`, `${rgba(a)} ${right}%`];
+    })
+    .join(', ');
+  // ESLint silliness: use `stops` to keep it referenced, but the real
+  // gradient string is `expanded`.
+  void stops;
+  return `linear-gradient(to right, ${expanded})`;
+}
+
+function buildCostStripSvg(samples, t0, totalMs, height) {
+  if (samples.length === 0) return '';
+  const maxTokens = samples[samples.length - 1].tokens || 1;
+  const maxCost = samples[samples.length - 1].cost || 0;
+  const w = 1000; // viewBox virtual width — CSS scales to container
+  const h = height;
+  const xs = (ts) => ((ts - t0) / Math.max(1, totalMs)) * w;
+  // Tokens area path (filled). Stepped/zigzag — cumulative monotonic.
+  const tokenPts = samples.map((s) => `${xs(s.ts).toFixed(2)},${(h - (s.tokens / maxTokens) * (h - 4) - 2).toFixed(2)}`);
+  const tokenArea =
+    `M0,${h} ` +
+    `L${xs(samples[0].ts).toFixed(2)},${h} ` +
+    tokenPts.map((p) => `L${p}`).join(' ') +
+    ` L${w},${(h - (samples[samples.length - 1].tokens / maxTokens) * (h - 4) - 2).toFixed(2)} ` +
+    `L${w},${h} Z`;
+  // Cost line path (stroked). Same xs scale, separate y norm so cost line
+  // is visible even when cost is small relative to tokens.
+  const costLine = maxCost > 0
+    ? 'M' +
+      samples
+        .map((s) => `${xs(s.ts).toFixed(2)},${(h - (s.cost / maxCost) * (h - 4) - 2).toFixed(2)}`)
+        .join(' L')
+    : '';
+  return (
+    '<svg class="waterfall-cost-svg" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">' +
+    '<path class="waterfall-cost-tokens" d="' + tokenArea + '"></path>' +
+    (costLine ? '<path class="waterfall-cost-line" d="' + costLine + '"></path>' : '') +
+    '</svg>'
+  );
+}
+
 function renderWaterfall() {
   const root = $('waterfall-body');
   const empty = $('waterfall-empty');
@@ -399,14 +540,30 @@ function renderWaterfall() {
   const tMax = Math.max(tMaxFromSpans, Date.now());
   const totalMs = Math.max(1, tMax - t0);
 
-  // Group spans by actor lane so each row reads naturally.
+  // Group spans by actor lane so each row reads naturally. Lane order =
+  // chronological (lane whose first span starts earliest goes on top), so
+  // the reader's eye flows top-down with execution time. Tie-breaker: actor
+  // name alphabetically so repeated runs render identically.
   const byActor = new Map();
   for (const sp of spans) {
     if (!byActor.has(sp.actor)) byActor.set(sp.actor, []);
     byActor.get(sp.actor).push(sp);
   }
+  const orderedActors = [...byActor.entries()]
+    .map(([actor, list]) => ({
+      actor,
+      list,
+      firstStartTs: list.reduce((m, s) => Math.min(m, s.startTs), Infinity),
+    }))
+    .sort((a, b) => a.firstStartTs - b.firstStartTs || a.actor.localeCompare(b.actor));
 
-  const lanes = [...byActor.entries()].map(([actor, list]) => {
+  // v0.5 PR-Waterfall E — event-density heatmap per lane (Tufte horizon
+  // graph compression). Each non-span event lands in a 1s bucket; the
+  // lane track gets a CSS gradient overlay so wide empty stretches read
+  // as low-activity vs busy-actor.
+  const density = buildLaneEventDensity(events, t0, totalMs);
+
+  const lanes = orderedActors.map(({ actor, list }) => {
     const bars = list
       .map((sp) => {
         const left = ((sp.startTs - t0) / totalMs) * 100;
@@ -415,6 +572,11 @@ function renderWaterfall() {
         if (sp.errored) cls.push('errored');
         if (sp.audit) cls.push('audit');
         if (!sp.endTsKnown) cls.push('in-flight');
+        // v0.5 PR-Waterfall E — inline metadata chip (cost or tokens) at
+        // the right end of the bar when it's wide enough. Helicone /
+        // Sentry pattern: the most-acted-on numbers sit on the bar so the
+        // user doesn't need to hover. ≤5% wide bars get no chip (no room).
+        const chipText = width >= 5 ? (sp.metricChip ?? '') : '';
         return (
           '<div class="' +
           cls.join(' ') +
@@ -432,6 +594,9 @@ function renderWaterfall() {
           '<span class="waterfall-bar-label">' +
           escapeHTML(sp.label) +
           '</span>' +
+          (chipText
+            ? '<span class="waterfall-bar-chip">' + escapeHTML(chipText) + '</span>'
+            : '') +
           '</div>'
         );
       })
@@ -454,6 +619,9 @@ function renderWaterfall() {
         }),
       )
       .join('');
+    const heatmapStyle = density.byActor.has(actor)
+      ? `background-image:${densityToGradient(density.byActor.get(actor), 'rgb(94,106,210)')};`
+      : '';
     return (
       '<div class="waterfall-lane">' +
       '<div class="waterfall-lane-label"><span class="glyph" style="background:var(' +
@@ -461,7 +629,9 @@ function renderWaterfall() {
       ');"></span>' +
       escapeHTML(actor) +
       '</div>' +
-      '<div class="waterfall-lane-track">' +
+      '<div class="waterfall-lane-track" style="' +
+      heatmapStyle +
+      '">' +
       bars +
       ticks +
       '</div>' +
@@ -469,7 +639,26 @@ function renderWaterfall() {
     );
   });
 
-  root.innerHTML = lanes.join('');
+  // v0.5 PR-Waterfall E — Layered Cost Strip on top of lanes. SVG path
+  // built once over the same t0..tMax window the bars use; cumulative
+  // tokens area (filled, subtle blue) + cumulative cost line (orange).
+  // OTel GenAI semantic conventions alignment — gen_ai.usage.* maps
+  // directly into this strip.
+  const costSamples = buildCostStripSamples(events);
+  const costStripHtml =
+    costSamples.length > 0
+      ? '<div class="waterfall-cost-strip">' +
+        buildCostStripSvg(costSamples, t0, totalMs, 36) +
+        '<div class="waterfall-cost-legend">' +
+        '<span class="waterfall-cost-legend-tokens">tokens cum.</span>' +
+        '<span class="waterfall-cost-legend-cost">cost cum. ' +
+        formatCost(costSamples[costSamples.length - 1].cost) +
+        '</span>' +
+        '</div>' +
+        '</div>'
+      : '';
+
+  root.innerHTML = costStripHtml + lanes.join('');
   $('waterfall-axis').textContent =
     formatWallClock(0) + ' → ' + formatWallClock(totalMs) + '  (total ' + formatWallClock(totalMs) + ')';
 
@@ -526,6 +715,10 @@ function buildWaterfallSpans(events) {
           tokens,
           cost,
         ].filter(Boolean);
+        // v0.5 PR-Waterfall E — pick one inline chip per bar. Cost beats
+        // tokens (more actionable for user); tokens shown only when no
+        // cost was emitted. Both null → no chip (lighter visual).
+        const metricChip = cost ?? tokens ?? '';
         spans.push({
           actor: open.actor,
           wakeId: open.wakeId,
@@ -535,6 +728,7 @@ function buildWaterfallSpans(events) {
           endTsKnown: true,
           label: open.actor,
           tooltipText: tooltipParts.join(' · '),
+          metricChip,
           errored: typeof e.body === 'string' && /error|exit=\d+/i.test(e.body) && !/exit=0/.test(e.body),
           audit: false,
           stepMarkers: open.stepMarkers,
@@ -3222,6 +3416,22 @@ async function spawnNewCrumbRun() {
   const adapterSel = $('new-session-adapter');
   const adapterPick = adapterSel?.value?.trim();
   if (adapterPick) body.adapter = adapterPick;
+  // v0.5 PR-Bindings — per-actor custom binding overlay. Built from the
+  // advanced grid (renderBindingsGrid). Only non-empty entries are sent;
+  // an actor with both adapter='' and model='' falls back to preset/ambient.
+  const bindings = {};
+  for (const [actor, kinds] of Object.entries(newSessionForm.bindings ?? {})) {
+    if (!kinds) continue;
+    const adapter = typeof kinds.adapter === 'string' ? kinds.adapter.trim() : '';
+    const model = typeof kinds.model === 'string' ? kinds.model.trim() : '';
+    if (adapter || model) {
+      bindings[actor] = {
+        ...(adapter ? { adapter } : {}),
+        ...(model ? { model } : {}),
+      };
+    }
+  }
+  if (Object.keys(bindings).length > 0) body.bindings = bindings;
   // v0.4: video_refs from the toggle textarea (only honored when gemini-sdk
   // OR gemini-cli-local is installed; the panel hides itself otherwise).
   const videoOn = $('new-session-video-on');
@@ -4027,12 +4237,17 @@ function renderAdapterList() {
   const inUse = adaptersInUseForActiveSession();
   root.innerHTML = adapterCache.map(a => {
     const cls = ['adapter-row'];
-    if (a.installed && a.authenticated !== false) cls.push(a.authenticated === true ? 'active' : 'maybe');
+    // v0.5 PR-Auth: 'expired' is its own visual state — fades like 'inactive'
+    // (preset chip can't run, video checkbox hides) but the modal copy reads
+    // "re-login" not "first login".
+    if (a.auth_state === 'expired') cls.push('expired');
+    else if (a.installed && a.authenticated !== false) cls.push(a.authenticated === true ? 'active' : 'maybe');
     else cls.push('inactive');
     if (inUse.has(a.id)) cls.push('in-use');
     const meta = a.version ? a.version.replace(/^.*?\b(\d[\w.-]*).*$/, '$1') : (a.models?.[0] ?? '');
     let pillText = '○';
-    if (a.installed && a.authenticated === true) pillText = 'auth ✓';
+    if (a.auth_state === 'expired') pillText = 'expired';
+    else if (a.installed && a.authenticated === true) pillText = 'auth ✓';
     else if (a.installed) pillText = 'installed';
     else pillText = 'missing';
     return '<div class="' + cls.join(' ') + '" data-adapter="' + escapeHTML(a.id) + '">' +
@@ -4080,8 +4295,11 @@ const PRESETS = [
   {
     id: 'bagelcode-cross-3way',
     label: 'cross-3way',
-    description: 'builder=codex · verifier=gemini-cli · rest=ambient',
-    requires: ['codex-local', 'gemini-cli-local'],
+    description: 'builder=codex · verifier=gemini-cli · rest=claude-local',
+    // All 3 providers must be installed + authenticated. claude-local is
+    // required because the planner-lead / researcher / coordinator slots
+    // fall back to ambient (= claude-local in the typical Claude Code entry).
+    requires: ['claude-local', 'codex-local', 'gemini-cli-local'],
   },
   {
     id: 'sdk-enterprise',
@@ -4095,7 +4313,13 @@ const ACTORS_FOR_BINDING = ['planner-lead', 'researcher', 'builder', 'verifier']
 
 const newSessionForm = {
   preset: '',
-  bindings: {}, // actor -> adapter id (informational only)
+  // v0.5 PR-Bindings — actor -> { adapter, model } overlay sent to the server
+  // as body.bindings. Server converts to repeated `--bind <actor>=<harness>[:<model>]`
+  // CLI flags; src/dispatcher/preset-loader.ts applies them as the highest-
+  // priority override (above .crumb/config.toml). Empty values omit the
+  // override for that actor — explicit "ambient" overlay is unsupported by
+  // design (just leave it blank).
+  bindings: {}, // actor -> { adapter, model }
 };
 
 function presetIsRunnable(preset) {
@@ -4163,26 +4387,79 @@ function renderBindingsGrid() {
 
 // ── Adapter setup modal (install / auth guide) ───────────────────────────
 
+// v0.5 PR-Auth — relative time formatter for credential expiry display.
+// "expires in 47m" / "expired 2h ago" / "expired 3d ago" — same pattern
+// the studio uses for waterfall axis labels (formatWallClock).
+function formatRelativeTime(unixSeconds) {
+  if (typeof unixSeconds !== 'number') return '';
+  const deltaS = unixSeconds - Math.floor(Date.now() / 1000);
+  const abs = Math.abs(deltaS);
+  let value;
+  if (abs < 60) value = `${abs}s`;
+  else if (abs < 3600) value = `${Math.round(abs / 60)}m`;
+  else if (abs < 86400) value = `${Math.round(abs / 3600)}h`;
+  else value = `${Math.round(abs / 86400)}d`;
+  return deltaS > 0 ? `expires in ${value}` : `expired ${value} ago`;
+}
+
+// v0.5 PR-Auth — wraps a command line in a copy-on-click block. Inline so the
+// modal can mix multiple commands without an extra component layer.
+function copyableCommand(cmd) {
+  return '<div class="adapter-modal-cmd" data-cmd="' + escapeHTML(cmd) + '" title="click to copy">' +
+    '<pre>' + escapeHTML(cmd) + '</pre>' +
+    '<span class="adapter-modal-cmd-copy">⧉ copy</span>' +
+  '</div>';
+}
+
 function openAdapterModal(adapterId) {
   const a = adapterCache.find(x => x.id === adapterId);
   if (!a) return;
   $('adapter-modal-title').textContent = a.display_name + ' — setup';
   const body = $('adapter-modal-body');
-  const stateLine = a.installed
-    ? (a.authenticated === true ? '✓ installed and authenticated' : a.authenticated === null ? '◐ installed (auth not probed)' : '✗ installed but auth missing')
-    : '✗ not installed';
+
+  // v0.5 PR-Auth — auth_state-aware status + recommended action. Each branch
+  // names exactly one next command so the user doesn't guess between
+  // "first install" / "re-login" / "re-issue token".
+  const state = a.auth_state ?? (a.installed ? (a.authenticated === true ? 'ok' : 'unknown') : 'missing');
+  const expiryText = a.expires_at != null ? formatRelativeTime(a.expires_at) : '';
+  let stateGlyph = '○';
+  let stateText = '';
+  let actionLabel = '';
+  let actionCommand = '';
+  if (state === 'ok') {
+    stateGlyph = '✓';
+    stateText = 'installed and authenticated' + (expiryText ? ` · ${expiryText}` : '');
+  } else if (state === 'expired') {
+    stateGlyph = '⏰';
+    stateText = 'installed but credentials expired' + (expiryText ? ` (${expiryText})` : '');
+    actionLabel = 're-login';
+    actionCommand = a.auth_hint ?? '';
+  } else if (state === 'missing') {
+    stateGlyph = '✗';
+    stateText = a.installed ? 'installed but not authenticated' : 'not installed';
+    actionLabel = a.installed ? 'first login' : 'install';
+    actionCommand = (a.installed ? a.auth_hint : a.install_hint) ?? '';
+  } else {
+    stateGlyph = '◐';
+    stateText = 'installed (auth not probed — first run will surface real state)';
+    actionLabel = 'login (if needed)';
+    actionCommand = a.auth_hint ?? '';
+  }
+
   const blocks = [
     '<div class="adapter-modal-step">' +
       '<div class="adapter-modal-step-label">current status</div>' +
-      '<div>' + escapeHTML(stateLine) + (a.version ? ' · ' + escapeHTML(a.version) : '') + '</div>' +
+      '<div>' + escapeHTML(stateGlyph + ' ' + stateText) + (a.version ? ' · ' + escapeHTML(a.version) : '') + '</div>' +
     '</div>',
-    a.install_hint ? '<div class="adapter-modal-step">' +
-      '<div class="adapter-modal-step-label">' + (a.installed ? 'reinstall' : 'install') + '</div>' +
-      '<pre>' + escapeHTML(a.install_hint) + '</pre>' +
+    actionCommand ? '<div class="adapter-modal-step">' +
+      '<div class="adapter-modal-step-label">' + escapeHTML(actionLabel) + '</div>' +
+      copyableCommand(actionCommand) +
     '</div>' : '',
-    a.auth_hint ? '<div class="adapter-modal-step">' +
-      '<div class="adapter-modal-step-label">login</div>' +
-      '<pre>' + escapeHTML(a.auth_hint) + '</pre>' +
+    // Always show install_hint as secondary action when state isn't 'missing'
+    // (re-install / upgrade path).
+    state !== 'missing' && a.install_hint ? '<div class="adapter-modal-step">' +
+      '<div class="adapter-modal-step-label">reinstall / upgrade</div>' +
+      copyableCommand(a.install_hint) +
     '</div>' : '',
     a.models?.length ? '<div class="adapter-modal-step">' +
       '<div class="adapter-modal-step-label">models</div>' +
@@ -4192,6 +4469,26 @@ function openAdapterModal(adapterId) {
     '</div>' : '',
   ].filter(Boolean).join('');
   body.innerHTML = blocks;
+
+  // Wire up copy-on-click for every .adapter-modal-cmd block.
+  body.querySelectorAll('.adapter-modal-cmd').forEach(el => {
+    el.addEventListener('click', async () => {
+      const cmd = el.dataset.cmd ?? '';
+      try {
+        await navigator.clipboard.writeText(cmd);
+        const copyEl = el.querySelector('.adapter-modal-cmd-copy');
+        if (copyEl) {
+          const prev = copyEl.textContent;
+          copyEl.textContent = '✓ copied';
+          setTimeout(() => { copyEl.textContent = prev; }, 1200);
+        }
+      } catch {
+        // clipboard API failure (insecure context, etc.) — silent. The user
+        // can still select + copy manually.
+      }
+    });
+  });
+
   $('adapter-modal-feedback').textContent = '';
   $('adapter-modal').style.display = 'flex';
 }

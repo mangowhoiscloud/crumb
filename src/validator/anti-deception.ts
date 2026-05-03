@@ -1,5 +1,5 @@
 /**
- * Anti-deception validator — 7 rules enforcing scoring ground-truth integrity.
+ * Anti-deception validator — 9 rules enforcing scoring ground-truth integrity.
  *
  * Frontier backbone:
  *   - NeurIPS 2024 self-bias linear correlation (cross-provider mitigation)
@@ -64,6 +64,20 @@ export interface QaResultLike {
     ac_id: string;
     status: 'PASS' | 'FAIL' | 'SKIP';
   }>;
+  /**
+   * v0.5 PR-Juice — JuiceManager.js (or any file exporting TIMINGS/SHAKE/
+   * POOLS) present in the multi-file bundle. Source-of-truth for Rule 9.
+   * `agents/specialists/game-vibe.md` declares the file binding for D5.vibe
+   * grading; absent means the polish layer was skipped. Undefined means the
+   * artifact wasn't a multi-file bundle (legacy single-file or mock).
+   */
+  juice_manager_present?: boolean;
+  /**
+   * v0.5 PR-Juice — coarse polish density count (tween/shake/particle/audio
+   * call sites in src/**). Surfaced for verifier D5 weighting; not a hard
+   * gate. Undefined for non-multi-file artifacts.
+   */
+  juice_density?: number;
 }
 
 export interface AntiDeceptionInput {
@@ -86,6 +100,25 @@ export interface AntiDeceptionInput {
    * claiming high quality without citing the deterministic ground truth).
    */
   researchVideoEvidenceIds?: string[];
+  /**
+   * v0.5 PR-Polish (Rule 10) — research lesson identifiers + their
+   * applicable_constraint strings, captured from `kind=step.research`
+   * events earlier in the session. When the verifier emits PASS while
+   * citing one of these lessons (via `evidence_refs[]`), the bundle's
+   * src/** files MUST contain at least one identifier or literal value
+   * matching `applicable_constraint`. Missing → D1 capped at 3 +
+   * `reference_lesson_not_implemented` violation.
+   *
+   * Empty / undefined skips the rule (legacy text-only research path with
+   * no concrete constraints emitted).
+   */
+  researchLessons?: Array<{ id: string; applicable_constraint: string }>;
+  /**
+   * v0.5 PR-Polish (Rule 10) — bundle source file contents (concatenated)
+   * read by the live reducer or summary.ts. Validator greps this for
+   * `applicable_constraint` matches. Empty string → rule skipped.
+   */
+  bundleSourceConcat?: string;
 }
 
 export interface AntiDeceptionOutput {
@@ -222,6 +255,83 @@ export function checkAntiDeception(input: AntiDeceptionInput): AntiDeceptionOutp
     if (scores.D1 && scores.D1.score > 2) {
       scores.D1 = forceScore(scores.D1, 2, scores.D1.source);
     }
+  }
+
+  // ── Rule 10 (v0.5 PR-Polish) — reference_lesson_not_implemented ──────────
+  // The researcher cites mechanic / motion / palette lessons (e.g. "Royal
+  // Match motion-timing stack" → tile_pop_in_ms ≤ 250). When the verifier
+  // emits PASS and the verifier's D5.evidence references a lesson id, the
+  // builder's emitted src/** code MUST contain at least one identifier or
+  // literal value from that lesson's `applicable_constraint`. Otherwise the
+  // verifier is rewarding spec compliance the build never delivered — the
+  // pokemon session 01KQQ9VHWKXRR5M8N6P2SC0QFG is the regression case (spec
+  // cited Smash hit-stop "80ms / 4 frames @ 60fps", builder emitted no
+  // matching constants, judge.score still gave PARTIAL boot regression).
+  //
+  // Why cap D1 at 3 instead of 0: D1 spans more than reference compliance
+  // (overall spec_fit), and a strict 0 over-penalizes builds that mostly
+  // honor the spec. 3 sits between Rule 6's D1_MIN floor (3) and Rule 7's
+  // PASS+AC-fail cap (2) — it lowers but doesn't crater D1, letting other
+  // dimensions (D2 exec, D6 portability, D5 vibe) determine whether the
+  // verdict drops to PARTIAL or stays PASS by aggregate.
+  //
+  // Skipped silently when researchLessons or bundleSourceConcat are empty
+  // (text-only research path / single-file artifact / mock fixture).
+  const lessons = input.researchLessons ?? [];
+  const bundleSrc = input.bundleSourceConcat ?? '';
+  if (
+    scores.verdict === 'PASS' &&
+    lessons.length > 0 &&
+    bundleSrc.length > 0 &&
+    scores.D1 &&
+    scores.D5 &&
+    Array.isArray(scores.D5.evidence)
+  ) {
+    const cited = scores.D5.evidence;
+    for (const lesson of lessons) {
+      if (!cited.includes(lesson.id)) continue;
+      // Look for any identifier-like or numeric literal token from the
+      // applicable_constraint. We split the constraint into tokens (≥3 chars,
+      // alphanumeric) and require at least one to appear verbatim in src.
+      // Tokens shorter than 3 chars are too noisy ("ms" matches everything).
+      const tokens = lesson.applicable_constraint
+        .split(/[^A-Za-z0-9_.]+/)
+        .filter((t) => t.length >= 3);
+      const matched = tokens.some((t) => bundleSrc.includes(t));
+      if (!matched) {
+        violations.push('reference_lesson_not_implemented');
+        if (scores.D1.score > 3) {
+          scores.D1 = forceScore(scores.D1, 3, scores.D1.source);
+        }
+        break; // one violation is enough; recompute aggregate below
+      }
+    }
+  }
+
+  // ── Rule 9 (v0.5 PR-Juice) — juice_manager_missing ────────────────────────
+  // `agents/specialists/game-vibe.md` declares `JuiceManager.js` (TIMINGS /
+  // SHAKE / POOLS export trio) binding for D5.vibe rubric. Cat-puzzle session
+  // 01KQMS9E5M1Z7TEF32E81YXAGT shipped without the file and still scored
+  // PASS at 0.85 ratio because the rubric was honor-system documented in
+  // markdown but never enforced in code. This rule promotes the documented
+  // contract to a hard cap: missing JuiceManager + D5 ≥ 5 → D5 ← 4 + violation.
+  //
+  // Why cap at 4 instead of 0: D5 spans more than the JuiceManager file
+  // (intervention response handling, multi-step polish coverage). A hard 0
+  // would over-penalize a build where every other polish dimension was
+  // covered. 4 mirrors the D1_MIN/D5_MIN floor pattern of Rule 6 — soft enough
+  // that strong builds remain PASS-eligible, hard enough that the file's
+  // absence registers in the aggregate.
+  //
+  // Frontier backing: ArtifactsBench (arXiv:2507.04952) sandbox-derived
+  // ground truth outranks LLM-only judgement. Same firewall pattern as
+  // Rules 1/2/7 (deterministic FS evidence wins over LLM rubric prose).
+  //
+  // Skipped when juice_manager_present is undefined (single-file artifacts
+  // and mock fixtures don't have a src/ tree to scan).
+  if (input.qaResult?.juice_manager_present === false && scores.D5 && scores.D5.score > 4) {
+    violations.push('juice_manager_missing');
+    scores.D5 = forceScore(scores.D5, 4, scores.D5.source);
   }
 
   // Recompute aggregate after force-corrections. With autoScores present, use

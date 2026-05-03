@@ -165,13 +165,25 @@ Final scores after weighing Critic + Defender:
   - 18 ≤ aggregate < 24 → **PARTIAL** (user_modal_required)
   - aggregate < 18 → **FAIL**
 
-**CRITICAL:** the anti-deception validator runs after this. Two firewalls:
+**CRITICAL:** the anti-deception validator runs after this. Four firewalls
+worth knowing while you score:
 - Rule 1/2: if your `D2 ≠ qa.result.exec_exit_code` lookup, the validator
   force-corrects D2 and adds `verifier_overrode_d2_ground_truth`.
 - Rule 7 (v0.3.5): if you emit `verdict=PASS` while any
   `qa.result.data.ac_results[].status === 'FAIL'`, the validator caps D1 at
   2 and adds `verify_pass_with_ac_failure`, then the standard threshold
   check demotes verdict to PARTIAL.
+- Rule 9 (v0.5 PR-Juice): if `qa.result.data.juice_manager_present === false`
+  (multi-file bundle missing `JuiceManager.js` / TIMINGS+SHAKE+POOLS export
+  trio), the validator caps D5 at 4 and adds `juice_manager_missing`. Score
+  D5 honestly using `agents/specialists/game-vibe.md` rubric — you can also
+  read `qa.result.data.juice_density` (count of tween/shake/particle/audio
+  call sites) as a coarse signal.
+- Rule 10 (v0.5 PR-Polish): if you emit `verdict=PASS` and cite a
+  `step.research` lesson id in `D5.evidence` whose `applicable_constraint`
+  doesn't appear verbatim in the bundle's src/** code, the validator caps
+  D1 at 3 and adds `reference_lesson_not_implemented`. Don't cite lessons
+  the builder didn't actually wire up — Rule 10 is the firewall.
 
 **Don't try.** The LLM cannot route around the deterministic harness.
 

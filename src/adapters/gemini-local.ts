@@ -36,6 +36,7 @@ import {
   checkAdapterHealth,
   makeLineSplitter,
   parseClaudeStreamProgress,
+  parseCodexStreamUsage,
   resolvePrompt,
 } from './_shared.js';
 
@@ -80,6 +81,7 @@ export class GeminiLocalAdapter implements Adapter {
       child.stdout.on('data', (b) => {
         stdout += b.toString();
         req.onStdoutActivity?.();
+        req.onStdoutChunk?.(b);
         if (onProgress) {
           splitter.feed(b, (line) => {
             const evt = parseClaudeStreamProgress(line);
@@ -90,6 +92,7 @@ export class GeminiLocalAdapter implements Adapter {
       child.stderr.on('data', (b) => {
         stderr += b.toString();
         req.onStdoutActivity?.();
+        req.onStderrChunk?.(b);
       });
       child.on('error', reject);
       const detachAbort = attachAbortHandler(child, req.signal);
@@ -101,11 +104,19 @@ export class GeminiLocalAdapter implements Adapter {
             if (evt) onProgress({ ...evt, elapsed_ms: Date.now() - t0 });
           });
         }
+        // v0.5 PR-XProvider — usage extraction (parseCodexStreamUsage handles
+        // Gemini's `usage_metadata.{prompt_token_count,candidates_token_count,
+        // cached_content_token_count}` field naming too). When the Gemini CLI
+        // emits stream-json with usage info, fold it into the result so the
+        // dispatcher's agent.stop metadata gets real numbers — same fix as
+        // codex-local for the cross-provider info-parity gap.
+        const usage = parseCodexStreamUsage(stdout) ?? undefined;
         resolve({
           exitCode: code ?? -1,
           stdout,
           stderr,
           durationMs: Date.now() - start,
+          ...(usage ? { usage } : {}),
         });
       });
     });

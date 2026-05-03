@@ -23,7 +23,11 @@ import { initialState, type CrumbState } from '../state/types.js';
 import { tail, readAll } from '../transcript/reader.js';
 import { getTranscriptWriter } from '../transcript/writer.js';
 import { dispatch, type DispatcherDeps } from '../dispatcher/live.js';
-import { loadPresetWithConfig, type PresetSpec } from '../dispatcher/preset-loader.js';
+import {
+  loadBindingsOnly,
+  loadPresetWithConfig,
+  type PresetSpec,
+} from '../dispatcher/preset-loader.js';
 import { AdapterRegistry, type Adapter } from '../adapters/types.js';
 import { ClaudeLocalAdapter } from '../adapters/claude-local.js';
 import { CodexLocalAdapter } from '../adapters/codex-local.js';
@@ -50,6 +54,13 @@ export interface RunOptions {
   adapterOverride?: string;
   /** Load .crumb/presets/<name>.toml for actor binding. User-controlled, no auto-default. */
   presetName?: string;
+  /**
+   * v0.5 PR-Bindings — per-actor `--bind <actor>=<harness>[:<model>]` overlay
+   * (highest priority above .crumb/config.toml + preset). Forwarded into
+   * loadPresetWithConfig (when presetName set) or loadBindingsOnly (ambient
+   * mode). Skipped when empty / undefined. See preset-loader.ts §applyCliBindings.
+   */
+  cliBindings?: Array<{ actor: string; harness?: string; model?: string }>;
   /** How long to wait after the last event before declaring stuck. ms. */
   idleTimeoutMs?: number;
   /**
@@ -149,7 +160,7 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
   let providersEnabled: Record<string, boolean> | undefined;
   if (opts.presetName) {
     try {
-      const result = await loadPresetWithConfig(opts.presetName, opts.repoRoot);
+      const result = await loadPresetWithConfig(opts.presetName, opts.repoRoot, opts.cliBindings);
       preset = result.preset;
       providersEnabled = result.providersEnabled;
       const actorCount = Object.keys(preset.actors).length;
@@ -175,6 +186,23 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
       throw new Error(
         `Failed to load preset "${opts.presetName}" from ${opts.repoRoot}/.crumb/presets/: ${err instanceof Error ? err.message : String(err)}`,
       );
+    }
+  } else if (opts.cliBindings && opts.cliBindings.length > 0) {
+    // v0.5 PR-Bindings — ambient mode + per-actor --bind overrides. We
+    // synthesize a preset whose only entries are the cliBindings; every
+    // other actor still falls through to the dispatcher's reducer-supplied
+    // adapter (= ambient). Without this branch, the studio's "Custom
+    // binding" grid was UI residue when no preset was selected (G9 fix).
+    const result = await loadBindingsOnly(opts.cliBindings, opts.repoRoot);
+    preset = result.preset;
+    providersEnabled = result.providersEnabled;
+    // eslint-disable-next-line no-console
+    console.log(
+      `[crumb] custom bindings (ambient mode): ${opts.cliBindings.length} actor(s) overridden`,
+    );
+    for (const [name, b] of Object.entries(preset.actors)) {
+      // eslint-disable-next-line no-console
+      console.log(`[crumb]   ${name}: ${b.harness}/${b.provider}/${b.model}`);
     }
   }
 

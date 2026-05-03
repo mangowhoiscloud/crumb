@@ -152,6 +152,22 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           category: 'spec',
         });
       }
+      // v0.5 PR-Controls — capture spec.data.controls so qa-check's Stage-2
+      // fallback can synthesize keypresses (or canvas click) when the first
+      // scene is a MenuScene blocked on user input. See
+      // agents/specialists/game-design.md §4.5.
+      const ctlRaw = (event.data as Record<string, unknown> | undefined)?.controls;
+      if (ctlRaw && typeof ctlRaw === 'object' && !Array.isArray(ctlRaw)) {
+        const ctl = ctlRaw as { start?: unknown; pointer_fallback?: unknown };
+        const startArr = Array.isArray(ctl.start)
+          ? ctl.start.filter((k): k is string => typeof k === 'string' && k.length > 0)
+          : [];
+        const pointerFallback = ctl.pointer_fallback === true;
+        next.task_ledger.controls = {
+          ...(startArr.length > 0 ? { start: startArr } : {}),
+          ...(pointerFallback ? { pointer_fallback: true } : {}),
+        };
+      }
       // v0.3.5 — capture deterministic AC predicates if planner-lead compiled any.
       // See agents/specialists/game-design.md §AC-Predicate-Compile.
       const predicates = event.data?.ac_predicates;
@@ -220,6 +236,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         ...(next.task_ledger.ac_predicates.length > 0
           ? { ac_predicates: next.task_ledger.ac_predicates }
           : {}),
+        ...(next.task_ledger.controls ? { controls: next.task_ledger.controls } : {}),
       });
       break;
     }
@@ -232,12 +249,30 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
       const data = (event.data ?? {}) as Record<string, unknown>;
       const exit = typeof data.exec_exit_code === 'number' ? data.exec_exit_code : 1;
       const smoke = data.cross_browser_smoke;
+      const acResultsRaw = Array.isArray(data.ac_results) ? data.ac_results : [];
+      const acResults = acResultsRaw
+        .filter(
+          (r): r is { ac_id: string; status: 'PASS' | 'FAIL' | 'SKIP' } & Record<string, unknown> =>
+            typeof r === 'object' &&
+            r !== null &&
+            typeof (r as Record<string, unknown>).ac_id === 'string' &&
+            ['PASS', 'FAIL', 'SKIP'].includes((r as Record<string, unknown>).status as string),
+        )
+        .map((r) => ({
+          ac_id: r.ac_id,
+          status: r.status,
+        }));
       next.last_qa_result = {
         build_event_id: String(data.build_event_id ?? event.parent_event_id ?? ''),
         exec_exit_code: exit,
         ...(smoke === 'ok' || smoke === 'fail' || smoke === 'skipped'
           ? { cross_browser_smoke: smoke }
           : {}),
+        ...(acResults.length > 0 ? { ac_results: acResults } : {}),
+        ...(typeof data.juice_manager_present === 'boolean'
+          ? { juice_manager_present: data.juice_manager_present }
+          : {}),
+        ...(typeof data.juice_density === 'number' ? { juice_density: data.juice_density } : {}),
       };
       // P1 #7: verifier circuit OPEN → no working judge path. Without a
       // verifier the pipeline can't get a verdict, so spawning again would

@@ -47,11 +47,12 @@ class QaCheckTimeoutError extends Error {
 async function runQaCheckWithTimeout(
   artifactPath: string,
   acPredicates: ACPredicateItem[],
+  controls: { start?: string[]; pointer_fallback?: boolean } | undefined,
   timeoutMs: number,
 ): Promise<Awaited<ReturnType<typeof runQaCheck>>> {
   let timer: NodeJS.Timeout | undefined;
   try {
-    const work = runQaCheck(artifactPath, acPredicates);
+    const work = runQaCheck(artifactPath, acPredicates, controls);
     const sentinel = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new QaCheckTimeoutError(timeoutMs)), timeoutMs);
     });
@@ -70,6 +71,7 @@ export async function runQaCheckEffect(effect: QaCheckEffect, deps: QaRunnerDeps
     result = await runQaCheckWithTimeout(
       artifactPath,
       effect.ac_predicates ?? [],
+      effect.controls,
       QA_CHECK_TIMEOUT_MS,
     );
   } catch (err) {
@@ -121,6 +123,14 @@ export async function runQaCheckEffect(effect: QaCheckEffect, deps: QaRunnerDeps
       ...(result.phaser_scene_running !== undefined
         ? { phaser_scene_running: result.phaser_scene_running }
         : {}),
+      ...(result.phaser_booted !== undefined ? { phaser_booted: result.phaser_booted } : {}),
+      ...(result.phaser_started_via_controls_fallback
+        ? { phaser_started_via_controls_fallback: true }
+        : {}),
+      ...(result.juice_manager_present !== undefined
+        ? { juice_manager_present: result.juice_manager_present }
+        : {}),
+      ...(result.juice_density !== undefined ? { juice_density: result.juice_density } : {}),
       ...(result.ac_results
         ? {
             ac_results: result.ac_results,

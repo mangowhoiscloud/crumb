@@ -80,6 +80,7 @@ export class ClaudeLocalAdapter implements Adapter {
       child.stdout.on('data', (b) => {
         stdout += b.toString();
         req.onStdoutActivity?.();
+        req.onStdoutChunk?.(b);
         if (onProgress) {
           splitter.feed(b, (line) => {
             const evt = parseClaudeStreamProgress(line);
@@ -90,6 +91,7 @@ export class ClaudeLocalAdapter implements Adapter {
       child.stderr.on('data', (b) => {
         stderr += b.toString();
         req.onStdoutActivity?.();
+        req.onStderrChunk?.(b);
       });
       child.on('error', reject);
       const detachAbort = attachAbortHandler(child, req.signal);

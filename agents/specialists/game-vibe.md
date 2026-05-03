@@ -37,7 +37,58 @@ export const POOLS = {
   PROJECTILE: 50,
   AUDIO_VOICE: 8               // browser AudioContext concurrent voice cap
 }
+
+// v0.5 PR-Motion — character motion library (keyframe-tween-stack option C).
+// Builder calls `playMotion(sprite, 'idle')` etc. on every animated character;
+// each motion is a Phaser tween chain — no frame-by-frame sprite atlas needed.
+// Backed by Sprite-AI / Pixnote frame-budget convention (idle ≈4-8 / hit ≈3-6
+// / win ≈8-16) translated into tween durations + targets so an LLM-emitted
+// build never has to hand-author frame strips. Profile-aware: Phaser scale/
+// tint tweens for A/C/D, stepped values for B (pixelArt floor).
+export const MOTIONS = {
+  idle:  { type: 'loop', scale: [0.98, 1.02], y: [-1, 1], duration: 1200 },
+  walk:  { type: 'loop', scale: [1.0, 1.03],  rot: [-2, 2],  duration: 600 },
+  hit:   { type: 'pulse', scale: [1.3, 1.0],  tint: 0xFFFFFF, duration: 200 },
+  win:   { type: 'pulse', scale: [1.2, 1.0],  y: [-20, 0], duration: 500 },
+  lose:  { type: 'fade',  alpha: [1.0, 0.4],  y: [0, 8],    duration: 600 },
+  special: { type: 'pulse', scale: [1.5, 1.0], tint: 0xFFE966, duration: 400 }
+}
+
+/**
+ * playMotion — one-call helper builders use everywhere a character moves.
+ * Reads MOTIONS[name], maps to a Phaser tween chain. yoyo=true on 'loop'
+ * for natural breathing; 'pulse' is anticipation+release; 'fade' is one-way.
+ * Verifier checks `sprite.scaleX` change over a 1s window to confirm the
+ * call landed (qa-runner Playwright probe). When the active genre profile
+ * is B (pixel-arcade), values are stepped by Math.round to preserve the
+ * pixel-perfect grid — no subpixel tweens.
+ */
+export function playMotion(scene, sprite, name) {
+  const m = MOTIONS[name]; if (!m || !sprite) return;
+  // Profile B: stepped values via roundPixels — no float interpolation.
+  const stepped = scene.game?.config?.pixelArt === true;
+  const round = stepped ? Math.round : (v) => v;
+  const opts = { yoyo: m.type === 'loop', repeat: m.type === 'loop' ? -1 : 0,
+                 duration: m.duration, ease: m.type === 'pulse' ? 'Back.Out' : 'Sine.InOut' };
+  if (m.scale) opts.scale = { from: round(m.scale[0]), to: round(m.scale[1]) };
+  if (m.y)     opts.y     = { from: round(sprite.y + m.y[0]), to: round(sprite.y + m.y[1]) };
+  if (m.alpha) opts.alpha = { from: m.alpha[0], to: m.alpha[1] };
+  if (m.rot)   opts.angle = { from: m.rot[0], to: m.rot[1] };
+  if (typeof m.tint === 'number' && sprite.setTint) {
+    sprite.setTint(m.tint);
+    scene.time.delayedCall(m.duration / 2, () => sprite.clearTint?.());
+  }
+  return scene.tweens.add({ targets: sprite, ...opts });
+}
 ```
+
+**BINDING (every animated character)**: every Sprite/Image that represents a
+character (player, enemy, NPC, mascot, even animated UI pets) MUST have at
+least `idle` motion bound at scene creation, plus the motion matching its
+key game-state transitions (hit → 'hit', round-end → 'win'/'lose'). Building
+a character without a `playMotion` call is treated like building a HUD
+without a score readout — verifier D5.vibe rubric checklist (below)
+explicitly tests for it via Playwright `sprite.scaleX` change detection.
 
 ## Per-profile guidance
 

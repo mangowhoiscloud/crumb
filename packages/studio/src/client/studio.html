@@ -101,8 +101,17 @@
     </div>
     <div id="new-session-preset-chips" class="preset-chips"></div>
     <details id="new-session-advanced" class="adv-binding">
-      <summary>Custom binding (per-actor harness × model)</summary>
+      <summary>Custom binding (per-actor harness × model) — applied as override</summary>
       <div id="new-session-bindings" class="bindings-grid"></div>
+      <!--
+        v0.5 PR-Bindings — selections here are sent to the server as
+        body.bindings, converted to repeated `--bind <actor>=<harness>[:<model>]`
+        CLI flags, and applied by src/dispatcher/preset-loader.ts as the
+        highest-priority overlay (above .crumb/config.toml + preset).
+        Empty rows leave that actor untouched; explicit ambient is unsupported
+        (just clear the row). Pre-v0.5 these were UI-residue only — they are
+        now load-bearing for ambient + custom binding sessions.
+      -->
       <!--
         v0.4 Video research toggle — shown only when gemini-sdk OR gemini-cli-local
         is installed + auth not-false (probed via /api/doctor). When toggled on,

@@ -117,4 +117,11 @@ export interface QaCheckEffect {
    * alongside the static smoke. Empty when the spec emitted no predicates.
    */
   ac_predicates?: ACPredicateLedgerItem[];
+  /**
+   * v0.5 PR-Controls — input mapping read from `spec.data.controls`. Used by
+   * `runPlaywrightSmoke`'s Stage-2 fallback when the first scene is a
+   * MenuScene waiting on user input. See `agents/specialists/game-design.md`
+   * §4.5. Empty / undefined → no fallback (legacy behavior).
+   */
+  controls?: { start?: string[]; pointer_fallback?: boolean };
 }

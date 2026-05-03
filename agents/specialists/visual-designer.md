@@ -46,6 +46,28 @@ hud_layout:
   pause_button: top_left
   hint_button: bottom_right
   safe_area_padding_px: 24  # iPhone notch / Android nav
+
+# v0.5 PR-Ambient — background layer binding (option A from §G7 research).
+# Every game scene MUST have ≥3 distinct visual layers + ≥1 ambient particle
+# emitter — a frozen idle frame is unacceptable for commercial-grade casual.
+# Backed by Royal Match design deep-dive (ironSource Saravanan): "ambient
+# floating + fast animation" is the brand-identity differentiator over
+# Toon Blast / Homescapes. Profile A (casual-portrait) covers ~70% of
+# Crumb sessions, so this is where the visual quality lift lands hardest.
+background_layers:
+  deep:                                    # back-most fill (palette.bg × 0.7 lightness)
+    palette_tone: bg_deep
+    fill_kind: solid                       # or gradient_top_bottom
+  mid:                                     # midground tint (palette.bg × 0.85)
+    palette_tone: bg_mid
+    fill_kind: gradient_top_bottom
+    accent_shapes: 2                       # silhouettes / vignette dots, palette-locked
+  ambient_particles:                       # always-on floating particles
+    count: 18                              # range 15-25; mobile budget
+    emitter: graphic                       # 1px Phaser.Graphics circles, palette accent_warm @ alpha 0.2
+    lifespan_ms: 6000                      # range 4000-8000
+    velocity_y_px_s: -20                   # drift up
+    velocity_x_jitter_px_s: 6              # subtle horizontal sway
 ```
 
 ## Mobile-first constraints (binding)
