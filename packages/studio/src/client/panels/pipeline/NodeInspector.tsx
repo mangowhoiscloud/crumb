@@ -242,28 +242,42 @@ export function NodeInspector() {
               <div
                 key={e.id}
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: '60px 90px 1fr',
-                  gap: 6,
-                  alignItems: 'baseline',
-                  paddingBottom: 4,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 2,
+                  paddingBottom: 6,
+                  marginBottom: 6,
                   borderBottom: '1px solid var(--hairline-soft)',
                 }}
               >
-                <span style={{ color: 'var(--ink-tertiary)' }}>
-                  {e.ts.split('T')[1]?.slice(0, 8)}
-                </span>
-                <span style={{ color: 'var(--ink-muted)' }}>{e.kind}</span>
-                <span
-                  style={{
-                    color: 'var(--ink)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {e.body ? truncate(e.body, 80) : ''}
-                </span>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+                  <span style={{ color: 'var(--ink-tertiary)' }}>
+                    {e.ts.split('T')[1]?.slice(0, 8)}
+                  </span>
+                  <span
+                    style={{
+                      color: 'var(--ink-muted)',
+                      fontSize: 10,
+                      padding: '0 4px',
+                      borderRadius: 'var(--r-xs)',
+                      background: 'var(--surface-1)',
+                    }}
+                  >
+                    {e.kind}
+                  </span>
+                </div>
+                {e.body && (
+                  <span
+                    style={{
+                      color: 'var(--ink)',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    {truncate(e.body, 200)}
+                  </span>
+                )}
               </div>
             ))}
           </div>
