@@ -48,6 +48,11 @@ export type Kind =
   | 'user.approve'
   | 'user.pause'
   | 'user.resume'
+  // v0.5 PR-Inbox-Console — Tier 1 ack. Reducer emits one `kind=ack` per
+  // `user.*` event with `metadata.ack_for=<user.* id>` so the studio inbox
+  // panel can show an immediate "✓ applied" tick under the user's line.
+  // Pure observability — anti-deception ignores it (deterministic=true).
+  | 'ack'
   // routing + audit
   | 'handoff.requested'
   | 'handoff.rollback'
@@ -208,6 +213,26 @@ export interface Metadata {
   cost_usd?: number;
   thinking_tokens?: number;
   audit_violations?: string[];
+  /**
+   * v0.5 PR-Inbox-Console — Tier 3 pairing. List of `user.intervene`
+   * (and `user.pause/resume/approve/veto`) event ids whose effects this
+   * emission consumed. Stamped by the dispatcher at spawn-start when it
+   * drains `progress_ledger.pending_intervene_ids`. Studio inbox panel
+   * groups actor events under each user input by matching on this list.
+   */
+  consumed_intervene_ids?: string[];
+  /**
+   * v0.5 PR-Inbox-Console — Tier 1 pairing. Set on `kind=ack` events the
+   * reducer emits immediately after every `user.*` case. Points back at
+   * the user input id so the studio renders the ack as a tick directly
+   * under the user's line.
+   */
+  ack_for?: string;
+  /**
+   * v0.5 PR-Inbox-Console — Tier 2 pairing. Set on `kind=note` events the
+   * `/ask <enum>` formatter emits with deterministic state snapshots.
+   */
+  in_reply_to?: string;
   /**
    * v0.3.0: 5-layer hierarchy markers (project → session → run → turn → step → event).
    * project lives on the filesystem; session_id and step are top-level Message fields;

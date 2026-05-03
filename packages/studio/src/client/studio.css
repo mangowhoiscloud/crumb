@@ -2519,6 +2519,131 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
 .adapter-row.expired .adapter-name,
 .adapter-row.expired .adapter-meta { opacity: 0.85; }
 
+/* v0.5 PR-Inbox-Console — Q&A console thread (3-tier pairing).
+   Stacks under the input box; each user input gets a card with
+   ack tick → optional /ask reply → fold-able actor responses. */
+.console-thread {
+  margin-top: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  padding: 6px 8px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+}
+.console-thread-empty {
+  color: var(--ink-tertiary);
+  font-style: italic;
+  text-align: center;
+  padding: 12px 0;
+}
+.thread-entry {
+  border-bottom: 1px dashed var(--hairline);
+  padding: 6px 0;
+}
+.thread-entry:last-child { border-bottom: none; }
+.thread-user .thread-ts { color: var(--ink-tertiary); }
+.thread-user .thread-you { color: var(--primary); font-weight: 600; }
+.thread-user .thread-body { color: var(--ink); }
+.thread-ack {
+  color: var(--ink-muted);
+  margin: 2px 0 0 8px;
+  font-size: 10px;
+}
+.thread-ack.thread-pending { color: var(--ink-tertiary); font-style: italic; }
+.thread-reply {
+  color: var(--ink);
+  margin: 2px 0 0 8px;
+  background: var(--surface-2);
+  padding: 4px 6px;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+}
+.thread-actor-fold { margin: 4px 0 0 8px; }
+.thread-actor-fold summary {
+  cursor: pointer;
+  color: var(--ink-muted);
+  font-size: 10px;
+  user-select: none;
+}
+.thread-actor-fold summary:hover { color: var(--ink); }
+.thread-actor-row {
+  margin: 2px 0 0 12px;
+  padding: 2px 4px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-size: 10px;
+}
+.thread-actor-row:hover { background: var(--surface-2); }
+.thread-actor-ts { color: var(--ink-tertiary); }
+.thread-actor-from { color: var(--primary); font-weight: 500; }
+.thread-actor-kind { color: var(--ink-muted); }
+.thread-actor-body { color: var(--ink); }
+
+/* v0.5 PR-Inbox-Console — autocomplete dropdown under the input. */
+.console-autocomplete {
+  position: relative;
+  margin-top: 2px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+.console-autocomplete-row {
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--ink-muted);
+}
+.console-autocomplete-row:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+/* v0.5 PR-Inbox-Console — /help cheatsheet card. */
+.console-help-card {
+  margin-top: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  padding: 10px 12px;
+  font-size: 11px;
+}
+.console-help-card h4 {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  color: var(--ink);
+}
+.console-help-card table { width: 100%; border-collapse: collapse; }
+.console-help-card td {
+  padding: 3px 6px;
+  vertical-align: top;
+  color: var(--ink-muted);
+}
+.console-help-card td:first-child { width: 200px; color: var(--ink); }
+.console-help-card code {
+  background: var(--surface-2);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+}
+.console-help-card button {
+  margin-top: 8px;
+  font-size: 10px;
+  padding: 3px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.console-help-card button:hover { color: var(--ink); border-color: var(--primary); }
+
 /* v0.5 PR-Auth — copyable command block in the adapter setup modal.
    Click anywhere on the block copies the command to clipboard; the small
    "⧉ copy" affordance flashes "✓ copied" for 1.2s. Pattern mirrors GitHub

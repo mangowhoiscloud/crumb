@@ -149,6 +149,14 @@ export const KIND_REGISTRY: Record<Kind, KindInfo> = {
     emitter: 'coordinator + helpers',
     ref: 'v0.1 §12 (helper output)',
   },
+  ack: {
+    kind: 'ack',
+    category: 'system',
+    description:
+      'v0.5 PR-Inbox-Console — Tier 1 immediate ack. Reducer emits one per user.* with metadata.ack_for so the studio inbox panel can show a tick under the user line. Deterministic, anti-deception ignores.',
+    emitter: 'reducer (system from)',
+    ref: 'src/reducer/index.ts §ackBodyFor',
+  },
   'step.socratic': {
     kind: 'step.socratic',
     category: 'step',

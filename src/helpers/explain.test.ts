@@ -3,13 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { KIND_REGISTRY, explainKind, formatExplain } from './explain.js';
 
 describe('KIND_REGISTRY coverage', () => {
-  it('covers every Kind in the union (35 after PR-Prune-1)', () => {
-    // 35 = 4 system + 10 workflow + 2 dialogue + 6 step + 5 user + 2 handoff + 5 meta + 1 version.
-    // PR-Prune-1 dropped 9 never-emitted kinds (session.forked, verify.request, question,
-    // answer, debate, version.refinement, ack, handoff.accepted, hook). agent.thought_summary
-    // kept for verifier input filtering; tool.call/tool.result kept as the dispatcher's
-    // stream-json tap pair (live.ts:322 emits tool.call).
-    expect(Object.keys(KIND_REGISTRY)).toHaveLength(35);
+  it('covers every Kind in the union (36 after v0.5 PR-Inbox-Console)', () => {
+    // 36 = 4 system + 10 workflow + 2 dialogue + 6 step + 5 user + 2 handoff + 5 meta + 1 version + 1 ack.
+    // v0.5 PR-Inbox-Console re-introduced `ack` (Tier 1 of the 3-tier ack model)
+    // — pruned in PR-Prune-1 because nothing emitted it; now reducer emits one
+    // for every user.* event with metadata.ack_for so the studio inbox panel
+    // can show an immediate tick under the user line. agent.thought_summary
+    // kept for verifier input filtering; tool.call/tool.result kept as the
+    // dispatcher's stream-json tap pair (live.ts:322 emits tool.call).
+    expect(Object.keys(KIND_REGISTRY)).toHaveLength(36);
     const required = [
       'qa.result',
       'judge.score',

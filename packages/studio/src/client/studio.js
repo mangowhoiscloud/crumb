@@ -1604,6 +1604,12 @@ onAppendMsg((d) => {
     eventCache.set(d.session_id, arr);
   }
   arr.push(d.msg);
+  // v0.5 PR-Inbox-Console — pair every event into the local thread state
+  // when it belongs to the active session. Cross-session events ignored
+  // (each studio tab focuses one session at a time).
+  if (typeof attachThreadEvent === 'function' && d.session_id === activeSession) {
+    attachThreadEvent(d.msg);
+  }
   // Track actors that have actually spawned so the sandwich preview only
   // surfaces buttons for sandwiches that exist on disk.
   const s = ensureSession(d.session_id, null);
@@ -2148,6 +2154,33 @@ function weaveOnAppend(msg) {
 }
 
 // ─── v3.4 Console input — POST /api/sessions/:id/inbox ────────────────────
+//
+// v0.5 PR-Inbox-Console — Q&A console thread:
+//   sendInboxLine() POSTs the user's line to /api/sessions/:id/inbox AND
+//   pushes a local "pending user line" record into `consoleThread` so the
+//   thread renders the user's input immediately (within input render frame,
+//   <16ms). When the SSE stream returns events (kind=ack / kind=note with
+//   metadata.in_reply_to / actor events with metadata.consumed_intervene_ids)
+//   they're paired to the user line by id and rendered as Tier 1 / Tier 2 /
+//   Tier 3 children. The pairing key is the id of the user's `kind=user.*`
+//   transcript line, which we don't know synchronously when sending — so we
+//   mark the thread row "pending" and link it to the first matching
+//   user.intervene/pause/resume/approve/veto event the SSE delivers within
+//   2s (heuristic: same body text + same actor=user, recent ts).
+
+const COMMAND_HINTS = [
+  '/approve','/veto rebuild','/pause','/resume','/goto verifier',
+  '/swap builder=mock','/append @builder use red palette','/note <text>',
+  '/redo','/cancel','/reset-circuit all','/ask status','/ask cost',
+  '/ask next','/ask stuck','/ask scorecard','/help','@builder ','@verifier ',
+];
+
+const consoleHistory = []; // up to 50 user lines; newest at end
+let consoleHistoryIdx = -1; // pointer into consoleHistory; -1 = "fresh line"
+
+// Thread state — array of { id?: ulid, body: string, ts: number,
+//   ack?: Event, reply?: Event, actorEvents: Event[] }
+const consoleThread = [];
 
 function setConsoleEnabled(enabled) {
   $('console-line').disabled = !enabled;
@@ -2194,17 +2227,253 @@ async function sendInboxLine(sessionId, line, feedbackEl) {
 
 $('console-send').addEventListener('click', () => {
   if (!activeSession) return;
-  const line = $('console-line').value;
+  const line = $('console-line').value.trim();
+  if (!line) return;
+  // /help intercept — local-only, never goes to inbox.
+  if (line === '/help' || line.toLowerCase() === '/help') {
+    $('console-help-card').style.display = 'block';
+    $('console-line').value = '';
+    return;
+  }
+  // Push user line into thread immediately (Tier 0 — visual only).
+  pushThreadUserLine(line);
+  // Push into history (dedupe consecutive duplicates).
+  if (consoleHistory[consoleHistory.length - 1] !== line) {
+    consoleHistory.push(line);
+    if (consoleHistory.length > 50) consoleHistory.shift();
+  }
+  consoleHistoryIdx = -1;
   sendInboxLine(activeSession, line, $('console-feedback'));
   $('console-line').value = '';
+  hideAutocomplete();
 });
 $('console-line').addEventListener('keydown', e => {
+  // Autocomplete navigation — Tab cycles, ArrowUp/Down history.
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (consoleHistory.length === 0) return;
+    if (consoleHistoryIdx === -1) consoleHistoryIdx = consoleHistory.length - 1;
+    else if (consoleHistoryIdx > 0) consoleHistoryIdx -= 1;
+    $('console-line').value = consoleHistory[consoleHistoryIdx] ?? '';
+    return;
+  }
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (consoleHistoryIdx === -1) return;
+    if (consoleHistoryIdx < consoleHistory.length - 1) {
+      consoleHistoryIdx += 1;
+      $('console-line').value = consoleHistory[consoleHistoryIdx] ?? '';
+    } else {
+      consoleHistoryIdx = -1;
+      $('console-line').value = '';
+    }
+    return;
+  }
+  if (e.key === 'Tab') {
+    const matches = autocompleteMatches($('console-line').value);
+    if (matches.length > 0) {
+      e.preventDefault();
+      $('console-line').value = matches[0] ?? $('console-line').value;
+      hideAutocomplete();
+    }
+    return;
+  }
+  if (e.key === 'Escape') {
+    hideAutocomplete();
+    return;
+  }
   if (e.key === 'Enter') {
     e.preventDefault();
     $('console-send').click();
   }
 });
+$('console-line').addEventListener('input', () => {
+  const v = $('console-line').value;
+  if (v.startsWith('/') && v.length >= 1) {
+    const matches = autocompleteMatches(v).slice(0, 8);
+    if (matches.length > 0) {
+      const root = $('console-autocomplete');
+      root.innerHTML = matches.map(m =>
+        '<div class="console-autocomplete-row" data-line="' + escapeHTML(m) + '">' +
+          escapeHTML(m) + '</div>'
+      ).join('');
+      root.style.display = '';
+      root.querySelectorAll('.console-autocomplete-row').forEach(el => {
+        el.addEventListener('click', () => {
+          $('console-line').value = el.dataset.line ?? '';
+          hideAutocomplete();
+          $('console-line').focus();
+        });
+      });
+      return;
+    }
+  }
+  hideAutocomplete();
+});
+$('console-help-close')?.addEventListener('click', () => {
+  $('console-help-card').style.display = 'none';
+});
+
+function autocompleteMatches(prefix) {
+  if (!prefix.startsWith('/') && !prefix.startsWith('@')) return [];
+  const lc = prefix.toLowerCase();
+  return COMMAND_HINTS.filter(h => h.toLowerCase().startsWith(lc));
+}
+function hideAutocomplete() {
+  const r = $('console-autocomplete');
+  if (r) { r.innerHTML = ''; r.style.display = 'none'; }
+}
+
+function pushThreadUserLine(line) {
+  consoleThread.push({
+    id: null,                           // populated when SSE delivers the user.* event
+    body: line,
+    ts: Date.now(),
+    ack: null,
+    reply: null,
+    actorEvents: [],
+    pendingPair: true,                  // until the matching user.* event arrives
+  });
+  // Cap thread length (oldest first dropped, with 50-line window).
+  while (consoleThread.length > 50) consoleThread.shift();
+  renderConsoleThread();
+}
+
+function attachThreadEvent(evt) {
+  // 4-pairing strategy:
+  //   1. user.* event → match latest pendingPair entry whose body equals evt.body
+  //      (or starts with the entry's body — TUI may add `/` prefix etc).
+  //   2. kind=ack → match by metadata.ack_for == entry.id
+  //   3. kind=note + metadata.in_reply_to → match by in_reply_to == entry.id
+  //   4. any event with metadata.consumed_intervene_ids → match by id ∈ list
+  if (!evt) return;
+  const md = evt.metadata ?? {};
+  if (evt.from === 'user' && /^user\./.test(evt.kind)) {
+    // Find latest pending entry whose body the same.
+    for (let i = consoleThread.length - 1; i >= 0; i--) {
+      const t = consoleThread[i];
+      if (!t.pendingPair) continue;
+      const a = (t.body ?? '').trim();
+      const b = (evt.body ?? '').trim();
+      if (a === b || (b && a && (a.startsWith(b) || b.startsWith(a)))) {
+        t.id = evt.id;
+        t.pendingPair = false;
+        renderConsoleThread();
+        return;
+      }
+    }
+    return;
+  }
+  if (evt.kind === 'ack' && md.ack_for) {
+    const t = consoleThread.find(x => x.id === md.ack_for);
+    if (t) { t.ack = evt; renderConsoleThread(); }
+    return;
+  }
+  if (evt.kind === 'note' && md.in_reply_to) {
+    const t = consoleThread.find(x => x.id === md.in_reply_to);
+    if (t) { t.reply = evt; renderConsoleThread(); }
+    return;
+  }
+  if (Array.isArray(md.consumed_intervene_ids) && md.consumed_intervene_ids.length > 0) {
+    let touched = false;
+    for (const id of md.consumed_intervene_ids) {
+      const t = consoleThread.find(x => x.id === id);
+      if (!t) continue;
+      // Avoid duplicate insertion on SSE backfill.
+      if (!t.actorEvents.some(e => e.id === evt.id)) {
+        t.actorEvents.push(evt);
+        touched = true;
+      }
+    }
+    if (touched) renderConsoleThread();
+  }
+}
+
+function renderConsoleThread() {
+  const root = $('console-thread');
+  if (!root) return;
+  if (consoleThread.length === 0) {
+    root.innerHTML = '<div class="console-thread-empty">your inputs + responses appear here</div>';
+    return;
+  }
+  root.innerHTML = consoleThread.map(t => {
+    const tStr = new Date(t.ts).toLocaleTimeString();
+    const ackPart = t.ack
+      ? '<div class="thread-ack">✓ ' + escapeHTML(t.ack.body ?? 'applied') + '</div>'
+      : (t.pendingPair
+        ? '<div class="thread-ack thread-pending">… queued</div>'
+        : '<div class="thread-ack thread-pending">… awaiting ack</div>');
+    const replyPart = t.reply
+      ? '<div class="thread-reply">◆ ' + escapeHTML(t.reply.body ?? '') + '</div>'
+      : '';
+    const actorPart = t.actorEvents.length > 0
+      ? ('<details class="thread-actor-fold" open><summary>' +
+          'actor responded · ' + t.actorEvents.length + ' events</summary>' +
+          t.actorEvents.map(e => {
+            const ts = (e.ts ?? '').slice(11, 19);
+            const body = (e.body ?? '').slice(0, 100);
+            return '<div class="thread-actor-row" data-id="' + escapeHTML(e.id) + '">' +
+              '<span class="thread-actor-ts">' + escapeHTML(ts) + '</span> ' +
+              '<span class="thread-actor-from">' + escapeHTML(e.from ?? '') + '</span> ' +
+              '<span class="thread-actor-kind">' + escapeHTML(e.kind ?? '') + '</span> ' +
+              '<span class="thread-actor-body">' + escapeHTML(body) + '</span>' +
+            '</div>';
+          }).join('') +
+        '</details>')
+      : '';
+    return '<div class="thread-entry">' +
+      '<div class="thread-user"><span class="thread-ts">' + escapeHTML(tStr) + '</span>' +
+        ' <span class="thread-you">you</span> ' +
+        '<span class="thread-body">' + escapeHTML(t.body) + '</span></div>' +
+      ackPart + replyPart + actorPart +
+    '</div>';
+  }).join('');
+  // Wire actor row click → detail panel.
+  root.querySelectorAll('.thread-actor-row').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.dataset.id;
+      if (id) showDetail(id, null);
+    });
+  });
+  // Auto-scroll bottom (newest at bottom).
+  root.scrollTop = root.scrollHeight;
+}
+
 renderConsoleHints();
+renderConsoleThread();
+// v0.5 PR-Inbox-Console — clear thread on session switch so the user sees
+// only the current session's Q&A history. Backfill from eventCache so
+// reopening a session re-attaches its prior user.* lines + ack/reply pairs.
+onSessionSelect((id) => {
+  consoleThread.length = 0;
+  consoleHistoryIdx = -1;
+  hideAutocomplete();
+  $('console-help-card').style.display = 'none';
+  if (id) {
+    const arr = eventCache.get(id) ?? [];
+    // Two-pass backfill: first identify user.* lines (push into thread),
+    // then attach ack/reply/actor events (which need the thread entries
+    // already present).
+    for (const m of arr) {
+      if (m.from === 'user' && /^user\./.test(m.kind)) {
+        consoleThread.push({
+          id: m.id,
+          body: m.body ?? '',
+          ts: Date.parse(m.ts),
+          ack: null,
+          reply: null,
+          actorEvents: [],
+          pendingPair: false,
+        });
+      }
+    }
+    while (consoleThread.length > 50) consoleThread.shift();
+    for (const m of arr) {
+      attachThreadEvent(m);
+    }
+  }
+  renderConsoleThread();
+});
 
 // Per-actor mini-console inside the detail panel.
 $('detail-msg-send').addEventListener('click', () => {

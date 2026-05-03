@@ -395,11 +395,47 @@
 
   <section class="console-input" id="console-section">
     <div class="console-row">
-      <input type="text" id="console-line" placeholder='Type a slash command, @actor mention, plain text, or "/crumb <goal>" to start a new session' autocomplete="off" disabled>
+      <input type="text" id="console-line" placeholder='Type a slash command, @actor mention, plain text, "/ask status", or "/help"' autocomplete="off" disabled>
       <button id="console-send" disabled>Send</button>
     </div>
+    <div id="console-autocomplete" class="console-autocomplete" style="display:none;"></div>
     <div class="console-hints" id="console-hints"></div>
     <div class="console-feedback" id="console-feedback"></div>
+    <!--
+      v0.5 PR-Inbox-Console — Q&A console thread. Each user input gets a
+      stacked card with three tiers:
+        Tier 1 (≤50ms) — `kind=ack` paired by metadata.ack_for
+        Tier 2 (≤500ms) — `kind=note` paired by metadata.in_reply_to
+                          (only when /ask <enum> was used)
+        Tier 3 (next spawn) — actor emissions paired by
+                              metadata.consumed_intervene_ids
+      The studio listens to SSE and inserts into this container; oldest at
+      top, newest at bottom, scrollable. Empty state shown until the first
+      user line.
+    -->
+    <div id="console-thread" class="console-thread"></div>
+    <!-- /help cheatsheet card; toggled by `/help` in the input. -->
+    <div id="console-help-card" class="console-help-card" style="display:none;">
+      <h4>Inbox commands</h4>
+      <table>
+        <tr><td><code>/approve</code></td><td>promote PARTIAL verdict to PASS</td></tr>
+        <tr><td><code>/veto &lt;reason&gt;</code></td><td>reject latest verdict, re-spawn last actor</td></tr>
+        <tr><td><code>/pause [@&lt;a&gt;] [reason]</code></td><td>pause global or per-actor</td></tr>
+        <tr><td><code>/resume [@&lt;a&gt;]</code></td><td>resume global or per-actor</td></tr>
+        <tr><td><code>/goto &lt;a&gt; [body]</code></td><td>force next_speaker; body becomes sandwich_append</td></tr>
+        <tr><td><code>/swap &lt;from&gt;=&lt;to&gt;</code></td><td>BYO adapter swap for one actor</td></tr>
+        <tr><td><code>/append [@&lt;a&gt;] &lt;text&gt;</code></td><td>add to next spawn's sandwich</td></tr>
+        <tr><td><code>/note &lt;text&gt;</code></td><td>record constraint without re-routing</td></tr>
+        <tr><td><code>/redo [body]</code></td><td>re-spawn last actor (alias for free-text)</td></tr>
+        <tr><td><code>/cancel [@&lt;a&gt;]</code></td><td>SIGTERM live spawn (lossy mid-build kill)</td></tr>
+        <tr><td><code>/reset-circuit &lt;a|all&gt;</code></td><td>clear circuit breaker</td></tr>
+        <tr><td><code>/ask &lt;enum&gt;</code></td><td>status / cost / next / stuck / scorecard — instant deterministic answer</td></tr>
+        <tr><td><code>@&lt;actor&gt; &lt;body&gt;</code></td><td>scoped sandwich_append for that actor</td></tr>
+        <tr><td><code>↑ / ↓</code></td><td>navigate input history</td></tr>
+        <tr><td><code>/</code> + <code>Tab</code></td><td>autocomplete slash command</td></tr>
+      </table>
+      <button id="console-help-close" class="muted">close</button>
+    </div>
   </section>
 </main>
 

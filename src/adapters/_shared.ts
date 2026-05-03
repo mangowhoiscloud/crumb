@@ -65,6 +65,13 @@ export function buildAdapterEnv(req: SpawnRequest): NodeJS.ProcessEnv {
     // full transcript. Hard isolation against framing / anchor / preference
     // leakage biases. See [[bagelcode-verifier-context-isolation-2026-05-03]].
     ...(req.judgeInputPath ? { CRUMB_JUDGE_INPUT_PATH: req.judgeInputPath } : {}),
+    // v0.5 PR-Inbox-Console — Tier 3 pairing. csv of user.* event ids drained
+    // at spawn-start; `crumb event`'s stampEnvMetadata stamps them onto every
+    // emission so the studio inbox panel groups actor responses under the
+    // originating user input.
+    ...(req.consumedIntervenIds && req.consumedIntervenIds.length > 0
+      ? { CRUMB_CONSUMED_INTERVENE_IDS: req.consumedIntervenIds.join(',') }
+      : {}),
   };
 }
 

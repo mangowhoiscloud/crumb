@@ -167,6 +167,20 @@ export interface ProgressLedger {
   // is auto-terminated with reason='ratchet_revert' to prevent unbounded loops.
   max_aggregate_so_far: number;
   max_aggregate_msg_id: string | null;
+
+  /**
+   * v0.5 PR-Inbox-Console — Tier 3 pairing buffer. Reducer pushes the id of
+   * every `user.intervene/pause/resume/approve/veto` event here; dispatcher
+   * drains the list at the next spawn-start and stamps
+   * `metadata.consumed_intervene_ids = [<drained ids>]` on every event the
+   * actor emits during that spawn. Studio inbox panel uses the stamp to
+   * group actor responses under the originating user input.
+   *
+   * Drain timing = spawn-start (not per-event), so a single user input that
+   * cascades into multiple spawns gets credit on the first one only — keeps
+   * the inbox UI grouping unambiguous.
+   */
+  pending_intervene_ids: string[];
 }
 
 /**
@@ -261,6 +275,7 @@ export const initialState = (sessionId: string): CrumbState => ({
     per_spawn_started_at: null,
     max_aggregate_so_far: 0,
     max_aggregate_msg_id: null,
+    pending_intervene_ids: [],
   },
   last_message: null,
   last_qa_result: null,

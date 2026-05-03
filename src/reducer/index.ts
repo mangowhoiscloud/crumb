@@ -11,6 +11,7 @@ import type { CrumbState } from '../state/types.js';
 import { isGenreProfile, isPersistenceProfile } from '../state/types.js';
 import type { Effect } from '../effects/types.js';
 import { checkAntiDeception } from '../validator/anti-deception.js';
+import { buildAskResponseDraft } from '../helpers/ask-formatter.js';
 
 const STUCK_THRESHOLD = 5;
 const ADAPTIVE_STOP_VARIANCE = 1.0;
@@ -87,6 +88,63 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
   }
 
   const effects: Effect[] = [];
+
+  // v0.5 PR-Inbox-Console — Tier 1 ack + Tier 3 pairing buffer.
+  // Every user.* event gets:
+  //   1. an immediate `kind=ack` emission (deterministic, anti-deception ignores)
+  //      with metadata.ack_for=<event.id> so the studio inbox panel can show
+  //      "✓ applied: <summary>" under the user's line within 50ms.
+  //   2. its id pushed onto `progress_ledger.pending_intervene_ids` so the
+  //      next spawn's emissions get tagged with metadata.consumed_intervene_ids,
+  //      which the inbox panel uses to fold actor responses under the
+  //      originating user input.
+  // Done as a pre-switch hoist (one place) so all 5 user.* cases inherit it
+  // without per-case duplication.
+  if (
+    event.kind === 'user.intervene' ||
+    event.kind === 'user.veto' ||
+    event.kind === 'user.approve' ||
+    event.kind === 'user.pause' ||
+    event.kind === 'user.resume'
+  ) {
+    next.progress_ledger.pending_intervene_ids = [
+      ...next.progress_ledger.pending_intervene_ids,
+      event.id,
+    ];
+    effects.push({
+      type: 'append',
+      message: {
+        session_id: state.session_id,
+        from: 'system',
+        kind: 'ack',
+        body: ackBodyFor(event),
+        metadata: {
+          visibility: 'public',
+          deterministic: true,
+          tool: 'inbox-ack@v1',
+          ack_for: event.id,
+        },
+      },
+    });
+
+    // v0.5 PR-Inbox-Console — Tier 2. `/ask <enum>` lands as
+    // user.intervene with `data.ask=<enum>`; the deterministic formatter
+    // helper reads state and produces a one-line response. Emitted as
+    // `kind=note + metadata.in_reply_to` so the studio inbox panel renders
+    // it as the second line under the user's input.
+    if (event.kind === 'user.intervene') {
+      const draft = buildAskResponseDraft(next, event);
+      if (draft) {
+        effects.push({
+          type: 'append',
+          message: {
+            session_id: state.session_id,
+            ...draft,
+          },
+        });
+      }
+    }
+  }
 
   switch (event.kind) {
     case 'session.start': {
@@ -903,11 +961,77 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         }
         return e;
       });
+      drainPendingInterveneIdsToFirstSpawn(next, filtered);
       return { state: next, effects: filtered };
     }
   }
 
+  drainPendingInterveneIdsToFirstSpawn(next, effects);
   return { state: next, effects };
+}
+
+/**
+ * v0.5 PR-Inbox-Console — Tier 3 drain. Attach the buffered pending
+ * `user.*` event ids to the first spawn effect in this reduction's
+ * outputs and clear the buffer. Done at the END so a single user input
+ * that cascades into multiple spawns gets credit on the first one only —
+ * keeps the inbox UI grouping unambiguous (one user line owns one
+ * subsequent actor turn). The dispatcher forwards the list via env var
+ * to the adapter; `crumb event`'s stampEnvMetadata stamps every emission
+ * during that spawn with `metadata.consumed_intervene_ids`.
+ */
+function drainPendingInterveneIdsToFirstSpawn(state: CrumbState, effects: Effect[]): void {
+  if (state.progress_ledger.pending_intervene_ids.length === 0) return;
+  const firstSpawn = effects.find((e): e is Effect & { type: 'spawn' } => e.type === 'spawn');
+  if (!firstSpawn) return;
+  firstSpawn.consumed_intervene_ids = [...state.progress_ledger.pending_intervene_ids];
+  state.progress_ledger.pending_intervene_ids = [];
+}
+
+/**
+ * v0.5 PR-Inbox-Console — deterministic ack body for the `kind=ack` event the
+ * reducer emits for every user.* input. Studio inbox panel renders this verbatim
+ * under the user's line as the Tier 1 immediate response. Body MUST be derivable
+ * purely from the event itself (no state) so replays are deterministic.
+ */
+function ackBodyFor(event: Message): string {
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  const actor = typeof data.target_actor === 'string' ? `@${data.target_actor}` : '';
+  switch (event.kind) {
+    case 'user.pause': {
+      const a = typeof data.actor === 'string' ? `@${data.actor}` : 'globally';
+      return `paused ${a}`;
+    }
+    case 'user.resume': {
+      const a = typeof data.actor === 'string' ? `@${data.actor}` : 'globally';
+      return `resumed ${a}`;
+    }
+    case 'user.approve':
+      return 'approved';
+    case 'user.veto':
+      return `vetoed${typeof data.target_msg_id === 'string' ? ` ${data.target_msg_id}` : ''}`;
+    case 'user.intervene': {
+      if (typeof data.goto === 'string') return `goto ${data.goto}`;
+      if (
+        data.swap &&
+        typeof (data.swap as Record<string, unknown>).from === 'string' &&
+        typeof (data.swap as Record<string, unknown>).to === 'string'
+      ) {
+        const s = data.swap as { from: string; to: string };
+        return `swapped ${s.from} → ${s.to}`;
+      }
+      if (typeof data.reset_circuit === 'string') return `reset circuit for ${data.reset_circuit}`;
+      if (data.reset_circuit === true) return 'reset all circuits';
+      if (typeof data.cancel === 'string')
+        return `cancelled ${data.cancel === 'all' ? 'all spawns' : `@${data.cancel}`}`;
+      if (typeof data.sandwich_append === 'string') {
+        return `appended to next${actor ? ` ${actor}` : ''} spawn`;
+      }
+      return `intervene queued${actor ? ` for ${actor}` : ''}`;
+    }
+    default:
+      return event.kind;
+  }
 }
 
 /**

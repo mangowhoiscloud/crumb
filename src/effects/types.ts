@@ -33,6 +33,15 @@ export interface SpawnEffect {
    * sandwich for the adapter to read.
    */
   sandwich_appends?: { source_id: string; text: string }[];
+  /**
+   * v0.5 PR-Inbox-Console — Tier 3 pairing. List of user.* event ids drained
+   * from `progress_ledger.pending_intervene_ids` when this spawn was scheduled.
+   * Forwarded to the adapter via `SpawnRequest.consumedIntervenIds` →
+   * `CRUMB_CONSUMED_INTERVENE_IDS` env → `stampEnvMetadata` →
+   * `metadata.consumed_intervene_ids` on every emission. Studio inbox panel
+   * uses the stamp to fold actor responses under their originating user input.
+   */
+  consumed_intervene_ids?: string[];
 }
 
 export interface AppendEffect {
