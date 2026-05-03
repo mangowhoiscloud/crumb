@@ -639,6 +639,109 @@ User directive verbatim, 2026-05-03 amendment:
 
 This is a hard gate at M8 — no soft-deprecation, no co-existence period after parity is reached, no "we'll clean it up later" debt accumulation.
 
+## 14. On-disk hierarchy + write/read parity (project → session → version)
+
+User directive 2026-05-03: *"아웃풋 저장 위치와 읽는 위치 일치도 고려해. 계층도도 세션, 프로젝트, 버전 고려하고."* The migration must codify a single hierarchy diagram, every artifact path must have a single writer + every reader resolves through the same canonical helper, and the **version layer** (project-scoped, not session-scoped) must be a first-class browseable surface in Studio (currently missing).
+
+### 14.1 Canonical hierarchy
+
+```
+$CRUMB_HOME                           ← env override CRUMB_HOME, default os.homedir()/.crumb
+└── projects/
+    └── <project_id>                  ← sha256(cwd) ambient OR pinned via .crumb/project.toml
+        │
+        ├── sessions/
+        │   └── <session_ulid>/
+        │       ├── transcript.jsonl  ← single writer: src/transcript/writer.ts
+        │       ├── meta.json         ← single writer: src/session/meta.ts
+        │       ├── inbox.txt         ← writers: src/inbox/* (user.intervene); reader: src/inbox/watcher.ts
+        │       ├── artifacts/        ← writer: builder spawns; reader: Studio Output
+        │       │   ├── DESIGN.md
+        │       │   ├── spec.md
+        │       │   ├── tuning.json
+        │       │   └── game/
+        │       │       ├── index.html
+        │       │       ├── manifest.webmanifest
+        │       │       ├── sw.js
+        │       │       └── src/…    ← multi-file PWA; recursive
+        │       └── agent-workspace/
+        │           └── <actor>/      ← per-actor spawn cwd, sandboxed
+        │
+        └── versions/                 ← PROJECT-scoped, not session-scoped
+            └── <semver-or-label>/    ← e.g. "1.0.0", "2026-05-03-evening"
+                ├── manifest.json     ← writer: src/session/version.ts:writeManifest()
+                │                        contents: { name, label, source_session, source_event_id,
+                │                                    scorecard, sha256_per_file, created_at }
+                └── artifacts/        ← writer: snapshotArtifacts(); pure copy, no symlink
+                    └── (mirror of session artifacts/, durable even if source session deleted)
+```
+
+Every path is discovered through `src/paths.ts` helpers — never built ad hoc:
+
+| Helper | Returns | Used by |
+|---|---|---|
+| `getCrumbHome()` | `$CRUMB_HOME ?? os.homedir()/.crumb` | every other helper |
+| `resolveProjectId(cwd)` | sha256(cwd) ambient OR pinned `.crumb/project.toml#project_id` | `getProjectDir`, status surfaces |
+| `getProjectDir(cwd)` | `<home>/projects/<project_id>` | versions + sessions roots |
+| `getSessionsDir(cwd)` | `<projectDir>/sessions` | session list |
+| `getSessionRoot(cwd, sid)` | `<sessionsDir>/<sid>` | per-session helpers |
+| `getArtifactsDir(cwd, sid)` | `<sessionRoot>/artifacts` | builder write target / Studio read |
+| `getActorWorkspace(cwd, sid, actor)` | `<sessionRoot>/agent-workspace/<actor>` | spawn cwd |
+| `getVersionsDir(cwd)` | `<projectDir>/versions` | release + browse |
+| `sessionDirFromTranscript(path)` | reverses transcript path back to `<sessionRoot>` | Studio server's artifact serve |
+
+The migration must NOT introduce any second resolver. A new React panel that needs an artifact path posts to `GET /api/sessions/:id/artifact/*` (existing) or `GET /api/projects/:pid/versions/:v/artifact/*` (NEW — see §14.4); the server resolves through `src/paths.ts`.
+
+### 14.2 Write/read parity matrix — every artifact path
+
+| Path | Writer (only one) | Reader(s) | Studio API endpoint | Studio panel |
+|---|---|---|---|---|
+| `transcript.jsonl` | `src/transcript/writer.ts` (dispatcher only) | reducer (`reduce()`), Studio SSE `/api/stream`, `crumb replay`, `crumb debug` | `/api/stream` SSE, `/api/sessions` list metrics | Pipeline / Waterfall / Logs / Transcript / Live Feed |
+| `meta.json` | `src/session/meta.ts` (CLI lifecycle only — `run`, `resume`, `done`) | bootstrap classifier (`packages/studio/src/server/bootstrap.ts`), `crumb ls` | implicit via `/api/sessions` enrichment | Session list pill (live / paused / done / errored) |
+| `inbox.txt` | `src/inbox/parser.ts` (CLI), Studio's `POST /api/sessions/:id/inbox` (slash bar) | `src/inbox/watcher.ts` (chokidar) → reducer | `/api/sessions/:id/inbox` POST | Slash bar |
+| `<sessionRoot>/artifacts/**` | builder spawn (cwd = `agent-workspace/builder`, writes via relative `../artifacts/`) | Studio Output panel | `/api/sessions/:id/artifacts/list`, `/api/sessions/:id/artifact/*` | Output |
+| `<versionsDir>/<v>/manifest.json` | `src/session/version.ts:writeManifest()` (CLI `crumb release`) | Studio Versions panel (M6+, NEW) | `/api/projects/:pid/versions` (NEW), `/api/projects/:pid/versions/:v/manifest` (NEW) | Versions panel (NEW) |
+| `<versionsDir>/<v>/artifacts/**` | `snapshotArtifacts()` (CLI `crumb release`) | Studio Output panel "Version" mode (M6+, NEW) | `/api/projects/:pid/versions/:v/artifact/*` (NEW) | Output, Versions panel |
+
+### 14.3 Bug surfaced by this audit — `snapshotArtifacts` is not recursive
+
+`src/session/version.ts:149-167` — `snapshotArtifacts()` only walks **top-level** files via `readdir(srcDir)` (no `withFileTypes`, no recursion). A multi-file Phaser PWA (`artifacts/game/index.html` + `artifacts/game/src/main.js` + `artifacts/game/manifest.webmanifest` + …) gets only the top-level entries snapshotted; nested files are silently dropped from the version. This is a **real release-data-loss bug**, independent of the migration. Lands as a small fix:
+
+- **PR `fix/session-version-recursive-snapshot`**: switch `readdir(srcDir, { withFileTypes: true, recursive: true })` (Node ≥18.17) or hand-rolled recursion for older targets; preserve `sha256_per_file` keyed by relative path. Test with a fixture that has nested subdirs.
+- Lands independently of the migration.
+
+### 14.4 Versions surface in Studio (NEW — M7 deliverable)
+
+Studio currently has no Versions browser. The user can release a session via `crumb release` (writes `<versionsDir>/<v>/manifest.json` + snapshot), but Studio's Output panel only resolves session-scoped artifacts. The migration adds:
+
+- **`<VersionsList>`** panel in the sidebar (toggleable, dockview group beneath Sessions)
+- **`/api/projects/:pid/versions`** — list, with manifest preview (name, label, scorecard, source_session)
+- **`/api/projects/:pid/versions/:v/artifact/*`** — serve files from `<versionsDir>/<v>/artifacts/**` with the same content-type table as `serveArtifactFile()`
+- **`<Output>` panel "Source" toggle** — Session (default) | Version (when a Version is selected). Same iframe + dropdown UI; URL switches between `/api/sessions/:id/artifact/*` and `/api/projects/:pid/versions/:v/artifact/*`.
+- **`<Scorecard>`** shows version label when a Version is the active source (matches the scorecard recorded in `manifest.json`).
+
+This lands as M7 on the roadmap (after M6 parity, before M8 legacy removal). Documented in §7's M-table addendum:
+
+| M7 (revised) | `feat/studio-v2-versions-panel` | Versions list + version-mode Output + scorecard reuse | Versions browseable; archived release artifacts viewable; manifest sha256 cited in Output header |
+
+The previous M7 "default flip" rolls forward to **M7.1** (`feat/studio-v2-default-on`) — same content, renumbered to make room for the versions deliverable.
+
+### 14.5 Data-stewardship invariants codified
+
+Cross-cutting rules that any new code (migration or otherwise) must obey:
+
+- ❌ Never construct a path under `$CRUMB_HOME` outside `src/paths.ts`. Adding a fourth tier (e.g., `runs/`) requires a `chore(paths):` PR that updates `paths.ts` + every consumer in lockstep.
+- ❌ Never copy via symlink for the version snapshot — `snapshotArtifacts` uses `copyFile` exactly because the version must survive source session deletion (§14.1 footnote).
+- ❌ Never write the same logical artifact via two writers (e.g., dispatcher writes `artifacts/game.html` AND a post-process script also writes there). Single writer per path.
+- ❌ Never break the "transcript path is the canonical session-id resolver" rule (`sessionDirFromTranscript` is the only reverse mapping; if you need the session-id from any other surface, derive it from the transcript path the watcher already has).
+- ✅ Studio reads via `<sessionId>` token in URL → server resolves through `watcher.snapshot()` → `sessionDirFromTranscript()` → real path. Adding a new artifact endpoint follows the same chain.
+
+User directive verbatim, 2026-05-03 amendment:
+
+> 아웃풋 저장 위치와 읽는 위치 일치도 고려해. 계층도도 세션, 프로젝트, 버전 고려하고.
+
+Both halves resolved: the matrix in §14.2 makes write/read parity explicit per path, and the hierarchy in §14.1 codifies project → session → version as the canonical 3-tier shape.
+
 ## Trigger criteria — when to start M0
 
 Start M0 (`chore/studio-vite-scaffold`) when **all four** of these are true:
