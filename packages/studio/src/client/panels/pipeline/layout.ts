@@ -36,13 +36,11 @@ const NODE_W = 132;
 const NODE_H = 48;
 
 /**
- * Forward edges drive dagre's left-to-right ranking. The
- * `researcher → planner-lead` synth handoff is a back-edge — including
- * it in dagre creates a cycle that collapses planner-lead and
- * researcher into the same column (the symptom users saw as "tangled
- * planner-lead + researcher"). We render the back-edge separately as a
- * curved return arrow (smoothstep) so the visual still tells the
- * Phase A → researcher → Phase B story without breaking the ranking.
+ * Forward edges drive dagre's left-to-right ranking. Back / rollback
+ * edges render as separate React Flow edges routed through the top
+ * handles (see ActorNode) so they arc clearly over the forward flow
+ * instead of overlapping it. Including back-edges in dagre's input
+ * collapses adjacent columns ("tangled planner-lead + researcher").
  */
 const FORWARD_EDGES: Array<[Actor, Actor, string]> = [
   ['user', 'coordinator', 'goal'],
@@ -51,13 +49,26 @@ const FORWARD_EDGES: Array<[Actor, Actor, string]> = [
   ['planner-lead', 'builder', 'build'],
   ['builder', 'verifier', 'verify'],
   ['verifier', 'validator', 'audit'],
-  // Terminal milestone — kind=done lands here. validator passes the
-  // verdict through; verifier's PASS short-circuits straight to done
-  // when validator audits clean.
+  // Terminal milestone — kind=done lands here.
   ['validator', 'done', 'done'],
 ];
 
+/** Cooperative back-edges (normal flow). Phase A → researcher → Phase B. */
 const BACK_EDGES: Array<[Actor, Actor, string]> = [['researcher', 'planner-lead', 'synth']];
+
+/**
+ * Rollback edges — fire only on FAIL / Critical deviation. Rendered as
+ * dashed reddish curves so the operator sees the "did NOT pass the bar"
+ * routing. Pipeline.tsx tints them brighter when an actual
+ * `kind=handoff.rollback` event surfaced in the rolling stream.
+ */
+const ROLLBACK_EDGES: Array<[Actor, Actor, string]> = [
+  // verifier FAIL / Important deviation → respawn builder with feedback.
+  ['verifier', 'builder', 'rollback (FAIL)'],
+  // verifier Critical deviation OR validator audit caught fabrication
+  // → unwind all the way to planner-lead Phase B re-spec.
+  ['validator', 'planner-lead', 'rollback (Critical)'],
+];
 
 export function buildDefaultLayout(): { nodes: Node<ActorNodeData>[]; edges: Edge[] } {
   const g = new dagre.graphlib.Graph();
@@ -86,6 +97,8 @@ export function buildDefaultLayout(): { nodes: Node<ActorNodeData>[]; edges: Edg
     id: `${from}-${to}`,
     source: from,
     target: to,
+    sourceHandle: 'right',
+    targetHandle: 'left',
     label,
     type: 'default',
     animated: false,
@@ -95,16 +108,43 @@ export function buildDefaultLayout(): { nodes: Node<ActorNodeData>[]; edges: Edg
     id: `${from}-${to}`,
     source: from,
     target: to,
+    // Top → top routes the back-edge as a clear arc above the row, so
+    // the "researcher hands synth back to planner-lead" return doesn't
+    // overlap the forward `evidence` edge between the same pair.
+    sourceHandle: 'top-source',
+    targetHandle: 'top-target',
     label,
-    // smoothstep with curvature reads as a return arrow (researcher
-    // hands evidence-synth back to planner-lead's Phase B re-spawn)
     type: 'smoothstep',
     animated: false,
     style: { strokeDasharray: '4 4', stroke: 'var(--ink-tertiary)' },
     labelStyle: { fill: 'var(--ink-tertiary)' },
   }));
 
-  return { nodes, edges: [...forward, ...back] };
+  const rollback: Edge[] = ROLLBACK_EDGES.map(([from, to, label]) => ({
+    id: `rollback-${from}-${to}`,
+    source: from,
+    target: to,
+    // Same top-handle routing, but distinct rollback styling. Pipeline
+    // bumps `data.recent` when a kind=handoff.rollback event lands in
+    // the rolling stream, which animates + brightens this edge.
+    sourceHandle: 'top-source',
+    targetHandle: 'top-target',
+    label,
+    type: 'smoothstep',
+    animated: false,
+    data: { rollback: true },
+    style: {
+      strokeDasharray: '6 4',
+      stroke: 'color-mix(in oklab, var(--tone-fail) 70%, var(--ink-tertiary))',
+    },
+    labelStyle: {
+      fill: 'var(--tone-fail)',
+      fontSize: 10,
+      fontFamily: 'var(--font-mono)',
+    },
+  }));
+
+  return { nodes, edges: [...forward, ...back, ...rollback] };
 }
 
 export const ALL_ACTORS = ACTORS;

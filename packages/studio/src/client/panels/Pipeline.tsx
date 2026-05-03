@@ -45,6 +45,7 @@ import { ActorNode } from './pipeline/ActorNode';
 import { StickyNoteNode, type StickyNoteNodeData } from './pipeline/StickyNoteNode';
 import { setSelectedNodeActor, useActiveSession, useSelectedNodeActor } from '../stores/selection';
 import { useSessions } from '../hooks/useSessions';
+import { useTranscriptStream } from '../hooks/useTranscriptStream';
 
 const NODE_TYPES = { actor: ActorNode, sticky: StickyNoteNode };
 
@@ -177,13 +178,73 @@ function PipelineInner() {
     setSelectedNodeActor(null);
   }, []);
 
+  // Active actors = those whose latest agent.wake hasn't been paired
+  // with an agent.stop yet. Drives the green pulse halo on ActorNode so
+  // the operator can see at a glance which actor is currently spawning.
+  const stream = useTranscriptStream(500);
+  const activeActors = useMemo(() => {
+    const wakeOpen = new Set<string>();
+    for (const e of stream.events) {
+      if (e.kind === 'agent.wake') wakeOpen.add(e.from);
+      else if (e.kind === 'agent.stop') wakeOpen.delete(e.from);
+    }
+    return wakeOpen;
+  }, [stream.events]);
+
+  // Recent rollback edges — bright + animated when the matching
+  // `handoff.rollback` event surfaced in the last ~30 s of the rolling
+  // window. Static rollback edges (verifier→builder, validator→
+  // planner-lead) stay dashed-pink as a "this can happen" hint;
+  // recent-fired ones glow.
+  const recentRollbacks = useMemo(() => {
+    const cutoff = Date.now() - 30_000;
+    const recent = new Set<string>();
+    for (const e of stream.events) {
+      if (e.kind !== 'handoff.rollback') continue;
+      if (new Date(e.ts).getTime() < cutoff) continue;
+      const target =
+        (e.data as { to?: string } | undefined)?.to ??
+        (e.data as { target_actor?: string } | undefined)?.target_actor ??
+        '';
+      if (e.from && target) recent.add(`${e.from}->${target}`);
+    }
+    return recent;
+  }, [stream.events]);
+
   const styledNodes = useMemo(
     () =>
-      nodes.map((n) => ({
-        ...n,
-        selected: n.type !== 'sticky' && selected === n.id,
-      })),
-    [nodes, selected],
+      nodes.map((n) => {
+        if (n.type === 'sticky') return { ...n, selected: false };
+        return {
+          ...n,
+          selected: selected === n.id,
+          data: {
+            ...(n.data as ActorNodeData),
+            active: activeActors.has(n.id),
+          },
+        };
+      }),
+    [nodes, selected, activeActors],
+  );
+
+  const styledEdges = useMemo(
+    () =>
+      edges.map((edge) => {
+        const data = edge.data as { rollback?: boolean } | undefined;
+        if (!data?.rollback) return edge;
+        const fired = recentRollbacks.has(`${edge.source}->${edge.target}`);
+        if (!fired) return edge;
+        return {
+          ...edge,
+          animated: true,
+          style: {
+            ...(edge.style ?? {}),
+            stroke: 'var(--tone-fail)',
+            strokeWidth: 2,
+          },
+        };
+      }),
+    [edges, recentRollbacks],
   );
 
   const flashToast = (msg: string): void => {
@@ -304,7 +365,7 @@ function PipelineInner() {
       <div style={{ flex: 1, minHeight: 0 }}>
         <ReactFlow
           nodes={styledNodes}
-          edges={edges}
+          edges={styledEdges}
           nodeTypes={NODE_TYPES}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
