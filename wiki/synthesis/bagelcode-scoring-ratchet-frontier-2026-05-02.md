@@ -203,8 +203,8 @@ related:
 
 ## 9. Cross-links
 
-- ★ **[[bagelcode-system-architecture-v0.3.5]]** §5 — anti-deception 7 rules 표 (본 페이지의 G-A 권고가 R4 numerical 로 격상)
-- ★ **[[bagelcode-system-diagrams-v0.3.5]]** §3 — anti-deception waterfall
+- ★ **[[bagelcode-system-architecture-v0.4]]** §5 — anti-deception 7 rules 표 (본 페이지의 G-A 권고가 R4 numerical 로 격상)
+- ★ **[[bagelcode-system-diagrams-v0.4]]** §3 — anti-deception waterfall
 - [[bagelcode-system-architecture-v0.1]] — §3.5 qa.result, §7 3-layer scoring
 - [[bagelcode-verifier-isolation-matrix]] — 20-source × 4-dimension cross-provider 매트릭스 (G-A 권고의 직접 backing)
 - [[bagelcode-host-harness-decision]] — Hybrid (Skill + headless CLI) lock
