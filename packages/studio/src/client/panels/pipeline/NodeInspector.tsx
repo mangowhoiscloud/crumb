@@ -233,7 +233,7 @@ export function NodeInspector() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              gap: 6,
+              gap: 8,
               fontFamily: 'var(--font-mono)',
               fontSize: 11,
             }}
@@ -244,23 +244,32 @@ export function NodeInspector() {
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 2,
-                  paddingBottom: 6,
-                  marginBottom: 6,
-                  borderBottom: '1px solid var(--hairline-soft)',
+                  gap: 4,
+                  padding: '8px 10px',
+                  background: 'var(--surface-card)',
+                  border: '1px solid var(--hairline-soft)',
+                  borderRadius: 'var(--r-sm)',
                 }}
               >
-                <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-                  <span style={{ color: 'var(--ink-tertiary)' }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span
+                    style={{
+                      color: 'var(--ink-tertiary)',
+                      fontSize: 10,
+                      letterSpacing: '0.2px',
+                    }}
+                  >
                     {e.ts.split('T')[1]?.slice(0, 8)}
                   </span>
                   <span
                     style={{
-                      color: 'var(--ink-muted)',
+                      color: `var(--actor-${e.from}, var(--ink-muted))`,
                       fontSize: 10,
-                      padding: '0 4px',
-                      borderRadius: 'var(--r-xs)',
-                      background: 'var(--surface-1)',
+                      padding: '1px 6px',
+                      borderRadius: 'var(--r-pill)',
+                      border: `1px solid color-mix(in oklab, var(--actor-${e.from}, var(--hairline)) 40%, transparent)`,
+                      background: `color-mix(in oklab, var(--actor-${e.from}, var(--surface-2)) 12%, transparent)`,
+                      letterSpacing: '0.3px',
                     }}
                   >
                     {e.kind}
@@ -272,7 +281,7 @@ export function NodeInspector() {
                       color: 'var(--ink)',
                       whiteSpace: 'pre-wrap',
                       wordBreak: 'break-word',
-                      lineHeight: 1.45,
+                      lineHeight: 1.5,
                     }}
                   >
                     {truncate(e.body, 200)}
