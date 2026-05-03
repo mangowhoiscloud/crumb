@@ -1,24 +1,42 @@
 const ACTOR_LANE_ORDER = [
-  'user','coordinator','planner-lead','researcher','builder','verifier','validator','system'
+  'user',
+  'coordinator',
+  'planner-lead',
+  'researcher',
+  'builder',
+  'verifier',
+  'validator',
+  'system',
 ];
 const ACTOR_VAR = {
-  'user':'--actor-user', 'coordinator':'--actor-coordinator',
-  'planner-lead':'--actor-planner-lead', 'researcher':'--actor-researcher',
-  'builder':'--actor-builder', 'verifier':'--actor-verifier',
-  'validator':'--actor-validator',
-  'system':'--actor-system'
+  user: '--actor-user',
+  coordinator: '--actor-coordinator',
+  'planner-lead': '--actor-planner-lead',
+  researcher: '--actor-researcher',
+  builder: '--actor-builder',
+  verifier: '--actor-verifier',
+  validator: '--actor-validator',
+  system: '--actor-system',
 };
 
 const sessions = new Map();
 let activeSession = null;
 const eventCache = new Map(); // session_id → StudioMessage[]
 
-function $(id) { return document.getElementById(id); }
-function escapeHTML(s) {
-  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+function $(id) {
+  return document.getElementById(id);
 }
-function escapeRegExp(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function escapeHTML(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 // IDE-style grep: escape `text` to HTML, then wrap each case-insensitive substring
 // match of `query` with <mark class="grep-hit"> for orange-highlight + nav.
 function highlightHTML(text, query) {
@@ -27,34 +45,39 @@ function highlightHTML(text, query) {
   const safeQuery = escapeHTML(query);
   if (!safeQuery) return safe;
   const re = new RegExp(escapeRegExp(safeQuery), 'gi');
-  return safe.replace(re, m => '<mark class="grep-hit">' + m + '</mark>');
+  return safe.replace(re, (m) => '<mark class="grep-hit">' + m + '</mark>');
 }
 
 // Per-panel grep state. cursor is preserved across re-renders so streaming
 // content doesn't reset the user's nav position.
 const grepState = {
-  logs:       { query: '', cursor: 0 },
+  logs: { query: '', cursor: 0 },
   transcript: { query: '', cursor: 0 },
-  feed:       { query: '', cursor: 0 },
-  narrative:  { query: '', cursor: 0 },
+  feed: { query: '', cursor: 0 },
+  narrative: { query: '', cursor: 0 },
 };
 
 function refreshGrepNav(panelKey, rootEl, countEl, prevBtn, nextBtn, opts = {}) {
   const state = grepState[panelKey];
   const hits = rootEl ? Array.from(rootEl.querySelectorAll('mark.grep-hit')) : [];
   state.matches = hits;
-  hits.forEach(h => h.classList.remove('active'));
+  hits.forEach((h) => h.classList.remove('active'));
   const total = hits.length;
   if (countEl) {
     countEl.classList.toggle('has-hits', total > 0);
     countEl.classList.toggle('no-hits', !!state.query && total === 0);
     countEl.textContent = !state.query
       ? '—'
-      : (total === 0 ? '0 / 0' : ((state.cursor % total) + 1) + ' / ' + total);
+      : total === 0
+        ? '0 / 0'
+        : (state.cursor % total) + 1 + ' / ' + total;
   }
   if (prevBtn) prevBtn.disabled = total === 0;
   if (nextBtn) nextBtn.disabled = total === 0;
-  if (total === 0) { state.cursor = 0; return; }
+  if (total === 0) {
+    state.cursor = 0;
+    return;
+  }
   if (state.cursor < 0 || state.cursor >= total) state.cursor = 0;
   hits[state.cursor].classList.add('active');
   if (opts.scroll) hits[state.cursor].scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -67,7 +90,7 @@ function gotoGrepMatch(panelKey, dir, countEl) {
   const el = state.matches[state.cursor];
   el.classList.add('active');
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  if (countEl) countEl.textContent = (state.cursor + 1) + ' / ' + state.matches.length;
+  if (countEl) countEl.textContent = state.cursor + 1 + ' / ' + state.matches.length;
 }
 function bindGrepInput(inputEl, prevBtn, nextBtn, panelKey, onChange) {
   if (!inputEl) return;
@@ -79,7 +102,8 @@ function bindGrepInput(inputEl, prevBtn, nextBtn, panelKey, onChange) {
   inputEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (e.shiftKey) prevBtn?.click(); else nextBtn?.click();
+      if (e.shiftKey) prevBtn?.click();
+      else nextBtn?.click();
     } else if (e.key === 'Escape') {
       e.preventDefault();
       inputEl.value = '';
@@ -90,9 +114,15 @@ function bindGrepInput(inputEl, prevBtn, nextBtn, panelKey, onChange) {
     }
   });
 }
-function formatTokens(n) { return n >= 1000 ? (n/1000).toFixed(1) + 'k' : String(n ?? 0); }
-function formatPct(r) { return Math.round((r ?? 0) * 100) + '%'; }
-function formatCost(n) { return '$' + (n ?? 0).toFixed(3); }
+function formatTokens(n) {
+  return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n ?? 0);
+}
+function formatPct(r) {
+  return Math.round((r ?? 0) * 100) + '%';
+}
+function formatCost(n) {
+  return '$' + (n ?? 0).toFixed(3);
+}
 
 function ensureSession(id, hints) {
   let s = sessions.get(id);
@@ -109,7 +139,8 @@ function ensureSession(id, hints) {
     sessions.set(id, s);
     eventCache.set(id, []);
   } else {
-    if (hints?.project_id && (!s.project_id || s.project_id === '—')) s.project_id = hints.project_id;
+    if (hints?.project_id && (!s.project_id || s.project_id === '—'))
+      s.project_id = hints.project_id;
     if (hints?.goal && !s.goal) s.goal = hints.goal;
     if (hints?.preset && !s.preset) s.preset = hints.preset;
     if (hints?.actors) s.actors = hints.actors;
@@ -131,54 +162,100 @@ function renderSessionList() {
     return;
   }
   const blocks = [...groups.entries()].map(([pid, arr]) => {
-    const rows = arr.map(s => {
-      const cls = ['session-row'];
-      if (s.live) cls.push('live');
-      // v3.5 bootstrap classifier: live / idle / interrupted / abandoned / terminal
-      if (s.state) cls.push('state-' + s.state);
-      if (activeSession === s.id) cls.push('active');
-      const cost = s.metrics ? formatCost(s.metrics.cost_usd) : '—';
-      const verdict = s.metrics?.last_verdict;
-      const status = verdict
-        ? (verdict === 'PASS' ? '✓' : verdict === 'PARTIAL' ? '~' : '✗')
-        : (s.metrics?.done ? '·' : '▶');
-      const stateTitle = s.state ? `state: ${s.state}${s.done_reason ? ' (' + s.done_reason + ')' : ''}` : '';
-      // PR-G7-B — Resume button on paused / interrupted / budget-exhausted
-      // sessions. Hidden when the session is live (no need) or terminal-pass.
-      // `done_reason` heuristic: budget exhausted → forceable resume.
-      const resumable = !s.live && (
-        s.state === 'paused' || s.state === 'interrupted' || s.state === 'idle' ||
-        (s.done_reason && /token_exhausted|wall_clock|builder_circuit_open/.test(s.done_reason))
-      );
-      const forceFlag = s.done_reason && /token_exhausted|wall_clock|builder_circuit_open/.test(s.done_reason);
-      const resumeBtn = resumable
-        ? '<button class="row-resume" data-resume="' + s.id + '"' +
-          (forceFlag ? ' data-force="1"' : '') +
-          ' title="re-enter coordinator loop (force=' + (forceFlag ? 'true' : 'false') + ')">↻</button>'
-        : '';
-      // R5 — Cancel button on live sessions. Posts `/cancel` to the session's
-      // inbox.txt; coordinator's parser+reducer turn it into a `cancel_spawn`
-      // effect that SIGTERMs the active subprocess (R2). Hidden when not
-      // live — no point cancelling a session with no active spawn.
-      const cancelBtn = s.live
-        ? '<button class="row-cancel" data-cancel="' + s.id + '" title="cancel active spawn(s) — SIGTERM the running actor (lossy mid-edit)">⏹</button>'
-        : '';
-      return '<div class="' + cls.join(' ') + '" data-id="' + s.id + '" title="' + escapeHTML(stateTitle) + '">' +
-        '<button class="row-close" data-close="' + s.id + '" title="dismiss from sidebar (transcript preserved on disk)">×</button>' +
-        resumeBtn +
-        cancelBtn +
-        '<div><span class="row-dot"></span><span class="row-id">' + escapeHTML(s.id.slice(0, 12)) + '…</span> <span style="color:var(--ink-tertiary);">' + status + '</span></div>' +
-        '<div class="row-goal">' + escapeHTML(s.goal ?? '(no goal yet)') + '</div>' +
-        '<div class="row-meta">' + cost + ' · ' + (s.metrics?.events ?? 0) + ' evt</div>' +
-      '</div>';
-    }).join('');
-    return '<div class="project-group">' +
-      '<h3 class="project-label" title="' + escapeHTML(pid) + '">' + escapeHTML(pid.slice(0, 12)) + '</h3>' +
+    const rows = arr
+      .map((s) => {
+        const cls = ['session-row'];
+        if (s.live) cls.push('live');
+        // v3.5 bootstrap classifier: live / idle / interrupted / abandoned / terminal
+        if (s.state) cls.push('state-' + s.state);
+        if (activeSession === s.id) cls.push('active');
+        const cost = s.metrics ? formatCost(s.metrics.cost_usd) : '—';
+        const verdict = s.metrics?.last_verdict;
+        const status = verdict
+          ? verdict === 'PASS'
+            ? '✓'
+            : verdict === 'PARTIAL'
+              ? '~'
+              : '✗'
+          : s.metrics?.done
+            ? '·'
+            : '▶';
+        const stateTitle = s.state
+          ? `state: ${s.state}${s.done_reason ? ' (' + s.done_reason + ')' : ''}`
+          : '';
+        // PR-G7-B — Resume button on paused / interrupted / budget-exhausted
+        // sessions. Hidden when the session is live (no need) or terminal-pass.
+        // `done_reason` heuristic: budget exhausted → forceable resume.
+        const resumable =
+          !s.live &&
+          (s.state === 'paused' ||
+            s.state === 'interrupted' ||
+            s.state === 'idle' ||
+            (s.done_reason &&
+              /token_exhausted|wall_clock|builder_circuit_open/.test(s.done_reason)));
+        const forceFlag =
+          s.done_reason && /token_exhausted|wall_clock|builder_circuit_open/.test(s.done_reason);
+        const resumeBtn = resumable
+          ? '<button class="row-resume" data-resume="' +
+            s.id +
+            '"' +
+            (forceFlag ? ' data-force="1"' : '') +
+            ' title="re-enter coordinator loop (force=' +
+            (forceFlag ? 'true' : 'false') +
+            ')">↻</button>'
+          : '';
+        // R5 — Cancel button on live sessions. Posts `/cancel` to the session's
+        // inbox.txt; coordinator's parser+reducer turn it into a `cancel_spawn`
+        // effect that SIGTERMs the active subprocess (R2). Hidden when not
+        // live — no point cancelling a session with no active spawn.
+        const cancelBtn = s.live
+          ? '<button class="row-cancel" data-cancel="' +
+            s.id +
+            '" title="cancel active spawn(s) — SIGTERM the running actor (lossy mid-edit)">⏹</button>'
+          : '';
+        return (
+          '<div class="' +
+          cls.join(' ') +
+          '" data-id="' +
+          s.id +
+          '" title="' +
+          escapeHTML(stateTitle) +
+          '">' +
+          '<button class="row-close" data-close="' +
+          s.id +
+          '" title="dismiss from sidebar (transcript preserved on disk)">×</button>' +
+          resumeBtn +
+          cancelBtn +
+          '<div><span class="row-dot"></span><span class="row-id">' +
+          escapeHTML(s.id.slice(0, 12)) +
+          '…</span> <span style="color:var(--ink-tertiary);">' +
+          status +
+          '</span></div>' +
+          '<div class="row-goal">' +
+          escapeHTML(s.goal ?? '(no goal yet)') +
+          '</div>' +
+          '<div class="row-meta">' +
+          cost +
+          ' · ' +
+          (s.metrics?.events ?? 0) +
+          ' evt</div>' +
+          '</div>'
+        );
+      })
+      .join('');
+    return (
+      '<div class="project-group">' +
+      '<h3 class="project-label" title="' +
+      escapeHTML(pid) +
+      '">' +
+      escapeHTML(pid.slice(0, 12)) +
+      '</h3>' +
       rows +
-    '</div>';
+      '</div>'
+    );
   });
   list.innerHTML = blocks.join('');
-  list.querySelectorAll('.session-row').forEach(el => {
+  list.querySelectorAll('.session-row').forEach((el) => {
     el.addEventListener('click', (e) => {
       // close + resume + cancel buttons have their own handlers — don't double-fire
       if (e.target?.closest?.('.row-close')) return;
@@ -188,7 +265,7 @@ function renderSessionList() {
     });
   });
   // PR-G7-B — Resume button click handler.
-  list.querySelectorAll('.row-resume').forEach(btn => {
+  list.querySelectorAll('.row-resume').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const id = btn.dataset.resume;
@@ -206,16 +283,25 @@ function renderSessionList() {
           // eslint-disable-next-line no-alert
           console.error('[studio] resume failed:', res.status, txt);
           btn.textContent = '!';
-          setTimeout(() => { btn.disabled = false; btn.textContent = '↻'; }, 3000);
+          setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = '↻';
+          }, 3000);
           return;
         }
         // Optimistic UI: row will re-render on next watcher poll once status flips to running.
         btn.textContent = '✓';
-        setTimeout(() => { btn.disabled = false; btn.textContent = '↻'; }, 2000);
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.textContent = '↻';
+        }, 2000);
       } catch (err) {
         console.error('[studio] resume error:', err);
         btn.textContent = '!';
-        setTimeout(() => { btn.disabled = false; btn.textContent = '↻'; }, 3000);
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.textContent = '↻';
+        }, 3000);
       }
     });
   });
@@ -224,7 +310,7 @@ function renderSessionList() {
   // coordinator's parser turns the line into kind=user.intervene with
   // data.cancel='all', and the reducer emits a cancel_spawn effect that
   // SIGTERMs the live subprocess (R2 wiring in src/dispatcher/live.ts).
-  list.querySelectorAll('.row-cancel').forEach(btn => {
+  list.querySelectorAll('.row-cancel').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const id = btn.dataset.cancel;
@@ -240,21 +326,30 @@ function renderSessionList() {
           const txt = await res.text().catch(() => '');
           console.error('[studio] cancel failed:', res.status, txt);
           btn.textContent = '!';
-          setTimeout(() => { btn.disabled = false; btn.textContent = '⏹'; }, 3000);
+          setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = '⏹';
+          }, 3000);
           return;
         }
         // Optimistic UI: row will re-render once the cancel_spawn effect's
         // kind=note hits the transcript and the watcher fans it out.
         btn.textContent = '✓';
-        setTimeout(() => { btn.disabled = false; btn.textContent = '⏹'; }, 2000);
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.textContent = '⏹';
+        }, 2000);
       } catch (err) {
         console.error('[studio] cancel error:', err);
         btn.textContent = '!';
-        setTimeout(() => { btn.disabled = false; btn.textContent = '⏹'; }, 3000);
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.textContent = '⏹';
+        }, 3000);
       }
     });
   });
-  list.querySelectorAll('.row-close').forEach(btn => {
+  list.querySelectorAll('.row-close').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const id = btn.dataset.close;
@@ -316,25 +411,46 @@ function renderHeader() {
   if (!s) {
     $('header-title').innerHTML = '<span class="pill muted">no session</span>';
     $('header-goal').textContent = 'Pick a session on the left to track its progress in real time.';
-    ['m-events','m-tokens','m-cache','m-cost','m-p95','m-err'].forEach(k => $(k).textContent = '—');
+    ['m-events', 'm-tokens', 'm-cache', 'm-cost', 'm-p95', 'm-err'].forEach(
+      (k) => ($(k).textContent = '—'),
+    );
     return;
   }
   const m = s.metrics;
   let pill = '<span class="pill muted">in progress</span>';
-  if (m?.last_verdict === 'PASS') pill = '<span class="pill ok">PASS ' + (m.last_aggregate ?? 0).toFixed(1) + '</span>';
-  else if (m?.last_verdict === 'PARTIAL') pill = '<span class="pill partial">PARTIAL ' + (m.last_aggregate ?? 0).toFixed(1) + '</span>';
-  else if (m?.last_verdict === 'FAIL' || m?.last_verdict === 'REJECT') pill = '<span class="pill err">' + m.last_verdict + ' ' + (m.last_aggregate ?? 0).toFixed(1) + '</span>';
-  $('header-title').innerHTML = pill + ' <span style="color:var(--ink-subtle); font-size:13px; font-family:ui-monospace,monospace;">' + escapeHTML(s.id) + '</span>';
+  if (m?.last_verdict === 'PASS')
+    pill = '<span class="pill ok">PASS ' + (m.last_aggregate ?? 0).toFixed(1) + '</span>';
+  else if (m?.last_verdict === 'PARTIAL')
+    pill = '<span class="pill partial">PARTIAL ' + (m.last_aggregate ?? 0).toFixed(1) + '</span>';
+  else if (m?.last_verdict === 'FAIL' || m?.last_verdict === 'REJECT')
+    pill =
+      '<span class="pill err">' +
+      m.last_verdict +
+      ' ' +
+      (m.last_aggregate ?? 0).toFixed(1) +
+      '</span>';
+  $('header-title').innerHTML =
+    pill +
+    ' <span style="color:var(--ink-subtle); font-size:13px; font-family:ui-monospace,monospace;">' +
+    escapeHTML(s.id) +
+    '</span>';
   $('header-goal').textContent = s.goal ?? '(no goal recorded)';
   $('m-events').textContent = m ? m.events : '—';
-  $('m-tokens').textContent = m ? formatTokens(m.tokens_in) + ' → ' + formatTokens(m.tokens_out) : '—';
+  $('m-tokens').textContent = m
+    ? formatTokens(m.tokens_in) + ' → ' + formatTokens(m.tokens_out)
+    : '—';
   $('m-cache').textContent = m ? formatPct(m.cache_ratio) : '—';
   $('m-cost').textContent = m ? formatCost(m.cost_usd) : '—';
   $('m-p95').textContent = m ? Math.round(m.latency_p95_ms) + 'ms' : '—';
-  $('m-err').textContent = m ? (m.error_count + ' / ' + m.audit_count) : '—';
+  $('m-err').textContent = m ? m.error_count + ' / ' + m.audit_count : '—';
   const banner = $('audit-banner');
   if (m && m.audit_count > 0) {
-    banner.textContent = '★ ' + m.audit_count + ' anti-deception audit event' + (m.audit_count === 1 ? '' : 's') + ' fired in this session.';
+    banner.textContent =
+      '★ ' +
+      m.audit_count +
+      ' anti-deception audit event' +
+      (m.audit_count === 1 ? '' : 's') +
+      ' fired in this session.';
     banner.classList.add('show');
   } else banner.classList.remove('show');
 }
@@ -471,7 +587,12 @@ function renderWaterfall() {
 
   root.innerHTML = lanes.join('');
   $('waterfall-axis').textContent =
-    formatWallClock(0) + ' → ' + formatWallClock(totalMs) + '  (total ' + formatWallClock(totalMs) + ')';
+    formatWallClock(0) +
+    ' → ' +
+    formatWallClock(totalMs) +
+    '  (total ' +
+    formatWallClock(totalMs) +
+    ')';
 
   // Bar click → existing detail panel. Tick click → same.
   root.querySelectorAll('.waterfall-bar, .waterfall-tick').forEach((el) => {
@@ -535,7 +656,8 @@ function buildWaterfallSpans(events) {
           endTsKnown: true,
           label: open.actor,
           tooltipText: tooltipParts.join(' · '),
-          errored: typeof e.body === 'string' && /error|exit=\d+/i.test(e.body) && !/exit=0/.test(e.body),
+          errored:
+            typeof e.body === 'string' && /error|exit=\d+/i.test(e.body) && !/exit=0/.test(e.body),
           audit: false,
           stepMarkers: open.stepMarkers,
         });
@@ -599,9 +721,7 @@ function renderSwimlane() {
     const groups = groupConsecutiveByKind(evts);
     const lastIdx = groups.length - 1;
     const cursor = getReadCursor(activeSession, actor);
-    const cells = groups
-      .map((g, i) => renderEvtCell(g, i === lastIdx, cursor))
-      .join('');
+    const cells = groups.map((g, i) => renderEvtCell(g, i === lastIdx, cursor)).join('');
     return (
       '<div class="lane">' +
       '<div class="lane-label"><span class="glyph" style="background:var(' +
@@ -732,9 +852,7 @@ function groupConsecutiveByKind(evts) {
         ids: [e.id],
         evts: [e],
         deterministic: !!e.metadata?.deterministic,
-        audit:
-          e.kind === 'audit' ||
-          (e.metadata?.audit_violations?.length ?? 0) > 0,
+        audit: e.kind === 'audit' || (e.metadata?.audit_violations?.length ?? 0) > 0,
       });
     }
   }
@@ -756,9 +874,7 @@ function renderEvtCell(group, isLast, cursor) {
   // matching iMessage/Slack behaviour where a single new message also
   // gets a dot/number — the user opened the lane after that message
   // arrived and we want to acknowledge they haven't seen it yet.
-  const unreadCount = cursor
-    ? group.ids.filter((id) => id > cursor).length
-    : group.ids.length;
+  const unreadCount = cursor ? group.ids.filter((id) => id > cursor).length : group.ids.length;
   const owner = group.evts[0]?.from ?? '';
   const titleAttr =
     count > 1
@@ -779,11 +895,7 @@ function renderEvtCell(group, isLast, cursor) {
     '">' +
     escapeHTML(group.kind) +
     (unreadCount > 0
-      ? '<span class="evt-count" aria-label="' +
-        unreadCount +
-        ' unread">' +
-        unreadCount +
-        '</span>'
+      ? '<span class="evt-count" aria-label="' + unreadCount + ' unread">' + unreadCount + '</span>'
       : '') +
     '</span>'
   );
@@ -861,23 +973,35 @@ function renderScorecard() {
   const delta = prevAgg != null ? aggregate - prevAgg : null;
 
   root.innerHTML =
-    '<div class="sc-composite">' + renderComposite(aggregate, verdict, delta) + '</div>' +
-    '<div class="sc-radar">' + renderRadar(dimRecords) + '</div>' +
-    '<div class="sc-rows">' + dimRecords.map(renderDimRow).join('') + '</div>';
+    '<div class="sc-composite">' +
+    renderComposite(aggregate, verdict, delta) +
+    '</div>' +
+    '<div class="sc-radar">' +
+    renderRadar(dimRecords) +
+    '</div>' +
+    '<div class="sc-rows">' +
+    dimRecords.map(renderDimRow).join('') +
+    '</div>';
 }
 
 function renderEmpty(dims) {
   return (
     '<div class="sc-composite sc-empty"><div class="sc-headline">— / 30</div>' +
     '<div class="sc-verdict-pill sc-verdict-pending">awaiting verifier</div></div>' +
-    '<div class="sc-radar">' + renderRadar(dims.map((d) => ({ key: d, score: null }))) + '</div>' +
+    '<div class="sc-radar">' +
+    renderRadar(dims.map((d) => ({ key: d, score: null }))) +
+    '</div>' +
     '<div class="sc-rows">' +
     dims
       .map(
         (d) =>
           '<div class="sc-row sc-row-empty">' +
-          '<span class="sc-row-key">' + d + '</span>' +
-          '<span class="sc-row-name">' + DIM_NAMES[d] + '</span>' +
+          '<span class="sc-row-key">' +
+          d +
+          '</span>' +
+          '<span class="sc-row-name">' +
+          DIM_NAMES[d] +
+          '</span>' +
           '<span class="sc-row-bar"><span class="sc-row-bar-fill" style="width:0%"></span></span>' +
           '<span class="sc-row-value">—</span>' +
           '<span class="sc-row-source">—</span>' +
@@ -900,12 +1024,16 @@ function deriveSanitizeNote(dim, violations) {
   if (!violations || violations.length === 0) return null;
   if (dim === 'D2') {
     if (violations.includes('verify_pass_without_exec_zero')) return { note: 'forced 0 (Rule 1)' };
-    if (violations.includes('verifier_overrode_d2_ground_truth')) return { note: 'forced to qa (Rule 2)' };
+    if (violations.includes('verifier_overrode_d2_ground_truth'))
+      return { note: 'forced to qa (Rule 2)' };
   }
   if (dim === 'D4' && violations.includes('verifier_overrode_d4_ground_truth')) {
     return { note: 'forced to auto (Rule 3)' };
   }
-  if ((dim === 'D1' || dim === 'D3' || dim === 'D5') && violations.includes('self_bias_score_discounted')) {
+  if (
+    (dim === 'D1' || dim === 'D3' || dim === 'D5') &&
+    violations.includes('self_bias_score_discounted')
+  ) {
     return { note: '−15% self-bias' };
   }
   if (dim === 'D5' && violations.includes('researcher_video_evidence_missing')) {
@@ -926,13 +1054,24 @@ function renderComposite(aggregate, verdict, delta) {
     const sign = delta > 0 ? '↗' : '↘';
     const cls = delta > 0 ? 'sc-delta-up' : 'sc-delta-down';
     deltaSpan =
-      '<div class="sc-delta ' + cls + '">' +
-      sign + ' ' + (delta > 0 ? '+' : '') + delta.toFixed(1) +
+      '<div class="sc-delta ' +
+      cls +
+      '">' +
+      sign +
+      ' ' +
+      (delta > 0 ? '+' : '') +
+      delta.toFixed(1) +
       '<span class="sc-delta-label"> vs prev</span></div>';
   }
   return (
-    '<div class="sc-headline">' + escapeHTML(aggStr) + '</div>' +
-    '<div class="sc-verdict-pill ' + verdictCls + '">' + escapeHTML(verdictTxt) + '</div>' +
+    '<div class="sc-headline">' +
+    escapeHTML(aggStr) +
+    '</div>' +
+    '<div class="sc-verdict-pill ' +
+    verdictCls +
+    '">' +
+    escapeHTML(verdictTxt) +
+    '</div>' +
     deltaSpan
   );
 }
@@ -967,8 +1106,22 @@ function renderRadar(records) {
       const [x, y] = axisPoint(i, 1.18);
       const [x0, y0] = axisPoint(i, 1);
       return (
-        '<line class="sc-radar-axis" x1="' + cx + '" y1="' + cy + '" x2="' + x0 + '" y2="' + y0 + '" />' +
-        '<text class="sc-radar-axis-label" x="' + x + '" y="' + (y + 3) + '">' + r.key + '</text>'
+        '<line class="sc-radar-axis" x1="' +
+        cx +
+        '" y1="' +
+        cy +
+        '" x2="' +
+        x0 +
+        '" y2="' +
+        y0 +
+        '" />' +
+        '<text class="sc-radar-axis-label" x="' +
+        x +
+        '" y="' +
+        (y + 3) +
+        '">' +
+        r.key +
+        '</text>'
       );
     })
     .join('');
@@ -981,7 +1134,11 @@ function renderRadar(records) {
     .join(' ');
   const hasData = records.some((r) => typeof r.score === 'number');
   return (
-    '<svg class="sc-radar-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">' +
+    '<svg class="sc-radar-svg" viewBox="0 0 ' +
+    W +
+    ' ' +
+    H +
+    '" preserveAspectRatio="xMidYMid meet">' +
     gridSvg +
     axesSvg +
     (hasData ? '<polygon class="sc-radar-data" points="' + dataPts + '" />' : '') +
@@ -995,7 +1152,13 @@ function renderDimRow(r) {
   const fillPct = score != null ? Math.max(0, Math.min(100, (score / 5) * 100)) : 0;
   const srcInfo = r.source ? SOURCE_BADGE[r.source] : null;
   const srcSpan = srcInfo
-    ? '<span class="sc-row-source ' + srcInfo.cls + '" title="' + escapeHTML(r.source) + '">' + srcInfo.label + '</span>'
+    ? '<span class="sc-row-source ' +
+      srcInfo.cls +
+      '" title="' +
+      escapeHTML(r.source) +
+      '">' +
+      srcInfo.label +
+      '</span>'
     : '<span class="sc-row-source">—</span>';
   let valueSpan = '<span class="sc-row-value">' + escapeHTML(valueDisplay) + '</span>';
   let trailSpan = '';
@@ -1011,9 +1174,15 @@ function renderDimRow(r) {
   }
   return (
     '<div class="sc-row">' +
-    '<span class="sc-row-key">' + r.key + '</span>' +
-    '<span class="sc-row-name">' + r.name + '</span>' +
-    '<span class="sc-row-bar"><span class="sc-row-bar-fill" style="width:' + fillPct.toFixed(1) + '%"></span></span>' +
+    '<span class="sc-row-key">' +
+    r.key +
+    '</span>' +
+    '<span class="sc-row-name">' +
+    r.name +
+    '</span>' +
+    '<span class="sc-row-bar"><span class="sc-row-bar-fill" style="width:' +
+    fillPct.toFixed(1) +
+    '%"></span></span>' +
     valueSpan +
     srcSpan +
     trailSpan +
@@ -1080,14 +1249,26 @@ function renderDetailSingle(evt) {
   if (evt.metadata?.provider) tags.push({ k: 'provider', v: evt.metadata.provider });
   if (evt.metadata?.model) tags.push({ k: 'model', v: evt.metadata.model });
   if (evt.metadata?.harness) tags.push({ k: 'harness', v: evt.metadata.harness });
-  if (evt.metadata?.deterministic) tags.push({ k: 'tag', v: 'deterministic', cls: 'tag-deterministic' });
-  if (evt.metadata?.cross_provider) tags.push({ k: 'tag', v: 'cross_provider', cls: 'tag-cross-provider' });
+  if (evt.metadata?.deterministic)
+    tags.push({ k: 'tag', v: 'deterministic', cls: 'tag-deterministic' });
+  if (evt.metadata?.cross_provider)
+    tags.push({ k: 'tag', v: 'cross_provider', cls: 'tag-cross-provider' });
   $('detail-tags').innerHTML = tags
     .map(
       (t) =>
-        '<span class="detail-tag ' + (t.cls || '') + '" title="' + escapeHTML(t.k) + '=' + escapeHTML(t.v) + '">' +
-        '<span class="detail-tag-key">' + escapeHTML(t.k) + '</span>' +
-        '<span class="detail-tag-val">' + escapeHTML(t.v) + '</span>' +
+        '<span class="detail-tag ' +
+        (t.cls || '') +
+        '" title="' +
+        escapeHTML(t.k) +
+        '=' +
+        escapeHTML(t.v) +
+        '">' +
+        '<span class="detail-tag-key">' +
+        escapeHTML(t.k) +
+        '</span>' +
+        '<span class="detail-tag-val">' +
+        escapeHTML(t.v) +
+        '</span>' +
         '</span>',
     )
     .join('');
@@ -1100,8 +1281,7 @@ function renderDetailSingle(evt) {
   if (Array.isArray(violations) && violations.length > 0) {
     auditBanner.style.display = '';
     auditBanner.innerHTML =
-      '<strong>★ anti-deception</strong>' +
-      ' — ' + violations.map(escapeHTML).join(', ');
+      '<strong>★ anti-deception</strong>' + ' — ' + violations.map(escapeHTML).join(', ');
   } else {
     auditBanner.style.display = 'none';
     auditBanner.innerHTML = '';
@@ -1129,8 +1309,7 @@ function renderDetailSingle(evt) {
   if (copyBody) copyBody.onclick = () => copyToClipboard(evt.body ?? '');
   const copyData = $('detail-copy-data');
   if (copyData)
-    copyData.onclick = () =>
-      copyToClipboard(evt.data ? JSON.stringify(evt.data, null, 2) : '');
+    copyData.onclick = () => copyToClipboard(evt.data ? JSON.stringify(evt.data, null, 2) : '');
 }
 
 /**
@@ -1153,9 +1332,21 @@ function renderResourceBar(evt) {
     if (!n || total === 0) return '';
     const pct = (n / total) * 100;
     return (
-      '<div class="rbar-seg ' + cls + '" style="width:' + pct.toFixed(2) + '%" ' +
-      'title="' + label + ': ' + formatTokens(n) + '">' +
-      '<span class="rbar-seg-label">' + label + ' ' + formatTokens(n) + '</span>' +
+      '<div class="rbar-seg ' +
+      cls +
+      '" style="width:' +
+      pct.toFixed(2) +
+      '%" ' +
+      'title="' +
+      label +
+      ': ' +
+      formatTokens(n) +
+      '">' +
+      '<span class="rbar-seg-label">' +
+      label +
+      ' ' +
+      formatTokens(n) +
+      '</span>' +
       '</div>'
     );
   };
@@ -1170,8 +1361,12 @@ function renderResourceBar(evt) {
   return (
     bar +
     '<div class="rbar-meta">' +
-    '<span class="rbar-meta-cell"><span class="rbar-meta-k">cost</span>' + escapeHTML(cost) + '</span>' +
-    '<span class="rbar-meta-cell"><span class="rbar-meta-k">latency</span>' + escapeHTML(lat) + '</span>' +
+    '<span class="rbar-meta-cell"><span class="rbar-meta-k">cost</span>' +
+    escapeHTML(cost) +
+    '</span>' +
+    '<span class="rbar-meta-cell"><span class="rbar-meta-k">latency</span>' +
+    escapeHTML(lat) +
+    '</span>' +
     (md.cache_write
       ? '<span class="rbar-meta-cell"><span class="rbar-meta-k">cache_w</span>' +
         formatTokens(md.cache_write) +
@@ -1197,56 +1392,99 @@ function renderDetailGroupSpread(events, groupIds) {
   const actorSummary = distinctActors > 1 ? distinctActors + ' actors' : '';
   $('detail-spread-toolbar').innerHTML =
     '<span class="spread-toolbar-label">' +
-    'kind: ' + escapeHTML(groupEvts[0]?.kind ?? 'group') +
-    ' · ' + groupEvts.length + ' events' +
+    'kind: ' +
+    escapeHTML(groupEvts[0]?.kind ?? 'group') +
+    ' · ' +
+    groupEvts.length +
+    ' events' +
     (actorSummary ? ' · ' + actorSummary : '') +
     '</span>' +
     '<span class="spread-toolbar-hint">Drag the panel edge to widen ↔</span>';
   $('detail-spread-cards').innerHTML = groupEvts.map(renderSpreadCard).join('');
   // Wire per-card copy buttons
-  $('detail-spread-cards').querySelectorAll('.spread-card-copy').forEach((btn) => {
-    btn.addEventListener('click', () => copyToClipboard(btn.dataset.text ?? ''));
-  });
+  $('detail-spread-cards')
+    .querySelectorAll('.spread-card-copy')
+    .forEach((btn) => {
+      btn.addEventListener('click', () => copyToClipboard(btn.dataset.text ?? ''));
+    });
 }
 
 function renderSpreadCard(evt) {
   const md = evt.metadata ?? {};
   const tagsHtml = [
-    md.provider ? '<span class="detail-tag"><span class="detail-tag-key">provider</span><span class="detail-tag-val">' + escapeHTML(md.provider) + '</span></span>' : '',
-    md.model ? '<span class="detail-tag"><span class="detail-tag-key">model</span><span class="detail-tag-val">' + escapeHTML(md.model) + '</span></span>' : '',
-    md.deterministic ? '<span class="detail-tag tag-deterministic"><span class="detail-tag-key">tag</span><span class="detail-tag-val">deterministic</span></span>' : '',
-  ].filter(Boolean).join('');
+    md.provider
+      ? '<span class="detail-tag"><span class="detail-tag-key">provider</span><span class="detail-tag-val">' +
+        escapeHTML(md.provider) +
+        '</span></span>'
+      : '',
+    md.model
+      ? '<span class="detail-tag"><span class="detail-tag-key">model</span><span class="detail-tag-val">' +
+        escapeHTML(md.model) +
+        '</span></span>'
+      : '',
+    md.deterministic
+      ? '<span class="detail-tag tag-deterministic"><span class="detail-tag-key">tag</span><span class="detail-tag-val">deterministic</span></span>'
+      : '',
+  ]
+    .filter(Boolean)
+    .join('');
   const violations = md.audit_violations ?? evt.scores?.audit_violations ?? [];
-  const banner = Array.isArray(violations) && violations.length > 0
-    ? '<div class="spread-card-audit">★ ' + violations.map(escapeHTML).join(', ') + '</div>'
-    : '';
+  const banner =
+    Array.isArray(violations) && violations.length > 0
+      ? '<div class="spread-card-audit">★ ' + violations.map(escapeHTML).join(', ') + '</div>'
+      : '';
   const lat = md.latency_ms != null ? Number(md.latency_ms) + 'ms' : '—';
-  const tok = md.tokens_in != null
-    ? formatTokens(md.tokens_in) + '→' + formatTokens(md.tokens_out ?? 0)
-    : '—';
+  const tok =
+    md.tokens_in != null
+      ? formatTokens(md.tokens_in) + '→' + formatTokens(md.tokens_out ?? 0)
+      : '—';
   const cost = md.cost_usd != null ? '$' + Number(md.cost_usd).toFixed(4) : '—';
   const dataPreview = evt.data ? JSON.stringify(evt.data, null, 2) : '';
   return (
-    '<article class="spread-card" data-id="' + escapeHTML(evt.id) + '">' +
+    '<article class="spread-card" data-id="' +
+    escapeHTML(evt.id) +
+    '">' +
     '<header class="spread-card-header">' +
-    '<span class="spread-card-actor"><span class="glyph" style="background:var(' + (ACTOR_VAR[evt.from] || '--ink-tertiary') + ');"></span>' + escapeHTML(evt.from || '?') + '</span>' +
-    '<span class="spread-card-ts">' + escapeHTML((evt.ts || '').split('T')[1]?.slice(0, 12) ?? '') + '</span>' +
-    '<button class="spread-card-copy" data-text="' + escapeHTML(evt.id) + '" title="Copy event id">⧉ id</button>' +
+    '<span class="spread-card-actor"><span class="glyph" style="background:var(' +
+    (ACTOR_VAR[evt.from] || '--ink-tertiary') +
+    ');"></span>' +
+    escapeHTML(evt.from || '?') +
+    '</span>' +
+    '<span class="spread-card-ts">' +
+    escapeHTML((evt.ts || '').split('T')[1]?.slice(0, 12) ?? '') +
+    '</span>' +
+    '<button class="spread-card-copy" data-text="' +
+    escapeHTML(evt.id) +
+    '" title="Copy event id">⧉ id</button>' +
     '</header>' +
     banner +
-    '<div class="spread-card-tags">' + tagsHtml + '</div>' +
+    '<div class="spread-card-tags">' +
+    tagsHtml +
+    '</div>' +
     '<div class="spread-card-resource">' +
-    '<span title="latency"><strong>↻</strong>&nbsp;' + escapeHTML(lat) + '</span>' +
-    '<span title="tokens in→out"><strong>⇄</strong>&nbsp;' + escapeHTML(tok) + '</span>' +
-    '<span title="cost"><strong>$</strong>&nbsp;' + escapeHTML(cost) + '</span>' +
+    '<span title="latency"><strong>↻</strong>&nbsp;' +
+    escapeHTML(lat) +
+    '</span>' +
+    '<span title="tokens in→out"><strong>⇄</strong>&nbsp;' +
+    escapeHTML(tok) +
+    '</span>' +
+    '<span title="cost"><strong>$</strong>&nbsp;' +
+    escapeHTML(cost) +
+    '</span>' +
     '</div>' +
     '<div class="spread-card-body-label">body</div>' +
-    '<pre class="spread-card-body">' + escapeHTML(evt.body ?? '(empty)') + '</pre>' +
+    '<pre class="spread-card-body">' +
+    escapeHTML(evt.body ?? '(empty)') +
+    '</pre>' +
     (dataPreview
       ? '<div class="spread-card-body-label">data ' +
-        '<button class="spread-card-copy" data-text="' + escapeHTML(dataPreview) + '" title="Copy JSON">⧉</button>' +
+        '<button class="spread-card-copy" data-text="' +
+        escapeHTML(dataPreview) +
+        '" title="Copy JSON">⧉</button>' +
         '</div>' +
-        '<pre class="spread-card-data">' + escapeHTML(dataPreview) + '</pre>'
+        '<pre class="spread-card-data">' +
+        escapeHTML(dataPreview) +
+        '</pre>'
       : '') +
     '</article>'
   );
@@ -1297,12 +1535,8 @@ function renderDetailEventNav() {
     '<button id="detail-event-next" class="detail-event-btn" ' +
     (idx === events.length - 1 ? 'disabled' : '') +
     ' title="Next event in session (→)">→</button>';
-  document
-    .getElementById('detail-event-prev')
-    ?.addEventListener('click', () => navDetailEvent(-1));
-  document
-    .getElementById('detail-event-next')
-    ?.addEventListener('click', () => navDetailEvent(1));
+  document.getElementById('detail-event-prev')?.addEventListener('click', () => navDetailEvent(-1));
+  document.getElementById('detail-event-next')?.addEventListener('click', () => navDetailEvent(1));
 }
 
 function navDetailEvent(delta) {
@@ -1334,20 +1568,30 @@ document.addEventListener('keydown', (e) => {
 
 function renderSandwichBar() {
   const bar = $('sandwich-actor-bar');
-  if (!activeSession) { bar.innerHTML = ''; return; }
+  if (!activeSession) {
+    bar.innerHTML = '';
+    return;
+  }
   const s = sessions.get(activeSession);
   const actors = s?.actors ?? [];
   if (actors.length === 0) {
-    bar.innerHTML = '<span style="color:var(--ink-tertiary);font-size:11px;">no actors spawned yet</span>';
+    bar.innerHTML =
+      '<span style="color:var(--ink-tertiary);font-size:11px;">no actors spawned yet</span>';
     return;
   }
-  bar.innerHTML = actors.map(a =>
-    '<button class="sw-btn" data-actor="' + escapeHTML(a) + '" style="' +
-    'background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);' +
-    'padding:4px 10px;border-radius:var(--r-sm);font-family:inherit;font-size:11px;cursor:pointer;">' +
-    escapeHTML(a) + '</button>'
-  ).join('');
-  bar.querySelectorAll('.sw-btn').forEach(btn => {
+  bar.innerHTML = actors
+    .map(
+      (a) =>
+        '<button class="sw-btn" data-actor="' +
+        escapeHTML(a) +
+        '" style="' +
+        'background:var(--surface-2);border:1px solid var(--hairline);color:var(--ink-muted);' +
+        'padding:4px 10px;border-radius:var(--r-sm);font-family:inherit;font-size:11px;cursor:pointer;">' +
+        escapeHTML(a) +
+        '</button>',
+    )
+    .join('');
+  bar.querySelectorAll('.sw-btn').forEach((btn) => {
     btn.addEventListener('click', () => loadSandwich(btn.dataset.actor));
   });
 }
@@ -1358,7 +1602,12 @@ async function loadSandwich(actor) {
   pre.style.display = 'block';
   pre.textContent = 'loading…';
   try {
-    const res = await fetch('/api/sessions/' + encodeURIComponent(activeSession) + '/sandwich/' + encodeURIComponent(actor));
+    const res = await fetch(
+      '/api/sessions/' +
+        encodeURIComponent(activeSession) +
+        '/sandwich/' +
+        encodeURIComponent(actor),
+    );
     const text = await res.text();
     pre.textContent = res.ok ? text : '(' + res.status + ') ' + text;
   } catch (err) {
@@ -1478,25 +1727,28 @@ if (connRetryBtn) {
   });
 }
 
-fetch('/api/sessions').then(r => r.json()).then(payload => {
-  for (const s of payload.sessions ?? []) {
-    const sess = ensureSession(s.session_id, {
-      project_id: s.project_id,
-      goal: s.goal,
-      preset: s.preset,
-      actors: s.actors,
-    });
-    sess.metrics = s.metrics;
-    // v3.5 bootstrap: preserve classifier output for sidebar dot color + sort.
-    sess.state = s.state ?? null;
-    sess.last_activity_at = s.last_activity_at ?? null;
-    sess.done_reason = s.done_reason ?? null;
-    sess.live = s.state === 'live'; // legacy flag for back-compat
-    eventCache.set(s.session_id, s.history ?? []);
-  }
-  if (!activeSession && payload.sessions?.[0]) selectSession(payload.sessions[0].session_id);
-  else renderSessionList();
-}).catch(() => {});
+fetch('/api/sessions')
+  .then((r) => r.json())
+  .then((payload) => {
+    for (const s of payload.sessions ?? []) {
+      const sess = ensureSession(s.session_id, {
+        project_id: s.project_id,
+        goal: s.goal,
+        preset: s.preset,
+        actors: s.actors,
+      });
+      sess.metrics = s.metrics;
+      // v3.5 bootstrap: preserve classifier output for sidebar dot color + sort.
+      sess.state = s.state ?? null;
+      sess.last_activity_at = s.last_activity_at ?? null;
+      sess.done_reason = s.done_reason ?? null;
+      sess.live = s.state === 'live'; // legacy flag for back-compat
+      eventCache.set(s.session_id, s.history ?? []);
+    }
+    if (!activeSession && payload.sessions?.[0]) selectSession(payload.sessions[0].session_id);
+    else renderSessionList();
+  })
+  .catch(() => {});
 
 // ─── v3.5 Console — DAG topology + weaving ────────────────────────────────
 //
@@ -1527,26 +1779,26 @@ fetch('/api/sessions').then(r => r.json()).then(payload => {
 //   user     → diamond     (external input)
 //   terminal → rounded box (done)
 const DAG_NODES = {
-  user:               { x: 50,   y: 160, label: 'user',       shape: 'diamond' },
-  coordinator:        { x: 165,  y: 160, label: 'coord',      shape: 'circle'  },
-  'planner-lead':     { x: 305,  y: 90,  label: 'planner',    shape: 'circle'  },
-  researcher:         { x: 305,  y: 230, label: 'researcher', shape: 'circle'  },
-  builder:            { x: 480,  y: 160, label: 'builder',    shape: 'circle'  },
-  qa_check:           { x: 645,  y: 160, label: 'qa_check',   shape: 'hexagon' },
-  verifier:           { x: 825,  y: 90,  label: 'verifier',   shape: 'circle'  },
-  validator:          { x: 825,  y: 230, label: 'validator',  shape: 'hexagon' },
-  done:               { x: 1010, y: 160, label: 'done',       shape: 'terminal' },
+  user: { x: 50, y: 160, label: 'user', shape: 'diamond' },
+  coordinator: { x: 165, y: 160, label: 'coord', shape: 'circle' },
+  'planner-lead': { x: 305, y: 90, label: 'planner', shape: 'circle' },
+  researcher: { x: 305, y: 230, label: 'researcher', shape: 'circle' },
+  builder: { x: 480, y: 160, label: 'builder', shape: 'circle' },
+  qa_check: { x: 645, y: 160, label: 'qa_check', shape: 'hexagon' },
+  verifier: { x: 825, y: 90, label: 'verifier', shape: 'circle' },
+  validator: { x: 825, y: 230, label: 'validator', shape: 'hexagon' },
+  done: { x: 1010, y: 160, label: 'done', shape: 'terminal' },
 };
 
 // Five-phase backgrounds aligned with the reducer's case-routing layers:
 // A=Spec authoring, B=Build, C=QA ground truth (deterministic), D=Judge
 // (verifier LLM + validator code), E=Done.
 const DAG_PHASES = [
-  { id: 'A', label: 'A · Spec',   x: 240, y: 32, w: 165, h: 256 },
-  { id: 'B', label: 'B · Build',  x: 420, y: 32, w: 145, h: 256 },
-  { id: 'C', label: 'C · QA',     x: 580, y: 32, w: 130, h: 256 },
+  { id: 'A', label: 'A · Spec', x: 240, y: 32, w: 165, h: 256 },
+  { id: 'B', label: 'B · Build', x: 420, y: 32, w: 145, h: 256 },
+  { id: 'C', label: 'C · QA', x: 580, y: 32, w: 130, h: 256 },
   { id: 'D', label: 'D · Verify', x: 765, y: 32, w: 130, h: 256 },
-  { id: 'E', label: 'E · Done',   x: 950, y: 32, w: 120, h: 256 },
+  { id: 'E', label: 'E · Done', x: 950, y: 32, w: 120, h: 256 },
 ];
 
 // Edges: [from, to, type, label?]. Edge types:
@@ -1560,24 +1812,24 @@ const DAG_PHASES = [
 //   resume    cyan solid    — done → re-enter loop                             [PR-G7-B]
 const DAG_EDGES = [
   // === Flow (standard handoff / spawn, indigo solid) ===
-  ['user',             'coordinator',      'flow',     'goal'],
-  ['coordinator',      'planner-lead',     'flow',     'spawn'],
-  ['planner-lead',     'researcher',       'flow',     'handoff'],
-  ['researcher',       'planner-lead',     'flow',     'step.research'],
-  ['planner-lead',     'builder',          'flow',     'spec'],
-  ['builder',          'qa_check',         'flow',     'build'],
-  ['qa_check',         'verifier',         'flow',     'qa.result'],
-  ['verifier',         'validator',        'audit',    'judge.score'],
+  ['user', 'coordinator', 'flow', 'goal'],
+  ['coordinator', 'planner-lead', 'flow', 'spawn'],
+  ['planner-lead', 'researcher', 'flow', 'handoff'],
+  ['researcher', 'planner-lead', 'flow', 'step.research'],
+  ['planner-lead', 'builder', 'flow', 'spec'],
+  ['builder', 'qa_check', 'flow', 'build'],
+  ['qa_check', 'verifier', 'flow', 'qa.result'],
+  ['verifier', 'validator', 'audit', 'judge.score'],
   // === Verdict-based routing from verifier ===
-  ['verifier',         'done',             'terminal', 'PASS'],
-  ['verifier',         'builder',          'respawn',  'Important / OPEN'],   // PR-G2 + PR-Prune-2 (adapter swap on circuit OPEN)
-  ['verifier',         'planner-lead',     'rollback', 'Critical'],
+  ['verifier', 'done', 'terminal', 'PASS'],
+  ['verifier', 'builder', 'respawn', 'Important / OPEN'], // PR-G2 + PR-Prune-2 (adapter swap on circuit OPEN)
+  ['verifier', 'planner-lead', 'rollback', 'Critical'],
   // === Re-entry (PR-G7-B resume) ===
-  ['done',             'coordinator',      'resume',   '↻'],
+  ['done', 'coordinator', 'resume', '↻'],
   // === User intervention ===
-  ['user',             'planner-lead',     'intervene', '@'],
-  ['user',             'builder',          'intervene', '@'],
-  ['user',             'verifier',         'intervene', '@'],
+  ['user', 'planner-lead', 'intervene', '@'],
+  ['user', 'builder', 'intervene', '@'],
+  ['user', 'verifier', 'intervene', '@'],
 ];
 
 // SVG path for a node body. Shapes:
@@ -1731,11 +1983,28 @@ function renderDag() {
   const svg = $('dag-svg');
   if (!svg) return;
   // Phase zone rects (rendered first → bottom layer)
-  const zonesSvg = DAG_PHASES.map(p =>
-    '<g class="dag-phase phase-' + p.id + '">' +
-      '<rect x="' + p.x + '" y="' + p.y + '" width="' + p.w + '" height="' + p.h + '" rx="10" />' +
-      '<text x="' + (p.x + 10) + '" y="' + (p.y + 16) + '" class="phase-label">' + escapeHTML(p.label) + '</text>' +
-    '</g>'
+  const zonesSvg = DAG_PHASES.map(
+    (p) =>
+      '<g class="dag-phase phase-' +
+      p.id +
+      '">' +
+      '<rect x="' +
+      p.x +
+      '" y="' +
+      p.y +
+      '" width="' +
+      p.w +
+      '" height="' +
+      p.h +
+      '" rx="10" />' +
+      '<text x="' +
+      (p.x + 10) +
+      '" y="' +
+      (p.y + 16) +
+      '" class="phase-label">' +
+      escapeHTML(p.label) +
+      '</text>' +
+      '</g>',
   ).join('');
   const events = activeSession ? (eventCache.get(activeSession) ?? []) : [];
   // PR-J' (Candidate 4) — per-edge runtime aggregation drives stroke width
@@ -1744,7 +2013,8 @@ function renderDag() {
   const edgeStats = aggregateEdgeRuntime(events);
   // Edges (typed) — typed dasharray + label rendered above the midpoint.
   const edgesSvg = DAG_EDGES.map(([from, to, type, label]) => {
-    const a = DAG_NODES[from], b = DAG_NODES[to];
+    const a = DAG_NODES[from],
+      b = DAG_NODES[to];
     if (!a || !b) return '';
     const d = edgePath(a, b, from, to);
     const stats = edgeStats.get(from + '→' + to);
@@ -1758,52 +2028,121 @@ function renderDag() {
     if (stats) extraCls.push('edge-traversed');
     if (stats?.avg_latency_ms && stats.avg_latency_ms > 5000) extraCls.push('edge-slow');
     const labelSvg = label
-      ? '<text class="edge-label edge-label-' + type + '" x="' + edgeLabelPos(a, b, from, to).x + '" y="' + edgeLabelPos(a, b, from, to).y + '">' + escapeHTML(label) + '</text>'
+      ? '<text class="edge-label edge-label-' +
+        type +
+        '" x="' +
+        edgeLabelPos(a, b, from, to).x +
+        '" y="' +
+        edgeLabelPos(a, b, from, to).y +
+        '">' +
+        escapeHTML(label) +
+        '</text>'
       : '';
-    const countBadge = stats && stats.count > 1
-      ? '<text class="edge-count" x="' + edgeLabelPos(a, b, from, to).x + '" y="' + (edgeLabelPos(a, b, from, to).y - 11) + '">×' + stats.count + '</text>'
-      : '';
-    return '<g class="dag-edge-group ' + extraCls.join(' ') + '">' +
-      '<path class="dag-edge edge-' + type + '" d="' + d + '" stroke-width="' + strokeWidth.toFixed(2) + '" marker-end="url(#dag-arrow-' + type + ')" />' +
-      labelSvg + countBadge +
-    '</g>';
+    const countBadge =
+      stats && stats.count > 1
+        ? '<text class="edge-count" x="' +
+          edgeLabelPos(a, b, from, to).x +
+          '" y="' +
+          (edgeLabelPos(a, b, from, to).y - 11) +
+          '">×' +
+          stats.count +
+          '</text>'
+        : '';
+    return (
+      '<g class="dag-edge-group ' +
+      extraCls.join(' ') +
+      '">' +
+      '<path class="dag-edge edge-' +
+      type +
+      '" d="' +
+      d +
+      '" stroke-width="' +
+      strokeWidth.toFixed(2) +
+      '" marker-end="url(#dag-arrow-' +
+      type +
+      ')" />' +
+      labelSvg +
+      countBadge +
+      '</g>'
+    );
   }).join('');
   const lastEvt = events[events.length - 1];
   const lastActor = lastEvt?.from;
-  const recentActors = new Set(events.slice(-8).map(e => e.from));
-  const isDone = events.some(e => e.kind === 'done');
+  const recentActors = new Set(events.slice(-8).map((e) => e.from));
+  const isDone = events.some((e) => e.kind === 'done');
   // PR-J' (Candidate 4) — per-actor runtime aggregation drives the badge
   // line under each node (LangSmith / Langfuse / Phoenix idiom).
   const actorStats = aggregateActorRuntime(events);
-  const nodesSvg = Object.entries(DAG_NODES).map(([actor, n]) => {
-    const cls = ['dag-node', 'node-' + actor.replace(/[^a-z_]/gi, '-'), 'shape-' + (n.shape || 'circle')];
-    if (lastActor === actor) cls.push('active');
-    else if (recentActors.has(actor)) cls.push('recent');
-    if (actor === 'done' && isDone) cls.push('active');
-    // qa_check is a synthetic node — system events with the qa-check-effect tool
-    // get aggregated under the qa_check key via aggregateActorRuntime's remap.
-    const badge = formatActorBadge(actorStats.get(actor));
-    const badgeSvg = badge
-      ? '<text class="dag-node-badge" x="' + n.x + '" y="' + (n.y + 32) + '">' + escapeHTML(badge) + '</text>'
-      : '';
-    return '<g class="' + cls.join(' ') + '" data-actor="' + actor + '">' +
-      '<path d="' + nodeShapePath(n) + '" />' +
-      '<text x="' + n.x + '" y="' + (n.y + 4) + '">' + escapeHTML(n.label) + '</text>' +
-      badgeSvg +
-    '</g>';
-  }).join('');
+  const nodesSvg = Object.entries(DAG_NODES)
+    .map(([actor, n]) => {
+      const cls = [
+        'dag-node',
+        'node-' + actor.replace(/[^a-z_]/gi, '-'),
+        'shape-' + (n.shape || 'circle'),
+      ];
+      if (lastActor === actor) cls.push('active');
+      else if (recentActors.has(actor)) cls.push('recent');
+      if (actor === 'done' && isDone) cls.push('active');
+      // qa_check is a synthetic node — system events with the qa-check-effect tool
+      // get aggregated under the qa_check key via aggregateActorRuntime's remap.
+      const badge = formatActorBadge(actorStats.get(actor));
+      const badgeSvg = badge
+        ? '<text class="dag-node-badge" x="' +
+          n.x +
+          '" y="' +
+          (n.y + 32) +
+          '">' +
+          escapeHTML(badge) +
+          '</text>'
+        : '';
+      return (
+        '<g class="' +
+        cls.join(' ') +
+        '" data-actor="' +
+        actor +
+        '">' +
+        '<path d="' +
+        nodeShapePath(n) +
+        '" />' +
+        '<text x="' +
+        n.x +
+        '" y="' +
+        (n.y + 4) +
+        '">' +
+        escapeHTML(n.label) +
+        '</text>' +
+        badgeSvg +
+        '</g>'
+      );
+    })
+    .join('');
   // Arrowhead defs — one per edge type so the head color matches the stroke.
-  const arrowDefs = ['flow','respawn','rollback','terminal','audit','intervene','resume']
-    .map(type =>
-      '<marker id="dag-arrow-' + type + '" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">' +
-        '<path class="arrow-head arrow-' + type + '" d="M0,0 L10,5 L0,10 Z" />' +
-      '</marker>'
-    ).join('');
-  svg.innerHTML = '<defs>' + arrowDefs + '</defs>' +
-                  '<g id="dag-zones">' + zonesSvg + '</g>' +
-                  '<g id="dag-edges">' + edgesSvg + '</g>' +
-                  '<g id="dag-ripples"></g>' +
-                  '<g id="dag-nodes">' + nodesSvg + '</g>';
+  const arrowDefs = ['flow', 'respawn', 'rollback', 'terminal', 'audit', 'intervene', 'resume']
+    .map(
+      (type) =>
+        '<marker id="dag-arrow-' +
+        type +
+        '" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">' +
+        '<path class="arrow-head arrow-' +
+        type +
+        '" d="M0,0 L10,5 L0,10 Z" />' +
+        '</marker>',
+    )
+    .join('');
+  svg.innerHTML =
+    '<defs>' +
+    arrowDefs +
+    '</defs>' +
+    '<g id="dag-zones">' +
+    zonesSvg +
+    '</g>' +
+    '<g id="dag-edges">' +
+    edgesSvg +
+    '</g>' +
+    '<g id="dag-ripples"></g>' +
+    '<g id="dag-nodes">' +
+    nodesSvg +
+    '</g>';
 }
 
 // Edge path geometry. Most edges are straight; verifier's two feedback
@@ -1836,9 +2175,11 @@ function edgePath(a, b, from, to) {
     return `M${a.x + 18},${a.y} Q${(a.x + b.x) / 2},${a.y + t} ${b.x - 24},${b.y - 4}`;
   }
   // Default: straight line, trimmed to node radius.
-  const dx = b.x - a.x, dy = b.y - a.y;
+  const dx = b.x - a.x,
+    dy = b.y - a.y;
   const len = Math.hypot(dx, dy) || 1;
-  const ux = dx / len, uy = dy / len;
+  const ux = dx / len,
+    uy = dy / len;
   const r = 26;
   return `M${a.x + ux * r},${a.y + uy * r} L${b.x - ux * r},${b.y - uy * r}`;
 }
@@ -1847,8 +2188,8 @@ function edgePath(a, b, from, to) {
 // via the control point so the label sits where the arc bulges.
 function edgeLabelPos(a, b, from, to) {
   if (from === 'verifier' && to === 'planner-lead') return { x: (a.x + b.x) / 2, y: 26 };
-  if (from === 'verifier' && to === 'builder')      return { x: (a.x + b.x) / 2, y: 56 };
-  if (from === 'done' && to === 'coordinator')      return { x: (a.x + b.x) / 2, y: 22 };
+  if (from === 'verifier' && to === 'builder') return { x: (a.x + b.x) / 2, y: 56 };
+  if (from === 'done' && to === 'coordinator') return { x: (a.x + b.x) / 2, y: 22 };
   if (from === 'user' && (to === 'planner-lead' || to === 'builder' || to === 'verifier')) {
     const t = to === 'planner-lead' ? -10 : to === 'builder' ? -30 : -50;
     return { x: (a.x + b.x) / 2, y: a.y + t - 4 };
@@ -1858,26 +2199,52 @@ function edgeLabelPos(a, b, from, to) {
 
 // Pipeline position narrative — 'where am I in the DAG' for the detail panel.
 function pipelinePositionFor(evt) {
-  const order = ['session.start','goal','question.socratic','answer.socratic','step.socratic',
-    'step.concept','handoff.requested','step.research.video','step.research','step.design',
-    'spec','build','qa.result','step.judge','judge.score','verify.result','done'];
+  const order = [
+    'session.start',
+    'goal',
+    'question.socratic',
+    'answer.socratic',
+    'step.socratic',
+    'step.concept',
+    'handoff.requested',
+    'step.research.video',
+    'step.research',
+    'step.design',
+    'spec',
+    'build',
+    'qa.result',
+    'step.judge',
+    'judge.score',
+    'verify.result',
+    'done',
+  ];
   const i = order.indexOf(evt.kind);
-  const phase = i < 0 ? 'meta'
-    : i <= 4  ? 'PHASE A — Socratic & Concept'
-    : i <= 7  ? 'PHASE A → B — Researcher'
-    : i <= 9  ? 'PHASE B — Design & Synth'
-    : i === 10 ? 'PHASE B → C — Spec sealed'
-    : i === 11 ? 'PHASE C — Build'
-    : i === 12 ? 'PHASE C → D — QA ground truth'
-    : i <= 14 ? 'PHASE D — Verifier (CourtEval)'
-    :           'PHASE D → done';
+  const phase =
+    i < 0
+      ? 'meta'
+      : i <= 4
+        ? 'PHASE A — Socratic & Concept'
+        : i <= 7
+          ? 'PHASE A → B — Researcher'
+          : i <= 9
+            ? 'PHASE B — Design & Synth'
+            : i === 10
+              ? 'PHASE B → C — Spec sealed'
+              : i === 11
+                ? 'PHASE C — Build'
+                : i === 12
+                  ? 'PHASE C → D — QA ground truth'
+                  : i <= 14
+                    ? 'PHASE D — Verifier (CourtEval)'
+                    : 'PHASE D → done';
   return phase + ' · ' + evt.from + '/' + evt.kind;
 }
 
 // Trigger a one-shot weaving ripple when an event flows from one actor to
 // another. Animates the dashed edge for 1.5s then removes the overlay.
 function rippleEdge(fromActor, toActor) {
-  const a = DAG_NODES[fromActor], b = DAG_NODES[toActor];
+  const a = DAG_NODES[fromActor],
+    b = DAG_NODES[toActor];
   if (!a || !b) return;
   const ripples = document.getElementById('dag-ripples');
   if (!ripples) return;
@@ -1892,19 +2259,19 @@ function rippleEdge(fromActor, toActor) {
 // the next-likely target. The map encodes "after kind X, the next message
 // usually goes to actor Y" — derived from the reducer's switch/case.
 const WEAVE_TARGET = {
-  'goal':                'coordinator',
-  'session.start':       null,
-  'question.socratic':   'user',
-  'answer.socratic':     'planner-lead',
-  'spec':                'builder',
-  'spec.update':         'builder',
-  'build':               'qa_check',       // qa_check effect (renamed from `system` v0.4.2)
-  'qa.result':           'verifier',
-  'step.research':       'planner-lead',   // researcher → resume planner phase B
-  'step.research.video': null,             // intermediate, no routing
-  'handoff.requested':   null,             // payload.to drives it
-  'handoff.rollback':    null,             // PR-G2 — verdict-deviation routing decides
-  'audit':               null,             // validator side-effect, no onward routing
+  goal: 'coordinator',
+  'session.start': null,
+  'question.socratic': 'user',
+  'answer.socratic': 'planner-lead',
+  spec: 'builder',
+  'spec.update': 'builder',
+  build: 'qa_check', // qa_check effect (renamed from `system` v0.4.2)
+  'qa.result': 'verifier',
+  'step.research': 'planner-lead', // researcher → resume planner phase B
+  'step.research.video': null, // intermediate, no routing
+  'handoff.requested': null, // payload.to drives it
+  'handoff.rollback': null, // PR-G2 — verdict-deviation routing decides
+  audit: null, // validator side-effect, no onward routing
 };
 
 // Translate a `from='system'` event with metadata.tool=qa-check-effect@v1
@@ -1961,12 +2328,21 @@ function setConsoleEnabled(enabled) {
 }
 
 function renderConsoleHints() {
-  const hints = ['/approve','/veto rebuild','/pause','/resume','/goto verifier','@builder use red palette','/note <text>','/redo'];
+  const hints = [
+    '/approve',
+    '/veto rebuild',
+    '/pause',
+    '/resume',
+    '/goto verifier',
+    '@builder use red palette',
+    '/note <text>',
+    '/redo',
+  ];
   const root = $('console-hints');
-  root.innerHTML = hints.map(h =>
-    '<button data-line="' + escapeHTML(h) + '">' + escapeHTML(h) + '</button>'
-  ).join('');
-  root.querySelectorAll('button').forEach(btn => {
+  root.innerHTML = hints
+    .map((h) => '<button data-line="' + escapeHTML(h) + '">' + escapeHTML(h) + '</button>')
+    .join('');
+  root.querySelectorAll('button').forEach((btn) => {
     btn.addEventListener('click', () => {
       $('console-line').value = btn.dataset.line;
       $('console-line').focus();
@@ -1990,7 +2366,8 @@ async function sendInboxLine(sessionId, line, feedbackEl) {
       feedbackEl.className = 'console-feedback err';
       return;
     }
-    feedbackEl.textContent = '✓ queued — watcher will surface the resulting event in the swimlane shortly';
+    feedbackEl.textContent =
+      '✓ queued — watcher will surface the resulting event in the swimlane shortly';
     feedbackEl.className = 'console-feedback ok';
   } catch (err) {
     feedbackEl.textContent = '✗ ' + err.message;
@@ -2004,7 +2381,7 @@ $('console-send').addEventListener('click', () => {
   sendInboxLine(activeSession, line, $('console-feedback'));
   $('console-line').value = '';
 });
-$('console-line').addEventListener('keydown', e => {
+$('console-line').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
     $('console-send').click();
@@ -2024,7 +2401,7 @@ $('detail-msg-send').addEventListener('click', () => {
   sendInboxLine(activeSession, line, $('detail-msg-feedback'));
   $('detail-msg').value = '';
 });
-$('detail-msg').addEventListener('keydown', e => {
+$('detail-msg').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
     $('detail-msg-send').click();
@@ -2034,22 +2411,26 @@ $('detail-msg').addEventListener('keydown', e => {
 // Detail navigation — parent chain + children list.
 let currentDetailEvent = null;
 const _origShowDetail = showDetail;
-showDetail = function(id) {
+showDetail = function (id) {
   _origShowDetail(id);
   if (!activeSession) return;
   const events = eventCache.get(activeSession) ?? [];
-  const evt = events.find(e => e.id === id);
+  const evt = events.find((e) => e.id === id);
   if (!evt) return;
   currentDetailEvent = evt;
   $('detail-pipeline-pos').textContent = '◇ ' + pipelinePositionFor(evt);
   // Thread: parent → this → children
-  const parent = evt.parent_event_id ? events.find(e => e.id === evt.parent_event_id) : null;
-  const children = events.filter(e => e.parent_event_id === evt.id);
+  const parent = evt.parent_event_id ? events.find((e) => e.id === evt.parent_event_id) : null;
+  const children = events.filter((e) => e.parent_event_id === evt.id);
   const lines = [];
-  if (parent) lines.push('↑ parent: ' + parent.from + ' / ' + parent.kind + ' — ' + (parent.body || '').slice(0, 80));
+  if (parent)
+    lines.push(
+      '↑ parent: ' + parent.from + ' / ' + parent.kind + ' — ' + (parent.body || '').slice(0, 80),
+    );
   lines.push('● this  : ' + evt.from + ' / ' + evt.kind + ' — ' + (evt.body || '').slice(0, 80));
-  for (const c of children) lines.push('↓ child : ' + c.from + ' / ' + c.kind + ' — ' + (c.body || '').slice(0, 80));
-  $('detail-thread').innerHTML = lines.map(l => '<div>' + escapeHTML(l) + '</div>').join('');
+  for (const c of children)
+    lines.push('↓ child : ' + c.from + ' / ' + c.kind + ' — ' + (c.body || '').slice(0, 80));
+  $('detail-thread').innerHTML = lines.map((l) => '<div>' + escapeHTML(l) + '</div>').join('');
   $('detail-prev').disabled = !parent;
   $('detail-next').disabled = children.length === 0;
   $('detail-prev').onclick = () => parent && showDetail(parent.id);
@@ -2063,7 +2444,7 @@ onAppendMsg((d) => {
     weaveOnAppend(d.msg);
   }
 });
-es.addEventListener('session_start', e => {
+es.addEventListener('session_start', (e) => {
   const d = JSON.parse(e.data);
   if (d.session_id === activeSession) renderDag();
 });
@@ -2163,7 +2544,7 @@ function setActiveView(view) {
   }
 }
 
-document.querySelectorAll('nav.view-tabs button').forEach(b => {
+document.querySelectorAll('nav.view-tabs button').forEach((b) => {
   b.addEventListener('click', () => setActiveView(b.dataset.view));
 });
 
@@ -2185,15 +2566,25 @@ function renderLogActorList() {
   for (const e of events) if (e.kind === 'error') erroredActors.add(e.from);
   const recentActor = events[events.length - 1]?.from;
 
-  root.innerHTML = actors.map(a => {
-    const cls = ['logs-actor-row'];
-    if (a === activeLogActor) cls.push('active');
-    if (a === recentActor) cls.push('live');
-    if (erroredActors.has(a)) cls.push('errored');
-    return '<div class="' + cls.join(' ') + '" data-actor="' + escapeHTML(a) + '">' +
-      '<span class="dot"></span>' + escapeHTML(a) + '</div>';
-  }).join('');
-  root.querySelectorAll('.logs-actor-row').forEach(row => {
+  root.innerHTML = actors
+    .map((a) => {
+      const cls = ['logs-actor-row'];
+      if (a === activeLogActor) cls.push('active');
+      if (a === recentActor) cls.push('live');
+      if (erroredActors.has(a)) cls.push('errored');
+      return (
+        '<div class="' +
+        cls.join(' ') +
+        '" data-actor="' +
+        escapeHTML(a) +
+        '">' +
+        '<span class="dot"></span>' +
+        escapeHTML(a) +
+        '</div>'
+      );
+    })
+    .join('');
+  root.querySelectorAll('.logs-actor-row').forEach((row) => {
     row.addEventListener('click', () => selectLogActor(row.dataset.actor));
   });
 }
@@ -2243,8 +2634,7 @@ function selectLogActor(actor) {
 
   logsCtl.abortCtl = new AbortController();
   fetch(
-    '/api/sessions/' + encodeURIComponent(activeSession) +
-      '/logs/' + encodeURIComponent(actor),
+    '/api/sessions/' + encodeURIComponent(activeSession) + '/logs/' + encodeURIComponent(actor),
     { signal: logsCtl.abortCtl.signal },
   )
     .then((r) => r.text())
@@ -2269,8 +2659,11 @@ function openLogStream(actor, parentToken) {
   // to actor A keeps pushing chunks after the user clicked actor B.
   closeLogStream();
   const url =
-    '/api/sessions/' + encodeURIComponent(activeSession) +
-    '/logs/' + encodeURIComponent(actor) + '/stream';
+    '/api/sessions/' +
+    encodeURIComponent(activeSession) +
+    '/logs/' +
+    encodeURIComponent(actor) +
+    '/stream';
   const es = new EventSource(url);
   logsCtl.es = es;
   logsCtl.lastHeartbeatTs = Date.now();
@@ -2416,9 +2809,7 @@ function renderLogsConnStatus(state, msg) {
   };
   let label = baseLabels[state] ?? state;
   if (state === 'streaming' && activeLogActor && activeSession) {
-    const events = (eventCache.get(activeSession) ?? []).filter(
-      (e) => e.from === activeLogActor,
-    );
+    const events = (eventCache.get(activeSession) ?? []).filter((e) => e.from === activeLogActor);
     const last = events[events.length - 1];
     if (!last) {
       label = 'live · waiting';
@@ -2434,7 +2825,9 @@ function renderLogsConnStatus(state, msg) {
   const showRetry = state === 'stalled' || state === 'errored';
   pill.innerHTML =
     '<span class="logs-conn-dot"></span>' +
-    '<span class="logs-conn-label">' + escapeHTML(label) + '</span>' +
+    '<span class="logs-conn-label">' +
+    escapeHTML(label) +
+    '</span>' +
     (msg ? '<span class="logs-conn-msg">' + escapeHTML(msg) + '</span>' : '') +
     (showRetry
       ? '<button class="logs-conn-retry" id="logs-conn-retry-btn">Reconnect now</button>'
@@ -2456,15 +2849,15 @@ function renderLogContent() {
     return;
   }
   if (!activeLogActor) {
-    root.innerHTML =
-      '<div class="logs-empty">Pick an actor on the left to tail its logs.</div>';
+    root.innerHTML = '<div class="logs-empty">Pick an actor on the left to tail its logs.</div>';
     refreshGrepNav('logs', root, $('logs-grep-count'), $('logs-grep-prev'), $('logs-grep-next'));
     return;
   }
   if (logsCtl.state === 'connecting') {
     root.innerHTML =
       '<div class="logs-empty logs-empty--loading">Loading ' +
-      escapeHTML(activeLogActor) + '…</div>';
+      escapeHTML(activeLogActor) +
+      '…</div>';
     refreshGrepNav('logs', root, $('logs-grep-count'), $('logs-grep-prev'), $('logs-grep-next'));
     return;
   }
@@ -2472,7 +2865,7 @@ function renderLogContent() {
     root.innerHTML =
       '<div class="logs-empty logs-empty--errored">Disconnected from ' +
       escapeHTML(activeLogActor) +
-      "’s log stream. Use the <strong>Reconnect now</strong> button above.</div>";
+      '’s log stream. Use the <strong>Reconnect now</strong> button above.</div>';
     refreshGrepNav('logs', root, $('logs-grep-count'), $('logs-grep-prev'), $('logs-grep-next'));
     return;
   }
@@ -2509,14 +2902,17 @@ function renderLogContent() {
   // `(no spawn log yet for <actor> in this session)` 47-byte body when the
   // agent-workspace dir has 0 spawn-*.log files. We split that case out so
   // the user sees the right intent.
-  const totalText = logBuffer.map((b) => b.text || '').join('').trim();
+  const totalText = logBuffer
+    .map((b) => b.text || '')
+    .join('')
+    .trim();
   const neverSpawned = /no spawn log yet for /.test(totalText);
   if (lines.length === 0 || (logBuffer.length === 1 && neverSpawned)) {
     if (neverSpawned) {
       root.innerHTML =
         '<div class="logs-empty logs-empty--never-spawned">' +
         escapeHTML(activeLogActor) +
-        " hasn’t spawned yet. Logs will appear here the moment it does.</div>";
+        ' hasn’t spawned yet. Logs will appear here the moment it does.</div>';
     } else if (logsCtl.state === 'streaming') {
       root.innerHTML =
         '<div class="logs-empty logs-empty--waiting">Connected. Waiting for first output…</div>';
@@ -2551,8 +2947,10 @@ function renderLogContent() {
 }
 
 bindGrepInput($('logs-filter'), $('logs-grep-prev'), $('logs-grep-next'), 'logs', renderLogContent);
-$('logs-grep-prev').addEventListener('click', () => gotoGrepMatch('logs', -1, $('logs-grep-count')));
-$('logs-grep-next').addEventListener('click', () => gotoGrepMatch('logs',  1, $('logs-grep-count')));
+$('logs-grep-prev').addEventListener('click', () =>
+  gotoGrepMatch('logs', -1, $('logs-grep-count')),
+);
+$('logs-grep-next').addEventListener('click', () => gotoGrepMatch('logs', 1, $('logs-grep-count')));
 $('logs-clear').addEventListener('click', () => {
   logBuffer.length = 0;
   renderLogContent();
@@ -2608,7 +3006,7 @@ setLogsState('idle');
 
 // DAG node click → jump to logs tab + select that actor (ArgoCD application
 // graph → pod logs single-click navigation).
-document.addEventListener('click', e => {
+document.addEventListener('click', (e) => {
   const node = e.target.closest('.dag-node');
   if (!node) return;
   const actor = node.dataset.actor;
@@ -2726,7 +3124,13 @@ function appendFeedLine(meta) {
   root.scrollTop = 0;
   // Re-collect matches so the counter reflects the newly-streamed line. Keep cursor in place.
   if (grepState.feed.query) {
-    refreshGrepNav('feed', root, $('console-feed-grep-count'), $('console-feed-grep-prev'), $('console-feed-grep-next'));
+    refreshGrepNav(
+      'feed',
+      root,
+      $('console-feed-grep-count'),
+      $('console-feed-grep-prev'),
+      $('console-feed-grep-next'),
+    );
   }
 }
 
@@ -2795,7 +3199,13 @@ function appendNarrativeLine(meta) {
   while (root.childNodes.length > NARRATIVE_MAX_LINES) root.removeChild(root.lastChild);
   root.scrollTop = 0;
   if (grepState.narrative?.query) {
-    refreshGrepNav('narrative', root, $('console-narrative-grep-count'), $('console-narrative-grep-prev'), $('console-narrative-grep-next'));
+    refreshGrepNav(
+      'narrative',
+      root,
+      $('console-narrative-grep-count'),
+      $('console-narrative-grep-prev'),
+      $('console-narrative-grep-next'),
+    );
   }
 }
 
@@ -2808,7 +3218,14 @@ function rehighlightNarrative() {
     if (q) body.innerHTML = highlightHTML(raw, q);
     else body.textContent = raw;
   }
-  refreshGrepNav('narrative', root, $('console-narrative-grep-count'), $('console-narrative-grep-prev'), $('console-narrative-grep-next'), { scroll: !!q });
+  refreshGrepNav(
+    'narrative',
+    root,
+    $('console-narrative-grep-count'),
+    $('console-narrative-grep-prev'),
+    $('console-narrative-grep-next'),
+    { scroll: !!q },
+  );
 }
 
 // Re-highlight every existing feed line (called when the grep query changes).
@@ -2821,7 +3238,14 @@ function rehighlightFeed() {
     if (q) body.innerHTML = highlightHTML(raw, q);
     else body.textContent = raw;
   }
-  refreshGrepNav('feed', root, $('console-feed-grep-count'), $('console-feed-grep-prev'), $('console-feed-grep-next'), { scroll: !!q });
+  refreshGrepNav(
+    'feed',
+    root,
+    $('console-feed-grep-count'),
+    $('console-feed-grep-prev'),
+    $('console-feed-grep-next'),
+    { scroll: !!q },
+  );
 }
 
 function classifyKindForFeed(kind) {
@@ -2829,7 +3253,8 @@ function classifyKindForFeed(kind) {
   if (kind === 'audit') return 'audit';
   if (kind === 'spec' || kind === 'spec.update') return 'spec';
   if (kind === 'build' || kind === 'qa.result') return 'build';
-  if (kind === 'judge.score' || kind === 'verify.result' || kind.startsWith('step.judge')) return 'judge';
+  if (kind === 'judge.score' || kind === 'verify.result' || kind.startsWith('step.judge'))
+    return 'judge';
   if (kind.startsWith('handoff.')) return 'handoff';
   // PR-F B — stream-json tap surfaces tool_use as kind=tool.call. Render as
   // assistant-text style so it stands out from system notes but blends with
@@ -2949,7 +3374,9 @@ const FEED_FORMATTERS = {
           : verdict === 'FAIL' || verdict === 'REJECT'
             ? '✗'
             : '·';
-    return `${verdictGlyph} judge ${verdict}` + (dims ? ` · ${dims}` : '') + (dev ? ` · ${dev}` : '');
+    return (
+      `${verdictGlyph} judge ${verdict}` + (dims ? ` · ${dims}` : '') + (dev ? ` · ${dev}` : '')
+    );
   },
   'verify.result': (m) => `${m.body ? m.body.slice(0, 100) : '✓ verify.result'}`,
   'step.research': (m) => {
@@ -3007,8 +3434,7 @@ const FEED_FORMATTERS = {
   'user.approve': () => `👤 ✓ approve`,
   'user.veto': (m) =>
     `👤 ✗ veto${m.data && m.data.target_msg_id ? ' ' + m.data.target_msg_id : ''}`,
-  'user.pause': (m) =>
-    `👤 ⏸ pause${m.data && m.data.actor ? ' @' + m.data.actor : ' (global)'}`,
+  'user.pause': (m) => `👤 ⏸ pause${m.data && m.data.actor ? ' @' + m.data.actor : ' (global)'}`,
   'user.resume': (m) => `👤 ▶ resume${m.data && m.data.actor ? ' @' + m.data.actor : ''}`,
   note: (m) => `· ${(m.body || '').slice(0, 140)}`,
 };
@@ -3046,12 +3472,28 @@ $('console-feed-pause').addEventListener('click', () => {
 });
 $('console-feed-clear').addEventListener('click', () => {
   $('console-feed-body').innerHTML = '';
-  refreshGrepNav('feed', $('console-feed-body'), $('console-feed-grep-count'), $('console-feed-grep-prev'), $('console-feed-grep-next'));
+  refreshGrepNav(
+    'feed',
+    $('console-feed-body'),
+    $('console-feed-grep-count'),
+    $('console-feed-grep-prev'),
+    $('console-feed-grep-next'),
+  );
 });
 
-bindGrepInput($('console-feed-grep'), $('console-feed-grep-prev'), $('console-feed-grep-next'), 'feed', rehighlightFeed);
-$('console-feed-grep-prev')?.addEventListener('click', () => gotoGrepMatch('feed', -1, $('console-feed-grep-count')));
-$('console-feed-grep-next')?.addEventListener('click', () => gotoGrepMatch('feed',  1, $('console-feed-grep-count')));
+bindGrepInput(
+  $('console-feed-grep'),
+  $('console-feed-grep-prev'),
+  $('console-feed-grep-next'),
+  'feed',
+  rehighlightFeed,
+);
+$('console-feed-grep-prev')?.addEventListener('click', () =>
+  gotoGrepMatch('feed', -1, $('console-feed-grep-count')),
+);
+$('console-feed-grep-next')?.addEventListener('click', () =>
+  gotoGrepMatch('feed', 1, $('console-feed-grep-count')),
+);
 
 // v0.4.2 — narrative panel controls (mirrors the feed wiring).
 $('console-narrative-pause')?.addEventListener('click', () => {
@@ -3062,11 +3504,27 @@ $('console-narrative-pause')?.addEventListener('click', () => {
 });
 $('console-narrative-clear')?.addEventListener('click', () => {
   $('console-narrative-body').innerHTML = '';
-  refreshGrepNav('narrative', $('console-narrative-body'), $('console-narrative-grep-count'), $('console-narrative-grep-prev'), $('console-narrative-grep-next'));
+  refreshGrepNav(
+    'narrative',
+    $('console-narrative-body'),
+    $('console-narrative-grep-count'),
+    $('console-narrative-grep-prev'),
+    $('console-narrative-grep-next'),
+  );
 });
-bindGrepInput($('console-narrative-grep'), $('console-narrative-grep-prev'), $('console-narrative-grep-next'), 'narrative', rehighlightNarrative);
-$('console-narrative-grep-prev')?.addEventListener('click', () => gotoGrepMatch('narrative', -1, $('console-narrative-grep-count')));
-$('console-narrative-grep-next')?.addEventListener('click', () => gotoGrepMatch('narrative',  1, $('console-narrative-grep-count')));
+bindGrepInput(
+  $('console-narrative-grep'),
+  $('console-narrative-grep-prev'),
+  $('console-narrative-grep-next'),
+  'narrative',
+  rehighlightNarrative,
+);
+$('console-narrative-grep-prev')?.addEventListener('click', () =>
+  gotoGrepMatch('narrative', -1, $('console-narrative-grep-count')),
+);
+$('console-narrative-grep-next')?.addEventListener('click', () =>
+  gotoGrepMatch('narrative', 1, $('console-narrative-grep-count')),
+);
 
 // Q5: append-handler fan-out — push every transcript event into the feed.
 onAppendMsg((d) => {
@@ -3074,7 +3532,7 @@ onAppendMsg((d) => {
   const line = feedLineFromTranscriptEvent(d.msg);
   if (line) appendFeedLine(line);
 });
-es.addEventListener('session_start', e => {
+es.addEventListener('session_start', (e) => {
   const d = JSON.parse(e.data);
   if (activeSession && d.session_id !== activeSession) return;
   appendFeedLine({
@@ -3110,9 +3568,14 @@ function refreshFeedLogStreams() {
 function attachFeedLogStream(actor) {
   if (feedLogActorSet.has(actor)) return;
   feedLogActorSet.add(actor);
-  const url = '/api/sessions/' + encodeURIComponent(activeSession) + '/logs/' + encodeURIComponent(actor) + '/stream';
+  const url =
+    '/api/sessions/' +
+    encodeURIComponent(activeSession) +
+    '/logs/' +
+    encodeURIComponent(actor) +
+    '/stream';
   const src = new EventSource(url);
-  src.addEventListener('rotate', e => {
+  src.addEventListener('rotate', (e) => {
     const d = JSON.parse(e.data);
     appendFeedLine({
       ts: new Date().toISOString(),
@@ -3121,16 +3584,27 @@ function attachFeedLogStream(actor) {
       kindClass: 'system',
     });
   });
-  src.addEventListener('chunk', e => {
+  src.addEventListener('chunk', (e) => {
     const d = JSON.parse(e.data);
     let inStderr = false;
     for (const raw of d.text.split('\n')) {
       const line = raw.replace(/\r$/, '');
       if (line.length === 0) continue;
-      if (/^--- stderr ---$/.test(line)) { inStderr = true; continue; }
-      if (/^--- stdout ---$/.test(line)) { inStderr = false; continue; }
+      if (/^--- stderr ---$/.test(line)) {
+        inStderr = true;
+        continue;
+      }
+      if (/^--- stdout ---$/.test(line)) {
+        inStderr = false;
+        continue;
+      }
       if (/^=== adapter /.test(line)) {
-        appendFeedLine({ ts: new Date().toISOString(), actor: actor, body: line, kindClass: 'system' });
+        appendFeedLine({
+          ts: new Date().toISOString(),
+          actor: actor,
+          body: line,
+          kindClass: 'system',
+        });
         continue;
       }
       // v0.4.2 — stream-json (Claude Code shape) goes to the agent narrative
@@ -3180,7 +3654,13 @@ onSessionSelect(() => {
   const narBody = $('console-narrative-body');
   if (narBody) {
     narBody.innerHTML = '';
-    refreshGrepNav('narrative', narBody, $('console-narrative-grep-count'), $('console-narrative-grep-prev'), $('console-narrative-grep-next'));
+    refreshGrepNav(
+      'narrative',
+      narBody,
+      $('console-narrative-grep-count'),
+      $('console-narrative-grep-prev'),
+      $('console-narrative-grep-next'),
+    );
   }
   refreshFeedLogStreams();
   refreshOutputTab();
@@ -3197,8 +3677,11 @@ $('new-session-cancel').addEventListener('click', () => {
   $('new-session-form').style.display = 'none';
 });
 $('new-session-go').addEventListener('click', spawnNewCrumbRun);
-$('new-session-goal').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); spawnNewCrumbRun(); }
+$('new-session-goal').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    spawnNewCrumbRun();
+  }
 });
 
 async function spawnNewCrumbRun() {
@@ -3227,7 +3710,10 @@ async function spawnNewCrumbRun() {
   const videoOn = $('new-session-video-on');
   const videoTextarea = $('new-session-video-refs');
   if (videoOn?.checked && videoTextarea?.value) {
-    const refs = videoTextarea.value.split('\n').map(s => s.trim()).filter(Boolean);
+    const refs = videoTextarea.value
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (refs.length > 0) body.video_refs = refs;
   }
   try {
@@ -3243,7 +3729,8 @@ async function spawnNewCrumbRun() {
       const hint = j.install_hint ? '  install: ' + j.install_hint : '';
       const auth = j.auth_hint ? '  auth: ' + j.auth_hint : '';
       const avail = j.available?.length ? '  available: ' + j.available.join(', ') : '';
-      fb.textContent = '✗ adapter ' + j.adapter + ' unavailable (' + j.reason + ')' + hint + auth + avail;
+      fb.textContent =
+        '✗ adapter ' + j.adapter + ' unavailable (' + j.reason + ')' + hint + auth + avail;
       fb.className = 'console-feedback err';
       return;
     }
@@ -3253,7 +3740,11 @@ async function spawnNewCrumbRun() {
       return;
     }
     const j = await res.json();
-    fb.textContent = '✓ pid=' + j.pid + (j.adapter ? ' (' + j.adapter + ')' : '') + ' — session will appear shortly';
+    fb.textContent =
+      '✓ pid=' +
+      j.pid +
+      (j.adapter ? ' (' + j.adapter + ')' : '') +
+      ' — session will appear shortly';
     fb.className = 'console-feedback ok';
     goalEl.value = '';
     setTimeout(() => {
@@ -3316,16 +3807,18 @@ async function refreshOutputTab() {
   // Collect every artifact path emitted via kind=artifact.created (or build.artifacts).
   const seen = new Map(); // path → sha256?
   for (const e of events) {
-    for (const a of (e.artifacts ?? [])) {
+    for (const a of e.artifacts ?? []) {
       if (a.path) seen.set(a.path, a.sha256 ?? null);
     }
   }
   // v3.5 disk fallback — when builder skipped artifact.created emission, the
   // file may exist on disk regardless. Walk <session>/artifacts/ and merge in
   // anything we haven't already seen via the transcript.
-  if (seen.size === 0 || ![...seen.keys()].some(p => /\.html$/.test(p))) {
+  if (seen.size === 0 || ![...seen.keys()].some((p) => /\.html$/.test(p))) {
     try {
-      const r = await fetch('/api/sessions/' + encodeURIComponent(activeSession) + '/artifacts/list');
+      const r = await fetch(
+        '/api/sessions/' + encodeURIComponent(activeSession) + '/artifacts/list',
+      );
       if (r.ok) {
         const j = await r.json();
         for (const f of j.files ?? []) {
@@ -3338,11 +3831,11 @@ async function refreshOutputTab() {
   }
   // Pick the renderable head: prefer multi-file index.html, fall back to game.html.
   const head = (() => {
-    const indexHit = [...seen.keys()].find(p => /(^|\/)index\.html$/.test(p));
+    const indexHit = [...seen.keys()].find((p) => /(^|\/)index\.html$/.test(p));
     if (indexHit) return indexHit;
-    const gameHit = [...seen.keys()].find(p => /(^|\/)game\.html$/.test(p));
+    const gameHit = [...seen.keys()].find((p) => /(^|\/)game\.html$/.test(p));
     if (gameHit) return gameHit;
-    const anyHtml = [...seen.keys()].find(p => /\.html$/.test(p));
+    const anyHtml = [...seen.keys()].find((p) => /\.html$/.test(p));
     return anyHtml ?? null;
   })();
   if (!head) {
@@ -3355,10 +3848,19 @@ async function refreshOutputTab() {
     return;
   }
   // Populate dropdown with all html artifacts.
-  const htmlPaths = [...seen.keys()].filter(p => /\.html$/.test(p));
-  select.innerHTML = htmlPaths.map(p =>
-    '<option value="' + escapeHTML(p) + '"' + (p === head ? ' selected' : '') + '>' + escapeHTML(p) + '</option>'
-  ).join('');
+  const htmlPaths = [...seen.keys()].filter((p) => /\.html$/.test(p));
+  select.innerHTML = htmlPaths
+    .map(
+      (p) =>
+        '<option value="' +
+        escapeHTML(p) +
+        '"' +
+        (p === head ? ' selected' : '') +
+        '>' +
+        escapeHTML(p) +
+        '</option>',
+    )
+    .join('');
   loadArtifactIntoFrame(head);
 }
 
@@ -3368,15 +3870,19 @@ function loadArtifactIntoFrame(artifactPath) {
   const empty = $('output-empty');
   // strip "artifacts/" prefix because the server endpoint roots at <session>/artifacts.
   const rel = artifactPath.replace(/^artifacts\//, '');
-  const url = '/api/sessions/' + encodeURIComponent(activeSession) +
-              '/artifact/' + rel.split('/').map(encodeURIComponent).join('/') +
-              '?t=' + Date.now();
+  const url =
+    '/api/sessions/' +
+    encodeURIComponent(activeSession) +
+    '/artifact/' +
+    rel.split('/').map(encodeURIComponent).join('/') +
+    '?t=' +
+    Date.now();
   iframe.src = url;
   iframe.style.display = 'block';
   if (empty) empty.style.display = 'none';
 }
 
-$('output-path-select').addEventListener('change', e => {
+$('output-path-select').addEventListener('change', (e) => {
   loadArtifactIntoFrame(e.target.value);
 });
 $('output-reload').addEventListener('click', () => {
@@ -3407,7 +3913,7 @@ onAppendMsg((d) => {
 
 // Hook the existing setActiveView so switching to Output triggers a refresh.
 const _origSetActiveView = setActiveView;
-setActiveView = function(view) {
+setActiveView = function (view) {
   _origSetActiveView(view);
   if (view === 'output') refreshOutputTab();
 };
@@ -3433,7 +3939,9 @@ setActiveView = function(view) {
     btn.addEventListener('click', () => {
       const next = currentTheme() === 'dark' ? 'light' : 'dark';
       html.dataset.theme = next;
-      try { localStorage.setItem('crumb.theme', next); } catch {}
+      try {
+        localStorage.setItem('crumb.theme', next);
+      } catch {}
       updateGlyph();
     });
   }
@@ -3443,7 +3951,9 @@ setActiveView = function(view) {
     const mql = window.matchMedia('(prefers-color-scheme: dark)');
     const onChange = (e) => {
       let stored = null;
-      try { stored = localStorage.getItem('crumb.theme'); } catch {}
+      try {
+        stored = localStorage.getItem('crumb.theme');
+      } catch {}
       if (!stored) {
         html.dataset.theme = e.matches ? 'dark' : 'light';
         updateGlyph();
@@ -3468,12 +3978,16 @@ function makeResizable(handleId, onDelta, persistKey, getInitial, axis = 'x') {
   let startVal = 0;
   let dragging = false;
   const persisted = persistKey ? Number(localStorage.getItem(persistKey)) : NaN;
-  if (persisted && persisted > 0) onDelta(persisted, /*absolute*/true);
+  if (persisted && persisted > 0) onDelta(persisted, /*absolute*/ true);
   const onMove = (e) => {
     if (!dragging) return;
     const pos = e.touches
-      ? (axis === 'y' ? e.touches[0].clientY : e.touches[0].clientX)
-      : (axis === 'y' ? e.clientY : e.clientX);
+      ? axis === 'y'
+        ? e.touches[0].clientY
+        : e.touches[0].clientX
+      : axis === 'y'
+        ? e.clientY
+        : e.clientX;
     const d = pos - start;
     onDelta(startVal, false, d);
     e.preventDefault();
@@ -3491,8 +4005,12 @@ function makeResizable(handleId, onDelta, persistKey, getInitial, axis = 'x') {
     dragging = true;
     handle.classList.add('dragging');
     start = e.touches
-      ? (axis === 'y' ? e.touches[0].clientY : e.touches[0].clientX)
-      : (axis === 'y' ? e.clientY : e.clientX);
+      ? axis === 'y'
+        ? e.touches[0].clientY
+        : e.touches[0].clientX
+      : axis === 'y'
+        ? e.clientY
+        : e.clientX;
     startVal = getInitial();
     document.addEventListener('mousemove', onMove);
     document.addEventListener('touchmove', onMove, { passive: false });
@@ -3515,34 +4033,56 @@ makeResizable(
   () => parseInt(getComputedStyle(document.body).getPropertyValue('--sessions-w'), 10) || 240,
 );
 
-// F4 — collapsible sessions sidebar. Hamburger in header.summary toggles
-// data-sidebar-collapsed on body; CSS zeros the sidebar + handle columns
-// (with a 220ms transition for the slide). Persisted in localStorage so
-// the chosen state survives reloads. Resized width is preserved separately
-// via `crumb.sessions-w` (above) so re-expand restores the user's setting.
+// F4-relocate (2026-05-03 amendment) — collapsible sessions sidebar with
+// the primary hamburger now living next to the CRUMB STUDIO wordmark inside
+// <aside.sessions>. When the sidebar is open, the primary toggle is the
+// only visible one. When collapsed, the sidebar (and its toggle) hide; a
+// floating twin in header.summary takes over so the user can reopen.
+// State persists in localStorage (`crumb.sessions-collapsed`); both buttons
+// stay in aria sync.
 (function initSidebarToggle() {
   const KEY = 'crumb.sessions-collapsed';
-  const btn = document.getElementById('sidebar-toggle');
-  if (!btn) return;
+  const primary = document.getElementById('sidebar-toggle');
+  const floating = document.getElementById('sidebar-toggle-floating');
+  if (!primary && !floating) return;
   const apply = (collapsed) => {
     if (collapsed) {
       document.body.dataset.sidebarCollapsed = '1';
-      btn.setAttribute('aria-expanded', 'false');
-      btn.title = 'Expand sessions sidebar';
+      if (primary) {
+        primary.setAttribute('aria-expanded', 'false');
+        primary.title = 'Expand sessions sidebar';
+      }
+      if (floating) {
+        floating.hidden = false;
+        floating.setAttribute('aria-expanded', 'false');
+        floating.title = 'Open sessions sidebar';
+      }
     } else {
       delete document.body.dataset.sidebarCollapsed;
-      btn.setAttribute('aria-expanded', 'true');
-      btn.title = 'Collapse sessions sidebar';
+      if (primary) {
+        primary.setAttribute('aria-expanded', 'true');
+        primary.title = 'Collapse sessions sidebar';
+      }
+      if (floating) {
+        floating.hidden = true;
+        floating.setAttribute('aria-expanded', 'true');
+      }
     }
   };
   let initial = false;
-  try { initial = localStorage.getItem(KEY) === '1'; } catch (_) {}
+  try {
+    initial = localStorage.getItem(KEY) === '1';
+  } catch (_) {}
   apply(initial);
-  btn.addEventListener('click', () => {
+  const onToggle = () => {
     const next = document.body.dataset.sidebarCollapsed !== '1';
     apply(next);
-    try { localStorage.setItem(KEY, next ? '1' : '0'); } catch (_) {}
-  });
+    try {
+      localStorage.setItem(KEY, next ? '1' : '0');
+    } catch (_) {}
+  };
+  if (primary) primary.addEventListener('click', onToggle);
+  if (floating) floating.addEventListener('click', onToggle);
 })();
 makeResizable(
   'detail-resize',
@@ -3672,10 +4212,18 @@ function lastActorErrorEvent() {
   const arr = eventCache.get(activeSession) || [];
   for (let i = arr.length - 1; i >= 0; i--) {
     const e = arr[i];
-    if (e.kind === 'error' || (e.kind === 'agent.stop' && /timed out|exit=[1-9]/.test(e.body || ''))) {
+    if (
+      e.kind === 'error' ||
+      (e.kind === 'agent.stop' && /timed out|exit=[1-9]/.test(e.body || ''))
+    ) {
       return e;
     }
-    if (e.kind === 'agent.wake' || e.kind === 'build' || e.kind === 'spec' || e.kind === 'judge.score') {
+    if (
+      e.kind === 'agent.wake' ||
+      e.kind === 'build' ||
+      e.kind === 'spec' ||
+      e.kind === 'judge.score'
+    ) {
       return null; // a healthy event after the failure → no resume needed
     }
   }
@@ -3684,9 +4232,15 @@ function lastActorErrorEvent() {
 function refreshResumeButton() {
   const btn = $('resume-btn');
   if (!btn) return;
-  if (!activeSession) { btn.style.display = 'none'; return; }
+  if (!activeSession) {
+    btn.style.display = 'none';
+    return;
+  }
   const evt = lastActorErrorEvent();
-  if (!evt) { btn.style.display = 'none'; return; }
+  if (!evt) {
+    btn.style.display = 'none';
+    return;
+  }
   const actor = evt.from && evt.from !== 'system' ? evt.from : 'last actor';
   btn.style.display = '';
   btn.textContent = '▶ Resume ' + actor;
@@ -3710,32 +4264,51 @@ onAppendMsg(() => refreshResumeButton());
 function renderTranscriptView() {
   const root = $('transcript-content');
   if (!root) return;
-  if (!activeSession) { root.textContent = '(no session selected)'; return; }
+  if (!activeSession) {
+    root.textContent = '(no session selected)';
+    return;
+  }
   const arr = eventCache.get(activeSession) || [];
   const query = grepState.transcript.query;
   const qLower = query.toLowerCase();
   const pretty = $('transcript-pretty')?.checked ?? true;
   const lines = arr
-    .filter(e => {
+    .filter((e) => {
       if (!query) return true;
       return JSON.stringify(e).toLowerCase().includes(qLower);
     })
-    .map(e => pretty ? JSON.stringify(e, null, 2) : JSON.stringify(e));
+    .map((e) => (pretty ? JSON.stringify(e, null, 2) : JSON.stringify(e)));
   const joined = lines.join('\n\n');
   // <pre> preserves whitespace, so innerHTML keeps the pretty layout while letting us inline-mark matches.
   root.innerHTML = highlightHTML(joined, query);
   $('transcript-status').textContent = `${arr.length} events · showing ${lines.length}`;
-  refreshGrepNav('transcript', root, $('transcript-grep-count'), $('transcript-grep-prev'), $('transcript-grep-next'));
+  refreshGrepNav(
+    'transcript',
+    root,
+    $('transcript-grep-count'),
+    $('transcript-grep-prev'),
+    $('transcript-grep-next'),
+  );
 }
-bindGrepInput($('transcript-filter'), $('transcript-grep-prev'), $('transcript-grep-next'), 'transcript', renderTranscriptView);
-$('transcript-grep-prev')?.addEventListener('click', () => gotoGrepMatch('transcript', -1, $('transcript-grep-count')));
-$('transcript-grep-next')?.addEventListener('click', () => gotoGrepMatch('transcript',  1, $('transcript-grep-count')));
+bindGrepInput(
+  $('transcript-filter'),
+  $('transcript-grep-prev'),
+  $('transcript-grep-next'),
+  'transcript',
+  renderTranscriptView,
+);
+$('transcript-grep-prev')?.addEventListener('click', () =>
+  gotoGrepMatch('transcript', -1, $('transcript-grep-count')),
+);
+$('transcript-grep-next')?.addEventListener('click', () =>
+  gotoGrepMatch('transcript', 1, $('transcript-grep-count')),
+);
 $('transcript-pretty')?.addEventListener('change', renderTranscriptView);
 $('transcript-copy')?.addEventListener('click', () => {
   navigator.clipboard?.writeText($('transcript-content').textContent || '');
 });
 const _origSetActiveView2 = setActiveView;
-setActiveView = function(view) {
+setActiveView = function (view) {
   _origSetActiveView2(view);
   if (view === 'transcript') renderTranscriptView();
 };
@@ -3796,11 +4369,13 @@ function _summarizeToolInput(name, input) {
   if (name === 'Glob') return input.pattern || '';
   if (name === 'Monitor') return JSON.stringify(input).slice(0, 90);
   if (name === 'Task' || name === 'Agent') {
-    return (input.description || '') + (input.subagent_type ? ' [' + input.subagent_type + ']' : '');
+    return (
+      (input.description || '') + (input.subagent_type ? ' [' + input.subagent_type + ']' : '')
+    );
   }
   if (name === 'TodoWrite') {
     const todos = input.todos || [];
-    const inProgress = todos.filter(t => t.status === 'in_progress').map(t => t.content);
+    const inProgress = todos.filter((t) => t.status === 'in_progress').map((t) => t.content);
     return inProgress.length ? '▶ ' + inProgress[0] : todos.length + ' todos';
   }
   if (name === 'WebSearch') return input.query || '';
@@ -3817,12 +4392,14 @@ function _summarizeToolInput(name, input) {
 function _summarizeToolResult(content, isError) {
   let body = content;
   if (Array.isArray(body)) {
-    body = body.map(b => {
-      if (typeof b === 'string') return b;
-      if (b.text) return b.text;
-      if (b.content) return typeof b.content === 'string' ? b.content : JSON.stringify(b.content);
-      return JSON.stringify(b);
-    }).join(' ');
+    body = body
+      .map((b) => {
+        if (typeof b === 'string') return b;
+        if (b.text) return b.text;
+        if (b.content) return typeof b.content === 'string' ? b.content : JSON.stringify(b.content);
+        return JSON.stringify(b);
+      })
+      .join(' ');
   } else if (typeof body === 'object' && body !== null) {
     body = JSON.stringify(body);
   }
@@ -3866,7 +4443,11 @@ function renderStreamJsonLine(raw) {
       } else if (block.type === 'tool_use') {
         const name = block.name || 'tool';
         const summary = _summarizeToolInput(name, block.input);
-        out.push({ glyph: '⏺', body: name + (summary ? '(' + summary + ')' : '()'), kindClass: 'tool-call' });
+        out.push({
+          glyph: '⏺',
+          body: name + (summary ? '(' + summary + ')' : '()'),
+          kindClass: 'tool-call',
+        });
       } else if (block.type === 'thinking' && block.thinking && block.thinking.length > 4) {
         // Render extended thinking as dim italic — usually empty signature
         // payloads, so this branch fires only when actual reasoning leaked.
@@ -3897,45 +4478,69 @@ function renderStreamJsonLine(raw) {
   if (obj.type === 'system') {
     const sub = obj.subtype;
     if (sub === 'task_started') {
-      return [{
-        glyph: '⎿',
-        body: 'Async ' + (obj.description || obj.task_type || 'task') + ' started',
-        kindClass: 'tool-result',
-      }];
+      return [
+        {
+          glyph: '⎿',
+          body: 'Async ' + (obj.description || obj.task_type || 'task') + ' started',
+          kindClass: 'tool-result',
+        },
+      ];
     }
     if (sub === 'task_notification') {
       const status = obj.status || 'updated';
       const desc = obj.description || obj.summary || obj.task_type || 'task';
-      return [{
-        glyph: '⎿',
-        body: 'Async ' + desc + ' ' + status,
-        kindClass: status === 'completed' ? 'tool-result' : (status === 'killed' ? 'tool-error' : 'tool-result'),
-      }];
+      return [
+        {
+          glyph: '⎿',
+          body: 'Async ' + desc + ' ' + status,
+          kindClass:
+            status === 'completed'
+              ? 'tool-result'
+              : status === 'killed'
+                ? 'tool-error'
+                : 'tool-result',
+        },
+      ];
     }
     if (sub === 'hook_started' || sub === 'hook_response') {
       const outcome = obj.outcome || (sub === 'hook_started' ? 'started' : 'ok');
-      return [{ glyph: '·', body: 'hook ' + (obj.hook_name || '?') + ' ' + outcome, kindClass: 'system' }];
+      return [
+        { glyph: '·', body: 'hook ' + (obj.hook_name || '?') + ' ' + outcome, kindClass: 'system' },
+      ];
     }
     if (sub === 'init') {
       const tools = (obj.tools || []).length;
       const skills = (obj.skills || []).length;
       const tail = obj.session_id ? obj.session_id.slice(-8) : '';
-      return [{
-        glyph: '·',
-        body: 'init session ' + tail + ' (model=' + (obj.model || '?') + ', tools=' + tools + ', skills=' + skills + ')',
-        kindClass: 'system',
-      }];
+      return [
+        {
+          glyph: '·',
+          body:
+            'init session ' +
+            tail +
+            ' (model=' +
+            (obj.model || '?') +
+            ', tools=' +
+            tools +
+            ', skills=' +
+            skills +
+            ')',
+          kindClass: 'system',
+        },
+      ];
     }
     return []; // other system subtypes — silent (parsed, suppressed)
   }
 
   if (obj.type === 'result') {
-    const cost = typeof obj.total_cost_usd === 'number' ? '$' + obj.total_cost_usd.toFixed(4) : '$?';
+    const cost =
+      typeof obj.total_cost_usd === 'number' ? '$' + obj.total_cost_usd.toFixed(4) : '$?';
     const out = obj.usage?.output_tokens ?? '?';
     const cacheRead = obj.usage?.cache_read_input_tokens;
     const dur = obj.duration_ms ? Math.round(obj.duration_ms / 1000) + 's' : '?';
     let body = 'turn complete · ' + out + ' out · ' + cost + ' · ' + dur;
-    if (cacheRead) body += ' · cache ' + (cacheRead >= 1000 ? (cacheRead / 1000).toFixed(1) + 'k' : cacheRead);
+    if (cacheRead)
+      body += ' · cache ' + (cacheRead >= 1000 ? (cacheRead / 1000).toFixed(1) + 'k' : cacheRead);
     return [{ glyph: '✓', body, kindClass: 'turn-complete' }];
   }
 
@@ -3971,13 +4576,20 @@ function renderAdapterPicker() {
   for (const a of adapterCache) {
     const installed = a.installed && a.authenticated !== false;
     opts.push(
-      '<option value="' + escapeHTML(a.id) + '"' + (installed ? '' : ' disabled') + '>' +
-      escapeHTML(a.display_name) + '</option>'
+      '<option value="' +
+        escapeHTML(a.id) +
+        '"' +
+        (installed ? '' : ' disabled') +
+        '>' +
+        escapeHTML(a.display_name) +
+        '</option>',
     );
   }
   sel.innerHTML = opts.join('');
   // Restore selection if still valid + still installed.
-  const stillValid = adapterCache.some(a => a.id === current && a.installed && a.authenticated !== false);
+  const stillValid = adapterCache.some(
+    (a) => a.id === current && a.installed && a.authenticated !== false,
+  );
   if (stillValid) sel.value = current;
 }
 
@@ -3994,7 +4606,8 @@ async function refreshAdapterList() {
     renderAdapterPicker();
     renderVideoResearchPanel(); // v0.4 toggle visibility tracks gemini availability
   } catch (err) {
-    root.innerHTML = '<div class="adapter-empty">probe failed: ' + escapeHTML(err.message) + '</div>';
+    root.innerHTML =
+      '<div class="adapter-empty">probe failed: ' + escapeHTML(err.message) + '</div>';
   }
 }
 
@@ -4006,9 +4619,10 @@ function renderVideoResearchPanel() {
   const panel = $('new-session-video');
   if (!panel) return;
   const geminiAvailable = adapterCache.some(
-    (a) => (a.id === 'gemini-sdk' || a.id === 'gemini-cli-local')
-      && a.installed
-      && a.authenticated !== false,
+    (a) =>
+      (a.id === 'gemini-sdk' || a.id === 'gemini-cli-local') &&
+      a.installed &&
+      a.authenticated !== false,
   );
   panel.style.display = geminiAvailable ? '' : 'none';
   if (!geminiAvailable) {
@@ -4055,26 +4669,43 @@ function renderAdapterList() {
     return;
   }
   const inUse = adaptersInUseForActiveSession();
-  root.innerHTML = adapterCache.map(a => {
-    const cls = ['adapter-row'];
-    if (a.installed && a.authenticated !== false) cls.push(a.authenticated === true ? 'active' : 'maybe');
-    else cls.push('inactive');
-    if (inUse.has(a.id)) cls.push('in-use');
-    const meta = a.version ? a.version.replace(/^.*?\b(\d[\w.-]*).*$/, '$1') : (a.models?.[0] ?? '');
-    let pillText = '○';
-    if (a.installed && a.authenticated === true) pillText = 'auth ✓';
-    else if (a.installed) pillText = 'installed';
-    else pillText = 'missing';
-    return '<div class="' + cls.join(' ') + '" data-adapter="' + escapeHTML(a.id) + '">' +
-      '<span class="adapter-dot"></span>' +
-      '<div class="adapter-info">' +
-        '<div class="adapter-name">' + escapeHTML(a.display_name) + '</div>' +
-        '<div class="adapter-meta">' + escapeHTML(meta) + '</div>' +
-      '</div>' +
-      '<span class="adapter-pill">' + escapeHTML(pillText) + '</span>' +
-    '</div>';
-  }).join('');
-  root.querySelectorAll('.adapter-row').forEach(el => {
+  root.innerHTML = adapterCache
+    .map((a) => {
+      const cls = ['adapter-row'];
+      if (a.installed && a.authenticated !== false)
+        cls.push(a.authenticated === true ? 'active' : 'maybe');
+      else cls.push('inactive');
+      if (inUse.has(a.id)) cls.push('in-use');
+      const meta = a.version
+        ? a.version.replace(/^.*?\b(\d[\w.-]*).*$/, '$1')
+        : (a.models?.[0] ?? '');
+      let pillText = '○';
+      if (a.installed && a.authenticated === true) pillText = 'auth ✓';
+      else if (a.installed) pillText = 'installed';
+      else pillText = 'missing';
+      return (
+        '<div class="' +
+        cls.join(' ') +
+        '" data-adapter="' +
+        escapeHTML(a.id) +
+        '">' +
+        '<span class="adapter-dot"></span>' +
+        '<div class="adapter-info">' +
+        '<div class="adapter-name">' +
+        escapeHTML(a.display_name) +
+        '</div>' +
+        '<div class="adapter-meta">' +
+        escapeHTML(meta) +
+        '</div>' +
+        '</div>' +
+        '<span class="adapter-pill">' +
+        escapeHTML(pillText) +
+        '</span>' +
+        '</div>'
+      );
+    })
+    .join('');
+  root.querySelectorAll('.adapter-row').forEach((el) => {
     el.addEventListener('click', () => openAdapterModal(el.dataset.adapter));
   });
 }
@@ -4090,7 +4721,7 @@ onSessionSelect(() => renderAdapterList());
 
 const PRESETS = [
   {
-    id: '',                 // ambient
+    id: '', // ambient
     label: 'ambient',
     description: 'follow the entry host (whatever you have authed)',
     requires: [],
@@ -4129,29 +4760,41 @@ const newSessionForm = {
 };
 
 function presetIsRunnable(preset) {
-  return preset.requires.every(req =>
-    adapterCache.some(a => a.id === req && a.installed && a.authenticated !== false));
+  return preset.requires.every((req) =>
+    adapterCache.some((a) => a.id === req && a.installed && a.authenticated !== false),
+  );
 }
 
 function renderPresetChips() {
   const root = $('new-session-preset-chips');
   if (!root) return;
-  root.innerHTML = PRESETS.map(p => {
+  root.innerHTML = PRESETS.map((p) => {
     const cls = ['preset-chip'];
     if (newSessionForm.preset === p.id) cls.push('active');
     if (!presetIsRunnable(p)) cls.push('disabled');
-    return '<button type="button" class="' + cls.join(' ') + '" data-preset="' + escapeHTML(p.id) + '" ' +
-      'title="' + escapeHTML(p.description + (p.requires.length ? ' · needs ' + p.requires.join(', ') : '')) + '">' +
-      escapeHTML(p.label) + '</button>';
+    return (
+      '<button type="button" class="' +
+      cls.join(' ') +
+      '" data-preset="' +
+      escapeHTML(p.id) +
+      '" ' +
+      'title="' +
+      escapeHTML(p.description + (p.requires.length ? ' · needs ' + p.requires.join(', ') : '')) +
+      '">' +
+      escapeHTML(p.label) +
+      '</button>'
+    );
   }).join('');
-  root.querySelectorAll('.preset-chip').forEach(el => {
+  root.querySelectorAll('.preset-chip').forEach((el) => {
     el.addEventListener('click', () => {
       if (el.classList.contains('disabled')) {
         // surface why
         const id = el.dataset.preset;
-        const p = PRESETS.find(x => x.id === id);
-        const missing = p?.requires.filter(req =>
-          !adapterCache.some(a => a.id === req && a.installed && a.authenticated !== false));
+        const p = PRESETS.find((x) => x.id === id);
+        const missing = p?.requires.filter(
+          (req) =>
+            !adapterCache.some((a) => a.id === req && a.installed && a.authenticated !== false),
+        );
         const fb = $('new-session-feedback');
         fb.className = 'console-feedback err';
         fb.textContent = `preset needs: ${(missing ?? []).join(', ')} — click an adapter to set up`;
@@ -4169,19 +4812,43 @@ function renderBindingsGrid() {
   // Per UX feedback: disabled options just fade out (CSS opacity 0.4) — no
   // bracketed " (×)" suffix and no parentheses on "ambient". The fade is the
   // affordance; extra glyphs add visual noise.
-  root.innerHTML = ACTORS_FOR_BINDING.map(actor => {
-    const adapterOptions = adapterCache.map(a => {
-      const disabled = !a.installed || a.authenticated === false;
-      return '<option value="' + escapeHTML(a.id) + '"' + (disabled ? ' disabled' : '') + '>' +
-        escapeHTML(a.display_name) + '</option>';
-    }).join('');
-    const modelOptions = adapterCache.flatMap(a => a.models.map(m => m)).filter((m, i, arr) => arr.indexOf(m) === i)
-      .map(m => '<option value="' + escapeHTML(m) + '">' + escapeHTML(m) + '</option>').join('');
-    return '<span class="bg-actor">' + escapeHTML(actor) + '</span>' +
-      '<select data-actor="' + escapeHTML(actor) + '" data-kind="adapter"><option value="">ambient</option>' + adapterOptions + '</select>' +
-      '<select data-actor="' + escapeHTML(actor) + '" data-kind="model"><option value="">default</option>' + modelOptions + '</select>';
+  root.innerHTML = ACTORS_FOR_BINDING.map((actor) => {
+    const adapterOptions = adapterCache
+      .map((a) => {
+        const disabled = !a.installed || a.authenticated === false;
+        return (
+          '<option value="' +
+          escapeHTML(a.id) +
+          '"' +
+          (disabled ? ' disabled' : '') +
+          '>' +
+          escapeHTML(a.display_name) +
+          '</option>'
+        );
+      })
+      .join('');
+    const modelOptions = adapterCache
+      .flatMap((a) => a.models.map((m) => m))
+      .filter((m, i, arr) => arr.indexOf(m) === i)
+      .map((m) => '<option value="' + escapeHTML(m) + '">' + escapeHTML(m) + '</option>')
+      .join('');
+    return (
+      '<span class="bg-actor">' +
+      escapeHTML(actor) +
+      '</span>' +
+      '<select data-actor="' +
+      escapeHTML(actor) +
+      '" data-kind="adapter"><option value="">ambient</option>' +
+      adapterOptions +
+      '</select>' +
+      '<select data-actor="' +
+      escapeHTML(actor) +
+      '" data-kind="model"><option value="">default</option>' +
+      modelOptions +
+      '</select>'
+    );
   }).join('');
-  root.querySelectorAll('select').forEach(el => {
+  root.querySelectorAll('select').forEach((el) => {
     el.addEventListener('change', () => {
       const actor = el.dataset.actor;
       const kind = el.dataset.kind;
@@ -4194,33 +4861,54 @@ function renderBindingsGrid() {
 // ── Adapter setup modal (install / auth guide) ───────────────────────────
 
 function openAdapterModal(adapterId) {
-  const a = adapterCache.find(x => x.id === adapterId);
+  const a = adapterCache.find((x) => x.id === adapterId);
   if (!a) return;
   $('adapter-modal-title').textContent = a.display_name + ' — setup';
   const body = $('adapter-modal-body');
   const stateLine = a.installed
-    ? (a.authenticated === true ? '✓ installed and authenticated' : a.authenticated === null ? '◐ installed (auth not probed)' : '✗ installed but auth missing')
+    ? a.authenticated === true
+      ? '✓ installed and authenticated'
+      : a.authenticated === null
+        ? '◐ installed (auth not probed)'
+        : '✗ installed but auth missing'
     : '✗ not installed';
   const blocks = [
     '<div class="adapter-modal-step">' +
       '<div class="adapter-modal-step-label">current status</div>' +
-      '<div>' + escapeHTML(stateLine) + (a.version ? ' · ' + escapeHTML(a.version) : '') + '</div>' +
-    '</div>',
-    a.install_hint ? '<div class="adapter-modal-step">' +
-      '<div class="adapter-modal-step-label">' + (a.installed ? 'reinstall' : 'install') + '</div>' +
-      '<pre>' + escapeHTML(a.install_hint) + '</pre>' +
-    '</div>' : '',
-    a.auth_hint ? '<div class="adapter-modal-step">' +
-      '<div class="adapter-modal-step-label">login</div>' +
-      '<pre>' + escapeHTML(a.auth_hint) + '</pre>' +
-    '</div>' : '',
-    a.models?.length ? '<div class="adapter-modal-step">' +
-      '<div class="adapter-modal-step-label">models</div>' +
-      '<div style="font-size:11px;color:var(--ink-subtle);font-family:ui-monospace,monospace;">' +
-        a.models.map(escapeHTML).join(' · ') +
+      '<div>' +
+      escapeHTML(stateLine) +
+      (a.version ? ' · ' + escapeHTML(a.version) : '') +
       '</div>' +
-    '</div>' : '',
-  ].filter(Boolean).join('');
+      '</div>',
+    a.install_hint
+      ? '<div class="adapter-modal-step">' +
+        '<div class="adapter-modal-step-label">' +
+        (a.installed ? 'reinstall' : 'install') +
+        '</div>' +
+        '<pre>' +
+        escapeHTML(a.install_hint) +
+        '</pre>' +
+        '</div>'
+      : '',
+    a.auth_hint
+      ? '<div class="adapter-modal-step">' +
+        '<div class="adapter-modal-step-label">login</div>' +
+        '<pre>' +
+        escapeHTML(a.auth_hint) +
+        '</pre>' +
+        '</div>'
+      : '',
+    a.models?.length
+      ? '<div class="adapter-modal-step">' +
+        '<div class="adapter-modal-step-label">models</div>' +
+        '<div style="font-size:11px;color:var(--ink-subtle);font-family:ui-monospace,monospace;">' +
+        a.models.map(escapeHTML).join(' · ') +
+        '</div>' +
+        '</div>'
+      : '',
+  ]
+    .filter(Boolean)
+    .join('');
   body.innerHTML = blocks;
   $('adapter-modal-feedback').textContent = '';
   $('adapter-modal').style.display = 'flex';
@@ -4241,7 +4929,7 @@ $('adapter-modal-refresh')?.addEventListener('click', async () => {
 // Backdrop click closes modal.
 document.querySelector('.adapter-modal-backdrop')?.addEventListener('click', closeAdapterModal);
 // Esc closes modal.
-document.addEventListener('keydown', e => {
+document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && $('adapter-modal').style.display === 'flex') closeAdapterModal();
 });
 
@@ -4261,11 +4949,14 @@ renderBindingsGrid();
   const close = document.getElementById('welcome-banner-close');
   if (!banner || !close) return;
   let dismissed = false;
-  try { dismissed = localStorage.getItem(KEY) === '1'; } catch (_) {}
+  try {
+    dismissed = localStorage.getItem(KEY) === '1';
+  } catch (_) {}
   if (!dismissed) banner.style.display = 'flex';
   close.addEventListener('click', () => {
     banner.style.display = 'none';
-    try { localStorage.setItem(KEY, '1'); } catch (_) {}
+    try {
+      localStorage.setItem(KEY, '1');
+    } catch (_) {}
   });
 })();
-
