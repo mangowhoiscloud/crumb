@@ -256,3 +256,17 @@ export interface Message {
 
 /** Fields the writer fills in (id + ts) — caller supplies the rest. */
 export type DraftMessage = Omit<Message, 'id' | 'ts'> & { id?: string; ts?: string };
+
+/**
+ * D1-D6 dimension keys.
+ *
+ * Resolves the §17.3 #2 leak (D1-D6 strings inline-hardcoded in
+ * `helpers/status.ts` + `summary/render.ts`). Consumers import from here.
+ *
+ * The studio package mirrors this constant + a label map at
+ * `packages/studio/src/server/types.ts` per §17.2 decoupling — the studio
+ * is intentionally not a TS-import consumer of crumb core types.
+ */
+export type Dimension = 'D1' | 'D2' | 'D3' | 'D4' | 'D5' | 'D6';
+
+export const DIMENSIONS: readonly Dimension[] = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'] as const;

@@ -29,6 +29,15 @@ export interface AdapterStatus {
   auth_source?: 'env' | 'env.local' | 'env-file' | 'keychain' | 'config-file' | 'mock' | 'none';
 }
 
+export interface SessionBudget {
+  respec_count: number;
+  respec_max: number;
+  verify_count: number;
+  verify_max: number;
+  token_total: number;
+  token_hard_cap: number;
+}
+
 export interface SessionMetrics {
   events: number;
   tokens?: number;
@@ -38,6 +47,8 @@ export interface SessionMetrics {
   errors?: number;
   last_verdict?: 'PASS' | 'FAIL' | 'PARTIAL' | 'REJECT' | null;
   last_aggregate?: number | null;
+  /** PR-O2 — session-level budget burndown (respec / verify / token caps). */
+  budget?: SessionBudget;
 }
 
 export interface SessionRow {

@@ -42,6 +42,18 @@
   --audit-bg: #f7e6cc;
   --audit-fg: #b8431c;
 
+  /* Verdict tones (Scorecard composite + sparkline dot + verdict pill). */
+  --tone-pass: #6b8c2a;
+  --tone-partial: #c47020;
+  --tone-fail: #c4452a;
+  --tone-pending: #b29275;
+
+  /* Score source attribution (anti-deception invariant 4 — every score
+     surface cites which layer produced it). */
+  --src-llm: #845b3a;
+  --src-qa: #6b8c2a;
+  --src-auto: #b8742d;
+
   /* Per-actor lane colors (lifecycle visualization). */
   --actor-user: #6a4828;
   --actor-coordinator: #8b6d4e;
@@ -102,6 +114,15 @@
   --warn: #ffb287;
   --audit-bg: #1f1633;
   --audit-fg: #fa7faa;
+
+  --tone-pass: #c2ef4e;
+  --tone-partial: #ffb287;
+  --tone-fail: #fa7faa;
+  --tone-pending: #62666d;
+
+  --src-llm: #79628c;
+  --src-qa: #c2ef4e;
+  --src-auto: #d8902c;
 
   --actor-user: #5e6ad2;
   --actor-coordinator: #8a8f98;

@@ -40,6 +40,8 @@ import { Narrative } from './panels/Narrative';
 import { Feed } from './panels/Feed';
 import { DetailRail } from './panels/DetailRail';
 import { SlashBar } from './panels/SlashBar';
+import { Scorecard } from './panels/Scorecard';
+import { ErrorBudgetStrip } from './panels/ErrorBudgetStrip';
 import { useSessions, useSessionsSseBridge } from './hooks/useSessions';
 
 const PANEL_COMPONENTS: Record<string, React.FC<IDockviewPanelProps>> = {
@@ -165,6 +167,9 @@ export function App() {
         <ThemeToggle />
       </header>
 
+      <Scorecard />
+      <ErrorBudgetStrip />
+
       <div style={{ flex: 1, minHeight: 0 }}>
         <DockviewReact
           components={PANEL_COMPONENTS}
@@ -183,7 +188,7 @@ export function App() {
           color: 'var(--ink-subtle)',
         }}
       >
-        <span>v0.4 (M5b)</span>
+        <span>v0.4 (M6b)</span>
         <span style={{ flex: 1 }} />
         <span>⌘B sidebar · Drag tabs to dock · Drag a tab out for popout</span>
       </footer>

@@ -18,7 +18,13 @@
  * See [[bagelcode-system-architecture-v0.1]] §10 (4 surface, Kiki studio mapping).
  */
 
-import type { Actor, Message, Verdict } from '../protocol/types.js';
+import {
+  DIMENSIONS,
+  type Actor,
+  type Dimension,
+  type Message,
+  type Verdict,
+} from '../protocol/types.js';
 import type { CrumbState } from '../state/types.js';
 import { computeAutoScores } from '../state/scorer.js';
 import { diagnose } from '../helpers/debug.js';
@@ -209,19 +215,17 @@ function renderScorecard(
     <table class="score">
       <thead><tr><th>dim</th><th>score</th><th>source</th></tr></thead>
       <tbody>
-        ${(['D1', 'D2', 'D3', 'D4', 'D5', 'D6'] as const)
-          .map((k) => {
-            const dim = scores?.[k];
-            const fallback = autoFallback(k, auto);
-            const score = dim?.score ?? fallback;
-            const source = dim?.source ?? (fallback !== null ? 'reducer-auto' : '—');
-            return `<tr>
+        ${DIMENSIONS.map((k) => {
+          const dim = scores?.[k];
+          const fallback = autoFallback(k, auto);
+          const score = dim?.score ?? fallback;
+          const source = dim?.source ?? (fallback !== null ? 'reducer-auto' : '—');
+          return `<tr>
             <td>${escape(DIM_LABEL[k] ?? k)}</td>
             <td class="num">${score === null ? '—' : score.toFixed(1)}</td>
             <td>${renderSourceBadge(source)}${dim?.lookup ? ` <span class="badge kind" title="lookup">${escape(dim.lookup)}</span>` : ''}</td>
           </tr>`;
-          })
-          .join('')}
+        }).join('')}
       </tbody>
     </table>
     ${
@@ -234,10 +238,7 @@ function renderScorecard(
 </section>`;
 }
 
-function autoFallback(
-  k: 'D1' | 'D2' | 'D3' | 'D4' | 'D5' | 'D6',
-  auto: ReturnType<typeof computeAutoScores>,
-): number | null {
+function autoFallback(k: Dimension, auto: ReturnType<typeof computeAutoScores>): number | null {
   if (k === 'D3') return auto.D3_auto;
   if (k === 'D4') return auto.D4;
   if (k === 'D5') return auto.D5_auto;
@@ -476,9 +477,7 @@ function renderMiniSpark(values: number[], maxValue: number): string {
 // ─── inline JS ─────────────────────────────────────────────────────────────
 
 function renderInlineScript(judge: Message | undefined, perActor: Map<Actor, ActorTotals>): string {
-  const radarScores = (['D1', 'D2', 'D3', 'D4', 'D5', 'D6'] as const).map(
-    (k) => judge?.scores?.[k]?.score ?? 0,
-  );
+  const radarScores = DIMENSIONS.map((k) => judge?.scores?.[k]?.score ?? 0);
   const actors = [...perActor.keys()];
   const tokIn = actors.map((a) => perActor.get(a)!.tokens_in);
   const tokOut = actors.map((a) => perActor.get(a)!.tokens_out);
