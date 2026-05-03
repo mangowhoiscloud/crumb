@@ -1,0 +1,135 @@
+{
+  "$schema_version": "crumb.tuning/v1",
+  "game_slug": "reba-berserker-v1",
+  "session_length_s": 60,
+
+  "player": {
+    "starting_hp": 100,
+    "anchor_y_ratio": 0.85,
+    "size_px": 56,
+    "tap_attack_cooldown_ms": 250,
+    "tap_attack_cooldown_ms_berserker": 80
+  },
+
+  "rage": {
+    "max": 100,
+    "per_kill": { "slime": 10, "bat": 15, "ghost": 20 },
+    "decay_per_s": 0
+  },
+
+  "berserker": {
+    "trigger_at_rage": 100,
+    "duration_s": 5,
+    "cooldown_s": 3,
+    "target_uptime_pct": 62,
+    "attack_rate_multiplier": 3,
+    "damage_multiplier": 2,
+    "score_multiplier": 2
+  },
+
+  "combo": {
+    "kill_window_s": 1.5,
+    "multipliers": [1.0, 1.5, 2.0, 3.0]
+  },
+
+  "enemies": {
+    "slime": { "hp": 1, "speed_px_per_s": 35, "damage_to_reba": 10, "score_base": 1 },
+    "bat":   { "hp": 1, "speed_px_per_s": 70, "damage_to_reba": 15, "score_base": 2 },
+    "ghost": { "hp": 2, "speed_px_per_s": 0, "teleport_interval_s": 1.5, "damage_to_reba": 20, "score_base": 4 }
+  },
+
+  "difficulty_phases": [
+    {
+      "name": "free_win_opener",
+      "time_window_s": [0, 10],
+      "enemy_pool": ["slime"],
+      "spawn_rate_per_s_start": 0.5,
+      "spawn_rate_per_s_end": 0.5,
+      "max_concurrent_enemies": 4
+    },
+    {
+      "name": "mid",
+      "time_window_s": [10, 30],
+      "enemy_pool": ["slime", "bat"],
+      "spawn_rate_per_s_start": 0.5,
+      "spawn_rate_per_s_end": 0.9,
+      "max_concurrent_enemies": 6
+    },
+    {
+      "name": "late",
+      "time_window_s": [30, 60],
+      "enemy_pool": ["slime", "bat", "ghost"],
+      "spawn_rate_per_s_start": 0.9,
+      "spawn_rate_per_s_end": 1.67,
+      "spawn_rate_floor_s": 0.6,
+      "max_concurrent_enemies": 8
+    }
+  ],
+
+  "spawn_arc": {
+    "shape": "top_half_circle",
+    "arc_degrees": 180,
+    "radius_ratio_of_viewport_width": 0.45
+  },
+
+  "viewport": {
+    "min_width_px": 320,
+    "max_width_px": 428,
+    "orientation": "portrait",
+    "scale_mode": "Phaser.Scale.FIT",
+    "safe_area_top_px": 24,
+    "safe_area_bottom_px": 34,
+    "touch_action": "none"
+  },
+
+  "colors": {
+    "background": "#1a0f2e",
+    "reba": "#ffd93d",
+    "slime": "#7df3e1",
+    "bat": "#a855f7",
+    "ghost": "#f1f5f9",
+    "hp_bar_full": "#22c55e",
+    "hp_bar_low": "#ef4444",
+    "rage_bar_filling": "#fb923c",
+    "rage_bar_full": "#ef4444",
+    "berserker_overlay_rgba": "rgba(239,68,68,0.18)",
+    "text": "#ffffff",
+    "ui_chrome": "#2d1b4e"
+  },
+
+  "motion_ms": {
+    "hit_flash": 80,
+    "kill_animation": 120,
+    "berserker_screen_tint_ramp": 200,
+    "berserker_screen_shake": 80,
+    "berserker_screen_shake_amplitude_px": 4,
+    "score_pop": 250,
+    "rage_bar_fill_ease": 150,
+    "game_over_fade": 600,
+    "reduced_motion_halve_all": true,
+    "reduced_motion_disable_shake": true
+  },
+
+  "hud": {
+    "score_position": "top-right",
+    "timer_position": "top-center",
+    "hp_bar_position": "top-left",
+    "rage_bar_position": "center-top",
+    "font_min_px": 14,
+    "font_headline_px": 24,
+    "hit_zone_min_px": 44
+  },
+
+  "audio": {
+    "synth": "web-audio-procedural",
+    "bgm": { "type": "chiptune-ostinato", "tempo_bpm": 132, "loop": true },
+    "sfx": ["tap_attack", "kill", "berserker_activate", "hp_damage"],
+    "external_files": false
+  },
+
+  "performance": {
+    "target_fps": 60,
+    "max_concurrent_enemies": 8,
+    "max_particles": 64
+  }
+}

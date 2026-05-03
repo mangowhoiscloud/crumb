@@ -1,0 +1,79 @@
+{
+  "session": {
+    "duration_s": 60,
+    "win_score_threshold": 50,
+    "free_win_warmup_s": 5
+  },
+  "player": {
+    "max_hp": 3,
+    "iframe_after_hit_ms": 200,
+    "dash_distance_px": 80,
+    "dash_invuln_ms": 200,
+    "swipe_min_px": 30,
+    "swipe_max_duration_ms": 300
+  },
+  "slash": {
+    "base_radius_px": 60,
+    "berserker_radius_multiplier": 1.5,
+    "animation_ms": 120,
+    "hit_stop_ms": 50,
+    "shake_amplitude_px": 4,
+    "shake_duration_ms": 80,
+    "berserker_shake_amplitude_multiplier": 0.5,
+    "concurrent_shake_cap": 1
+  },
+  "scoring": {
+    "base_kill_score": 1,
+    "combo_window_ms": 800,
+    "combo_multipliers": [1.0, 1.2, 1.5, 2.0, 5.0],
+    "berserker_score_multiplier": 3
+  },
+  "rage": {
+    "per_kill": 10,
+    "kills_to_full": 10,
+    "cap": 100,
+    "auto_trigger_at": 100
+  },
+  "berserker": {
+    "duration_ms": 8000,
+    "duration_jitter_ms": 200,
+    "tint_color_rgba": [214, 40, 40, 0.30],
+    "tint_fadein_ms": 200,
+    "tint_fadeout_ms": 400,
+    "score_multiplier": 3,
+    "slash_radius_multiplier": 1.5
+  },
+  "spawn": {
+    "interval_start_ms": 1500,
+    "interval_end_ms": 600,
+    "ramp_curve": "linear",
+    "ramp_over_s": 60,
+    "warmup_single_enemy_until_s": 5,
+    "enemy_speed_min": 35,
+    "enemy_speed_max": 65
+  },
+  "viewport": {
+    "min_width_px": 320,
+    "max_width_px": 428,
+    "design_width_px": 384,
+    "design_height_px": 640,
+    "safe_area_top_px": 24,
+    "safe_area_bottom_px": 24
+  },
+  "palette": {
+    "background": "#3D2817",
+    "primary": "#F4E8D0",
+    "secondary": "#1A0F08",
+    "accent": "#D62828",
+    "text": "#F4E8D0"
+  },
+  "motion": {
+    "white_flash_ms": 60,
+    "game_over_fade_ms": 600,
+    "reduced_motion_shake_multiplier": 0.25
+  },
+  "hud": {
+    "rage_callout_text": "Berserker!",
+    "hp_icons": 3
+  }
+}

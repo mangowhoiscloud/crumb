@@ -1,0 +1,113 @@
+{
+  "$schema_note": "Reba Berserker tuning — numbers cited from researcher step.research 01KQNAWYMA8DE8MCBZ1X9NCTX2 and concept step.concept 01KQNANJ1M68GNJEFHVWBD8787. Mirrored into artifacts/game/src/config/tuning.json by builder.",
+  "session": {
+    "duration_s": 60,
+    "win_score_threshold": 50,
+    "free_win_warmup_s": 5
+  },
+  "player": {
+    "max_hp": 3,
+    "iframe_after_hit_ms": 200,
+    "dash_distance_px": 80,
+    "dash_invuln_ms": 200,
+    "swipe_min_px": 30,
+    "swipe_max_duration_ms": 300
+  },
+  "slash": {
+    "base_radius_px": 60,
+    "berserker_radius_multiplier": 1.5,
+    "animation_ms": 120,
+    "hit_stop_ms": 50,
+    "shake_amplitude_px": 4,
+    "shake_duration_ms": 80,
+    "berserker_shake_amplitude_multiplier": 0.5,
+    "concurrent_shake_cap": 1
+  },
+  "scoring": {
+    "base_kill_score": 1,
+    "combo_window_ms": 800,
+    "combo_multipliers": [1.0, 1.2, 1.5, 2.0, 5.0],
+    "berserker_score_multiplier": 3
+  },
+  "rage": {
+    "per_kill": 10,
+    "kills_to_full": 10,
+    "cap": 100,
+    "auto_trigger_at": 100
+  },
+  "berserker": {
+    "duration_ms": 8000,
+    "duration_jitter_ms": 200,
+    "tint_color": "rgba(214,40,40,0.30)",
+    "tint_fadein_ms": 200,
+    "tint_fadeout_ms": 400,
+    "score_multiplier": 3,
+    "slash_radius_multiplier": 1.5
+  },
+  "spawn": {
+    "interval_start_ms": 1500,
+    "interval_end_ms": 600,
+    "ramp_curve": "linear",
+    "ramp_over_s": 60,
+    "warmup_single_enemy_until_s": 5
+  },
+  "viewport": {
+    "min_width_px": 320,
+    "max_width_px": 428,
+    "scale_mode": "Phaser.Scale.FIT",
+    "orientation": "portrait",
+    "safe_area_top_px": 24,
+    "safe_area_bottom_px": 24,
+    "touch_action": "none"
+  },
+  "palette": {
+    "background": "#3D2817",
+    "primary": "#F4E8D0",
+    "secondary": "#1A0F08",
+    "accent": "#D62828",
+    "text": "#F4E8D0",
+    "contrast_min_ratio": 4.5,
+    "berserker_red_contrast_vs_bg": 4.8,
+    "colorblind_safe": true
+  },
+  "motion": {
+    "slash_animation_ms": 120,
+    "hit_stop_ms": 50,
+    "shake_normal_ms": 80,
+    "shake_normal_amplitude_px": 4,
+    "shake_berserker_ms": 80,
+    "shake_berserker_amplitude_px": 2,
+    "white_flash_ms": 60,
+    "combo_window_ms": 800,
+    "berserker_tint_fadein_ms": 200,
+    "berserker_active_ms": 8000,
+    "berserker_active_jitter_ms": 200,
+    "berserker_tint_fadeout_ms": 400,
+    "game_over_fade_ms": 600,
+    "reduced_motion_shake_multiplier": 0.25
+  },
+  "hud": {
+    "score_position": "top-right",
+    "timer_position": "top-center",
+    "pause_button_position": "top-left",
+    "rage_bar_full_width": true,
+    "hp_icons": 3,
+    "rage_callout_text": "Berserker!"
+  },
+  "audio": {
+    "synth_only": true,
+    "bgm_loops": 1,
+    "sfx_count": 5,
+    "sfx_keys": ["slash", "hit", "kill", "berserker_trigger", "game_over"]
+  },
+  "accessibility": {
+    "min_hit_zone_px": 44,
+    "respect_reduced_motion": true,
+    "aria_live_hud_mirror": true
+  },
+  "evidence_refs": {
+    "concept": "01KQNANJ1M68GNJEFHVWBD8787",
+    "research": "01KQNAWYMA8DE8MCBZ1X9NCTX2",
+    "lessons_applied": ["rage_cadence_3_bursts_per_60s", "berserker_8000pm200ms", "hit_stop_50ms_shake_4px_80ms_capped_under_berserker", "palette_5color_flash_hommage_4.5_1_red_on_brown"]
+  }
+}
