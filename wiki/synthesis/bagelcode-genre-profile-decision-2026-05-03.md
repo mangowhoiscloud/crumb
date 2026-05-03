@@ -3,7 +3,7 @@ title: Genre profile decision — extend Crumb's envelope to 4 profiles + 4 pers
 category: synthesis
 tags: [bagelcode, decision, envelope, genre-profile, persistence-profile, three-js-opt-in, studio-picker, 2026]
 sources:
-  - "[[bagelcode-gamestudio-subagents-deep-2026-05-03]] — gamestudio specialist gaps (technical-artist + game-feel)"
+  - "[[bagelcode-gamestudio-subagents-deep-2026-05-03]] — gamestudio specialist gaps (technical-artist + game-vibe)"
   - "[[bagelcode-genre-stack-frontier-2026-05-03]] — 2026 frontier per-genre stacks"
   - "[[bagelcode-mobile-game-tech-2026]] — current Phaser-only baseline"
   - "agents/specialists/game-design.md §1 envelope (current, single-profile)"
@@ -13,7 +13,7 @@ summary: >-
   (casual-portrait / pixel-arcade / sidescroll-2d / flash-3d-arcade) + four persistence
   profiles (local-only / postgres-anon / edge-orm / firebase-realtime). Lift the §2 Three.js
   ban for the opt-in flash-3d-arcade profile only. Add 2 specialists (technical-artist +
-  game-feel). Add Studio profile picker. Phased migration so existing casual-portrait sessions
+  game-vibe). Add Studio profile picker. Phased migration so existing casual-portrait sessions
   remain bit-identical.
 provenance:
   extracted: 0.40
@@ -53,7 +53,7 @@ updated: 2026-05-03
 
 ### D3. Two new specialists
 
-`agents/specialists/technical-artist.md` (gamestudio gap) and `agents/specialists/game-feel.md` (gamestudio gap). Inline-read by planner-lead step.design + builder. Genre-aware sub-sections.
+`agents/specialists/technical-artist.md` (gamestudio gap) and `agents/specialists/game-vibe.md` (gamestudio gap). Inline-read by planner-lead step.design + builder. Genre-aware sub-sections.
 
 ### D4. Studio profile picker
 
@@ -79,7 +79,7 @@ Crumb's static-PWA envelope (§1.1) currently rules out worker tiers — every g
 
 ### T3. Specialist count growth
 
-Adding 2 specialists takes the planner-lead inline-read budget from 3 (concept / visual / game-design) to 4 (+ technical-artist). Builder gains 2 (game-design now + technical-artist + game-feel). Token cost: ~+8KB on the planner spawn, ~+10KB on the builder spawn. Within the 200K Claude Opus 4.7 context window — no concern.
+Adding 2 specialists takes the planner-lead inline-read budget from 3 (concept / visual / game-design) to 4 (+ technical-artist). Builder gains 2 (game-design now + technical-artist + game-vibe). Token cost: ~+8KB on the planner spawn, ~+10KB on the builder spawn. Within the 200K Claude Opus 4.7 context window — no concern.
 
 ### T4. Genre profile auto-detection drift
 
@@ -103,7 +103,7 @@ If the researcher's named-game lock-in mis-classifies "메이플스토리 같은
 
 ### Phase 3 — Two new specialists
 - `agents/specialists/technical-artist.md` (genre-aware shader / VFX / particle pool guidance)
-- `agents/specialists/game-feel.md` (genre-aware juice timings, screen-shake tiers, hit-stop rules)
+- `agents/specialists/game-vibe.md` (genre-aware juice timings, screen-shake tiers, hit-stop rules)
 - planner-lead.md and builder.md sandwich frontmatters add `inline_specialists` entries
 
 ### Phase 4 — Specialist deepening (existing files)
@@ -127,8 +127,8 @@ If the researcher's named-game lock-in mis-classifies "메이플스토리 같은
 - `crumb run` JSON-output mode used by studio (already exists — `--json` flag)
 
 ### Phase 7 — Verifier integration
-- D5.feel grading rubric reads `agents/specialists/game-feel.md` Quality-checklist subsection (per genre)
-- Anti-deception rule: `judge.score` D5 with no game-feel evidence → D5 ≤ 4
+- D5.vibe grading rubric reads `agents/specialists/game-vibe.md` Quality-checklist subsection (per genre)
+- Anti-deception rule: `judge.score` D5 with no game-vibe evidence → D5 ≤ 4
 - D6.portability adapts per profile (local-only → no env check; postgres-anon → CRUMB_SUPABASE_URL; edge-orm → wrangler dev pingable)
 
 ### Phase 8 — Tests + CI
@@ -164,7 +164,7 @@ If the researcher's named-game lock-in mis-classifies "메이플스토리 같은
 
 1. **Three.js ban**: confirm OK to lift for opt-in `flash-3d-arcade` only (not blanket).
 2. **Worker tier**: confirm OK for opt-in `edge-orm` profile (adds `wrangler dev` smoke-test path) — or should we keep static-PWA pure and drop edge-orm?
-3. **Specialist scope**: confirm `technical-artist` + `game-feel` as 2 new files, OR fold into existing `visual-designer.md` (one bigger file vs two focused ones — current proposal is two).
+3. **Specialist scope**: confirm `technical-artist` + `game-vibe` as 2 new files, OR fold into existing `visual-designer.md` (one bigger file vs two focused ones — current proposal is two).
 4. **Default persistence**: confirm `local-only` (Dexie) becomes the new default, OR keep current behavior (no persistence unless leaderboard markers).
 5. **Studio surface**: confirm the New Session form lives inside the existing studio (modal/sidebar) — OR should it be a separate `crumb-launcher` package?
 6. **Phasing**: confirm the 9-phase migration is OK to land as one PR per phase (≈9 PRs) or one bundled PR?

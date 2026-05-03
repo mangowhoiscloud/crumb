@@ -19,6 +19,8 @@ inline_skills:
   - skills/tdd-iron-law.md
 inline_specialists:
   - agents/specialists/game-design.md
+  - agents/specialists/technical-artist.md
+  - agents/specialists/game-vibe.md
 ---
 
 # Builder
@@ -65,7 +67,20 @@ The implementation step among the 5 outer actors. The core of the v0.1 actor spl
 
 ### 1. Builder
 
-Generate the directory tree under `artifacts/game/` per §1.1:
+**v0.4 — profile selection (do this first).** Read from `task_ledger`:
+- `genre_profile` — selects the file-tree template:
+  - `casual-portrait` → use the §1.1 envelope below as-is (Phaser portrait)
+  - `pixel-arcade` → §1.1 + §1.3.B adaptations (`pixelArt: true`, locked palette, integer-snapped)
+  - `sidescroll-2d` → §1.1 + §1.3.C adaptations (ArcadePhysics, landscape, parallax, state machine)
+  - `flash-3d-arcade` → REPLACE §1.1 with §1.3.D Three.js envelope (importmap + WebGLRenderer + animate loop)
+- `persistence_profile` — selects the PersistenceManager template:
+  - `local-only` (default) → §1.4.local-only Dexie wrapper
+  - `postgres-anon` → §1.2 / §1.4.postgres-anon Supabase wrapper
+  - `edge-orm` → §1.4.edge-orm Worker (`functions/api/runs.ts` + `wrangler.toml`)
+
+Inline-read `agents/specialists/technical-artist.md` (per-profile FX/shader/particle pool guidance) and `agents/specialists/game-vibe.md` (`JuiceManager.js` constants — emit `src/systems/JuiceManager.js` with the TIMINGS / SHAKE / POOLS export per profile).
+
+Generate the directory tree under `artifacts/game/` per §1.1 (or §1.3.D for profile D):
 
 1. **`index.html`** — entry. `<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">`, `touch-action: none`, safe-area inset. Loads Phaser via CDN, then `<script type="module" src="src/main.js">`. Links the manifest + registers `sw.js`.
 2. **`manifest.webmanifest`** — name + short_name + start_url=`./index.html` + display=`standalone` + theme_color from DESIGN.md palette + icons (192 + 512).

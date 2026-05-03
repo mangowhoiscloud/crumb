@@ -1,7 +1,7 @@
 ---
 title: gamestudio-subagents — deep dive (12 personas, prompt structure, genre-relevance) 2026-05-03
 category: references
-tags: [bagelcode, gamestudio-subagents, claude-code, persona, prompt-structure, technical-artist, game-feel, godot, 2026]
+tags: [bagelcode, gamestudio-subagents, claude-code, persona, prompt-structure, technical-artist, game-vibe, godot, 2026]
 sources:
   - "https://github.com/pamirtuna/gamestudio-subagents (193⭐, sampled 8 personas via gh api)"
   - "[[bagelcode-gamestudio-subagents-2026]] — first-pass overview"
@@ -113,7 +113,7 @@ Scope per genre profile:
 - **sidescroll-2d**: parallax TileSprite layers (3-5), camera follow + lerp, hit-stop on impact (16-32ms freeze)
 - **flash-3d-arcade**: Three.js EffectComposer + UnrealBloomPass + camera shake (perlin noise on Camera position), low-poly material (MeshBasicMaterial / MeshStandardMaterial only, no PBR)
 
-### 5.2 New: `agents/specialists/game-feel.md`
+### 5.2 New: `agents/specialists/game-vibe.md`
 
 Inline-read by `builder.md` after the genre-profile render template is selected. Sources: gamestudio `game_feel_developer.md` (4.7 KB), compressed.
 
@@ -123,7 +123,7 @@ Scope per genre profile:
 - audio-feedback layering (4-channel rule: action + impact + ambient + UI)
 - pool-size guidance (particle pool 20 / projectile pool 50)
 
-These two specialists turn the silent "polish gap" into a structured deliverable readable by builder + verifier (verifier reads the §"Quality checklist" subsection as D5.feel evidence).
+These two specialists turn the silent "polish gap" into a structured deliverable readable by builder + verifier (verifier reads the §"Quality checklist" subsection as D5.vibe evidence).
 
 ## 6. Sandwich integration plan
 
@@ -139,11 +139,11 @@ agents/
     inline_specialists:
       - game-design.md              (existing)
       - technical-artist.md         ★ NEW (inline-read for render-system files when shader/post-process needed)
-      - game-feel.md                ★ NEW (inline-read for systems/JuiceManager.js / EffectManager.js)
+      - game-vibe.md                ★ NEW (inline-read for systems/JuiceManager.js / EffectManager.js)
   verifier.md
     inline_specialists:
       - game-design.md              (existing — gains the genre-profile / persistence-profile checks)
-      - game-feel.md                ★ NEW (D5.feel grading rubric + Quality-checklist match)
+      - game-vibe.md                ★ NEW (D5.vibe grading rubric + Quality-checklist match)
 ```
 
 ## See also

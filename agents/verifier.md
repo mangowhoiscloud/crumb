@@ -13,6 +13,9 @@ provider_hint: ambient (swap via preset.actors.verifier; the bagelcode-cross-3wa
 inline_skills:
   - skills/verification-before-completion.md
   - skills/code-review-protocol.md
+inline_specialists:
+  - agents/specialists/game-design.md
+  - agents/specialists/game-vibe.md
 ---
 
 # Verifier (Reviewer + CourtEval)

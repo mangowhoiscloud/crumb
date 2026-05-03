@@ -18,6 +18,7 @@ inline_specialists:
   - agents/specialists/concept-designer.md
   - agents/specialists/visual-designer.md
   - agents/specialists/game-design.md
+  - agents/specialists/technical-artist.md
 ---
 
 # Planner Lead
@@ -110,8 +111,25 @@ Emit `kind=handoff.requested(to=researcher)` with `payload={video_refs?, concept
 
 Phase B starts in a brand-new planner-lead CLI session that re-reads transcript.jsonl from scratch (the `adapter_session_id` / `cache_carry_over` schema fields exist for forward-compat but no adapter wires `--resume` yet). The new transcript context now contains `kind=step.research.video` × N + `kind=step.research` (synthesis) from the researcher actor.
 
+**v0.4 — profile resolution.** Before invoking specialists, resolve the active
+`task_ledger.genre_profile` and `task_ledger.persistence_profile`:
+- `genre_profile`: read from `task_ledger`. If `"auto-detect"` (default), read the
+  most recent researcher `kind=note` with `data.proposed_genre_profile` and lock that
+  in. If `data.confidence < 0.7`, emit one `kind=question.socratic` asking the user to
+  confirm or override (timeout default = `auto-detect → casual-portrait`). Profile D
+  (`flash-3d-arcade`) NEVER auto-selects on weak evidence — researcher already enforces
+  this (`confidence < 0.85` forces D → A); planner-lead double-checks.
+- `persistence_profile`: read from `task_ledger`. If unset, run the §1.4 trigger
+  logic (leaderboard markers → `postgres-anon`; else → `local-only` default).
+
+Both values are cited in the final `kind=spec` `data.genre_profile` and
+`data.persistence_profile` (sealed alongside acceptance_criteria). Builder reads them
+verbatim — no re-derivation.
+
 Inline-read `agents/specialists/visual-designer.md` AND
-`agents/specialists/game-design.md`. **v0.3.1 — also inline-read any
+`agents/specialists/game-design.md` (§1.3 + §1.4).
+**v0.4** — when the resolved profile is B/C/D, ALSO inline-read
+`agents/specialists/technical-artist.md` (shaders / FX / particle pools per profile). **v0.3.1 — also inline-read any
 user-supplied DESIGN.md** at `<session>/inbox/design.md` or
 `<session>/artifacts/DESIGN.brand.md` (VoltAgent `awesome-design-md`
 9-section format — see game-design.md §2.5). When present, the user

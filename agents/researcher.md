@@ -183,6 +183,43 @@ metadata:
   evidence_summary: { videos_analyzed: <int>, total_frames_observed: <int> }
 ```
 
+### 3.5 Genre profile proposal (only when `task_ledger.genre_profile = "auto-detect"`)
+
+**v0.4** — when the user's pitch went through the Studio picker / `crumb run` with an
+explicit `--genre <profile>`, that value is in `task_ledger.genre_profile` and this step
+is skipped. Otherwise (`auto-detect`, the default), propose a genre profile based on
+the mechanics + named-game evidence collected in step 1.5 + step 2 + step 3:
+
+| Signal | → propose |
+|---|---|
+| named game ∈ {match-3, merge, casual mobile, slot, clicker, drop-and-stack} OR mechanics_extracted dominated by tap/swipe-portrait | `casual-portrait` |
+| named game ∈ {NES family, Galaga, Bomberman, 1-screen retro, top-down pixel} OR ≥ 2 mechanics with `palette_hint` size ≤ 25 colors AND integer-grid evidence | `pixel-arcade` |
+| named game ∈ {Megaman, Sonic, Hollow Knight, Celeste, side-scrolling platformer / shmup} OR mechanics with explicit jump/fall/parallax/state-machine evidence | `sidescroll-2d` |
+| named game ∈ {Flash-era 3D arcade, low-poly racer, asteroid shooter, Star Fox SNES, dogfight} OR mechanics with 3D camera / Z-axis evidence | `flash-3d-arcade` (only when explicit 3D evidence — never default-up) |
+| ambiguous / mixed | `casual-portrait` (the conservative fallback — preserves current behavior) |
+
+Emit a single `kind=note` event:
+
+```yaml
+kind: note
+body: "proposed genre profile: <profile>"
+data:
+  proposed_genre_profile: <casual-portrait | pixel-arcade | sidescroll-2d | flash-3d-arcade>
+  confidence: <float 0.0–1.0>
+  reasoning: <one-line citing named-game OR dominant mechanics_extracted entries>
+  evidence_refs: [<step.research.video.id | step.research.id>, ...]
+```
+
+When `confidence < 0.7`, the studio surface (or planner-lead step.design when no studio
+attached) MAY ask the user via `kind=question.socratic` to confirm or override before
+sealing the spec. When `confidence ≥ 0.7`, the planner-lead reads the note and treats
+the proposal as binding for step.design.
+
+**v0.4 anti-deception rule**: when `proposed_genre_profile = "flash-3d-arcade"` AND
+`confidence < 0.85`, the validator forces the proposal back to `casual-portrait`
+(profile D never auto-selects on weak evidence — see
+[[bagelcode-genre-profile-decision-2026-05-03]] T1).
+
 ### 4. Handoff
 
 Emit `kind=handoff.requested(to=planner-lead)` with `payload={research_id: <step.research.id>}`. STOP — do not write the spec. That's planner-lead's step.design + step.synth job.

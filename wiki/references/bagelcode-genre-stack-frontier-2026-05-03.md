@@ -62,7 +62,7 @@ The existing baseline. No changes.
 | Sprite fallback | **PixelLab.ai** API for 4/8-direction walks (text→sprite, Aseprite plugin) — 10× faster than hand-drawn walk cycles | PixelLab review 2026, jonathanyu.xyz |
 | Atlas tool | Aseprite CLI `--format json-array --sheet-type packed` | existing fallback |
 | Animation | 4-frame walk @ 8fps, 2-frame idle @ 4fps | NES family standard |
-| Shake | integer-snapped (`Math.round`), 2px / 4px / 8px tiers | game-feel pattern |
+| Shake | integer-snapped (`Math.round`), 2px / 4px / 8px tiers | game-vibe pattern |
 | Forbidden | subpixel motion, hover-animations, vector graphics, anti-aliased text | preserves chunky feel |
 
 ### LLM-pipeline reference
