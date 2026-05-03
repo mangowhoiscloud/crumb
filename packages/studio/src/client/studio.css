@@ -833,11 +833,135 @@ section.swimlane {
 .evt:hover { border-color: var(--primary); background: var(--surface-2); }
 .evt.deterministic { border-color: var(--lime); }
 .evt.audit { border-color: var(--audit-fg); background: var(--audit-bg); color: var(--audit-fg); }
+/*
+ * v0.5 PR-7 — fresh animation now slides in from the LEFT (events
+ * accumulate left-to-right chronologically; the newest chip should
+ * emerge from the trailing edge of the lane, not pop in from the right).
+ * User feedback: opacity-fade flicker on session switch should target
+ * the same left edge for consistency with chronological reading.
+ */
 .evt.fresh { animation: fresh 1200ms ease; }
 @keyframes fresh {
   0% { transform: translateX(-6px); opacity: 0; border-color: var(--primary-hover); }
   60% { transform: translateX(0); opacity: 1; }
   100% { border-color: var(--hairline); }
+}
+
+/*
+ * v0.5 PR-7 — grouped chip + count badge.
+ *
+ * Pattern: Slack unread count / WhatsApp message bubble / VS Code Problems
+ * panel collapsed-duplicate. The badge sits at the top-right corner of
+ * the chip, slightly offset, with a subtle accent so it doesn't compete
+ * with the chip's primary kind label. Numbers up to 99; cap rendered as
+ * "99+" via aria-label.
+ */
+.evt {
+  position: relative; /* anchor for the count badge */
+}
+.evt.grouped {
+  /* Slight left-edge accent so groups read as "this is multiple events"
+     without changing color cardinality with audit/deterministic states. */
+  box-shadow: -2px 0 0 0 var(--primary-hover);
+  padding-right: 18px; /* room for the badge so the kind label doesn't overlap */
+}
+.evt-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--primary);
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  pointer-events: none; /* let chip click through to its own handler */
+  letter-spacing: 0;
+}
+.evt.audit .evt-count { background: var(--audit-fg); color: var(--audit-bg); }
+.evt.deterministic .evt-count { background: var(--lime); }
+
+/*
+ * v0.5 PR-7 — group paginator inside the detail panel. WhatsApp/Slack
+ * message-thread paginator + Datadog log facet pager convention. Only
+ * visible when detailGroup is set (multi-event chip opened).
+ */
+.detail-group-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  color: var(--ink-muted);
+}
+.detail-group-btn {
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--ink-muted);
+  border-radius: var(--r-sm);
+  padding: 2px 9px;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 80ms ease, color 80ms ease;
+}
+.detail-group-btn:hover:not([disabled]) {
+  border-color: var(--primary);
+  color: var(--ink);
+}
+.detail-group-btn[disabled] {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.detail-group-pos {
+  flex: 1 1 auto;
+  text-align: center;
+  color: var(--ink);
+}
+.detail-group-pos strong { color: var(--primary); font-weight: 700; }
+
+/*
+ * v0.5 PR-7 — session-switch cascade fade-in, LEFT-FIRST.
+ *
+ * User feedback: when switching between sessions the chips re-render and
+ * fade in. The fade ripple should propagate from the LEFT (chronologically
+ * first events) so the user reads the timeline in natural left-to-right
+ * order. Previous behavior re-rendered all chips simultaneously which
+ * read as "everything blinked".
+ *
+ * Implementation: lane-events container gets an animation that staggers
+ * its children via :nth-child delays. Cap at 12 chips (~120 ms total) so
+ * dense lanes don't drag.
+ */
+.lane-events.session-switch-cascade .evt {
+  animation: evt-cascade 240ms ease both;
+}
+.lane-events.session-switch-cascade .evt:nth-child(1)  { animation-delay: 0ms; }
+.lane-events.session-switch-cascade .evt:nth-child(2)  { animation-delay: 12ms; }
+.lane-events.session-switch-cascade .evt:nth-child(3)  { animation-delay: 24ms; }
+.lane-events.session-switch-cascade .evt:nth-child(4)  { animation-delay: 36ms; }
+.lane-events.session-switch-cascade .evt:nth-child(5)  { animation-delay: 48ms; }
+.lane-events.session-switch-cascade .evt:nth-child(6)  { animation-delay: 60ms; }
+.lane-events.session-switch-cascade .evt:nth-child(7)  { animation-delay: 72ms; }
+.lane-events.session-switch-cascade .evt:nth-child(8)  { animation-delay: 84ms; }
+.lane-events.session-switch-cascade .evt:nth-child(9)  { animation-delay: 96ms; }
+.lane-events.session-switch-cascade .evt:nth-child(10) { animation-delay: 108ms; }
+.lane-events.session-switch-cascade .evt:nth-child(11) { animation-delay: 120ms; }
+.lane-events.session-switch-cascade .evt:nth-child(12) { animation-delay: 130ms; }
+@keyframes evt-cascade {
+  0%   { opacity: 0; transform: translateX(-4px); }
+  100% { opacity: 1; transform: translateX(0); }
 }
 
 aside.detail {
