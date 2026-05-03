@@ -159,6 +159,39 @@ Cross-platform 환경 변수:
 | `CRUMB_POLL=1` | chokidar polling 강제 (WSL2 / Docker / NFS / SMB) |
 | `CRUMB_NO_OPEN=1` | 브라우저 자동 오픈 안 함 (`--no-open` 와 동일) |
 
+### Slash bar — 사용자 개입 grammar
+
+브라우저 하단 슬래시 바와 헤드리스 `inbox.txt` watcher 가 동일 grammar 공유. 두 표면 모두 한 줄을 append; 활성 세션의 inbox watcher 가 `src/inbox/parser.ts` 로 파싱하고 `kind=user.*` (또는 `kind=note`) 이벤트를 transcript 에 기록. coordinator 가 이 이벤트를 보고 라우팅 — 브라우저든 TUI든 스크립트로 `echo` 했든 동일한 흐름.
+
+| 명령 | 동작 | Transcript kind |
+|---|---|---|
+| `/approve` | 최신 verifier `PARTIAL` 판정을 `PASS` 로 promote — 부드러운 기준이 운영자 수동 검증으로 만족됐을 때 세션 종료 가능 | `user.approve` |
+| `/veto <reason>` | 최신 판정 거부. reducer 가 artifact 폐기 + builder 재spawn (Critical 이면 planner-lead Phase B) 라우팅, 이벤트에 `reason` 캡처 | `user.veto` |
+| `/pause [@<actor>] [reason]` | 글로벌 또는 actor 별 pause. `/pause` 는 모든 spawn 정지 후 `/resume` 대기; `/pause @builder waiting` 은 builder 만 정지하고 나머지 진행 | `user.pause` (`data.actor` if scoped) |
+| `/resume [@<actor>]` | `/pause` 의 역. 글로벌 큐 또는 명시 actor 재개 | `user.resume` |
+| `/goto <actor> [body]` | `next_speaker = <actor>` 강제 + 즉시 spawn — LangGraph `Command(goto)` analogue. 단계 건너뛰기 (verifier 직행) 또는 멈춘 actor 재spawn 용 | `user.intervene` (`data.goto`) |
+| `/swap <from>=<adapter>` | actor adapter binding 라이브 swap (Paperclip BYO 스타일). 예: `/swap builder=mock` 으로 결정적 build 재현. override 는 세션 종료까지 `progress_ledger.adapter_override[<actor>]` 에 보존 | `user.intervene` (`data.swap`) |
+| `/append [@<actor>] <text>` | 다음 spawn 들에 sandwich-append 주입. `data.sandwich_append` 가 시스템 프롬프트에 concatenate — actor 재시작 없이 nudge. Codex `APPEND_SYSTEM.md` analogue | `user.intervene` (`data.sandwich_append`) |
+| `/note <text>` | 자유 형식 제약 / 코멘트를 timeline 에 기록. 라우팅 변경 X — 향후 actor 들이 transcript 히스토리에서 볼 수 있는 어노테이션 | `note` (from `user`) |
+| `/redo [body]` | 마지막 actor 의 spawn 을 optional override body 로 재emit. adapter 일시적 실패로 응답 불완전 시 유용 | `user.intervene` |
+| `/reset-circuit <actor\|all>` | 트립된 circuit-breaker 클리어. dispatcher 가 연속 실패로 actor 차단 후 재시도 원할 때 | `user.intervene` (`data.reset_circuit`) |
+| `@<actor> <body>` | 자유 텍스트 멘션 — body 가 `data.target_actor` 태그된 `user.intervene` 로 들어가서 그 actor 의 다음 sandwich 에 노출. 예: `@builder use red palette` | `user.intervene` (`data.target_actor`) |
+| `<plain text>` | `/` 또는 `@` 로 시작 안 하는 모든 것. generic intervention — transcript 에 보이고 라우팅 변경 X | `user.intervene` |
+
+헤드리스 표면도 같은 라인이 동작:
+
+```bash
+echo "/pause @builder waiting" >> ~/.crumb/projects/<id>/sessions/<sid>/inbox.txt
+echo "@builder use red palette" >> ~/.crumb/projects/<id>/sessions/<sid>/inbox.txt
+echo "/note hold off until I review the spec" >> ~/.crumb/projects/<id>/sessions/<sid>/inbox.txt
+```
+
+제약:
+
+- 세션이 **live** (`status: "running"`) 여야 함 — `done` / `errored` 세션은 inbox watcher 가 떠있지 않아 라인이 파일엔 추가되지만 파싱되지 않음. Studio 슬래시 바는 활성 세션이 terminal 일 때 비활성화
+- reducer 가 단일 진실 — 슬래시 바는 transcript 를 **직접** 쓰지 않음. AGENTS.md read-only invariant 모든 표면에서 보존
+- 라인은 strict 순서로 처리; `/pause` 직후 `/resume` 1ms 후도 OK
+
 ## CLI
 
 모든 명령은 클론된 repo 안에서 `npx crumb …` (또는 다른 디렉터리에서 `npx --prefix /path/to/crumb crumb …`) 로 호출. `--version` / `-v` 는 패키지 버전 출력. `npx crumb --help` 가 동일한 표를 출력합니다.
