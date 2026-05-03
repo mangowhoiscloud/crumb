@@ -1,5 +1,5 @@
 ---
-title: 베이글코드 과제 — 2026 Production Multi-Agent Cases
+title: Bagelcode Task — 2026 Production Multi-Agent Cases
 category: references
 tags: [bagelcode, production-cases, 2026, multi-agent, orchestration, case-study, frontier]
 sources:
@@ -16,323 +16,323 @@ created: 2026-05-01
 updated: 2026-05-01
 ---
 
-# 2026 Production Multi-Agent Cases — 우리 결정 검증 + 보강
+# 2026 Production Multi-Agent Cases — Validate + Reinforce Our Decisions
 
-> **scope**: 2026 이후 자료만. 실 production 배포 사례 + 학술 frontier (NeurIPS 2025/2026, arXiv 2602+) 우선. 벤더·tech blog·산업 리포트 포함.
+> **scope**: Materials from 2026 onward only. Real production deployments + academic frontier (NeurIPS 2025/2026, arXiv 2602+) prioritized. Vendor / tech blog / industry reports included.
 >
-> 이 페이지는 [[bagelcode-frontier-orchestration-2026]] (research 패턴) 의 **sister**: 그쪽이 학술/연구, 이쪽이 **실 배포 사례 + 2026+ data**.
+> This page is the **sister** to [[bagelcode-frontier-orchestration-2026]] (research patterns): that one covers academic / research, this one covers **real deployment cases + 2026+ data**.
 
 ---
 
-## Tier A — 산업 리포트 (벤더 1차)
+## Tier A — Industry Reports (vendor first-party)
 
 ### A1. Anthropic — 2026 Agentic Coding Trends Report
 
 URL: https://resources.anthropic.com/2026-agentic-coding-trends-report
 
-**8 trends** (보고서 mention):
+**8 trends** (mentioned in the report):
 - Shifting engineering roles
 - Multi-agent coordination
 - Human-AI collaboration patterns
 - Scaling agentic coding beyond engineering teams
 
-**Enterprise case studies (보고서 명시):**
+**Enterprise case studies (named in the report):**
 - Rakuten · CRED · TELUS · Zapier
 
-**Anthropic 의 production guidance (verbatim 인용 가능 부분):**
+**Anthropic's production guidance (verbatim quotable portion):**
 > "Budget for 15x tokens if you go multi-agent, as research-style orchestration burns roughly 15x the tokens of chat interactions"
 
 **Claude Code production usage (2026):**
 > "instances assigned specialised roles like architect, builder, and validator, collaborating via shared planning documents"
 
-→ **우리 결정 검증**: Hub(Coordinator) + Builder.A + Verifier 가 정확히 architect/builder/validator 패턴. shared planning document = 우리 transcript.jsonl.
+→ **Validates our decision**: Hub(Coordinator) + Builder.A + Verifier exactly matches the architect/builder/validator pattern. Shared planning document = our transcript.jsonl.
 
 ### A2. Datadog — State of AI Engineering 2026
 
 URL: https://www.datadoghq.com/state-of-ai-engineering/
 
-산업 telemetry 기반 trends. agent pattern adoption / framework usage / token cost 실 데이터. (페이지 fetch 깊이는 모자르지만 frontier indicator 로 사용.)
+Trends based on industry telemetry. Real data on agent pattern adoption / framework usage / token cost. (Page fetch depth is shallow but used as a frontier indicator.)
 
 ---
 
-## Tier B — Production 분석 (analyst 1차)
+## Tier B — Production Analysis (analyst first-party)
 
 ### B1. Micheal Lanham — "Multi-Agent in Production in 2026: What Actually Survived" (2026-04)
 
 URL: https://medium.com/@Micheal-Lanham/multi-agent-in-production-in-2026-what-actually-survived-f86de8bb1cd1
 
-**가장 중요한 1개 article**. 2026 까지 살아남은 패턴 vs 죽은 패턴 정리.
+**The single most important article**. Patterns that survived to 2026 vs patterns that died.
 
-#### 살아남은 패턴
-| 패턴 | 조건 | 비고 |
+#### Surviving Patterns
+| Pattern | Condition | Note |
 |---|---|---|
-| **Agent-flow** (순차) | 명확한 단계 경계 + 중간 산출물 | 우리 transcript = 중간 산출 영속 |
-| **Orchestration** (중앙) | "**default public pattern**" | ✅ 우리 Hub-Ledger-Spoke 정확히 매치 |
-| Bounded collaboration | phase gates + artifact 계약 + 최종 supervisor | 우리: Verifier = supervisor |
+| **Agent-flow** (sequential) | Clear stage boundaries + intermediate artifacts | Our transcript = persistent intermediate artifacts |
+| **Orchestration** (centralized) | "**default public pattern**" | ✅ Our Hub-Ledger-Spoke matches exactly |
+| Bounded collaboration | Phase gates + artifact contracts + final supervisor | Ours: Verifier = supervisor |
 
-#### 사망한 패턴
-| 패턴 | 평가 |
+#### Dead Patterns
+| Pattern | Verdict |
 |---|---|
-| **Open mesh collaboration** | "가장 낭만적이고 가장 내구성 떨어지는 default pattern. 프로덕션에서 거의 생존하지 못함" |
+| **Open mesh collaboration** | "the most romantic and least durable default pattern. Almost never survives in production" |
 
-→ ✅ 우리는 [[bagelcode-orchestration-topology]] 에서 mesh (flat peer = 23.7% degradation) 명시 폐기. **2026 production 검증과 일치**.
+→ ✅ We explicitly drop mesh (flat peer = 23.7% degradation) in [[bagelcode-orchestration-topology]]. **Aligns with 2026 production validation**.
 
-#### 실 production 사례 (Lanham 정리)
+#### Real Production Cases (Lanham's compilation)
 
-| 조직 | 패턴 | 성과 |
+| Org | Pattern | Outcome |
 |---|---|---|
-| **Meta Ranking Engineer** | Flow | 6 모델 평균 정확도 **2× 증가** |
-| **Meta tribal-knowledge** | Flow | **50+ agents, 도구 호출 -40%** |
-| **Anthropic Research** | Orchestration | "single-agent Opus 4 대비 **+90.2%**" |
-| **Exa deep research** | Orchestration | 15s-3min latency, 일일 수백 query |
-| **Minimal (e-commerce)** | Orchestration | "80%+ 효율성, 90% 자동 처리" |
-| **Shopify Sidekick** | **Anti-pattern** | 권고: "Avoid multi-agent architectures early" |
+| **Meta Ranking Engineer** | Flow | Avg accuracy across 6 models **2× increase** |
+| **Meta tribal-knowledge** | Flow | **50+ agents, tool calls -40%** |
+| **Anthropic Research** | Orchestration | "**+90.2%** vs single-agent Opus 4" |
+| **Exa deep research** | Orchestration | 15s-3min latency, hundreds of queries daily |
+| **Minimal (e-commerce)** | Orchestration | "80%+ efficiency, 90% automated handling" |
+| **Shopify Sidekick** | **Anti-pattern** | Recommendation: "Avoid multi-agent architectures early" |
 
-→ **베이글코드 신작팀 vs Shopify Sidekick**: 우리도 `--solo` 모드 default 시작, `--standard` / `--full` 점진 확장 = Shopify 교훈 정합.
+→ **Bagelcode new-game team vs Shopify Sidekick**: We also start in `--solo` mode by default and progressively expand to `--standard` / `--full` = aligned with the Shopify lesson.
 
-#### 최소 권장 아키텍처 (Lanham, verbatim 요약)
+#### Minimum Recommended Architecture (Lanham, verbatim summary)
 
 > "**Start with a single strong agent.** Tool complexity alone can make one agent hard to reason about."
 
-**단계적 확장 룰:**
-1. 강한 단일 에이전트로 시작
-2. 신뢰 가능한 단계 + 감사 가능한 중간 산출 → **Flow** 로
-3. 너비 우선 분해 가능한 작업 → **Orchestration** 으로
-4. 독립 증거 trajectory → **Collaboration** (드물게)
+**Stepwise expansion rule:**
+1. Start with one strong agent
+2. Reliable stages + auditable intermediate artifacts → **Flow**
+3. Breadth-first decomposable work → **Orchestration**
+4. Independent evidence trajectories → **Collaboration** (rarely)
 
-→ 우리 mode 변형 (`--solo` → `--standard` → `--full` → `--parallel`) 가 정확히 이 escalation 순서.
+→ Our mode variants (`--solo` → `--standard` → `--full` → `--parallel`) follow precisely this escalation order.
 
-#### "From Spark to Fire" 캐스케이드 (Lanham 인용)
+#### "From Spark to Fire" Cascade (Lanham citation)
 
-단일 거짓이 시스템 전체 오염. **방어 성공률 0.32 → 0.89** (거버넌스 계층 적용 시).
+A single falsehood contaminates the entire system. **Defense success rate 0.32 → 0.89** (when the governance layer is applied).
 
-→ 우리 [[bagelcode-fault-tolerance-design]] §F5 anti-deception 룰 + cross-provider Verifier 가 거버넌스 계층 역할.
+→ Our [[bagelcode-fault-tolerance-design]] §F5 anti-deception rule + cross-provider Verifier serve as the governance layer.
 
-#### MIT 결정 이론 (Lanham 인용)
+#### MIT Decision Theory (Lanham citation)
 
 > "without new exogenous signals, any delegated acyclic network is **decision-theoretically dominated** by a centralized Bayes decision maker"
 
-**실 데이터 (relay 단계 추가 시 GPT-4 정확도):**
+**Real data (GPT-4 accuracy as relay stages are added):**
 ```
-1단계: 90.7%
-2단계: 41.2%  ← -49.5%p
-5단계: 22.5%  ← -68.2%p
+Stage 1: 90.7%
+Stage 2: 41.2%  ← -49.5%p
+Stage 5: 22.5%  ← -68.2%p
 ```
 
-→ **PDCA 5단계 폐기 결정의 가장 강력한 학술 근거**. relay 가 길수록 fragility 폭증. 우리 4 actor (Coord + Builder.A + Builder.B + Verifier) 로 최대한 짧게.
+→ **The strongest academic justification for dropping the PDCA 5-step chain**. The longer the relay, the more fragility explodes. We use 4 actors (Coord + Builder.A + Builder.B + Verifier) to keep the chain as short as possible.
 
-#### 토큰 / latency / 품질 데이터 (요약)
+#### Token / Latency / Quality Data (summary)
 
-| 메트릭 | 수치 | source |
+| Metric | Number | Source |
 |---|---|---|
-| 토큰 비용 | 15× chat | Anthropic |
-| latency | 15s-3min | Exa |
-| 정확도 저하 (단계당) | -2.8 ~ -8.5점 | MIT 의역 시 |
-| 오류 증폭 | 17.2× (independent) vs 4.4× (centralized) | Google 2026 |
-| 순차 계획 multi-agent 회귀 | -39 ~ -70% | Google 2026 |
-| 거버넌스 계층 효과 | 0.32 → 0.89 | "meaningful safety overhead" 주의 |
+| Token cost | 15× chat | Anthropic |
+| Latency | 15s-3min | Exa |
+| Accuracy degradation (per stage) | -2.8 ~ -8.5 points | MIT (paraphrased) |
+| Error amplification | 17.2× (independent) vs 4.4× (centralized) | Google 2026 |
+| Sequential plan multi-agent regression | -39 ~ -70% | Google 2026 |
+| Governance layer effect | 0.32 → 0.89 | "meaningful safety overhead" caveat |
 
 ---
 
-## Tier C — Vendor / Tool 동향 (2025-12 ~ 2026-04)
+## Tier C — Vendor / Tool Trends (2025-12 ~ 2026-04)
 
 ### C1. Cursor 3 + Composer 2 (2026-04)
 
-**핵심 발화:**
+**Key statements:**
 - Composer 2 = "purpose-built model optimized for **cost-efficient sub-agent work**"
 - "**handles the coordination layer cheaply**, calling out to stronger models only when needed"
-- 200+ tok/s, Agent Mode 가 20× scaled RL 로 multi-file editing
-- Background Agents = 클라우드 repo clone, 자율 PR 오픈
+- 200+ tok/s, Agent Mode does multi-file editing via 20× scaled RL
+- Background Agents = clones the cloud repo, opens autonomous PRs
 
-→ ✅ **우리 Haiku Coordinator + Opus Builder 패턴과 정확히 같은 발상.** 2026-04 frontier 가 같은 방향 수렴 = 강한 검증.
+→ ✅ **Exactly the same idea as our Haiku Coordinator + Opus Builder pattern.** The 2026-04 frontier converging to the same direction = strong validation.
 
-### C2. Cognition + Windsurf 합병 (2025-12 → 2026)
+### C2. Cognition + Windsurf Merger (2025-12 → 2026)
 
-- **2025-12**: Cognition AI 가 Windsurf $250M 인수
-- 2026: Devin 의 autonomous task execution + Windsurf 의 interactive developer-in-the-loop **합쳐짐**
+- **2025-12**: Cognition AI acquires Windsurf for $250M
+- 2026: Devin's autonomous task execution + Windsurf's interactive developer-in-the-loop **merged**
 - Windsurf SWE-1.5 @ 950 tok/s on Cerebras
 - "engineers manage **multiple Devin instances in parallel**", **40% of code commits**
 
-→ ✅ **우리 Builder.A vs Builder.B parallel mode** 의 강한 근거. Cognition 자체가 "Don't build multi-agents" 입장에서 **production 에서는 parallel instances 운영**으로 진화. 표면 입장 ≠ 실제 운영. 우리는 처음부터 그 합리적 절충 채택.
+→ ✅ **Strong basis for our Builder.A vs Builder.B parallel mode.** Cognition itself evolved from "Don't build multi-agents" to **running parallel instances in production**. Stated stance ≠ actual operations. We adopted that pragmatic compromise from the start.
 
-### C3. OpenAI Codex 동향
+### C3. OpenAI Codex Trends
 
 - "subagents - currently surfaced in the Codex app and CLI"
 - "Both CLIs support **non-interactive mode**, so you can script the handoff"
-- 2026-03 quarter: thread handoff + subagent navigation 개선
+- 2026-03 quarter: improvements to thread handoff + subagent navigation
 
-→ 우리 Builder.B (Codex CLI) 채택 결정의 운영 근거.
+→ Operational rationale for adopting Builder.B (Codex CLI).
 
 ---
 
-## Tier D — 학술 (2026 이후)
+## Tier D — Academic (post-2026)
 
 ### D1. RAPS — Reputation-Aware Publish-Subscribe (arXiv 2602.08009, 2026-02)
 
 URL: https://arxiv.org/abs/2602.08009
 
-**핵심:**
-- 분산 publish-subscribe 프로토콜 (고정 토폴로지 → 의도 기반 동적)
-- 두 overlay layer:
-  1. **Reactive Subscription** — 의도 동적 정제
-  2. **Bayesian Reputation** — 로컬 감시로 악의적 peer 탐지/격리
-- 5 벤치마크 검증: 적응성 + 확장성 + 견고성
+**Core:**
+- Distributed publish-subscribe protocol (fixed topology → intent-based dynamic)
+- Two overlay layers:
+  1. **Reactive Subscription** — dynamic intent refinement
+  2. **Bayesian Reputation** — local monitoring detects / isolates malicious peers
+- Validated on 5 benchmarks: adaptability + scalability + robustness
 
-→ **우리 우회**: 우리는 4 actor 고정 + Hub 가 라우팅 권한 → publish-subscribe 까지 안 감. **인사이트만 차용**: Bayesian reputation 발상 = Verifier 의 weighted decision 에 적용 가능 ([[bagelcode-rubric-scoring]] D5 에 향후 확장).
+→ **Our bypass**: We use 4 fixed actors + Hub holds routing authority → don't go as far as publish-subscribe. **Borrow the insight only**: Bayesian reputation idea = applicable to weighted decisions in the Verifier ([[bagelcode-rubric-scoring]] D5 future extension).
 
 ### D2. NeurIPS 2025 — Multi-Agent Collaboration via Evolving Orchestration (arXiv 2505.19591)
 
 URL: https://openreview.net/forum?id=L0xZPXT3le
 
-**핵심:**
-- "**Puppeteer-style** paradigm" — 중앙 orchestrator 가 dynamic 하게 agent 지휘
-- RL 로 학습된 orchestrator 가 adaptively sequence + prioritize
-- flexible collective reasoning
+**Core:**
+- "**Puppeteer-style** paradigm" — central orchestrator dynamically directs agents
+- RL-trained orchestrator adaptively sequences + prioritizes
+- Flexible collective reasoning
 
-→ 우리 Hub 가 **rule-based** (heuristic schema). RL 학습은 과제 스코프 초과. 향후 P2 work 로만 인지.
+→ Our Hub is **rule-based** (heuristic schema). RL training is out of scope for this task. Noted only as possible P2 future work.
 
 ### D3. NeurIPS 2025 — Improved MAC with Multi-Turn RL (MAGRPO)
 
-LLM 협력을 cooperative MARL 문제로 모델링. 우리 과제 스코프 외, **인지만**.
+Models LLM cooperation as a cooperative MARL problem. Out of our task scope, **awareness only**.
 
 ### D4. arXiv 2601.13671 — The Orchestration of Multi-Agent Systems
 
 URL: https://arxiv.org/html/2601.13671v1
 
-Architecture · Protocols · Enterprise Adoption 종합 정리. 학술적 backbone.
+Comprehensive survey of Architecture · Protocols · Enterprise Adoption. Academic backbone.
 
 ---
 
-## Tier E — 게임 도메인 정조준
+## Tier E — Game Domain Direct Hit
 
 ### E1. gamestudio-subagents (GitHub, 193 stars, 2026)
 
 URL: https://github.com/pamirtuna/gamestudio-subagents
 
-베이글코드 도메인 (모바일 캐주얼) 에 **가장 가까운 multi-agent 게임 빌드 시스템**.
+The **closest multi-agent game build system** to Bagelcode's domain (mobile casual).
 
-**12-agent team 구조:**
+**12-agent team structure:**
 
 ```
-경영      Master Orchestrator + Producer
-분석      Market Analyst + Data Scientist
-설계      Sr Game Designer + Mid Game Designer
-엔지니어  Mechanics Developer + Game Feel Developer
-미술      Sr Game Artist + Technical Artist + UI/UX
-QA        QA Agent
+Management   Master Orchestrator + Producer
+Analytics    Market Analyst + Data Scientist
+Design       Sr Game Designer + Mid Game Designer
+Engineering  Mechanics Developer + Game Feel Developer
+Art          Sr Game Artist + Technical Artist + UI/UX
+QA           QA Agent
 ```
 
-**3 mode (베이글코드 메일 의 "기획자→게임" 시나리오 직접 응답):**
-- **Design Mode** — 시장 검증 + 설계 문서 + 미술 방향
-- **Prototype Mode** — 핵심 메커닉 검증 + 플레이어 데이터
-- **Full Development Mode** — 모든 agent + telemetry
+**3 modes (direct response to the "planner→game" scenario in the Bagelcode email):**
+- **Design Mode** — market validation + design docs + art direction
+- **Prototype Mode** — core mechanic validation + player data
+- **Full Development Mode** — all agents + telemetry
 
 **workflow (verbatim):**
 ```
-사용자 입력
-→ 마켓 분석 (경쟁 + 타겟 검증)
-→ Go/No-Go 의사결정
-→ 모드별 팀 구성
-→ 병렬 개발 (설계→미술→엔지니어링→QA)
-→ 데이터 수집 + 최적화 반복
+User input
+→ Market analysis (competition + target validation)
+→ Go/No-Go decision
+→ Mode-specific team composition
+→ Parallel development (design→art→engineering→QA)
+→ Data collection + optimization iteration
 ```
 
-**산출 예 (Match-3 puzzle, 베이글코드 fit):**
+**Output example (Match-3 puzzle, Bagelcode fit):**
 ```bash
 claude "Design a match-3 puzzle game with space theme"
 ```
 
-→ `documentation/`, `source/`, `qa/`, `project-config.json` 자동 생성.
+→ Auto-generates `documentation/`, `source/`, `qa/`, `project-config.json`.
 
-→ **우리 Crumb 의 simplified 변형**. 12 → 4 actor 로 축소. 우리는 Master Orchestrator + Mechanics Developer + UI/UX (Codex) + QA (Gemini Vision) 만 활성. 베이글코드 메일 verbatim 정조준.
+→ **A simplified variant of our Crumb.** Reduced from 12 → 4 actors. We only activate Master Orchestrator + Mechanics Developer + UI/UX (Codex) + QA (Gemini Vision). Direct hit on the Bagelcode email verbatim.
 
-→ **차용 X**: 같은 개념을 우리 sandwich 패턴 + cross-provider Verifier 위에 다시 깎음. 12-agent 풀세트는 [[bagelcode-kiki-leverage]] §"가져오지 말 것" 과 일치.
+→ **Not borrowed**: Re-carve the same concept on top of our sandwich pattern + cross-provider Verifier. Avoiding the full 12-agent set is consistent with [[bagelcode-kiki-leverage]] §"What not to bring".
 
 ### E2. Unity Muse / Buildbox 4 / Layer / Ludo.ai (2026 cluster)
 
-| Tool | 차별점 |
+| Tool | Differentiator |
 |---|---|
-| Unity Muse | 자연어 → 캐주얼 게임 generation (game code + assets + animation + NPC AI) |
-| Buildbox 4 | 노코드 모바일 캐주얼 우선, text-to-game |
-| Layer | 게임 스튜디오 향 통합 generative platform |
-| Ludo.ai | 게임 research / design 어시스턴트, "10x productivity" |
+| Unity Muse | Natural language → casual game generation (game code + assets + animation + NPC AI) |
+| Buildbox 4 | No-code mobile-casual first, text-to-game |
+| Layer | Integrated generative platform for game studios |
+| Ludo.ai | Game research / design assistant, "10x productivity" |
 
-→ 우리는 **개별 tool 가 아니라 멀티 에이전트 협업 인프라**. 직접 경쟁 X, 차용 X. 베이글코드 신작팀이 이런 tool 들과 연결될 수 있는 **infrastructure 레이어** 가 우리 위치.
+→ We are **not an individual tool but multi-agent collaboration infrastructure**. No direct competition, no borrowing. Our position is the **infrastructure layer** that the Bagelcode new-game team can connect to such tools through.
 
 ---
 
-## Tier F — Agent Protocol 표준 (2026)
+## Tier F — Agent Protocol Standards (2026)
 
 ### F1. A2A (Agent-to-Agent) Protocol
 
-- 2025-04 Google 발표
-- 2025-06 Linux Foundation 기증
+- 2025-04 announced by Google
+- 2025-06 donated to Linux Foundation
 - 2026-01-15 LangGraph v0.2 first-class A2A + MCP target
-- 2025-07 AgentMaster = 첫 production A2A+MCP 사용
+- 2025-07 AgentMaster = first production A2A+MCP user
 
-**아키텍처 distinction:**
+**Architecture distinction:**
 - **MCP** = vertical (agent-to-tool), client-server
 - **A2A** = horizontal (agent-to-agent), peer-to-peer
 
-→ 우리 wire format = JSONL (A2A 와 정합). MCP 는 도구 호출 시 자연 사용. 명시적 A2A 채택은 과제 스코프 초과 — 인지만.
+→ Our wire format = JSONL (compatible with A2A). MCP is naturally used during tool calls. Explicit A2A adoption is out of scope — awareness only.
 
-### F2. 운영 보안 우려 (verbatim)
+### F2. Operational Security Concern (verbatim)
 
 > "the agent protocol stack is being deployed into production faster than the security model can keep up"
 
-→ 우리는 demo / 평가 환경이라 직접 영향 없음. 그러나 README "Limitations" 섹션에 1줄 언급 가치.
+→ No direct impact since we are demo / evaluation. But worth a one-line mention in the README "Limitations" section.
 
 ---
 
-## 종합 — 우리 결정 검증/강화 8가지
+## Summary — 8 Decisions Validated / Reinforced
 
-| 우리 결정 | 2026 검증 |
+| Our Decision | 2026 Validation |
 |---|---|
 | Hub-Ledger-Spoke (Hierarchical) | ✅ Lanham "Orchestration is winner", Anthropic shared docs |
-| PDCA chain 폐기 | ✅✅ MIT 결정 이론 (5단계 → -68%p), Google 2026 (-39~70% 회귀) |
-| flat mesh 폐기 | ✅✅ Lanham "open mesh = 죽음" |
-| Haiku Coordinator + Opus Builder | ✅ Cursor Composer 2 정확히 같은 발상 |
-| Builder.A + Builder.B 병렬 옵션 | ✅ Cognition Devin "multiple instances in parallel" |
-| Cross-provider Verifier | ✅ "From Spark to Fire" 거버넌스 계층 |
-| `--solo` mode 시작 → 점진 확장 | ✅ Lanham + Shopify Sidekick "avoid early" |
-| 4 actor 짧은 chain | ✅ MIT 결정이론 (relay 짧을수록 강건) |
+| Drop PDCA chain | ✅✅ MIT decision theory (5-stage → -68%p), Google 2026 (-39~70% regression) |
+| Drop flat mesh | ✅✅ Lanham "open mesh = death" |
+| Haiku Coordinator + Opus Builder | ✅ Cursor Composer 2 has the exact same idea |
+| Builder.A + Builder.B parallel option | ✅ Cognition Devin "multiple instances in parallel" |
+| Cross-provider Verifier | ✅ "From Spark to Fire" governance layer |
+| Start in `--solo` mode → progressive expansion | ✅ Lanham + Shopify Sidekick "avoid early" |
+| 4-actor short chain | ✅ MIT decision theory (shorter relay = more robust) |
 
-→ **모든 결정이 2026 frontier 와 정합**. PDCA 폐기 결정이 가장 강하게 검증됨.
+→ **All decisions align with the 2026 frontier**. The decision to drop PDCA receives the strongest validation.
 
-## 우리가 추가로 고려할 4가지 (이 페이지 영향)
+## 4 Additional Considerations (impact of this page)
 
-1. **D6 Resilience 차원 [[bagelcode-rubric-scoring]] 에 추가 결정** — Lanham "방어 성공률 0.32→0.89" 같은 cascade 시연 데이터 가능
-2. **README "Limitations" 섹션** — A2A protocol 보안 1줄 + multi-agent 15× 토큰 정직한 인정
-3. **`--parallel-builders` mode 의 demo 명시** — Cognition 의 "40% commits in parallel" 이 production 검증
-4. **MIT 결정이론 인용** — 우리 README 의 "왜 4 actor 인가" 정당화에 사용 가능 (verbatim 1줄)
+1. **Decide whether to add the D6 Resilience dimension to [[bagelcode-rubric-scoring]]** — Lanham's "defense rate 0.32→0.89" is a possible cascade demo data point
+2. **README "Limitations" section** — one line on A2A protocol security + honest acknowledgment of multi-agent 15× tokens
+3. **Demo for `--parallel-builders` mode** — Cognition's "40% commits in parallel" as production validation
+4. **MIT decision theory citation** — usable in our README's "why 4 actors" justification (verbatim one line)
 
-## 1차 사료 (12 links)
+## Primary Sources (12 links)
 
-### 산업 리포트
+### Industry Reports
 - [Anthropic 2026 Agentic Coding Trends Report](https://resources.anthropic.com/2026-agentic-coding-trends-report)
 - [Datadog State of AI Engineering 2026](https://www.datadoghq.com/state-of-ai-engineering/)
 
-### 분석 / 종합
+### Analysis / Synthesis
 - [Lanham — Multi-Agent in Production in 2026 (2026-04)](https://medium.com/@Micheal-Lanham/multi-agent-in-production-in-2026-what-actually-survived-f86de8bb1cd1)
 - [AI Agents in Production 2026 (47billion)](https://47billion.com/blog/ai-agents-in-production-frameworks-protocols-and-what-actually-works-in-2026/)
 
-### Vendor 동향
+### Vendor Trends
 - [Cursor vs Windsurf vs Claude Code 2026 (DEV)](https://dev.to/pockit_tools/cursor-vs-windsurf-vs-claude-code-in-2026-the-honest-comparison-after-using-all-three-3gof)
 - [Windsurf vs Cursor vs Claude Code (How Do I Use AI, 2026-04)](https://www.howdoiuseai.com/blog/2026-04-16-windsurf-vs-cursor-vs-claude-code)
 - [Codex Subagents](https://developers.openai.com/codex/subagents)
 
-### 학술 (2026 이후)
+### Academic (post-2026)
 - [RAPS — arXiv 2602.08009 (2026-02)](https://arxiv.org/abs/2602.08009)
 - [Multi-Agent Collaboration via Evolving Orchestration — NeurIPS 2025](https://openreview.net/forum?id=L0xZPXT3le)
 - [Orchestration of MAS — arXiv 2601.13671](https://arxiv.org/html/2601.13671v1)
 - [Awesome AI Agent Papers 2026 (curated)](https://github.com/VoltAgent/awesome-ai-agent-papers)
 
-### 게임 도메인
+### Game Domain
 - [gamestudio-subagents (GitHub, 12-agent)](https://github.com/pamirtuna/gamestudio-subagents)
 - [AI Agents for Game Development 2026 (index.dev)](https://www.index.dev/blog/ai-agents-for-game-development)
 - [The Role of AI in Game Development 2026 (Q99)](https://www.q99studio.com/ai-game-development-2026/)
 
-### Protocol 표준
+### Protocol Standards
 - [A2A Protocol spec](https://a2a-protocol.org/latest/)
 - [MCP vs A2A 2026 Guide (DEV)](https://dev.to/pockit_tools/mcp-vs-a2a-the-complete-guide-to-ai-agent-protocols-in-2026-30li)
 
@@ -340,9 +340,9 @@ claude "Design a match-3 puzzle game with space theme"
 
 - [[bagelcode]] / [[bagelcode-task-direction]]
 - [[bagelcode-frontier-orchestration-2026]] — sister page (research patterns)
-- [[bagelcode-orchestration-topology]] — Hub-Ledger-Spoke 결정
+- [[bagelcode-orchestration-topology]] — Hub-Ledger-Spoke decision
 - [[bagelcode-fault-tolerance-design]] — F1-F5 mitigation
-- [[bagelcode-rubric-scoring]] — D6 Resilience 추가 검토 근거
-- [[bagelcode-agents-fixed]] — Coordinator·Builder·Verifier 선정 검증
-- [[bagelcode-tradingagents-paper]] — 학술 1차 근거 (sister)
-- [[bagelcode-paperclip-vs-alternatives]] — framework 비채택 (Lanham "simplest solution" 일관)
+- [[bagelcode-rubric-scoring]] — basis for considering D6 Resilience addition
+- [[bagelcode-agents-fixed]] — Coordinator·Builder·Verifier selection validation
+- [[bagelcode-tradingagents-paper]] — academic first-party basis (sister)
+- [[bagelcode-paperclip-vs-alternatives]] — non-adoption of frameworks (consistent with Lanham "simplest solution")

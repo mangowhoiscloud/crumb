@@ -1,103 +1,103 @@
 ---
-title: 베이글코드 AI-First 문화 — 에이전트를 위한 에이전트
+title: Bagelcode AI-First Culture — Agents for Agents
 category: references
 tags: [bagelcode, ai-first, culture, agent-design, todos, ai-lab]
 sources:
-  - "https://www.bagelcode.com/article/ai-first-wiht-bagles-에이전트를-만들다-에이전트를-위해-만들다/"
+  - "https://www.bagelcode.com/article/ai-first-wiht-bagels-에이전트를-만들다-에이전트를-위해-만들다/"
 created: 2026-05-01
 updated: 2026-05-01
 ---
 
-# 베이글코드 AI-First 문화 — 에이전트를 위한 에이전트
+# Bagelcode AI-First Culture — Agents for Agents
 
-> 베이글코드 공식 블로그 요약. **AI Lab팀 / AI-First 정의 / TODOS 사례 / 사람·에이전트 양면 설계**. 채용 과제의 톤·평가 기준을 가장 직접적으로 보여주는 문화 자료.
+> Summary of the Bagelcode official blog post. **The AI Lab team / definition of AI-First / TODOS case study / dual design for humans and agents**. The cultural source that most directly conveys the tone and evaluation criteria of the recruitment task.
 
-## 한 줄 요약
+## One-line summary
 
-베이글코드의 AI-First는 **AI를 도구가 아니라 협업 파트너**로 둔다. 그래서 도구를 만들 때도 *사람만* 쓰는 UI를 만드는 게 아니라 **에이전트도 쓸 수 있는 형태**로 만든다.
+Bagelcode's AI-First treats **AI not as a tool but as a collaboration partner**. So even when building tools, they don't make UIs *for humans only* — they design them in a form **that agents can also use**.
 
-## AI-First 정의
+## Definition of AI-First
 
-> "AI와 함께 성장의 영역을 넓혀가는 여정."
+> "에이전트와 함께 성장의 영역을 넓혀가는 여정." (*A journey of expanding the territory of growth together with agents.*)
 
-→ 단발 자동화가 아니라 사람과 AI가 같이 진화하는 운영 모델. "스며든 변화" — 강요 X, 자율 채택 O.
+→ Not one-off automation but an operational model in which humans and AI evolve together. "Change that seeps in" — no coercion, voluntary adoption.
 
-## AI Lab 팀의 역할
+## The role of the AI Lab team
 
-- AI 트렌드 연구 + 실제 업무 적용
-- 직접 도구 개발 + 사내 배포
-- 전사 생산성 향상 기여
+- AI trend research + applying it to actual work
+- Building tools directly + deploying internally
+- Contributing to company-wide productivity gains
 
-**대표 산출물**: 코드베이스, 씬스틸러, AI뉴스 슬랙봇, **TODOS** (사례).
+**Representative outputs**: Codebase, ScreenStealer, AI News Slack bot, **TODOS** (case study).
 
-## 에이전트 협업 5원칙 (블로그에서 추출)
+## Five principles for collaborating with agents (extracted from the blog)
 
-1. **명령이 아닌 '맥락 공유 소통'** — 단순 지시가 아니라 컨텍스트 공유
-2. **다중 에이전트 병렬 처리** — 동시에 여러 에이전트
-3. **AI 재사용을 위한 문서화** — 같은 일 두 번 시키지 않게 문서화
-4. **반복 작업의 구조화** — 스킬/룰 생성으로 패턴 굳히기
-5. **기존 도구 활용 + 개인화 부분만 직접 개발** — 풀 빌드 X, 가장자리만 빌드
+1. **Not commands but "context-sharing communication"** — sharing context rather than issuing simple instructions
+2. **Multi-agent parallel processing** — multiple agents at the same time
+3. **Documentation for AI reuse** — document so the same task isn't requested twice
+4. **Structuring repetitive work** — solidify patterns by creating skills/rules
+5. **Use existing tools + build only the personalization edges yourself** — no full-stack build, only the edges
 
-## TODOS 사례 (실전 신호)
+## TODOS case study (a real-world signal)
 
-| 항목 | 내용 |
+| Item | Content |
 |---|---|
-| 문제 | Jira는 과도함 + Slack Canvas는 비효율 |
-| 해결 | **3일 개발** — 단순 UI/UX 강조 |
-| 확산 | 자동화보다 **각 팀 자율 커스터마이징 지원** |
-| 인용 | "제가 세팅만 해드리면 돼요. 각 팀이 직접 하는 게 최고죠" |
+| Problem | Jira is overkill + Slack Canvas is inefficient |
+| Solution | **3-day build** — emphasizing simple UI/UX |
+| Diffusion | Rather than automating, **support each team's autonomous customization** |
+| Quote | "제가 세팅만 해드리면 돼요. 각 팀이 직접 하는 게 최고죠" (*I just need to set it up — it's best when each team does it themselves.*) |
 
-**함의:**
-- 베이글코드는 **3일짜리 prototype을 prod로 진화시키는 사이클을 표준으로 둔다** ([[bagelcode-davis-system]] 의 BagelJam:Dev 2일 해커톤과 일관)
-- **풀스택 솔루션보다 가벼운 도구 + 각 팀 자율 운영** — 과제도 풀 SaaS X, 명료한 도구 1개
+**Implications:**
+- Bagelcode **treats the cycle of evolving a 3-day prototype into production as a standard** (consistent with [[bagelcode-davis-system]]'s 2-day BagelJam:Dev hackathon)
+- **Lightweight tools + each team's autonomous operation rather than full-stack solutions** — the take-home is also no full SaaS, but a single clear tool
 
-## 설계 기준의 변화 (가장 결정적)
+## The shift in design criteria (most decisive)
 
-**과거**: 사람 중심 웹 인터페이스 → 예쁘게 디자인.
-**현재**: **에이전트도 활용 가능한 설계**. CLI, MCP 등 고려.
+**Past**: human-centric web interface → designed to look pretty.
+**Present**: **design that agents can also leverage**. Considering CLI, MCP, etc.
 
-> "AI 친화적으로 할 거면 굳이 예쁘게 만드는 데 시간을 많이 들일 필요가 없었던 거예요"
+> "AI 친화적으로 할 거면 굳이 예쁘게 만드는 데 시간을 많이 들일 필요가 없었던 거예요" (*If we're going to be AI-friendly, there was really no need to spend a lot of time making things pretty.*)
 
-**핵심 함의 (과제 직결):**
-- UI 화려함 < 에이전트 호환성 (CLI / API / MCP / 메시지 프로토콜)
-- "사용자가 협업 과정에 개입/관찰" 요구 = 에이전트 친화 + 사람 친화 동시 (이중 인터페이스)
-- README가 "동작" 해야 한다 = 사람도 즉시 실행, 에이전트도 즉시 호출
+**Core implications (directly tied to the take-home):**
+- UI flair < agent compatibility (CLI / API / MCP / message protocols)
+- The "user intervenes/observes during collaboration" requirement = simultaneously agent-friendly and human-friendly (a dual interface)
+- README must "work" = a human can run it instantly, an agent can call it instantly
 
-## 조직 문화 변화의 신호
+## Signals of organizational-culture change
 
-- **AI Help for Beginner** Slack 채널 활성화 — 학습 채널이 살아있음
-- **AI Fair / 게임잼** — 실습 문화 정착
-- "**강요가 아니라 스며든 변화**" — 정책으로 누른 게 아니라 자율 채택
+- The **AI Help for Beginner** Slack channel is active — the learning channel is alive
+- **AI Fair / game jams** — hands-on culture is established
+- "**Not coercion but seeping change**" — not pushed by policy but voluntarily adopted
 
-→ **채용 시그널**: AI에 능숙한 사람이 아니라, **AI를 자기 워크플로우에 자연스럽게 녹이는 사람**을 찾는다. "에이전트로 뭔가 만들어 본 흔적"이 있는 후보를 본다.
+→ **Recruitment signal**: they're not looking for someone proficient at AI, but for **someone who naturally weaves AI into their own workflow**. They look for candidates who show "traces of having actually built something with agents."
 
-## 채용 과제와 직접 매핑
+## Direct mapping to the recruitment task
 
-| 블로그 메시지 | 과제 요건과의 관계 |
+| Blog message | Relation to task requirements |
 |---|---|
-| "AI 협업 = 맥락 공유 소통" | "사용자가 협업 과정에 개입/관찰" 요건의 본질 |
-| "다중 에이전트 병렬 처리" | "두 개 이상의 AI 에이전트가 메시지를 주고받음" |
-| "AI 재사용을 위한 문서화" | 제출물에 ".md 파일 포함" 명시 |
-| "반복 작업의 구조화 (스킬/룰)" | Claude Code skills, Cursor rules 활용 신호 |
-| "에이전트도 쓸 수 있는 설계" | UI를 화려하게 X, **CLI/MCP/메시지 프로토콜** 우선 |
-| "3일 개발 / 단순 UI" | 과제 마감 2-3일 + 단순함이 미덕 |
-| "각 팀 자율 커스터마이징" | 결과물이 **확장 포인트(설정/스킬)**를 노출하면 가산점 |
+| "AI collaboration = context-sharing communication" | The essence of the "user intervenes/observes during collaboration" requirement |
+| "Multi-agent parallel processing" | "Two or more AI agents exchanging messages" |
+| "Documentation for AI reuse" | Submission explicitly requires ".md files included" |
+| "Structuring repetitive work (skills/rules)" | Signal to leverage Claude Code skills, Cursor rules |
+| "Design that agents can also use" | Don't dazzle with UI — prioritize **CLI/MCP/message protocols** |
+| "3-day build / simple UI" | Task deadline of 2-3 days + simplicity is a virtue |
+| "Each team's autonomous customization" | Bonus points if the deliverable exposes **extension points (config/skills)** |
 
-## 베이글코드 신작팀이 보고자 하는 것 (추론)
+## What the Bagelcode 신작팀 wants to see (inferred)
 
-채용 메일 + 이 블로그를 합치면:
+Combining the recruitment mail with this blog:
 
-1. **"AI 코딩 에이전트로 무언가를 짧은 시간에 깎아낼 수 있는 사람"** (3일 사이클)
-2. **"에이전트끼리, 그리고 사람과 자연스럽게 컨텍스트를 주고받는 구조를 설계할 수 있는 사람"**
-3. **"문서(.md)와 도구를 같이 다루는 메타 사고가 있는 사람"** — 인스트럭션이 코드만큼 중요한 자산이라는 감각
-4. **"화려한 UI보다 동작하는 README를 만드는 사람"** — 진짜 쓸모 우선
-5. **"기획-엔지니어 양면을 보는 사람"** — 메일의 "기획 역량을 기대하겠습니다"
+1. **"Someone who can carve something out with an AI coding agent in a short time"** (3-day cycle)
+2. **"Someone who can design structures where agents — and humans — naturally exchange context with each other"**
+3. **"Someone with the meta-thinking to handle documents (.md) alongside tools"** — the sense that instructions are an asset as important as code
+4. **"Someone who builds a working README rather than a flashy UI"** — real usefulness first
+5. **"Someone who sees both the planner and engineer sides"** — the mail's "we expect planning capability"
 
 ## See also
 
-- [[bagelcode]] — 프로젝트 허브
-- [[bagelcode-davis-system]] — DAVIS 사례 (멀티 에이전트 라우터)
-- [[bagelcode-recruitment-task]] — 채용 메일 원문
-- [[bagelcode-team-profile]] — 팀 페르소나 종합
-- [[bagelcode-task-direction]] — 과제 방향성
-- [[kiki-appmaker-orchestration]] — sandwich identity (에이전트 인스트럭션 자산화 패턴)
+- [[bagelcode]] — project hub
+- [[bagelcode-davis-system]] — DAVIS case study (multi-agent router)
+- [[bagelcode-recruitment-task]] — the recruitment-mail original text
+- [[bagelcode-team-profile]] — synthesized team persona
+- [[bagelcode-task-direction]] — task direction
+- [[kiki-appmaker-orchestration]] — sandwich identity (the pattern of treating agent instructions as assets)
