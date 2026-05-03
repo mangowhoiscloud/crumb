@@ -4,6 +4,22 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Docs — Pre-verifier-no-scoring page: explicit LLM-judge vs deterministic-gate distinction + Anthropic cache numbers (W1) (2026-05-03)
+
+`wiki/synthesis/bagelcode-pre-verifier-no-scoring-frontier-2026-05-03.md` was originally written to deflect reviewer questions about why intermediate phases (spec, design) lack scoring. The page implicitly conflated "no scoring at all" with "no LLM scoring", because the only scoring that *was* present (`qa_check`) was discussed under its own heading. Reviewers reading the TL;DR table can mistake the "(none)" cell on the planner-lead row as "no gate is allowed" rather than "no LLM gate is allowed". After the post-merge token-quality audit and the 10-system frontier survey on "step-gate-with-cached-retry", this distinction was made load-bearing.
+
+Changes:
+
+- **New section "LLM-judge gate ≠ deterministic gate"** with a 2-row table mapping gate type → frontier verdict → Crumb stance. LLM-judge gates rejected (DeepSeek-R1 PRM abandonment Jan 2025, Cognition "Don't Build Multi-Agents" Jun 2025, Eisenstein DeepMind 2024 round 4+ saturation, Huang ICLR 2024 / Stechly NeurIPS 2024 self-critique noise). Deterministic gates accepted (Cursor 2.0 typecheck-after-5-writes, DSPy `dspy.Suggest`, OpenHands ReAct deterministic observation, Aider diff-format parser retry).
+- **TL;DR table** gains a new row for `step.design` showing it's an eligible deterministic gate (palette ⊂ named retro palette / touch hit zone WCAG 2.5.5 AAA = 44×44 / motion timing within evidence_ref deviation). Cross-references the new section.
+- **New section "Sandwich layout for cached retry (Anthropic numbers)"** — embeds the official Anthropic ephemeral cache table (4 breakpoints, 5m/1h TTL, 1.25× / 2.0× write multiplier, 0.1× read multiplier, 0.28 reads / 1.11 reads break-even). 4-bp + rolling-tail layout strategy. Byte-identical discipline footguns cited from frontier known-issue reports (Claude Code #43657, Cline #9892, Hermes-agent #13631).
+- **Two new Q&A cheat sheet entries**: (1) "Could you add a design-phase quality gate?" — yes, deterministic only, Camp B pattern; (2) "Why not retry every step?" — Eisenstein 2024 round-4 saturation caps cumulative rounds at 3.
+- Frontmatter `related:` extended with `bagelcode-no-pass-n-decision-2026-05-03`, `bagelcode-caching-strategy`, `bagelcode-caching-frontier-2026`. Tags gain `deterministic-gate`, `prompt-cache`.
+
+No code changes. This is the conceptual groundwork for the upcoming W2/W3/W4 PRs (sandwich byte-identical CI test, `design_check` deterministic effect, retry policy with cache-hit monitoring).
+
+All numbers in the new sections are paper- or standard-grounded (Anthropic official docs, Eisenstein DeepMind 2024, W3C WCAG 2.5.5, Lospec retro palette catalog) — no magic values introduced.
+
 ### Changed — Studio feedstack: live-feed on top, narrative on bottom + VSCode-style orient toggle + datadog-grade kind formatters (W-Studio-A) (2026-05-03)
 
 Three coupled improvements to the live execution feed + agent narrative panels per user feedback:
