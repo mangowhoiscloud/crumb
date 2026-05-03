@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, '..');
 const clientDir = resolve(pkgRoot, 'src', 'client');
-const outFile = resolve(pkgRoot, 'src', 'studio-html.generated.ts');
+const outFile = resolve(pkgRoot, 'src', 'server', 'studio-html.generated.ts');
 
 const html = readFileSync(resolve(clientDir, 'studio.html'), 'utf8');
 const css = readFileSync(resolve(clientDir, 'studio.css'), 'utf8');

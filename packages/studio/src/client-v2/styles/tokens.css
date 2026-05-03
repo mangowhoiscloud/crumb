@@ -1,0 +1,145 @@
+/*
+ * M2 — Studio v2 design tokens.
+ *
+ * Source-of-truth for cream / brown / actor-lane palette so the v2 client
+ * renders pixel-equivalent to the v1 baseline (per §0 prime directive).
+ * Mirrors the values in `design.md` at the repo root + `studio.css` of v1.
+ *
+ * The `[data-theme="dark"]` overrides match v1's [data-theme="dark"]
+ * branch in studio.css. Theme bootstrap script in index.html sets the
+ * attribute before paint to prevent FOUC.
+ *
+ * Density toggle: `[data-density="compact"]` on <html> drops every
+ * vertical rhythm by ~25% (Datadog Notebook convention). See §6.6.
+ */
+
+@import 'open-props/style';
+
+:root {
+  /* Brand surfaces (cream / kraft) — light theme defaults. */
+  --canvas: #fdf3e7;
+  --surface-1: #f7e8d2;
+  --surface-2: #f0d9b5;
+  --surface-3: #e8c896;
+  --surface-card: #fffaf0;
+  --hairline: #d8c2a0;
+  --hairline-strong: #c0a880;
+  --hairline-soft: rgba(96, 56, 18, 0.12);
+
+  /* Ink (text) hierarchy. */
+  --ink: #401e08;
+  --ink-strong: #2d1304;
+  --ink-muted: #6a4828;
+  --ink-subtle: #8b6d4e;
+  --ink-tertiary: #b29275;
+
+  /* Brand accent. */
+  --primary: #b8742d;
+  --primary-strong: #a45c1a;
+  --accent-warm: #cc7a3a;
+  --lime: #6b8c2a;
+  --warn: #c47020;
+  --audit-bg: #f7e6cc;
+  --audit-fg: #b8431c;
+
+  /* Per-actor lane colors (lifecycle visualization). */
+  --actor-user: #6a4828;
+  --actor-coordinator: #8b6d4e;
+  --actor-planner-lead: #cc7a3a;
+  --actor-researcher: #845b3a;
+  --actor-builder: #6b8c2a;
+  --actor-verifier: #c4452a;
+  --actor-builder-fallback: #946a48;
+  --actor-validator: #b8742d;
+  --actor-system: #4a3220;
+
+  /* Radii. */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-pill: 9999px;
+
+  /* Density-aware spacing scale (Comfortable defaults). */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Density-aware control heights. */
+  --row-preset: 32px;
+  --row-harness: 44px;
+  --row-model: 56px;
+
+  /* Typography. */
+  --font-body: ui-sans-serif, -apple-system, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --font-brand: 'Crumb Brand', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+}
+
+[data-theme='dark'] {
+  --canvas: #14110d;
+  --surface-1: #1c1812;
+  --surface-2: #28221b;
+  --surface-3: #342c22;
+  --surface-card: #1f1a14;
+  --hairline: #3a3024;
+  --hairline-strong: #4d4032;
+  --hairline-soft: rgba(255, 224, 180, 0.08);
+
+  --ink: #faecd6;
+  --ink-strong: #ffffff;
+  --ink-muted: #c8b08c;
+  --ink-subtle: #9a8568;
+  --ink-tertiary: #6e5e44;
+
+  --primary: #d8902c;
+  --primary-strong: #f0a440;
+  --accent-warm: #e89a55;
+  --lime: #c2ef4e;
+  --warn: #ffb287;
+  --audit-bg: #1f1633;
+  --audit-fg: #fa7faa;
+
+  --actor-user: #5e6ad2;
+  --actor-coordinator: #8a8f98;
+  --actor-planner-lead: #ffb287;
+  --actor-researcher: #79628c;
+  --actor-builder: #c2ef4e;
+  --actor-verifier: #fa7faa;
+  --actor-builder-fallback: #62666d;
+  --actor-validator: #ffb287;
+  --actor-system: #34343a;
+}
+
+/* Compact density — Datadog Notebook convention; M3+ inherits this from
+ * <html data-density="compact">. ~25% off vertical rhythm; type drops one
+ * step (body-md → body-sm) inside dense panels via component-local rules. */
+[data-density='compact'] {
+  --space-1: 3px;
+  --space-2: 6px;
+  --space-3: 9px;
+  --space-4: 12px;
+  --space-5: 18px;
+  --space-6: 24px;
+
+  --row-preset: 24px;
+  --row-harness: 36px;
+  --row-model: 44px;
+}
+
+/* prefers-reduced-motion: per §8.1 quality bar — collapse all transitions
+ * to 0ms when the OS asks for less motion. dockview honors this when its
+ * own transitions are disabled at the wrapper level. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
