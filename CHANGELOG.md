@@ -4,6 +4,30 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — Pipeline annotations + project default layout + export/import + minimap toggle (M9 — n8n parity polish, 2026-05-03)
+
+Pipeline canvas gains the n8n-style polish that was deferred from M2-M8 to keep the migration focused. All four deliverables ride a single React Flow extension surface — no new dep, no schema change, no server route.
+
+- **Sticky-Note nodes** (`pipeline/StickyNoteNode.tsx`) — draggable annotation cards on the canvas. Double-click to edit (textarea); blur or ⌘+Enter commits, Esc cancels. Hover shows a delete glyph. Renders as a soft cream-on-warm card with `--accent-warm` border so it never reads as an actor node. No Handle, no edges, no participation in the dagre seed.
+- **"Save default" affordance** — pins the current layout (positions + stickies) as the project's default under `crumb.studio.pipeline.layout.project.<projectId>`. New sessions in the same project hydrate from this default before falling back to the dagre seed.
+- **Layout JSON export / import** — Pipeline toolbar `↓ export` downloads `pipeline-layout-<sessionPrefix>.json`; `↑ import` reads a previously exported file and re-applies positions + stickies. Lets a power user move layouts between machines.
+- **Minimap toggle** — toolbar button (and persisted state at `crumb.studio.pipeline.minimap`) hides/shows the bottom-right minimap. Sticky nodes render as `--accent-warm` in the minimap so annotations stay legible at zoomed-out scale.
+
+Persistence resolution order on session switch:
+1. Session-specific override `crumb.studio.pipeline.layout.<sessionId>` (most recent drag wins)
+2. Project default `crumb.studio.pipeline.layout.project.<projectId>` (set via "Save default")
+3. Legacy global `crumb.studio.pipeline.layout` (one-time migration from pre-M9)
+4. Dagre seed (`buildDefaultLayout()`)
+
+Toast affordance: `setToast` flashes a one-line confirmation (auto-dismiss 2.2 s) for "layout reset" / "saved as default" / "import failed" so the operator gets non-modal feedback without breaking the canvas focus.
+
+Plan alignment audit (against `wiki/synthesis/bagelcode-studio-big-bang-update-2026-05-03.md`):
+- §6.1 Interactive Pipeline: complete (drag + pan + zoom + sticky annotations + export/import)
+- §9 open question #6 ("user-added text-label nodes" → deferred to M9): resolved — sticky-note feature now ships
+- §9 open question #7 ("per-session vs per-project layout"): resolved with the 3-tier resolution order above
+- §13.1 portability: no hardcoded paths; all storage keyed by sessionId / projectId / user-scope only
+- §17 leak guard: client doesn't recompute any server-derived metric; sticky text persists in localStorage only (no transcript write)
+
 ## [1.0.0] — 2026-05-03
 
 First publishable release. The big-bang Studio migration (M0 → M8) reached its hard gate; the React + dockview client replaces the vanilla DOM bundle entirely; transcript schema, reducer invariants, anti-deception validator, multi-host preset system, and CourtEval verifier flow are all production-shaped.
