@@ -36,7 +36,8 @@ describeServer('studio server', () => {
     try {
       const r = await fetchText(server.url);
       expect(r.status).toBe(200);
-      expect(r.body).toMatch(/<!DOCTYPE html>/);
+      // Doctype is case-insensitive per HTML spec; prettier emits lowercase.
+      expect(r.body).toMatch(/<!doctype html>/i);
       expect(r.body).toContain('Crumb · Live Studio');
     } finally {
       await server.close();

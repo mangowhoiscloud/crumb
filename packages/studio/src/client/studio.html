@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Crumb · Live Studio</title>
-<!--
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Crumb · Live Studio</title>
+    <!--
   PR-Branding (F3) — pre-paint theme bootstrap (FOUC prevention).
   Runs before any CSS computes against tokens. Reads the persisted
   preference (or OS preference if absent) and sets data-theme on
@@ -12,24 +12,28 @@
   correctly on first paint. No-op for users who have an explicit
   preference.
 -->
-<script>
-(function () {
-  try {
-    var stored = localStorage.getItem('crumb.theme');
-    var auto = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    document.documentElement.dataset.theme = stored || auto;
-  } catch (e) {
-    // localStorage may be blocked; default to light (matches :root).
-    document.documentElement.dataset.theme = 'light';
-  }
-})();
-</script>
-<style>__CSS__</style>
-</head>
-<body>
-
-<aside class="sessions" id="sessions-pane">
-  <!--
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('crumb.theme');
+          var auto =
+            window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
+          document.documentElement.dataset.theme = stored || auto;
+        } catch (e) {
+          // localStorage may be blocked; default to light (matches :root).
+          document.documentElement.dataset.theme = 'light';
+        }
+      })();
+    </script>
+    <style>
+      __CSS__
+    </style>
+  </head>
+  <body>
+    <aside class="sessions" id="sessions-pane">
+      <!--
     PR-Branding (F3 + bread character) — Crumb wordmark. Inline multi-color
     SVG: kawaii toast slice with a bite missing top-right, simple face, and
     orange crumbs scattering below-left (matches the brand mark mascot).
@@ -37,12 +41,22 @@
     both light and dark themes; theme-driven recolor (var(--primary)) is not
     applied to the mark. Wordmark uses font-family "Crumb Brand" cascade.
   -->
-  <div class="brand">
-    <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
-      <!-- Toast slice silhouette with a rounded bite carved out of the
+      <div class="brand">
+        <button
+          id="sidebar-toggle"
+          class="sidebar-toggle"
+          aria-expanded="true"
+          aria-label="Toggle sessions sidebar"
+          title="Collapse sessions sidebar"
+        >
+          ☰
+        </button>
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+          <!-- Toast slice silhouette with a rounded bite carved out of the
            upper-right crust. Single path so the brown crust outline detours
            naturally around the bite indent without overlapping artwork. -->
-      <path d="M5.5 7.5
+          <path
+            d="M5.5 7.5
                Q5.5 3 12 3
                Q14.6 3 15.6 3.7
                Q15 5 16.4 5.5
@@ -52,9 +66,14 @@
                L7.5 18
                Q5.5 18 5.5 16
                Z"
-            fill="#fde6c0" stroke="#cc7a3a" stroke-width="1.4" stroke-linejoin="round"/>
-      <!-- Inner crumb-texture face: a softer warm wash inside the crust line -->
-      <path d="M7.5 7.5
+            fill="#fde6c0"
+            stroke="#cc7a3a"
+            stroke-width="1.4"
+            stroke-linejoin="round"
+          />
+          <!-- Inner crumb-texture face: a softer warm wash inside the crust line -->
+          <path
+            d="M7.5 7.5
                Q7.5 5 10 5
                L14 5
                Q16 5 16 7.5
@@ -63,47 +82,59 @@
                L10 16
                Q7.5 16 7.5 14
                Z"
-            fill="#fff1d4" opacity="0.7"/>
-      <!-- Eyes -->
-      <ellipse cx="10" cy="10.6" rx="0.75" ry="1.1" fill="#2a1a08"/>
-      <ellipse cx="13" cy="10.6" rx="0.75" ry="1.1" fill="#2a1a08"/>
-      <!-- Smile -->
-      <path d="M10.6 12.7 Q11.5 13.5 12.4 12.7"
-            stroke="#2a1a08" stroke-width="0.6" stroke-linecap="round" fill="none"/>
-      <!-- Crumbs scattering below-left of the toast -->
-      <circle cx="8"   cy="20.4" r="0.95" fill="#e8a155"/>
-      <circle cx="6.4" cy="21.9" r="0.6"  fill="#e8a155"/>
-      <circle cx="9.5" cy="22.2" r="0.5"  fill="#e8a155"/>
-      <circle cx="7.7" cy="23.1" r="0.4"  fill="#e8a155"/>
-    </svg>
-    <span class="brand-text">CRUMB<span class="brand-suffix">STUDIO</span></span>
-  </div>
+            fill="#fff1d4"
+            opacity="0.7"
+          />
+          <!-- Eyes -->
+          <ellipse cx="10" cy="10.6" rx="0.75" ry="1.1" fill="#2a1a08" />
+          <ellipse cx="13" cy="10.6" rx="0.75" ry="1.1" fill="#2a1a08" />
+          <!-- Smile -->
+          <path
+            d="M10.6 12.7 Q11.5 13.5 12.4 12.7"
+            stroke="#2a1a08"
+            stroke-width="0.6"
+            stroke-linecap="round"
+            fill="none"
+          />
+          <!-- Crumbs scattering below-left of the toast -->
+          <circle cx="8" cy="20.4" r="0.95" fill="#e8a155" />
+          <circle cx="6.4" cy="21.9" r="0.6" fill="#e8a155" />
+          <circle cx="9.5" cy="22.2" r="0.5" fill="#e8a155" />
+          <circle cx="7.7" cy="23.1" r="0.4" fill="#e8a155" />
+        </svg>
+        <span class="brand-text">CRUMB<span class="brand-suffix">STUDIO</span></span>
+      </div>
 
-  <div class="sessions-header">
-    <h2>Adapters</h2>
-    <button id="adapter-refresh" class="icon-btn" title="Re-probe installed adapters">↻</button>
-  </div>
-  <div id="adapter-list" class="adapter-list">
-    <div class="adapter-empty">probing…</div>
-  </div>
+      <div class="sessions-header">
+        <h2>Adapters</h2>
+        <button id="adapter-refresh" class="icon-btn" title="Re-probe installed adapters">↻</button>
+      </div>
+      <div id="adapter-list" class="adapter-list">
+        <div class="adapter-empty">probing…</div>
+      </div>
 
-  <div class="sessions-header">
-    <h2>Sessions</h2>
-    <button id="new-session" class="icon-btn" title="Start a new crumb session">＋</button>
-  </div>
-  <div id="new-session-form" style="display:none;">
-    <input type="text" id="new-session-goal" placeholder="game goal (e.g. 60s 고양이 퍼즐)" autocomplete="off">
-    <div class="new-session-row">
-      <label for="new-session-adapter" class="adapter-pick-label">Adapter</label>
-      <select id="new-session-adapter" class="adapter-pick">
-        <option value="">default — preset or ambient</option>
-      </select>
-    </div>
-    <div id="new-session-preset-chips" class="preset-chips"></div>
-    <details id="new-session-advanced" class="adv-binding">
-      <summary>Custom binding (per-actor harness × model)</summary>
-      <div id="new-session-bindings" class="bindings-grid"></div>
-      <!--
+      <div class="sessions-header">
+        <h2>Sessions</h2>
+        <button id="new-session" class="icon-btn" title="Start a new crumb session">＋</button>
+      </div>
+      <div id="new-session-form" style="display: none">
+        <input
+          type="text"
+          id="new-session-goal"
+          placeholder="game goal (e.g. 60s 고양이 퍼즐)"
+          autocomplete="off"
+        />
+        <div class="new-session-row">
+          <label for="new-session-adapter" class="adapter-pick-label">Adapter</label>
+          <select id="new-session-adapter" class="adapter-pick">
+            <option value="">default — preset or ambient</option>
+          </select>
+        </div>
+        <div id="new-session-preset-chips" class="preset-chips"></div>
+        <details id="new-session-advanced" class="adv-binding">
+          <summary>Custom binding (per-actor harness × model)</summary>
+          <div id="new-session-bindings" class="bindings-grid"></div>
+          <!--
         v0.4 Video research toggle — shown only when gemini-sdk OR gemini-cli-local
         is installed + auth not-false (probed via /api/doctor). When toggled on,
         the textarea below accepts YouTube URLs / sandboxed local paths, one per
@@ -112,43 +143,57 @@
         the gemini-sdk video path (10fps frame sampling, native YouTube URL).
         Hidden entirely when gemini is not available.
       -->
-      <div id="new-session-video" class="video-research" style="display:none;">
-        <label class="video-research-toggle">
-          <input type="checkbox" id="new-session-video-on">
-          <span>Video research (Gemini)</span>
-        </label>
-        <textarea id="new-session-video-refs" class="video-research-refs" rows="2"
-          placeholder="YouTube URL or sandboxed local path · one per line"
-          style="display:none;"></textarea>
+          <div id="new-session-video" class="video-research" style="display: none">
+            <label class="video-research-toggle">
+              <input type="checkbox" id="new-session-video-on" />
+              <span>Video research (Gemini)</span>
+            </label>
+            <textarea
+              id="new-session-video-refs"
+              class="video-research-refs"
+              rows="2"
+              placeholder="YouTube URL or sandboxed local path · one per line"
+              style="display: none"
+            ></textarea>
+          </div>
+        </details>
+        <div class="new-session-row">
+          <button id="new-session-go">Run</button>
+          <button id="new-session-cancel" class="muted">Cancel</button>
+        </div>
+        <div id="new-session-feedback" class="console-feedback"></div>
       </div>
-    </details>
-    <div class="new-session-row">
-      <button id="new-session-go">Run</button>
-      <button id="new-session-cancel" class="muted">Cancel</button>
-    </div>
-    <div id="new-session-feedback" class="console-feedback"></div>
-  </div>
-  <div id="sess-list"></div>
-</aside>
+      <div id="sess-list"></div>
+    </aside>
 
-<!-- Install / auth guide modal — shown when user clicks an inactive adapter row -->
-<div id="adapter-modal" class="adapter-modal" style="display:none;" role="dialog" aria-modal="true">
-  <div class="adapter-modal-backdrop"></div>
-  <div class="adapter-modal-card">
-    <button class="adapter-modal-close" id="adapter-modal-close" aria-label="Close">×</button>
-    <h3 id="adapter-modal-title">Adapter setup</h3>
-    <div id="adapter-modal-body"></div>
-    <div class="adapter-modal-row">
-      <button id="adapter-modal-refresh" class="primary">Re-check status</button>
-      <button id="adapter-modal-dismiss" class="muted">Close</button>
+    <!-- Install / auth guide modal — shown when user clicks an inactive adapter row -->
+    <div
+      id="adapter-modal"
+      class="adapter-modal"
+      style="display: none"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div class="adapter-modal-backdrop"></div>
+      <div class="adapter-modal-card">
+        <button class="adapter-modal-close" id="adapter-modal-close" aria-label="Close">×</button>
+        <h3 id="adapter-modal-title">Adapter setup</h3>
+        <div id="adapter-modal-body"></div>
+        <div class="adapter-modal-row">
+          <button id="adapter-modal-refresh" class="primary">Re-check status</button>
+          <button id="adapter-modal-dismiss" class="muted">Close</button>
+        </div>
+        <div id="adapter-modal-feedback" class="console-feedback"></div>
+      </div>
     </div>
-    <div id="adapter-modal-feedback" class="console-feedback"></div>
-  </div>
-</div>
-<div class="resize-handle resize-handle-sessions" id="sessions-resize" title="Drag to resize sessions pane"></div>
+    <div
+      class="resize-handle resize-handle-sessions"
+      id="sessions-resize"
+      title="Drag to resize sessions pane"
+    ></div>
 
-<main>
-  <!--
+    <main>
+      <!--
     v0.5 first-visit welcome banner — read-only observation invariant
     documented inline so the user understands the contract on day one.
     Dismissed via the × button; localStorage key `crumb.studio.welcome.dismissed`
@@ -156,309 +201,534 @@
     Backed by ArtifactsBench / Karpathy autoresearch read-only studio
     convention (see PR #115 frontier survey).
   -->
-  <div id="welcome-banner" class="welcome-banner" style="display:none;">
-    <div class="welcome-banner-body">
-      <span class="welcome-banner-title">👋 Crumb Studio</span>
-      <span class="welcome-banner-text">Read-only observation surface. Sessions auto-detected at <code>~/.crumb/projects/</code>. Mutations route through transcript intervention only — <code>crumb pause</code> / <code>veto</code> / <code>approve</code> / <code>redo</code>, never via this studio.</span>
-    </div>
-    <button id="welcome-banner-close" class="welcome-banner-close" title="Dismiss (won't show again)" aria-label="Dismiss welcome banner">×</button>
-  </div>
+      <div id="welcome-banner" class="welcome-banner" style="display: none">
+        <div class="welcome-banner-body">
+          <span class="welcome-banner-title">👋 Crumb Studio</span>
+          <span class="welcome-banner-text"
+            >Read-only observation surface. Sessions auto-detected at
+            <code>~/.crumb/projects/</code>. Mutations route through transcript intervention only —
+            <code>crumb pause</code> / <code>veto</code> / <code>approve</code> / <code>redo</code>,
+            never via this studio.</span
+          >
+        </div>
+        <button
+          id="welcome-banner-close"
+          class="welcome-banner-close"
+          title="Dismiss (won't show again)"
+          aria-label="Dismiss welcome banner"
+        >
+          ×
+        </button>
+      </div>
 
-  <header class="summary">
-    <!-- F4 — collapsible sidebar toggle. Hamburger button toggles
-         data-sidebar-collapsed on <body>; CSS zeros out the grid columns
-         + hides the resize handle. localStorage persists state across
-         reloads (key: crumb.sessions-collapsed). -->
-    <button id="sidebar-toggle" class="sidebar-toggle" aria-expanded="true" aria-label="Toggle sessions sidebar" title="Collapse sessions sidebar">☰</button>
-    <div>
-      <h1 id="header-title"><span class="pill muted">no session</span></h1>
-      <div class="goal" id="header-goal">Pick a session on the left or hit ＋ to start a new crumb run.</div>
-    </div>
-    <dl class="metrics-row">
-      <div><dt>events</dt><dd id="m-events">—</dd></div>
-      <div><dt>tokens</dt><dd id="m-tokens">—</dd></div>
-      <div><dt>cache</dt><dd id="m-cache">—</dd></div>
-      <div><dt>cost</dt><dd id="m-cost">—</dd></div>
-      <div><dt>p95 lat</dt><dd id="m-p95">—</dd></div>
-      <div><dt>err / audit</dt><dd id="m-err">—</dd></div>
-    </dl>
-  </header>
+      <header class="summary">
+        <!-- F4 (relocated): the sidebar toggle now lives next to the CRUMB STUDIO
+         wordmark inside <aside.sessions> per the user spec — see studio.html
+         line ~40. When the sidebar is collapsed, an alternate floating
+         hamburger appears at the viewport's top-left so the user can re-open
+         it. CSS handles the show/hide via `body[data-sidebar-collapsed=1]`. -->
+        <button
+          id="sidebar-toggle-floating"
+          class="sidebar-toggle sidebar-toggle-floating"
+          aria-expanded="false"
+          aria-label="Open sessions sidebar"
+          title="Open sessions sidebar"
+          hidden
+        >
+          ☰
+        </button>
+        <div>
+          <h1 id="header-title"><span class="pill muted">no session</span></h1>
+          <div class="goal" id="header-goal">
+            Pick a session on the left or hit ＋ to start a new crumb run.
+          </div>
+        </div>
+        <dl class="metrics-row">
+          <div>
+            <dt>events</dt>
+            <dd id="m-events">—</dd>
+          </div>
+          <div>
+            <dt>tokens</dt>
+            <dd id="m-tokens">—</dd>
+          </div>
+          <div>
+            <dt>cache</dt>
+            <dd id="m-cache">—</dd>
+          </div>
+          <div>
+            <dt>cost</dt>
+            <dd id="m-cost">—</dd>
+          </div>
+          <div>
+            <dt>p95 lat</dt>
+            <dd id="m-p95">—</dd>
+          </div>
+          <div>
+            <dt>err / audit</dt>
+            <dd id="m-err">—</dd>
+          </div>
+        </dl>
+      </header>
 
-  <div id="audit-banner"></div>
+      <div id="audit-banner"></div>
 
-  <!--
+      <!--
     v0.5 PR-5 — connection-state pill. Shows when EventSource fires onerror
     (server restart / laptop sleep / wifi flap). Manual "Reconnect now" hard-
     reloads to re-establish the SSE stream + re-hydrate via /api/sessions.
     Hidden by default; revealed by setConnState('reconnecting') in studio.js.
   -->
-  <div id="conn-state-pill" class="conn-state-pill" style="display:none;">
-    <span class="conn-state-dot"></span>
-    <span class="conn-state-text">Reconnecting…</span>
-    <button id="conn-state-retry" type="button" class="conn-state-retry">Reconnect now</button>
-  </div>
+      <div id="conn-state-pill" class="conn-state-pill" style="display: none">
+        <span class="conn-state-dot"></span>
+        <span class="conn-state-text">Reconnecting…</span>
+        <button id="conn-state-retry" type="button" class="conn-state-retry">Reconnect now</button>
+      </div>
 
-  <section class="scorecard-bar" id="scorecard-bar">
-    <div class="scorecard-strip" id="scorecard"></div>
-  </section>
+      <section class="scorecard-bar" id="scorecard-bar">
+        <div class="scorecard-strip" id="scorecard"></div>
+      </section>
 
-  <nav class="view-tabs" id="view-tabs">
-    <button data-view="pipeline" class="active">Pipeline</button>
-    <button data-view="waterfall">Waterfall</button>
-    <button data-view="logs">Logs</button>
-    <button data-view="output">Output</button>
-    <button data-view="transcript">Transcript</button>
-    <span style="flex:1;"></span>
-    <button id="resume-btn" class="resume-btn" style="display:none;" title="Re-spawn the last interrupted actor">▶ Resume</button>
-    <!-- PR-Branding (F3) — theme toggle. Glyph swapped by JS to match
+      <nav class="view-tabs" id="view-tabs">
+        <button data-view="pipeline" class="active">Pipeline</button>
+        <button data-view="waterfall">Waterfall</button>
+        <button data-view="logs">Logs</button>
+        <button data-view="output">Output</button>
+        <button data-view="transcript">Transcript</button>
+        <span style="flex: 1"></span>
+        <button
+          id="resume-btn"
+          class="resume-btn"
+          style="display: none"
+          title="Re-spawn the last interrupted actor"
+        >
+          ▶ Resume
+        </button>
+        <!-- PR-Branding (F3) — theme toggle. Glyph swapped by JS to match
          current state (☀ when on dark = "switch to light", 🌙 when on
          light). Persists choice in localStorage 'crumb.theme'. -->
-    <button id="theme-toggle" class="theme-toggle" type="button" title="Toggle light / dark theme">🌙</button>
-  </nav>
+        <button
+          id="theme-toggle"
+          class="theme-toggle"
+          type="button"
+          title="Toggle light / dark theme"
+        >
+          🌙
+        </button>
+      </nav>
 
-  <div class="view-pane active" id="view-pipeline">
-    <section class="dag" id="dag-section">
-      <div class="dag-header">
-        <h2>Pipeline · v0.4.2</h2>
-        <div class="dag-legend" id="dag-legend">
-          <span class="lg lg-flow">flow</span>
-          <span class="lg lg-respawn">respawn</span>
-          <span class="lg lg-rollback">rollback</span>
-          <span class="lg lg-terminal">PASS</span>
-          <span class="lg lg-audit">audit</span>
-          <span class="lg lg-intervene">intervene</span>
-          <span class="lg lg-resume">resume</span>
-          <span class="lg-shapes">
-            <svg class="lg-shape-svg" viewBox="0 0 110 14"><circle cx="7" cy="7" r="6" /><text x="18" y="11">actor</text><polygon points="44,1 56,4 56,10 44,13 32,10 32,4" /><text x="62" y="11">effect</text><rect x="84" y="2" width="22" height="10" rx="5" /><text x="90" y="11">done</text></svg>
-          </span>
-        </div>
+      <div class="view-pane active" id="view-pipeline">
+        <section class="dag" id="dag-section">
+          <div class="dag-header">
+            <h2>Pipeline · v0.4.2</h2>
+            <div class="dag-legend" id="dag-legend">
+              <span class="lg lg-flow">flow</span>
+              <span class="lg lg-respawn">respawn</span>
+              <span class="lg lg-rollback">rollback</span>
+              <span class="lg lg-terminal">PASS</span>
+              <span class="lg lg-audit">audit</span>
+              <span class="lg lg-intervene">intervene</span>
+              <span class="lg lg-resume">resume</span>
+              <span class="lg-shapes">
+                <svg class="lg-shape-svg" viewBox="0 0 110 14">
+                  <circle cx="7" cy="7" r="6" />
+                  <text x="18" y="11">actor</text>
+                  <polygon points="44,1 56,4 56,10 44,13 32,10 32,4" />
+                  <text x="62" y="11">effect</text>
+                  <rect x="84" y="2" width="22" height="10" rx="5" />
+                  <text x="90" y="11">done</text>
+                </svg>
+              </span>
+            </div>
+          </div>
+          <svg
+            class="dag-svg"
+            id="dag-svg"
+            viewBox="0 0 1100 320"
+            preserveAspectRatio="xMidYMid meet"
+          ></svg>
+        </section>
       </div>
-      <svg class="dag-svg" id="dag-svg" viewBox="0 0 1100 320" preserveAspectRatio="xMidYMid meet"></svg>
-    </section>
 
-  </div>
-
-  <!--
+      <!--
     v0.5 PR-O3 — Waterfall view. Wall-clock-proportional spans per actor,
     Datadog APM / Chrome DevTools Performance / Jaeger trace convention.
     Bars are click-through to the same right-rail detail panel as Pipeline.
     Hover → tooltip with kind / latency / tokens / cost. Empty in absence
     of agent.wake → agent.stop pairs (no spans yet to draw).
   -->
-  <div class="view-pane" id="view-waterfall">
-    <section class="waterfall" id="waterfall-section">
-      <div class="waterfall-toolbar">
-        <span class="waterfall-toolbar-label">Wall-clock waterfall</span>
-        <span class="waterfall-toolbar-hint" id="waterfall-hint">click any bar for detail · hover for tooltip</span>
-        <span style="flex:1;"></span>
-        <span class="waterfall-toolbar-axis" id="waterfall-axis">—</span>
-      </div>
-      <div class="waterfall-body" id="waterfall-body">
-        <div class="empty" id="waterfall-empty">Waiting for spawn spans…</div>
-      </div>
-      <!--
+      <div class="view-pane" id="view-waterfall">
+        <section class="waterfall" id="waterfall-section">
+          <div class="waterfall-toolbar">
+            <span class="waterfall-toolbar-label">Wall-clock waterfall</span>
+            <span class="waterfall-toolbar-hint" id="waterfall-hint"
+              >click any bar for detail · hover for tooltip</span
+            >
+            <span style="flex: 1"></span>
+            <span class="waterfall-toolbar-axis" id="waterfall-axis">—</span>
+          </div>
+          <div class="waterfall-body" id="waterfall-body">
+            <div class="empty" id="waterfall-empty">Waiting for spawn spans…</div>
+          </div>
+          <!--
         Tooltip is positioned absolutely; populated by JS on bar hover.
         pointer-events: none so it doesn't steal hover from the bar
         beneath it (Chrome DevTools Performance convention).
       -->
-      <div id="waterfall-tooltip" class="waterfall-tooltip" style="display:none;"></div>
-    </section>
-  </div>
+          <div id="waterfall-tooltip" class="waterfall-tooltip" style="display: none"></div>
+        </section>
+      </div>
 
-  <div class="view-pane" id="view-logs">
-    <section class="logs">
-      <div class="logs-actor-list" id="logs-actor-list"></div>
-      <div class="logs-pane">
-        <div class="logs-toolbar">
-          <span id="logs-current-actor" style="color:var(--ink);font-family:ui-monospace,monospace;">—</span>
-          <!--
+      <div class="view-pane" id="view-logs">
+        <section class="logs">
+          <div class="logs-actor-list" id="logs-actor-list"></div>
+          <div class="logs-pane">
+            <div class="logs-toolbar">
+              <span
+                id="logs-current-actor"
+                style="color: var(--ink); font-family: ui-monospace, monospace"
+                >—</span
+              >
+              <!--
             v0.5 PR-6 — connection-status pill (idle / awaiting-actor /
             connecting / streaming / stalled / errored). Datadog/Honeycomb
             live-tail standard: every state has its own color + label, and
             stalled/errored expose a "Reconnect now" affordance directly.
             Populated by renderLogsConnStatus() in studio.js.
           -->
-          <span id="logs-conn-status" class="logs-conn-status state-idle">
-            <span class="logs-conn-dot"></span>
-            <span class="logs-conn-label">pick session</span>
-          </span>
-          <input type="text" id="logs-filter" placeholder="grep…" title="substring · Enter=next · Shift+Enter=prev · Esc=clear">
-          <span class="grep-controls">
-            <span id="logs-grep-count" class="grep-count">—</span>
-            <button id="logs-grep-prev" class="grep-nav" title="Previous match (Shift+Enter)" disabled>↑</button>
-            <button id="logs-grep-next" class="grep-nav" title="Next match (Enter)" disabled>↓</button>
-          </span>
-          <label><input type="checkbox" id="logs-follow" checked> follow</label>
-          <button id="logs-clear">clear</button>
-          <button id="logs-copy">copy</button>
-        </div>
-        <div class="logs-content" id="logs-content">
-          <div class="logs-empty">Pick an actor on the left to tail its spawn logs in real time.</div>
-        </div>
-        <!--
+              <span id="logs-conn-status" class="logs-conn-status state-idle">
+                <span class="logs-conn-dot"></span>
+                <span class="logs-conn-label">pick session</span>
+              </span>
+              <input
+                type="text"
+                id="logs-filter"
+                placeholder="grep…"
+                title="substring · Enter=next · Shift+Enter=prev · Esc=clear"
+              />
+              <span class="grep-controls">
+                <span id="logs-grep-count" class="grep-count">—</span>
+                <button
+                  id="logs-grep-prev"
+                  class="grep-nav"
+                  title="Previous match (Shift+Enter)"
+                  disabled
+                >
+                  ↑
+                </button>
+                <button id="logs-grep-next" class="grep-nav" title="Next match (Enter)" disabled>
+                  ↓
+                </button>
+              </span>
+              <label><input type="checkbox" id="logs-follow" checked /> follow</label>
+              <button id="logs-clear">clear</button>
+              <button id="logs-copy">copy</button>
+            </div>
+            <div class="logs-content" id="logs-content">
+              <div class="logs-empty">
+                Pick an actor on the left to tail its spawn logs in real time.
+              </div>
+            </div>
+            <!--
           v0.5 PR-6 — "Jump to live" button. Shown only when followAuto is
           off (user scrolled up in a streaming view). GitHub Actions / ArgoCD
           pattern — the floating affordance pulls them back to the tail
           without a full reload. Hidden by default; toggled by the scroll
           handler in studio.js.
         -->
-        <button id="logs-jump-live" class="logs-jump-live" style="display:none;" title="Resume following the live tail">
-          <span class="logs-jump-live-arrow">↓</span> Jump to live
-        </button>
+            <button
+              id="logs-jump-live"
+              class="logs-jump-live"
+              style="display: none"
+              title="Resume following the live tail"
+            >
+              <span class="logs-jump-live-arrow">↓</span> Jump to live
+            </button>
+          </div>
+        </section>
       </div>
-    </section>
-  </div>
 
-  <div class="view-pane" id="view-output">
-    <section class="output">
-      <div class="output-toolbar">
-        <span id="output-path-label">artifact:</span>
-        <select id="output-path-select"></select>
-        <button id="output-reload">reload</button>
-        <button id="output-open">open in new tab ↗</button>
+      <div class="view-pane" id="view-output">
+        <section class="output">
+          <div class="output-toolbar">
+            <span id="output-path-label">artifact:</span>
+            <select id="output-path-select"></select>
+            <button id="output-reload">reload</button>
+            <button id="output-open">open in new tab ↗</button>
+          </div>
+          <div class="output-frame-wrap" id="output-frame-wrap">
+            <div class="logs-empty" id="output-empty">
+              No artifacts emitted yet for this session.
+            </div>
+            <iframe
+              id="output-frame"
+              sandbox="allow-scripts allow-pointer-lock allow-same-origin"
+              style="display: none"
+            ></iframe>
+          </div>
+        </section>
       </div>
-      <div class="output-frame-wrap" id="output-frame-wrap">
-        <div class="logs-empty" id="output-empty">No artifacts emitted yet for this session.</div>
-        <iframe id="output-frame" sandbox="allow-scripts allow-pointer-lock allow-same-origin" style="display:none;"></iframe>
-      </div>
-    </section>
-  </div>
 
-  <div class="view-pane" id="view-transcript">
-    <section class="transcript-view">
-      <div class="transcript-toolbar">
-        <span id="transcript-status">—</span>
-        <input type="text" id="transcript-filter" placeholder="grep / filter…" title="match kind / from / body · Enter=next · Shift+Enter=prev · Esc=clear">
-        <span class="grep-controls">
-          <span id="transcript-grep-count" class="grep-count">—</span>
-          <button id="transcript-grep-prev" class="grep-nav" title="Previous match (Shift+Enter)" disabled>↑</button>
-          <button id="transcript-grep-next" class="grep-nav" title="Next match (Enter)" disabled>↓</button>
-        </span>
-        <label><input type="checkbox" id="transcript-pretty" checked> pretty</label>
-        <button id="transcript-copy">copy all</button>
+      <div class="view-pane" id="view-transcript">
+        <section class="transcript-view">
+          <div class="transcript-toolbar">
+            <span id="transcript-status">—</span>
+            <input
+              type="text"
+              id="transcript-filter"
+              placeholder="grep / filter…"
+              title="match kind / from / body · Enter=next · Shift+Enter=prev · Esc=clear"
+            />
+            <span class="grep-controls">
+              <span id="transcript-grep-count" class="grep-count">—</span>
+              <button
+                id="transcript-grep-prev"
+                class="grep-nav"
+                title="Previous match (Shift+Enter)"
+                disabled
+              >
+                ↑
+              </button>
+              <button
+                id="transcript-grep-next"
+                class="grep-nav"
+                title="Next match (Enter)"
+                disabled
+              >
+                ↓
+              </button>
+            </span>
+            <label><input type="checkbox" id="transcript-pretty" checked /> pretty</label>
+            <button id="transcript-copy">copy all</button>
+          </div>
+          <pre id="transcript-content" class="transcript-content"></pre>
+        </section>
       </div>
-      <pre id="transcript-content" class="transcript-content"></pre>
-    </section>
-  </div>
 
-  <!--
+      <!--
     v0.5 PR-Layout — 4-pane vertical: tabs+content (absorber) | swimlane | narrative | feed
     splitter-view-swim writes --swimlane-h (drag down → swim shrinks, view-pane absorbs)
     splitter-swim-narr writes --swimlane-h + --narrative-h (2-var, total preserved)
     splitter-narr-feed writes --narrative-h + --feed-h (2-var, total preserved)
     Industry-standard splitter behavior: drag UP narrows upper, drag DOWN narrows lower.
   -->
-  <div class="resize-handle resize-handle-pane" id="splitter-view-swim" title="Drag to resize event view (swimlane)"></div>
+      <div
+        class="resize-handle resize-handle-pane"
+        id="splitter-view-swim"
+        title="Drag to resize event view (swimlane)"
+      ></div>
 
-  <section class="swimlane" id="swimlane">
-    <div class="empty" id="swim-empty">Waiting for events…</div>
-  </section>
+      <section class="swimlane" id="swimlane">
+        <div class="empty" id="swim-empty">Waiting for events…</div>
+      </section>
 
-  <div class="resize-handle resize-handle-pane" id="splitter-swim-narr" title="Drag to resize swimlane / narrative split"></div>
+      <div
+        class="resize-handle resize-handle-pane"
+        id="splitter-swim-narr"
+        title="Drag to resize swimlane / narrative split"
+      ></div>
 
-  <section class="console-narrative" id="console-narrative-section">
-    <div class="console-feed-toolbar">
-      <span class="console-feed-title">Agent narrative</span>
-      <span id="console-narrative-status" class="console-feed-status">stream-json bubbles · ⏺ tool / ⎿ result / ✓ turn</span>
-      <input type="text" id="console-narrative-grep" class="feed-grep-input" placeholder="grep…" autocomplete="off">
-      <span class="grep-controls">
-        <span id="console-narrative-grep-count" class="grep-count">—</span>
-        <button id="console-narrative-grep-prev" class="grep-nav" title="Previous match (Shift+Enter)" disabled>↑</button>
-        <button id="console-narrative-grep-next" class="grep-nav" title="Next match (Enter)" disabled>↓</button>
-      </span>
-      <button id="console-narrative-pause" class="ghost-btn">pause</button>
-      <button id="console-narrative-clear" class="ghost-btn">clear</button>
-    </div>
-    <div class="console-narrative-body" id="console-narrative-body"></div>
-  </section>
-  <div class="resize-handle resize-handle-pane" id="splitter-narr-feed" title="Drag to resize narrative / live-feed split"></div>
+      <section class="console-narrative" id="console-narrative-section">
+        <div class="console-feed-toolbar">
+          <span class="console-feed-title">Agent narrative</span>
+          <span id="console-narrative-status" class="console-feed-status"
+            >stream-json bubbles · ⏺ tool / ⎿ result / ✓ turn</span
+          >
+          <input
+            type="text"
+            id="console-narrative-grep"
+            class="feed-grep-input"
+            placeholder="grep…"
+            autocomplete="off"
+          />
+          <span class="grep-controls">
+            <span id="console-narrative-grep-count" class="grep-count">—</span>
+            <button
+              id="console-narrative-grep-prev"
+              class="grep-nav"
+              title="Previous match (Shift+Enter)"
+              disabled
+            >
+              ↑
+            </button>
+            <button
+              id="console-narrative-grep-next"
+              class="grep-nav"
+              title="Next match (Enter)"
+              disabled
+            >
+              ↓
+            </button>
+          </span>
+          <button id="console-narrative-pause" class="ghost-btn">pause</button>
+          <button id="console-narrative-clear" class="ghost-btn">clear</button>
+        </div>
+        <div class="console-narrative-body" id="console-narrative-body"></div>
+      </section>
+      <div
+        class="resize-handle resize-handle-pane"
+        id="splitter-narr-feed"
+        title="Drag to resize narrative / live-feed split"
+      ></div>
 
-  <section class="console-feed" id="console-feed-section">
-    <div class="console-feed-toolbar">
-      <span class="console-feed-title">Live execution feed</span>
-      <span id="console-feed-status" class="console-feed-status">—</span>
-      <input type="text" id="console-feed-grep" class="feed-grep-input" placeholder="grep…" autocomplete="off">
-      <span class="grep-controls">
-        <span id="console-feed-grep-count" class="grep-count">—</span>
-        <button id="console-feed-grep-prev" class="grep-nav" title="Previous match (Shift+Enter)" disabled>↑</button>
-        <button id="console-feed-grep-next" class="grep-nav" title="Next match (Enter)" disabled>↓</button>
-      </span>
-      <button id="console-feed-pause" class="ghost-btn">pause</button>
-      <button id="console-feed-clear" class="ghost-btn">clear</button>
-    </div>
-    <div class="console-feed-body" id="console-feed-body"></div>
-  </section>
+      <section class="console-feed" id="console-feed-section">
+        <div class="console-feed-toolbar">
+          <span class="console-feed-title">Live execution feed</span>
+          <span id="console-feed-status" class="console-feed-status">—</span>
+          <input
+            type="text"
+            id="console-feed-grep"
+            class="feed-grep-input"
+            placeholder="grep…"
+            autocomplete="off"
+          />
+          <span class="grep-controls">
+            <span id="console-feed-grep-count" class="grep-count">—</span>
+            <button
+              id="console-feed-grep-prev"
+              class="grep-nav"
+              title="Previous match (Shift+Enter)"
+              disabled
+            >
+              ↑
+            </button>
+            <button
+              id="console-feed-grep-next"
+              class="grep-nav"
+              title="Next match (Enter)"
+              disabled
+            >
+              ↓
+            </button>
+          </span>
+          <button id="console-feed-pause" class="ghost-btn">pause</button>
+          <button id="console-feed-clear" class="ghost-btn">clear</button>
+        </div>
+        <div class="console-feed-body" id="console-feed-body"></div>
+      </section>
 
-  <section class="console-input" id="console-section">
-    <div class="console-row">
-      <input type="text" id="console-line" placeholder='Type a slash command, @actor mention, plain text, or "/crumb <goal>" to start a new session' autocomplete="off" disabled>
-      <button id="console-send" disabled>Send</button>
-    </div>
-    <div class="console-hints" id="console-hints"></div>
-    <div class="console-feedback" id="console-feedback"></div>
-  </section>
-</main>
+      <section class="console-input" id="console-section">
+        <div class="console-row">
+          <input
+            type="text"
+            id="console-line"
+            placeholder='Type a slash command, @actor mention, plain text, or "/crumb <goal>" to start a new session'
+            autocomplete="off"
+            disabled
+          />
+          <button id="console-send" disabled>Send</button>
+        </div>
+        <div class="console-hints" id="console-hints"></div>
+        <div class="console-feedback" id="console-feedback"></div>
+      </section>
+    </main>
 
-<aside class="detail" id="detail">
-  <div class="resize-handle resize-handle-detail" id="detail-resize" title="Drag to resize detail pane"></div>
-  <!--
+    <aside class="detail" id="detail">
+      <div
+        class="resize-handle resize-handle-detail"
+        id="detail-resize"
+        title="Drag to resize detail pane"
+      ></div>
+      <!--
     v0.5 PR-9 — sticky header (close + paginators + title). User feedback:
     close button must NOT scroll out of reach. Header pinned at top:0
     inside the panel; .detail-body below scrolls independently.
   -->
-  <div class="detail-header">
-    <button class="close" id="detail-close" aria-label="Close detail">×</button>
-    <div class="detail-title-row">
-      <h3 id="detail-title">Event detail</h3>
-      <span id="detail-group-badge" class="detail-group-badge" style="display:none;"></span>
-    </div>
-    <div id="detail-pipeline-pos" class="detail-pipeline-pos"></div>
-    <!-- PR-K' — cross-actor event paginator stays for single-event nav -->
-    <div id="detail-event-nav" class="detail-event-nav" style="display:none;"></div>
-    <div id="detail-nav" class="detail-thread-nav">
-      <button id="detail-prev" class="detail-nav-btn">↑ parent</button>
-      <button id="detail-next" class="detail-nav-btn">↓ children</button>
-    </div>
-  </div>
+      <div class="detail-header">
+        <button class="close" id="detail-close" aria-label="Close detail">×</button>
+        <div class="detail-title-row">
+          <h3 id="detail-title">Event detail</h3>
+          <span id="detail-group-badge" class="detail-group-badge" style="display: none"></span>
+        </div>
+        <div id="detail-pipeline-pos" class="detail-pipeline-pos"></div>
+        <!-- PR-K' — cross-actor event paginator stays for single-event nav -->
+        <div id="detail-event-nav" class="detail-event-nav" style="display: none"></div>
+        <div id="detail-nav" class="detail-thread-nav">
+          <button id="detail-prev" class="detail-nav-btn">↑ parent</button>
+          <button id="detail-next" class="detail-nav-btn">↓ children</button>
+        </div>
+      </div>
 
-  <!-- PR-K' single-event view — Datadog-style structured panel -->
-  <div class="detail-body" id="detail-body-single">
-    <div id="detail-tags" class="detail-tags"></div>
-    <div id="detail-audit-banner" class="detail-audit-banner" style="display:none;"></div>
-    <h3>Timing &amp; cost</h3>
-    <div id="detail-resource-bar" class="detail-resource-bar"></div>
-    <pre id="detail-meta"></pre>
-    <h3>
-      Body
-      <button class="detail-copy-btn" id="detail-copy-body" title="Copy">⧉</button>
-    </h3>
-    <pre id="detail-body"></pre>
-    <h3>
-      Data
-      <button class="detail-copy-btn" id="detail-copy-data" title="Copy JSON">⧉</button>
-    </h3>
-    <pre id="detail-data"></pre>
-    <h3>Conversation thread (parent → this → children)</h3>
-    <div id="detail-thread" class="detail-thread"></div>
-    <h3>Sandwich preview</h3>
-    <div id="sandwich-actor-bar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
-    <pre id="sandwich-content" style="display:none;max-height:360px;overflow:auto;"></pre>
-    <h3>Send message to this actor</h3>
-    <div style="display:flex;gap:6px;">
-      <input type="text" id="detail-msg" placeholder="@actor or /command or text" style="flex:1;background:var(--canvas);color:var(--ink);border:1px solid var(--hairline);border-radius:var(--r-md);padding:6px 10px;font-family:ui-monospace,monospace;font-size:12px;outline:none;">
-      <button id="detail-msg-send" style="background:var(--primary);color:var(--ink);border:none;border-radius:var(--r-md);padding:6px 12px;font-size:11px;cursor:pointer;">Send</button>
-    </div>
-    <div id="detail-msg-feedback" style="font-size:10px;color:var(--ink-subtle);margin-top:4px;font-family:ui-monospace,monospace;min-height:12px;"></div>
-  </div>
+      <!-- PR-K' single-event view — Datadog-style structured panel -->
+      <div class="detail-body" id="detail-body-single">
+        <div id="detail-tags" class="detail-tags"></div>
+        <div id="detail-audit-banner" class="detail-audit-banner" style="display: none"></div>
+        <h3>Timing &amp; cost</h3>
+        <div id="detail-resource-bar" class="detail-resource-bar"></div>
+        <pre id="detail-meta"></pre>
+        <h3>
+          Body
+          <button class="detail-copy-btn" id="detail-copy-body" title="Copy">⧉</button>
+        </h3>
+        <pre id="detail-body"></pre>
+        <h3>
+          Data
+          <button class="detail-copy-btn" id="detail-copy-data" title="Copy JSON">⧉</button>
+        </h3>
+        <pre id="detail-data"></pre>
+        <h3>Conversation thread (parent → this → children)</h3>
+        <div id="detail-thread" class="detail-thread"></div>
+        <h3>Sandwich preview</h3>
+        <div
+          id="sandwich-actor-bar"
+          style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px"
+        ></div>
+        <pre id="sandwich-content" style="display: none; max-height: 360px; overflow: auto"></pre>
+        <h3>Send message to this actor</h3>
+        <div style="display: flex; gap: 6px">
+          <input
+            type="text"
+            id="detail-msg"
+            placeholder="@actor or /command or text"
+            style="
+              flex: 1;
+              background: var(--canvas);
+              color: var(--ink);
+              border: 1px solid var(--hairline);
+              border-radius: var(--r-md);
+              padding: 6px 10px;
+              font-family: ui-monospace, monospace;
+              font-size: 12px;
+              outline: none;
+            "
+          />
+          <button
+            id="detail-msg-send"
+            style="
+              background: var(--primary);
+              color: var(--ink);
+              border: none;
+              border-radius: var(--r-md);
+              padding: 6px 12px;
+              font-size: 11px;
+              cursor: pointer;
+            "
+          >
+            Send
+          </button>
+        </div>
+        <div
+          id="detail-msg-feedback"
+          style="
+            font-size: 10px;
+            color: var(--ink-subtle);
+            margin-top: 4px;
+            font-family: ui-monospace, monospace;
+            min-height: 12px;
+          "
+        ></div>
+      </div>
 
-  <!-- PR-K' multi-event spread view — horizontal cards, one per event in
+      <!-- PR-K' multi-event spread view — horizontal cards, one per event in
        the grouped chip. Hidden until showDetail() opens a group. -->
-  <div class="detail-body detail-body-spread" id="detail-body-spread" style="display:none;">
-    <div id="detail-spread-toolbar" class="detail-spread-toolbar"></div>
-    <div id="detail-spread-cards" class="detail-spread-cards"></div>
-  </div>
-</aside>
+      <div class="detail-body detail-body-spread" id="detail-body-spread" style="display: none">
+        <div id="detail-spread-toolbar" class="detail-spread-toolbar"></div>
+        <div id="detail-spread-cards" class="detail-spread-cards"></div>
+      </div>
+    </aside>
 
-<script>__JS__</script>
-</body>
+    <script>
+      __JS__;
+    </script>
+  </body>
 </html>
