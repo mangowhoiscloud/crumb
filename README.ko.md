@@ -30,17 +30,20 @@
 
 ## 빠른 시작
 
-**최초 1회 셋업** (Streamlit 스타일 — clone / build / run 3줄, `npm link` 불필요):
+**최초 1회 셋업** (Streamlit 스타일 — clone / build / link / run):
 
 ```bash
 git clone https://github.com/mangowhoiscloud/crumb.git && cd crumb && npm install && npm run build
-npx crumb doctor                                  # auth + chromium + Studio 점검
-npx crumb run --goal "60초 매치-3 콤보 보너스"    # → http://localhost:7321 으로 Studio 자동 오픈
+npm link                                          # 1회: `crumb` + `crumb-studio` 가 PATH 에 등록
+crumb doctor                                      # auth + chromium + Studio 점검
+crumb run --goal "60초 매치-3 콤보 보너스"        # → http://localhost:7321 으로 Studio 자동 오픈
 ```
 
 `crumb run` 이 Crumb Studio (로컬 read-only 관측 surface) 를 자동 spawn — Vite-style banner 가 URL + 방금 시작한 세션 deep link 까지 출력. CI / SSH / headless 환경에서는 `--no-studio` 또는 `CRUMB_NO_STUDIO=1` 로 비활성화. Studio 는 `detached + unref` 로 run 종료 후에도 살아있어 다음 `crumb run` 호출 시 재spawn 없이 그대로 재사용 (chokidar 가 새 transcript 를 자동 watch).
 
-`npx` 가 workspace `bin` (`crumb` + `crumb-studio`) 을 그대로 본다 — `npm link` 불필요. 어떤 디렉터리에서든 bare command (`crumb …`) 로 호출하고 싶으면 repo 안에서 `npm link` 1회 실행 (contributor 편의용으로 유지, quickstart 에서는 제외) — 자세한 건 [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+세션 시작 없이 Studio 만 띄우고 싶다면 `crumb studio` (= `crumb-studio` alias). `~/.crumb/projects/` 의 모든 기존 세션이 보이므로 언제든 안전하게 호출 가능.
+
+> 글로벌 symlink 가 싫다면 `npm link` 를 건너뛰고 모든 명령에 `npx` 를 붙이면 된다 (`npx crumb run …`, `npx crumb studio`). `npx` 가 workspace `bin` 을 직접 resolve.
 
 > **Chromium 다운로드 건너뛰기** (CI / air-gapped 환경): `CRUMB_SKIP_PLAYWRIGHT_INSTALL=1 npm install`. qa-check D6 portability gate 는 signal-only 로 남고, D2 lint + size gate 는 그대로 동작.
 

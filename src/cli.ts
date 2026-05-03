@@ -1071,6 +1071,76 @@ async function readStdin(): Promise<string> {
 }
 
 /**
+ * `crumb studio` — front-of-house entrypoint to the Studio web console.
+ *
+ * Equivalent to `npx crumb-studio`, but reachable from the unified
+ * `crumb <verb>` dispatcher so users only have to remember one command. All
+ * Studio CLI flags (`--port`, `--bind`, `--no-open`, `--home`,
+ * `--poll-interval`, `--port-file`) pass through verbatim.
+ *
+ * Foreground stdio inherit — Ctrl+C in the parent terminal kills the Studio
+ * child cleanly, matching `crumb-studio` standalone behavior. For detached
+ * background usage (auto-spawn after `crumb run`), see `ensureStudioRunning`
+ * in `cmdRun`.
+ *
+ * Architecture invariant: Studio is a host-process sibling, never an actor.
+ * Routing this through the same dispatcher does not change that — this is
+ * just an alias that delegates to `packages/studio/dist/cli.js`.
+ */
+async function cmdStudio(args: ParsedArgs): Promise<void> {
+  const studioBin = resolveStudioBinForSubcommand();
+  if (!studioBin) {
+    throw new Error(
+      'crumb-studio binary not found. Run `npm run build` from the repo root, ' +
+        'or set CRUMB_STUDIO_BIN to a packaged shim.',
+    );
+  }
+  // Reconstruct argv from the parsed args. parseArgs collapsed flag names
+  // into a Map (with 'true' for boolean flags) and pushed positionals into a
+  // separate array; rebuild a flat argv here so the studio CLI's own parser
+  // sees the original shape.
+  const passthrough: string[] = [];
+  for (const [k, v] of args.flags.entries()) {
+    if (v === 'true') {
+      passthrough.push(`--${k}`);
+    } else {
+      passthrough.push(`--${k}`, v);
+    }
+  }
+  passthrough.push(...args.positional);
+
+  await new Promise<void>((resolveSpawn, rejectSpawn) => {
+    const child = spawn(process.execPath, [studioBin, ...passthrough], {
+      stdio: 'inherit',
+      env: process.env,
+    });
+    child.on('error', rejectSpawn);
+    child.on('exit', (code) => {
+      if (code === 0 || code === null) resolveSpawn();
+      else process.exit(code);
+    });
+    // Forward signals so Ctrl+C / SIGTERM in the parent shell propagates to
+    // the child without leaving an orphan studio listening on the port.
+    const forward = (sig: NodeJS.Signals) => () => {
+      if (!child.killed) child.kill(sig);
+    };
+    process.on('SIGINT', forward('SIGINT'));
+    process.on('SIGTERM', forward('SIGTERM'));
+  });
+}
+
+function resolveStudioBinForSubcommand(): string | null {
+  if (process.env.CRUMB_STUDIO_BIN && existsSync(process.env.CRUMB_STUDIO_BIN)) {
+    return process.env.CRUMB_STUDIO_BIN;
+  }
+  const here = fileURLToPath(import.meta.url);
+  const repoRootGuess = inferRepoRoot() ?? resolve(here, '..', '..');
+  const workspaceDist = resolve(repoRootGuess, 'packages', 'studio', 'dist', 'cli.js');
+  if (existsSync(workspaceDist)) return workspaceDist;
+  return null;
+}
+
+/**
  * v0.5 Studio auto-spawn (Streamlit / Vite / Gradio frontier convention).
  *
  * Probes http://127.0.0.1:7321 first; if a Studio is already running, prints
@@ -1212,6 +1282,9 @@ Usage:
                                           # Bagelcode submission: crumb copy-artifacts <demo-ulid> --to ./demo/
   crumb migrate [--dry-run]                # move legacy <cwd>/sessions/ → ~/.crumb/projects/<id>/sessions/
                                           # idempotent; --dry-run previews
+  crumb studio [--port 7321] [--bind 127.0.0.1] [--no-open] [--home <path>] [--port-file <path>]
+                                          # launch the web console (alias for crumb-studio)
+                                          # auto-opens http://127.0.0.1:7321/ — Ctrl+C to stop
 
 Flags (run):
   --preset <name>     load .crumb/presets/<name>.toml. e.g. bagelcode-cross-3way / mock /
@@ -1288,6 +1361,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       break;
     case 'migrate':
       await cmdMigrate(args);
+      break;
+    case 'studio':
+      await cmdStudio(args);
       break;
     case 'help':
     case '--help':

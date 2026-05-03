@@ -39,17 +39,20 @@ crumb-studio                # http://127.0.0.1:7321/ — local web console (auto
 
 The two packages ship from the same monorepo (`mangowhoiscloud/crumb`) and share one SemVer cadence. `@crumb/studio` declares `crumb` as an **optional peer dependency** — Studio can watch existing sessions standalone, but spawning new sessions through the new-session form requires `crumb run` on `PATH`.
 
-**Source / dev setup** (Streamlit-style — clone, build, run; no `npm link` required):
+**Source / dev setup** (Streamlit-style — clone, build, link, run):
 
 ```bash
 git clone https://github.com/mangowhoiscloud/crumb.git && cd crumb && npm install && npm run build
-npx crumb doctor                                  # auth + chromium + Studio readiness
-npx crumb run --goal "60s match-3 combo bonus"    # → Studio auto-opens at http://localhost:7321
+npm link                                          # one-time: register `crumb` + `crumb-studio` on PATH
+crumb doctor                                      # auth + chromium + Studio readiness
+crumb run --goal "60s match-3 combo bonus"        # → Studio auto-opens at http://localhost:7321
 ```
 
 `crumb run` spawns Crumb Studio (the local read-only observation surface) automatically — Vite-style banner prints the URL plus a deep link to the just-started session. Disable with `--no-studio` or `CRUMB_NO_STUDIO=1` for CI / SSH / headless. Studio survives the run via `detached + unref`, so subsequent `crumb run` invocations re-use the existing Studio (chokidar watches new transcripts automatically).
 
-`npx` resolves the workspace `bin` (`crumb` + `crumb-studio`) without `npm link`. To make them callable as bare commands from any directory, run `npm link` from the repo (kept as a contributor convenience, no longer the documented quickstart) — see [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+To open Studio without starting a session, run `crumb studio` (alias for `crumb-studio`). It surfaces every existing session under `~/.crumb/projects/`, so it's safe to launch any time.
+
+> Don't want global symlinks? Skip `npm link` and prefix every command with `npx` instead (`npx crumb run …`, `npx crumb studio`). `npx` resolves the workspace `bin` directly.
 
 > **Skipping the Chromium download** (CI / air-gapped): `CRUMB_SKIP_PLAYWRIGHT_INSTALL=1 npm install`. The qa-check D6 portability gate stays signal-only; the D2 lint + size gate still runs.
 
