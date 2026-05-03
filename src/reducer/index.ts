@@ -355,13 +355,20 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           data: { aggregate, scores: sanitized },
         });
       } else if (verdict === 'FAIL' || verdict === 'REJECT') {
-        // Rollback to planner for respec — unless engineering circuit is OPEN, then fallback.
+        // PR-G2/G4 — three-way routing on FAIL:
+        //   1. Both circuits OPEN          → done(all_builders_open)
+        //   2. Builder circuit OPEN         → spawn(builder-fallback)   [infra path — different LLM]
+        //   3. Builder CLOSED + Critical    → rollback(planner-lead)    [spec needs change]
+        //   4. Builder CLOSED + Important/Minor (or unspecified) → spawn(builder) w/ sandwich_append
+        //
+        // The verifier MAY hint at a deviation type via judge.score
+        // data.deviation.type ∈ {Critical, Important, Minor}, mirroring the
+        // code-review-protocol.md taxonomy. When omitted, we default to
+        // Important (respawn builder) — the prior behavior of always going
+        // to planner-lead overspecified the fix and burned a full plan-cycle
+        // for trivial issues like "missing entry redirector".
         const eng = next.progress_ledger.circuit_breaker['builder'];
         const fallback = next.progress_ledger.circuit_breaker['builder-fallback'];
-        // P1 #6: when BOTH builder and builder-fallback are OPEN, there's no
-        // working build path. Spawning fallback again would just burn tokens
-        // until wall-clock exhausted. Terminate cleanly with a distinct done
-        // reason so observers see the deadlock.
         if (eng?.state === 'OPEN' && fallback?.state === 'OPEN') {
           next.done = true;
           effects.push({ type: 'done', reason: 'all_builders_open' });
@@ -369,16 +376,12 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         }
         if (eng?.state === 'OPEN') {
           next.progress_ledger.next_speaker = 'builder-fallback';
-          // v0.3.1 — emit kind=audit event=fallback_activated BEFORE the spawn so
-          // builder-fallback's sandwich (agents/builder-fallback.md §"in")
-          // actually finds the input event it claims to read. Previously this
-          // event was promised in the sandwich text but never produced.
           effects.push({
             type: 'append',
             message: {
               session_id: next.session_id,
               from: 'system',
-              parent_event_id: event.id, // C2 — wire thread navigation in studio
+              parent_event_id: event.id,
               kind: 'audit',
               body: `fallback_activated — builder circuit OPEN (${eng.consecutive_failures} consecutive failures)`,
               data: {
@@ -398,14 +401,78 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
             sandwich_appends: collectSandwichAppends(next, 'builder-fallback'),
           });
         } else {
-          next.progress_ledger.next_speaker = 'planner-lead';
-          effects.push({
-            type: 'rollback',
-            to: 'planner-lead',
-            feedback: sanitized.feedback ?? event.scores?.feedback ?? 'verify failed',
-          });
+          // PR-G2 — deviation-typed routing.
+          const deviation = ((event.scores as { deviation?: { type?: string } } | undefined)
+            ?.deviation?.type ?? 'Important') as 'Critical' | 'Important' | 'Minor';
+          const feedback = sanitized.feedback ?? event.scores?.feedback ?? 'verify failed';
+          if (deviation === 'Critical') {
+            next.progress_ledger.next_speaker = 'planner-lead';
+            effects.push({
+              type: 'rollback',
+              to: 'planner-lead',
+              feedback,
+            });
+          } else {
+            // Important / Minor → respawn original builder with verifier
+            // feedback injected as a one-shot sandwich_append. Avoids a full
+            // plan cycle for tightly-scoped fixes (e.g. "add entry redirector",
+            // observed in session 01KQNEYQT53P5JFGD0944NBZ9D).
+            const suggested = (event.scores as { suggested_change?: string } | undefined)
+              ?.suggested_change;
+            const appendBody =
+              `Verifier feedback (${deviation}): ${feedback}` +
+              (suggested ? `\n\nSuggested change:\n${suggested}` : '');
+            next.task_ledger.facts.push({
+              source_id: event.id,
+              text: appendBody,
+              category: 'sandwich_append',
+              target_actor: 'builder',
+            });
+            next.progress_ledger.next_speaker = 'builder';
+            effects.push({
+              type: 'spawn',
+              actor: 'builder',
+              adapter: pickAdapter(next, 'builder'),
+              sandwich_appends: collectSandwichAppends(next, 'builder'),
+            });
+          }
         }
       }
+      break;
+    }
+
+    case 'handoff.rollback': {
+      // PR-G2 — verifier explicitly asked for a rollback (separate from the
+      // verdict path above; e.g. when judge.score was already accepted but a
+      // new evidence prompts a rebuild). The reducer ignores the verifier's
+      // suggested `to` field (sandwich text was self-routing fiction) and
+      // dispatches purely on event.data.deviation.type, mirroring the FAIL
+      // routing above. data.suggested_change becomes a sandwich_append for the
+      // target actor's next spawn so the fix instruction reaches the builder.
+      const data =
+        (event.data as
+          | {
+              deviation?: { type?: string };
+              suggested_change?: string;
+            }
+          | undefined) ?? {};
+      const deviation = (data.deviation?.type ?? 'Important') as 'Critical' | 'Important' | 'Minor';
+      const target: Actor = deviation === 'Critical' ? 'planner-lead' : 'builder';
+      if (data.suggested_change) {
+        next.task_ledger.facts.push({
+          source_id: event.id,
+          text: `Verifier rollback (${deviation}):\n${data.suggested_change}`,
+          category: 'sandwich_append',
+          target_actor: target,
+        });
+      }
+      next.progress_ledger.next_speaker = target;
+      effects.push({
+        type: 'spawn',
+        actor: target,
+        adapter: pickAdapter(next, target as 'planner-lead' | 'builder' | 'verifier'),
+        sandwich_appends: collectSandwichAppends(next, target),
+      });
       break;
     }
 
@@ -498,6 +565,35 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           adapter: pickAdapter(next, data.goto as 'planner-lead' | 'builder' | 'verifier'),
           prompt: event.body,
           sandwich_appends: collectSandwichAppends(next, data.goto),
+        });
+      } else if (
+        // PR-G7-A — `@<actor> body` shorthand (target_actor only, no goto).
+        // Previously this only recorded a fact and did NOT spawn. Users typing
+        // `@builder Codex 말고 claude-local 사용해` expected the builder to wake
+        // up; instead the line was silently dropped (real footgun in
+        // 01KQNAK1CXTBDEBX2WP2QQK891 inbox — 5 of 6 lines wasted). Now an
+        // explicit @actor with a body spawns that actor with the body as
+        // prompt, unless the actor is paused.
+        data.target_actor &&
+        !data.swap &&
+        !data.reset_circuit &&
+        !data.sandwich_append &&
+        data.target_actor !== 'user' &&
+        data.target_actor !== 'system' &&
+        data.target_actor !== 'coordinator' &&
+        data.target_actor !== 'validator' &&
+        event.body &&
+        event.body.trim().length > 0 &&
+        !next.progress_ledger.paused &&
+        !next.progress_ledger.paused_actors.includes(data.target_actor)
+      ) {
+        next.progress_ledger.next_speaker = data.target_actor;
+        effects.push({
+          type: 'spawn',
+          actor: data.target_actor,
+          adapter: pickAdapter(next, data.target_actor as 'planner-lead' | 'builder' | 'verifier'),
+          prompt: event.body,
+          sandwich_appends: collectSandwichAppends(next, data.target_actor),
         });
       }
 

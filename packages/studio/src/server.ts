@@ -142,6 +142,11 @@ export async function startStudioServer(
     if (req.method === 'POST' && closeMatch) {
       return void serveSessionClose(res, hiddenSessions, closeMatch[1]!);
     }
+    // PR-G7-B — /api/sessions/:id/resume (POST — re-enter the coordinator loop)
+    const resumeMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/resume$/);
+    if (req.method === 'POST' && resumeMatch) {
+      return void serveSessionResume(req, res, repoRoot, resumeMatch[1]!);
+    }
     res.statusCode = 404;
     res.end('not found');
   });
@@ -775,6 +780,79 @@ function serveSessionClose(
   res.statusCode = 200;
   res.setHeader('content-type', 'application/json');
   res.end(JSON.stringify({ ok: true, hidden: sessionId }));
+}
+
+/**
+ * PR-G7-B — POST /api/sessions/:id/resume.
+ *
+ * Re-enters a paused / done session by spawning `crumb resume <id> --run` as
+ * a detached child. Body may carry `{ adapter?, force? }`:
+ *   - adapter: forwarded as `--adapter`, useful when the previous run failed
+ *     because of a broken adapter and the user wants to swap.
+ *   - force: forwarded as `--force` so even budget-exhausted (`done`) sessions
+ *     can re-enter — the reducer's TOKEN_BUDGET_HARD bump in PR-G1 covers most
+ *     cases but `force` is the explicit override.
+ *
+ * Returns 202 with `{ ok, pid }` once the child is spawned. The studio
+ * watcher picks up the resumed session's new transcript events via the
+ * existing tail.
+ */
+async function serveSessionResume(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  repoRoot: string,
+  sessionId: string,
+): Promise<void> {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  const MAX_BYTES = 8192;
+  for await (const chunk of req) {
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
+    total += buf.length;
+    if (total > MAX_BYTES) {
+      res.statusCode = 413;
+      res.setHeader('content-type', 'text/plain; charset=utf-8');
+      res.end('payload too large');
+      return;
+    }
+    chunks.push(buf);
+  }
+  let adapter: string | undefined;
+  let force = false;
+  if (chunks.length > 0) {
+    try {
+      const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+        adapter?: unknown;
+        force?: unknown;
+      };
+      if (typeof body.adapter === 'string' && body.adapter.length > 0) adapter = body.adapter;
+      if (body.force === true) force = true;
+    } catch {
+      res.statusCode = 400;
+      res.setHeader('content-type', 'text/plain; charset=utf-8');
+      res.end('invalid JSON body');
+      return;
+    }
+  }
+
+  const { spawn } = await import('node:child_process');
+  const args = ['tsx', 'src/index.ts', 'resume', sessionId, '--run'];
+  if (adapter) args.push('--adapter', adapter);
+  if (force) args.push('--force');
+  const child = spawn('npx', args, { cwd: repoRoot, detached: true, stdio: 'ignore' });
+  child.unref();
+
+  res.statusCode = 202;
+  res.setHeader('content-type', 'application/json');
+  res.end(
+    JSON.stringify({
+      ok: true,
+      pid: child.pid,
+      session_id: sessionId,
+      adapter: adapter ?? null,
+      force,
+    }),
+  );
 }
 
 /**

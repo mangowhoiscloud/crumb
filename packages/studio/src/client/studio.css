@@ -798,6 +798,33 @@ section.scorecard {
 }
 .session-row:hover .row-close { opacity: 1; }
 .session-row .row-close:hover { color: var(--audit-fg); background: var(--surface-2); }
+/* PR-G7-B — resume button. Sits to the left of the close ×, only on resumable
+ * sessions. Uses --primary so it reads as an action, not a destructive op. */
+.session-row .row-resume {
+  position: absolute;
+  top: 6px;
+  right: 30px;
+  background: transparent;
+  border: none;
+  color: var(--primary);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 60ms ease;
+  font-weight: 600;
+}
+.session-row:hover .row-resume { opacity: 1; }
+.session-row .row-resume:hover {
+  color: var(--ink);
+  background: color-mix(in oklab, var(--primary) 30%, transparent);
+}
+.session-row .row-resume:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
 
 /* v3.5 — scorecard moved up; horizontal strip across the top of main */
 .scorecard-bar {

@@ -220,12 +220,20 @@ describe('reducer', () => {
     ]);
   });
 
-  it('routes verify.result FAIL → rollback to planner-lead', () => {
+  it('routes verify.result FAIL deviation=Critical → rollback to planner-lead', () => {
+    // PR-G2 — only Critical deviations rollback to planner. Important / Minor
+    // (default) respawn the builder with the verifier feedback as a one-shot
+    // sandwich_append. Tests for Important/Minor are below.
     const s0 = initialState('sess-test');
     const verify = fixed({
-      from: 'builder',
+      from: 'verifier',
       kind: 'verify.result',
-      scores: { aggregate: 12, verdict: 'FAIL', feedback: 'AC#3 broken' },
+      scores: {
+        aggregate: 12,
+        verdict: 'FAIL',
+        feedback: 'AC#3 broken',
+        deviation: { type: 'Critical' },
+      },
     });
     const { state, effects } = reduce(s0, verify);
 
@@ -235,6 +243,45 @@ describe('reducer', () => {
       to: 'planner-lead',
       feedback: 'AC#3 broken',
     });
+  });
+
+  it('routes verify.result FAIL deviation=Important → respawn builder w/ sandwich_append', () => {
+    // PR-G2 — tightly-scoped fixes (e.g. "missing entry redirector") should
+    // not burn a full plan-cycle. Builder respawns with verifier feedback +
+    // suggested_change injected as a one-shot sandwich_append.
+    const s0 = initialState('sess-test');
+    const verify = fixed({
+      from: 'verifier',
+      kind: 'verify.result',
+      scores: {
+        aggregate: 14,
+        verdict: 'FAIL',
+        feedback: 'qa-check expects artifacts/game.html',
+        deviation: { type: 'Important' },
+        suggested_change: 'Add a 1-line redirector at artifacts/game.html',
+      },
+    });
+    const { state, effects } = reduce(s0, verify);
+
+    expect(state.done).toBe(false);
+    expect(effects[0]).toMatchObject({ type: 'spawn', actor: 'builder' });
+    const append = state.task_ledger.facts.find(
+      (f) => f.category === 'sandwich_append' && f.target_actor === 'builder',
+    );
+    expect(append).toBeDefined();
+    expect(append!.text).toContain('Important');
+    expect(append!.text).toContain('redirector');
+  });
+
+  it('routes verify.result FAIL with no deviation field → defaults to Important (builder respawn)', () => {
+    const s0 = initialState('sess-test');
+    const verify = fixed({
+      from: 'verifier',
+      kind: 'verify.result',
+      scores: { aggregate: 12, verdict: 'FAIL', feedback: 'AC#3 broken' },
+    });
+    const { effects } = reduce(s0, verify);
+    expect(effects[0]).toMatchObject({ type: 'spawn', actor: 'builder' });
   });
 
   it('routes verify.result FAIL with builder circuit OPEN → audit + builder-fallback spawn', () => {
@@ -444,6 +491,84 @@ describe('reducer', () => {
     expect(state.task_ledger.facts).toHaveLength(1);
     expect(state.task_ledger.facts[0].text).toContain('@planner-lead');
     expect(state.task_ledger.facts[0].text).toContain('콤보 보너스 좀 더 짧게');
+  });
+
+  it('PR-G7-A: @<actor> body shorthand spawns the actor with body as prompt', () => {
+    // Live session 01KQNAK1 inbox had 5 of 6 lines as `@builder ...` shorthand.
+    // Old behavior recorded a fact and dropped — actor never woke up. New
+    // behavior treats target_actor + body (with no other intent fields) as an
+    // explicit spawn request.
+    const s0 = initialState('sess-test');
+    const ev = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      body: 'codex 쓰지 말고 claude-local 사용해',
+      data: { target_actor: 'builder' },
+    });
+    const { state, effects } = reduce(s0, ev);
+    expect(state.progress_ledger.next_speaker).toBe('builder');
+    expect(effects).toHaveLength(1);
+    expect(effects[0]).toMatchObject({ type: 'spawn', actor: 'builder' });
+    expect((effects[0] as { prompt?: string }).prompt).toContain('codex');
+  });
+
+  it('PR-G7-A: @<actor> shorthand respects per-actor pause (no spawn)', () => {
+    const s0 = initialState('sess-test');
+    s0.progress_ledger.paused_actors = ['builder'];
+    const ev = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      body: 'do it',
+      data: { target_actor: 'builder' },
+    });
+    const { effects } = reduce(s0, ev);
+    expect(effects).toHaveLength(0);
+  });
+
+  it('PR-G7-A: @<actor> shorthand does NOT spawn when sandwich_append is set (append-only intent)', () => {
+    // sandwich_append is the long-lived note pattern; target_actor scopes the
+    // append. We must not double-fire (append + spawn) for that intent.
+    const s0 = initialState('sess-test');
+    const ev = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      data: {
+        target_actor: 'builder',
+        sandwich_append: 'always use Phaser.Scale.FIT',
+      },
+    });
+    const { effects } = reduce(s0, ev);
+    expect(effects).toHaveLength(0);
+  });
+
+  it('PR-G2: handoff.rollback Important → spawn(builder) w/ suggested_change as sandwich_append', () => {
+    const s0 = initialState('sess-test');
+    const ev = fixed({
+      from: 'verifier',
+      kind: 'handoff.rollback',
+      data: {
+        deviation: { type: 'Important' },
+        suggested_change: 'Add artifacts/game.html redirector',
+      },
+    });
+    const { state, effects } = reduce(s0, ev);
+    expect(effects[0]).toMatchObject({ type: 'spawn', actor: 'builder' });
+    const append = state.task_ledger.facts.find(
+      (f) => f.category === 'sandwich_append' && f.target_actor === 'builder',
+    );
+    expect(append?.text).toContain('redirector');
+  });
+
+  it('PR-G2: handoff.rollback Critical → spawn(planner-lead)', () => {
+    const s0 = initialState('sess-test');
+    const ev = fixed({
+      from: 'verifier',
+      kind: 'handoff.rollback',
+      data: { deviation: { type: 'Critical' }, suggested_change: 'AC1 contradicts AC3' },
+    });
+    const { state, effects } = reduce(s0, ev);
+    expect(state.progress_ledger.next_speaker).toBe('planner-lead');
+    expect(effects[0]).toMatchObject({ type: 'spawn', actor: 'planner-lead' });
   });
 
   // v0.2.0 G6 — LangGraph Command(goto/update) pattern
