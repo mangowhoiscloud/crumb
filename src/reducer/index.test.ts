@@ -3,9 +3,21 @@ import { describe, expect, it } from 'vitest';
 import { reduce } from './index.js';
 import { initialState } from '../state/types.js';
 import type { Message } from '../protocol/types.js';
+import type { Effect } from '../effects/types.js';
 import { fixedMessage } from '../test-helpers/fixtures.js';
 
 const fixed = (overrides: Partial<Message>): Message => fixedMessage(overrides, 'goal');
+
+/**
+ * v0.5 PR-Inbox-Console — every user.* event now produces a `kind=ack`
+ * append effect (Tier 1 immediate ack). Existing tests that assert on
+ * `effects.toHaveLength(N)` were authored before this addition; this
+ * helper filters out the ack so the rest of the assertion surface stays
+ * structurally identical. Tests that specifically want to assert about
+ * the ack still see it via the unfiltered effects array.
+ */
+const nonAckEffects = (effects: Effect[]): Effect[] =>
+  effects.filter((e) => !(e.type === 'append' && e.message.kind === 'ack'));
 
 describe('reducer', () => {
   it('routes goal → spawn(planner-lead, claude-local)', () => {
@@ -493,7 +505,7 @@ describe('reducer', () => {
 
     expect(state.task_ledger.facts.some((f) => f.category === 'constraint')).toBe(true);
     expect(state.progress_ledger.next_speaker).toBe('builder');
-    expect(effects).toEqual([]);
+    expect(nonAckEffects(effects)).toEqual([]);
   });
 
   it('determinism: replaying same events produces same state', () => {
@@ -530,8 +542,9 @@ describe('reducer', () => {
     const { state, effects } = reduce(s0, pause);
 
     expect(state.progress_ledger.paused).toBe(true);
-    expect(effects).toHaveLength(1);
-    expect(effects[0]).toMatchObject({ type: 'hook', kind: 'confirm' });
+    const filtered = nonAckEffects(effects);
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]).toMatchObject({ type: 'hook', kind: 'confirm' });
   });
 
   it('v0.2.0 G1: while paused, spawn effects are demoted to hook (LangGraph interrupt)', () => {
@@ -577,9 +590,10 @@ describe('reducer', () => {
     const { state, effects } = reduce(s0, approve);
 
     expect(state.done).toBe(true);
-    expect(effects).toHaveLength(1);
-    expect(effects[0]).toMatchObject({ type: 'done' });
-    expect((effects[0] as { reason: string }).reason).toContain('user_approve_partial');
+    const filtered = nonAckEffects(effects);
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]).toMatchObject({ type: 'done' });
+    expect((filtered[0] as { reason: string }).reason).toContain('user_approve_partial');
   });
 
   // v0.2.0 G3 — actor-targeted intervention (AutoGen UserProxyAgent + GroupChatManager pattern)
@@ -612,9 +626,10 @@ describe('reducer', () => {
     });
     const { state, effects } = reduce(s0, ev);
     expect(state.progress_ledger.next_speaker).toBe('builder');
-    expect(effects).toHaveLength(1);
-    expect(effects[0]).toMatchObject({ type: 'spawn', actor: 'builder' });
-    expect((effects[0] as { prompt?: string }).prompt).toContain('codex');
+    const filtered = nonAckEffects(effects);
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]).toMatchObject({ type: 'spawn', actor: 'builder' });
+    expect((filtered[0] as { prompt?: string }).prompt).toContain('codex');
   });
 
   it('PR-G7-A: @<actor> shorthand respects per-actor pause (no spawn)', () => {
@@ -627,7 +642,7 @@ describe('reducer', () => {
       data: { target_actor: 'builder' },
     });
     const { effects } = reduce(s0, ev);
-    expect(effects).toHaveLength(0);
+    expect(nonAckEffects(effects)).toHaveLength(0);
   });
 
   it('PR-G7-A: @<actor> shorthand does NOT spawn when sandwich_append is set (append-only intent)', () => {
@@ -643,7 +658,7 @@ describe('reducer', () => {
       },
     });
     const { effects } = reduce(s0, ev);
-    expect(effects).toHaveLength(0);
+    expect(nonAckEffects(effects)).toHaveLength(0);
   });
 
   it('PR-G2: handoff.rollback Important → spawn(builder) w/ suggested_change as sandwich_append', () => {
@@ -973,7 +988,7 @@ describe('reducer', () => {
     const approve1 = fixed({ from: 'user', kind: 'user.approve' });
     const r1 = reduce(s0, approve1);
     expect(r1.state.done).toBe(false);
-    expect(r1.effects).toHaveLength(0);
+    expect(nonAckEffects(r1.effects)).toHaveLength(0);
 
     // PASS history
     const s1 = initialState('sess-test');
@@ -984,7 +999,7 @@ describe('reducer', () => {
     });
     const approve2 = fixed({ from: 'user', kind: 'user.approve' });
     const r2 = reduce(s1, approve2);
-    expect(r2.effects).toHaveLength(0);
+    expect(nonAckEffects(r2.effects)).toHaveLength(0);
   });
 
   it('resets circuit breaker on successful event from previously-failing actor', () => {

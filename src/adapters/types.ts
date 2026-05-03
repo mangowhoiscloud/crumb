@@ -70,6 +70,16 @@ export interface SpawnRequest {
    */
   onStdoutActivity?: () => void;
   /**
+   * Optional raw stdout chunk sink. Adapters call this with every Buffer
+   * received from the child's stdout — the dispatcher uses it to live-tail
+   * the spawn log into `<session>/agent-workspace/<actor>/spawn-*.log`
+   * while the spawn is still running, so the studio's Logs tab can stream
+   * progress instead of seeing an empty file until the spawn exits.
+   */
+  onStdoutChunk?: (buf: Buffer) => void;
+  /** Optional raw stderr chunk sink. Same lifecycle as `onStdoutChunk`. */
+  onStderrChunk?: (buf: Buffer) => void;
+  /**
    * Optional progress callback. Adapters parse their CLI's stream-json
    * output (claude-local: `--output-format stream-json`, codex-local:
    * `experimental_json`, gemini-local: `--show-progress` events) into a
@@ -113,6 +123,16 @@ export interface SpawnRequest {
    * Bench EMNLP 2025 Findings §805 + Preference Leakage ICLR 2026.
    */
   judgeInputPath?: string;
+  /**
+   * v0.5 PR-Inbox-Console — Tier 3 pairing. List of `user.intervene/pause/
+   * resume/approve/veto` event ids drained from `progress_ledger.
+   * pending_intervene_ids` at this spawn-start. Dispatcher forwards them as
+   * `CRUMB_CONSUMED_INTERVENE_IDS` (csv); `crumb event`'s `stampEnvMetadata`
+   * picks them up and stamps `metadata.consumed_intervene_ids` on every
+   * event the actor emits during the spawn. Studio inbox panel uses the
+   * stamp to fold actor responses under the originating user input.
+   */
+  consumedIntervenIds?: string[];
 }
 
 export interface SpawnResult {

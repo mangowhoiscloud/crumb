@@ -197,8 +197,34 @@ Append in order:
    AND `data.clarity` AND `data.acceptance_criteria` array, ≥3 items, AND
    `data.ac_predicates` array compiling each testable AC to a deterministic
    browser-side predicate per `agents/specialists/game-design.md`
-   §AC-Predicate-Compile**)
+   §AC-Predicate-Compile, AND `data.controls` block per
+   `agents/specialists/game-design.md` §4.5 — see below**)
 3. `kind=handoff.requested`, `to=builder`, `payload={spec_id}`
+
+### `data.controls` — input mapping (v0.5 PR-Controls, BINDING)
+
+Every spec MUST emit a `data.controls` block so qa-check can drive the game
+deterministically. If the game has a MenuScene that waits on user input,
+list the synthesizable keys in `controls.start[]`. If you choose direct
+boot (BootScene → GameScene), still emit `controls.start: []` to make the
+zero-input contract explicit.
+
+```yaml
+data:
+  controls:
+    start: ["Space", "Enter"]      # at least one synthesizable key for MenuScene
+                                    # advance, OR [] when first scene is GameScene
+    actions:                         # informational, builder may extend
+      basic: "J"
+      pause: "Escape"
+    pointer_fallback: true           # true → page.click('canvas') is allowed as
+                                    # qa-check's last-resort start synthesis
+```
+
+Without a `controls` block, qa-check's Stage-2 SYS.RUNNING wait will time
+out on any MenuScene-first game and the verifier will cite boot regression
+even though the game is fine in the user's hand. See pokemon session
+01KQQ9VHWKXRR5M8N6P2SC0QFG for the regression case the controls schema fixes.
 
 ### `data.ac_predicates` — deterministic AC compile (v0.3.5)
 

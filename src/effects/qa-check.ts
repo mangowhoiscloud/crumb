@@ -76,6 +76,31 @@ export interface QaResult {
    */
   phaser_booted?: boolean;
   /**
+   * v0.5 PR-Controls — true when SYS.RUNNING was reached only after the
+   * controls.start[] fallback input loop synthesized keypresses (or canvas
+   * click via pointer_fallback). Verifier weighs D5.vibe lower when true:
+   * a premium game's demo intro auto-advances rather than blocking on
+   * an explicit button press.
+   */
+  phaser_started_via_controls_fallback?: boolean;
+  /**
+   * v0.5 PR-Juice — `src/systems/JuiceManager.js` (or any file exporting
+   * TIMINGS / SHAKE / POOLS) present in the multi-file bundle.
+   * agents/specialists/game-vibe.md declares this file binding for D5.vibe;
+   * absent → anti-deception Rule 9 caps D5 at 4. Always set when artifact
+   * is a multi-file bundle; absent (undefined) for single-file artifacts
+   * (legacy single-file profile, retired in v0.4 but mock fixtures).
+   */
+  juice_manager_present?: boolean;
+  /**
+   * v0.5 PR-Juice — coarse polish density score derived from a regex sweep
+   * over the bundle's `src/**` JS files. Counts: tween/Tween calls,
+   * camera.shake, scaleTo/yoyo, particles/ParticleEmitter, audio context
+   * createOscillator/createBuffer. Surface for verifier D5 weighting; not
+   * a hard gate (heuristic, framework-version-sensitive). Higher = juicier.
+   */
+  juice_density?: number;
+  /**
    * v0.3.5 — per-AC deterministic results from `qa-interactive.ts`. Empty
    * array = caller passed no `ac_predicates` (legacy spec or all-subjective);
    * non-empty = each entry's status is the single-origin ground truth for
@@ -138,6 +163,97 @@ function isMultiFileBundle(artifactPath: string): boolean {
   return basename(artifactPath) === 'index.html';
 }
 
+/**
+ * v0.5 PR-Juice — scan a multi-file bundle for the polish-layer signal that
+ * `agents/specialists/game-vibe.md` declares binding for D5.vibe rubric.
+ *
+ * Two outputs:
+ *
+ * 1. `juice_manager_present` — true when any file under `src/` (a) is named
+ *    JuiceManager.js, OR (b) exports the trio TIMINGS / SHAKE / POOLS the
+ *    spec calls out. Boolean is consumed by anti-deception Rule 9 (missing
+ *    → D5 ≤ 4) so a builder can't claim "feels juicy" without the file.
+ *
+ * 2. `juice_density` — count of polish-layer call sites across the bundle's
+ *    .js files. Patterns mirror the per-profile guidance in
+ *    `agents/specialists/game-vibe.md`:
+ *    - `tweens?.add` / `tween(` / Phaser tween chains
+ *    - `camera.shake` / `cameras.main.shake`
+ *    - `particles?.createEmitter` / `ParticleEmitter` / `THREE.Points`
+ *    - `setTimeout(..., 16)` style hit-pause / `time.delayedCall`
+ *    - Web Audio: `createOscillator` / `createBuffer` / `decodeAudioData`
+ *    Higher density = more polish moments wired up. Heuristic only —
+ *    framework-version-sensitive — so the verifier weights it, not gates.
+ *
+ * Best-effort: fs failures degrade silently to `juice_manager_present=false`
+ * and `juice_density=0`. Single-file artifacts return undefined for both
+ * (no `src/` to walk).
+ */
+const JUICE_PATTERNS = [
+  /\btweens?\s*\.\s*add\b/g,
+  /\btween\s*\(/g,
+  /\bcameras?\s*\.\s*(?:main\s*\.\s*)?shake\b/g,
+  /\bcreateEmitter\b/g,
+  /\bParticleEmitter\b/g,
+  /\bTHREE\s*\.\s*Points\b/g,
+  /\bdelayedCall\b/g,
+  /\bcreateOscillator\b/g,
+  /\bcreateBuffer\b/g,
+  /\bdecodeAudioData\b/g,
+];
+
+function scanJuiceSignals(bundleRoot: string): {
+  juiceManagerPresent: boolean;
+  juiceDensity: number;
+} {
+  let juiceManagerPresent = false;
+  let juiceDensity = 0;
+  const stack: string[] = [bundleRoot];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    let entries;
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      const full = join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (!/\.(js|mjs|ts)$/i.test(entry.name)) continue;
+      // JuiceManager filename match (game-vibe.md binding).
+      if (/^juicemanager\.(js|mjs|ts)$/i.test(entry.name)) {
+        juiceManagerPresent = true;
+      }
+      let body: string;
+      try {
+        body = readFileSync(full, 'utf-8');
+      } catch {
+        continue;
+      }
+      // TIMINGS + SHAKE + POOLS export trio (file may be named differently).
+      if (
+        !juiceManagerPresent &&
+        /\bTIMINGS\b/.test(body) &&
+        /\bSHAKE\b/.test(body) &&
+        /\bPOOLS\b/.test(body)
+      ) {
+        juiceManagerPresent = true;
+      }
+      for (const pat of JUICE_PATTERNS) {
+        const matches = body.match(pat);
+        if (matches) juiceDensity += matches.length;
+      }
+    }
+  }
+  return { juiceManagerPresent, juiceDensity };
+}
+
 function walkBundle(root: string): { totalBytes: number; fileCount: number } {
   let totalBytes = 0;
   let fileCount = 0;
@@ -186,6 +302,7 @@ export async function runQaCheck(
   artifactPath: string,
   acPredicates: ACPredicateItem[] = [],
   persistenceProfile?: PersistenceProfile,
+  controls?: { start?: string[]; pointer_fallback?: boolean },
 ): Promise<QaResult> {
   const start = Date.now();
 
@@ -236,10 +353,15 @@ export async function runQaCheck(
   // no pass/fail gate (single-shot quality > compression budget).
   let bundleBytes: number;
   let bundleFileCount: number;
+  let juiceManagerPresent: boolean | undefined;
+  let juiceDensity: number | undefined;
   if (isMultiFileBundle(artifactPath)) {
     const walked = walkBundle(dirname(artifactPath));
     bundleBytes = walked.totalBytes;
     bundleFileCount = walked.fileCount;
+    const juice = scanJuiceSignals(dirname(artifactPath));
+    juiceManagerPresent = juice.juiceManagerPresent;
+    juiceDensity = juice.juiceDensity;
   } else {
     bundleBytes = statSync(artifactPath).size;
     bundleFileCount = 1;
@@ -253,17 +375,19 @@ export async function runQaCheck(
   let pwaOfflineBoot: QaResult['pwa_offline_boot'] = 'skipped';
   let phaserSceneRunning: QaResult['phaser_scene_running'];
   let phaserBooted: QaResult['phaser_booted'];
+  let phaserStartedViaControlsFallback: QaResult['phaser_started_via_controls_fallback'];
   const requirePlaywright = process.env.CRUMB_QA_REQUIRE_PLAYWRIGHT === '1';
   const playwrightOptional = process.env.CRUMB_QA_PLAYWRIGHT_OPTIONAL === '1';
   let playwrightUnavailable = false;
   try {
     const { runPlaywrightSmoke } = await import('./qa-check-playwright.js');
-    const smoke = await runPlaywrightSmoke(artifactPath);
+    const smoke = await runPlaywrightSmoke(artifactPath, controls);
     firstInteraction = smoke.firstInteraction;
     crossBrowserSmoke = smoke.crossBrowser;
     pwaOfflineBoot = smoke.pwaOffline ?? 'skipped';
     phaserSceneRunning = smoke.phaserSceneRunning;
     phaserBooted = smoke.phaserBooted;
+    phaserStartedViaControlsFallback = smoke.phaserStartedViaControlsFallback;
     if (smoke.firstInteraction === 'fail') {
       findings.push(`playwright smoke failed: ${smoke.reason ?? 'unknown'}`);
     }
@@ -355,6 +479,9 @@ export async function runQaCheck(
     pwa_offline_boot: pwaOfflineBoot,
     ...(phaserSceneRunning !== undefined ? { phaser_scene_running: phaserSceneRunning } : {}),
     ...(phaserBooted !== undefined ? { phaser_booted: phaserBooted } : {}),
+    ...(phaserStartedViaControlsFallback ? { phaser_started_via_controls_fallback: true } : {}),
+    ...(juiceManagerPresent !== undefined ? { juice_manager_present: juiceManagerPresent } : {}),
+    ...(juiceDensity !== undefined ? { juice_density: juiceDensity } : {}),
     ...(acResults.length > 0
       ? { ac_results: acResults, ac_pass_count: acPassCount, ac_total: acResults.length }
       : {}),

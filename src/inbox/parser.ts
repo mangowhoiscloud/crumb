@@ -215,6 +215,31 @@ function parseSlash(line: string, sessionId: string): DraftMessage | null {
         body: rest,
       };
     }
+    case 'ask': {
+      // v0.5 PR-Inbox-Console — Tier 2 query slash. Enum-only (status / cost
+      // / next / stuck / scorecard); reducer routes to the ask-formatter
+      // helper which emits a `kind=note` response within ~500ms — no LLM
+      // call, replay-deterministic. Any non-enum value falls through to
+      // free-text intervene so the user still gets an ack.
+      const ENUM = new Set(['status', 'cost', 'next', 'stuck', 'scorecard']);
+      const query = rest.toLowerCase().split(/\s+/)[0] ?? '';
+      if (!ENUM.has(query)) {
+        return {
+          session_id: sessionId,
+          from: 'user',
+          kind: 'user.intervene',
+          body: rest || '/ask',
+          data: { ask_invalid: query || '(empty)' },
+        };
+      }
+      return {
+        session_id: sessionId,
+        from: 'user',
+        kind: 'user.intervene',
+        body: `/ask ${query}`,
+        data: { ask: query },
+      };
+    }
     case 'redo': {
       // Alias for free-text user.intervene — preserves TUI muscle memory.
       return {

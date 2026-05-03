@@ -59,29 +59,42 @@ import type { DraftMessage, Harness, Message, Provider } from './protocol/types.
 interface ParsedArgs {
   command: string;
   flags: Map<string, string>;
+  /**
+   * v0.5 PR-Bindings — repeating-flag values. Currently only `--bind` uses
+   * this (the per-actor binding override surface) — every occurrence appends
+   * one entry to multi.get('bind') so `--bind a=x --bind b=y` lands as
+   * ['a=x','b=y']. Single-occurrence flags continue to use `flags`.
+   */
+  multi: Map<string, string[]>;
   positional: string[];
 }
+
+const REPEATING_FLAGS = new Set(['bind']);
 
 function parseArgs(argv: string[]): ParsedArgs {
   const [command, ...rest] = argv;
   const flags = new Map<string, string>();
+  const multi = new Map<string, string[]>();
   const positional: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     if (a.startsWith('--')) {
       const key = a.slice(2);
       const next = rest[i + 1];
-      if (next && !next.startsWith('--')) {
-        flags.set(key, next);
-        i++;
+      const value = next && !next.startsWith('--') ? next : 'true';
+      if (next && !next.startsWith('--')) i++;
+      if (REPEATING_FLAGS.has(key)) {
+        const arr = multi.get(key) ?? [];
+        arr.push(value);
+        multi.set(key, arr);
       } else {
-        flags.set(key, 'true');
+        flags.set(key, value);
       }
     } else {
       positional.push(a);
     }
   }
-  return { command: command ?? 'help', flags, positional };
+  return { command: command ?? 'help', flags, multi, positional };
 }
 
 /**
@@ -159,6 +172,25 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
   const adapterOverride = args.flags.get('adapter');
   const presetName = args.flags.get('preset');
   const label = args.flags.get('label');
+  // v0.5 PR-Bindings — `--bind <actor>=<harness>[:<model>]` (repeating).
+  // Highest-priority overlay above .crumb/config.toml + preset, so the studio's
+  // "Custom binding" grid actually reaches the dispatcher (was UI residue
+  // before this PR). When --preset is also given, bindings overlay onto that
+  // preset; without --preset, a synthetic preset is constructed via
+  // loadBindingsOnly. Skipped when no --bind flags are present (ambient).
+  const cliBindings: Array<{ actor: string; harness?: string; model?: string }> = [];
+  for (const raw of args.multi.get('bind') ?? []) {
+    const m = raw.match(/^([\w-]+)=([\w.-]*)(?::(.+))?$/);
+    if (!m) {
+      throw new Error(`--bind must be <actor>=<harness>[:<model>]; got: ${raw}`);
+    }
+    const [, actor, harness, model] = m;
+    cliBindings.push({
+      actor,
+      ...(harness ? { harness } : {}),
+      ...(model ? { model } : {}),
+    });
+  }
   const idleTimeoutMs = Number(args.flags.get('idle-timeout') ?? 60_000);
   // v0.3.1: per-spawn timeout flag (override 10-min default for slow Claude wakes
   // or fast mock runs). Default `undefined` → dispatcher's PER_SPAWN_TIMEOUT_MS.
@@ -227,6 +259,7 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
       ...(genreProfile ? { genreProfile } : {}),
       ...(persistenceProfile ? { persistenceProfile } : {}),
       presetName,
+      ...(cliBindings.length > 0 ? { cliBindings } : {}),
       idleTimeoutMs,
       perSpawnTimeoutMs,
     });
@@ -364,6 +397,23 @@ export function stampEnvMetadata(draft: DraftMessage, env: NodeJS.ProcessEnv): D
   ) {
     md.cross_provider = provider !== builderProvider;
     mutated = true;
+  }
+  // v0.5 PR-Inbox-Console — Tier 3 stamp. CRUMB_CONSUMED_INTERVENE_IDS env
+  // is a comma-separated list set by the dispatcher at spawn-start (drained
+  // from progress_ledger.pending_intervene_ids). Every event the actor
+  // emits during this spawn carries it via metadata.consumed_intervene_ids,
+  // letting the studio inbox panel group actor responses under the user
+  // input that originated them. Never overwrites — actor may set its own.
+  const consumedRaw = env.CRUMB_CONSUMED_INTERVENE_IDS;
+  if (consumedRaw && md.consumed_intervene_ids === undefined) {
+    const ids = consumedRaw
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    if (ids.length > 0) {
+      md.consumed_intervene_ids = ids;
+      mutated = true;
+    }
   }
   return mutated ? { ...draft, metadata: md } : draft;
 }
@@ -1309,7 +1359,7 @@ function printHelp(): void {
   console.log(`Crumb v${readPackageVersion()} — multi-agent execution harness
 
 Usage:
-  crumb run --goal "<game pitch>" [--session <id>] [--preset <name>] [--adapter <id>]
+  crumb run --goal "<game pitch>" [--session <id>] [--preset <name>] [--adapter <id>] [--bind <actor>=<harness>[:<model>]]…
   crumb event                              # read JSON from stdin, append to transcript
   crumb event tail [--all] [--kinds ...]   # stream transcript events with metadata.visibility=private
                                           # filtered out by default; --all bypasses; --kinds limits to a list
@@ -1354,6 +1404,12 @@ Flags (run):
                       명시 없으면 ambient (entry host 따라감).
   --adapter <id>      force every actor to one adapter (override preset). claude-local /
                       codex-local / mock. 디버깅용.
+  --bind <actor>=<harness>[:<model>]
+                      v0.5 PR-Bindings — per-actor override (repeatable).
+                      Highest-priority above .crumb/config.toml + preset.
+                      e.g. --bind builder=codex --bind verifier=gemini-cli:gemini-3-1-pro
+                      Without --preset: synthesizes a "bindings-only" preset
+                      where named actors are overridden, others stay ambient.
   --genre <profile>   v0.4: pre-select genre profile. one of:
                         auto-detect (default — researcher proposes)
                         casual-portrait | pixel-arcade | sidescroll-2d | flash-3d-arcade

@@ -71,6 +71,7 @@
         "user.approve",
         "user.pause",
         "user.resume",
+        "ack",
         "handoff.requested",
         "handoff.rollback",
         "artifact.created",
@@ -246,6 +247,21 @@
         "cost_usd": { "type": "number" },
         "thinking_tokens": { "type": "number" },
         "audit_violations": { "type": "array", "items": { "type": "string" } },
+        "consumed_intervene_ids": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" },
+          "description": "v0.5 PR-Inbox-Console — Tier 3 pairing. List of user.* event ids whose effects this emission consumed. Stamped by dispatcher at spawn-start and propagated through `crumb event` via CRUMB_CONSUMED_INTERVENE_IDS env. Studio inbox panel groups actor responses under the originating user input by matching this list."
+        },
+        "ack_for": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "v0.5 PR-Inbox-Console — Tier 1 pairing. Set on kind=ack events the reducer emits for every user.* input. Points back at the source user event id."
+        },
+        "in_reply_to": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "v0.5 PR-Inbox-Console — Tier 2 pairing. Set on kind=note events the /ask formatter emits with deterministic state snapshots."
+        },
         "crumb": {
           "type": "object",
           "description": "v0.3.0: 5-layer hierarchy markers (project → session → run → turn → step → event). project lives on the filesystem; session_id and step are top-level fields; run_id/turn_id are reducer-derived and live here. parent_session_id/fork_event_id appear only on the first event of a forked session.",

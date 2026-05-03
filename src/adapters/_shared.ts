@@ -65,6 +65,13 @@ export function buildAdapterEnv(req: SpawnRequest): NodeJS.ProcessEnv {
     // full transcript. Hard isolation against framing / anchor / preference
     // leakage biases. See [[bagelcode-verifier-context-isolation-2026-05-03]].
     ...(req.judgeInputPath ? { CRUMB_JUDGE_INPUT_PATH: req.judgeInputPath } : {}),
+    // v0.5 PR-Inbox-Console — Tier 3 pairing. csv of user.* event ids drained
+    // at spawn-start; `crumb event`'s stampEnvMetadata stamps them onto every
+    // emission so the studio inbox panel groups actor responses under the
+    // originating user input.
+    ...(req.consumedIntervenIds && req.consumedIntervenIds.length > 0
+      ? { CRUMB_CONSUMED_INTERVENE_IDS: req.consumedIntervenIds.join(',') }
+      : {}),
   };
 }
 
@@ -243,4 +250,82 @@ export function parseCodexStreamProgress(line: string): ProgressEvent | null {
     return { kind: 'thinking', summary: 'thinking' };
   }
   return null;
+}
+
+/**
+ * v0.5 PR-XProvider — codex experimental_json usage extractor.
+ *
+ * Codex CLI emits a final event (kind=`task_complete` or kind=`session_done`,
+ * varies by version) carrying `usage: { input_tokens, output_tokens,
+ * cached_input_tokens }` at the end of the stream. Some versions stash the
+ * same fields in the top-level event with `total_tokens` instead. Walk the
+ * concatenated stdout looking for any line that has at least one of these
+ * fields; later occurrences overwrite earlier ones (we want the final
+ * tally).
+ *
+ * Returns null if nothing parses — caller falls back to existing best-effort
+ * (which today is "no usage at all"). The few tokens we do extract feed
+ * the dispatcher's agent.stop metadata fold (live.ts:507-514) so studio
+ * surfaces real numbers for codex sessions, not zeros.
+ */
+export function parseCodexStreamUsage(stdout: string): {
+  tokens_in?: number;
+  tokens_out?: number;
+  cache_read?: number;
+  model?: string;
+} | null {
+  if (!stdout || stdout.length === 0) return null;
+  const lines = stdout.split('\n');
+  const acc: { tokens_in?: number; tokens_out?: number; cache_read?: number; model?: string } = {};
+  for (const line of lines) {
+    if (!line.startsWith('{')) continue;
+    let evt: unknown;
+    try {
+      evt = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!evt || typeof evt !== 'object') continue;
+    const e = evt as Record<string, unknown>;
+    // Usage may live at root or under .usage / .response_usage / .session /
+    // .usage_metadata (Gemini CLI / Google AI SDK convention). Walk all
+    // candidate sub-objects looking for the canonical fields.
+    const candidates: Array<Record<string, unknown>> = [e];
+    for (const key of ['usage', 'response_usage', 'token_usage', 'session', 'usage_metadata']) {
+      const sub = e[key];
+      if (sub && typeof sub === 'object' && !Array.isArray(sub)) {
+        candidates.push(sub as Record<string, unknown>);
+      }
+    }
+    for (const c of candidates) {
+      const tIn =
+        (typeof c.input_tokens === 'number' && c.input_tokens) ||
+        (typeof c.prompt_tokens === 'number' && c.prompt_tokens) ||
+        (typeof c.prompt_token_count === 'number' && c.prompt_token_count) ||
+        (typeof c.tokens_in === 'number' && c.tokens_in);
+      const tOut =
+        (typeof c.output_tokens === 'number' && c.output_tokens) ||
+        (typeof c.completion_tokens === 'number' && c.completion_tokens) ||
+        (typeof c.candidates_token_count === 'number' && c.candidates_token_count) ||
+        (typeof c.tokens_out === 'number' && c.tokens_out);
+      const cached =
+        (typeof c.cached_input_tokens === 'number' && c.cached_input_tokens) ||
+        (typeof c.cached_content_token_count === 'number' && c.cached_content_token_count) ||
+        (typeof c.cache_read === 'number' && c.cache_read);
+      const mdl = typeof c.model === 'string' ? c.model : undefined;
+      if (typeof tIn === 'number') acc.tokens_in = tIn;
+      if (typeof tOut === 'number') acc.tokens_out = tOut;
+      if (typeof cached === 'number') acc.cache_read = cached;
+      if (mdl) acc.model = mdl;
+    }
+  }
+  if (
+    acc.tokens_in === undefined &&
+    acc.tokens_out === undefined &&
+    acc.cache_read === undefined &&
+    !acc.model
+  ) {
+    return null;
+  }
+  return acc;
 }

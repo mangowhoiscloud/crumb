@@ -86,6 +86,14 @@ export interface TaskLedger {
    * runs alongside the static smoke. Empty when planner emits no predicates.
    */
   ac_predicates: ACPredicateLedgerItem[];
+  /**
+   * v0.5 PR-Controls — input mapping captured from `kind=spec.data.controls`.
+   * `start[]` = synthesizable keys that advance from MenuScene (Playwright
+   * qa-runner uses `page.keyboard.press`). `pointer_fallback=true` lets the
+   * runner click the canvas as a last resort. See
+   * `agents/specialists/game-design.md` §4.5.
+   */
+  controls?: { start?: string[]; pointer_fallback?: boolean };
   artifacts: { path: string; sha256: string }[];
   /**
    * v0.4 — genre profile (auto-detect | casual-portrait | pixel-arcade |
@@ -172,6 +180,19 @@ export interface ProgressLedger {
   phase_b_step_design_seen: boolean;
   phase_b_spec_seen: boolean;
   phase_b_handoff_to_builder_seen: boolean;
+  /**
+   * v0.5 PR-Inbox-Console — Tier 3 pairing buffer. Reducer pushes the id of
+   * every `user.intervene/pause/resume/approve/veto` event here; dispatcher
+   * drains the list at the next spawn-start and stamps
+   * `metadata.consumed_intervene_ids = [<drained ids>]` on every event the
+   * actor emits during that spawn. Studio inbox panel uses the stamp to
+   * group actor responses under the originating user input.
+   *
+   * Drain timing = spawn-start (not per-event), so a single user input that
+   * cascades into multiple spawns gets credit on the first one only — keeps
+   * the inbox UI grouping unambiguous.
+   */
+  pending_intervene_ids: string[];
 }
 
 /**
@@ -184,6 +205,24 @@ export interface QaSnapshot {
   build_event_id: string;
   exec_exit_code: number;
   cross_browser_smoke?: 'ok' | 'fail' | 'skipped';
+  /**
+   * v0.3.5 — per-AC predicate results from the deterministic AC layer.
+   * Read by anti-deception Rule 7 (PASS verdict + AC FAIL → D1 ≤ 2).
+   */
+  ac_results?: Array<{ ac_id: string; status: 'PASS' | 'FAIL' | 'SKIP' }>;
+  /**
+   * v0.5 PR-Juice — JuiceManager.js (or TIMINGS/SHAKE/POOLS export trio)
+   * present in the multi-file bundle. Source-of-truth for anti-deception
+   * Rule 9 (`juice_manager_missing`). Undefined for legacy single-file
+   * artifacts (mock fixtures only in v0.4+).
+   */
+  juice_manager_present?: boolean;
+  /**
+   * v0.5 PR-Juice — coarse polish density signal (count of tween / shake /
+   * particle / Web-Audio call sites in src/**). Surface for verifier D5
+   * weighting; not gated on directly.
+   */
+  juice_density?: number;
 }
 
 export interface CrumbState {
@@ -251,6 +290,7 @@ export const initialState = (sessionId: string): CrumbState => ({
     phase_b_step_design_seen: false,
     phase_b_spec_seen: false,
     phase_b_handoff_to_builder_seen: false,
+    pending_intervene_ids: [],
   },
   last_message: null,
   last_qa_result: null,

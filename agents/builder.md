@@ -78,7 +78,30 @@ The implementation step among the 5 outer actors. The core of the v0.1 actor spl
   - `postgres-anon` → §1.2 / §1.4.postgres-anon Supabase wrapper
   - `edge-orm` → §1.4.edge-orm Worker (`functions/api/runs.ts` + `wrangler.toml`)
 
-Inline-read `agents/specialists/technical-artist.md` (per-profile FX/shader/particle pool guidance) and `agents/specialists/game-vibe.md` (`JuiceManager.js` constants — emit `src/systems/JuiceManager.js` with the TIMINGS / SHAKE / POOLS export per profile).
+Inline-read `agents/specialists/technical-artist.md` (per-profile FX/shader/particle pool guidance) and `agents/specialists/game-vibe.md` (`JuiceManager.js` constants — emit `src/systems/JuiceManager.js` with the TIMINGS / SHAKE / POOLS / **MOTIONS** exports + the `playMotion(scene, sprite, name)` helper per game-vibe.md).
+
+**v0.5 PR-Motion (BINDING)** — every animated character (player, enemy, NPC,
+mascot, animated UI pet) MUST receive at least an `idle` motion bound at
+scene creation: `playMotion(scene, sprite, 'idle')`. State transitions
+(damage → 'hit', round-win → 'win', round-lose → 'lose', special-cast →
+'special') MUST trigger the matching motion call. Skipping motion calls is
+treated like skipping a HUD score readout — verifier D5.vibe rubric
+(checklist below) tests for it via Playwright `sprite.scaleX` change
+detection over a 1s window.
+
+**v0.5 PR-Ambient (BINDING)** — every GameScene MUST emit DESIGN.md
+`background_layers` exactly: 3 visual layers (deep / mid / ambient) +
+1 ambient particle emitter. Concretely in BootScene/GameScene `create()`:
+```js
+const bgDeep = this.add.rectangle(0, 0, w, h, paletteHex('bg_deep')).setOrigin(0).setDepth(-3);
+const bgMid  = this.add.graphics().setDepth(-2);  // gradient or accent_shapes
+const dust = this.add.particles(0, 0, 'pixel', { ... });  // ambient_particles per tuning
+```
+A scene with no particle emitter or fewer than 3 background layers fails
+qa-check's `scene.children.length ≥ 4` deterministic gate AND lowers
+verifier D5.vibe via the "scene alive when idle" rubric. Royal Match /
+Toon Blast deep-dive: ambient floating + fast animation is the
+differentiator from static-feel mid-tier titles.
 
 Generate the directory tree under `artifacts/game/` per §1.1 (or §1.3.D for profile D):
 
@@ -91,6 +114,11 @@ Generate the directory tree under `artifacts/game/` per §1.1 (or §1.3.D for pr
 7. **`src/config/tuning.json`** — mirror of `artifacts/tuning.json` (or import the original via `fetch('./tuning.json')`).
 8. **`src/scenes/BootScene.js`** — preload step. Procedurally generate sprites via Canvas API (`OpusGameLabs/game-creator` pattern) so binary asset emit is optional, not required. Emit Phaser textures via `this.textures.addCanvas(name, canvas)`.
 9. **`src/scenes/MenuScene.js`** — title + start button + best-score readout from localStorage.
+   **v0.5 PR-Controls (BINDING)**: every key listed in `spec.data.controls.start[]`
+   MUST advance from MenuScene to GameScene (`this.input.keyboard.on('keydown-' + key, …)`).
+   If `spec.data.controls.start` is empty or absent, SKIP MenuScene entirely
+   and route BootScene → GameScene directly — qa-check's Stage-2 SYS.RUNNING
+   wait depends on at least one path that auto-advances or is keyboard-synthesizable.
 10. **`src/scenes/GameScene.js`** — main loop. One AC = one mechanic, no surprise features.
 11. **`src/scenes/GameOverScene.js`** — score readout + retry / back-to-menu.
 12. **`src/entities/<name>.js`** — one file per entity (player / tile / enemy / etc.). Each export a single class.

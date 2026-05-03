@@ -60,8 +60,26 @@ export interface PlaywrightSmokeResult {
    * predicates worth running).
    */
   phaserBooted?: boolean;
+  /**
+   * v0.5 PR-Controls — true when Stage 2 (SYS.RUNNING) only succeeded after
+   * the controls fallback input loop synthesized a keypress / canvas click.
+   * Surfaced into qa.result so verifier knows MenuScene was bridged, not
+   * native-booted. PASS verdict still possible but D5.vibe should weigh
+   * "premium games auto-advance demo intros" if this is true.
+   */
+  phaserStartedViaControlsFallback?: boolean;
   /** Failure detail for lint_findings; absent when ok. */
   reason?: string;
+}
+
+/**
+ * v0.5 PR-Controls — input mapping read from spec.data.controls. Drives
+ * qa-check's Stage-2 fallback when the first scene is a MenuScene waiting
+ * on user input. See `agents/specialists/game-design.md` §4.5.
+ */
+export interface ControlsHint {
+  start?: string[];
+  pointer_fallback?: boolean;
 }
 
 const NAV_TIMEOUT_MS = 5000;
@@ -75,6 +93,12 @@ const PHASER_BOOTED_TIMEOUT_MS = 5000;
 // well-formed builds purely on cold-start latency. 10s leaves headroom while
 // still flagging genuinely stuck scenes (infinite loop, missing asset, etc.).
 const SCENE_RUNNING_TIMEOUT_MS = 10_000;
+// v0.5 PR-Controls — extra retry budget after synthesizing a controls.start
+// keypress / pointer-fallback click. MenuScene → GameScene transitions
+// typically take 100-500ms after input, but BootScene preload still flushing
+// can stretch it; 5s is a safe ceiling without re-introducing the "false fail
+// on cold paint" failure mode.
+const CONTROLS_FALLBACK_RETRY_MS = 5000;
 const CONSOLE_WATCH_MS = 1500;
 const OFFLINE_RELOAD_TIMEOUT_MS = 5000;
 
@@ -202,7 +226,10 @@ export const PHASER_BOOTED_PROBE = `(() => {
   return false;
 })()`;
 
-export async function runPlaywrightSmoke(artifactPath: string): Promise<PlaywrightSmokeResult> {
+export async function runPlaywrightSmoke(
+  artifactPath: string,
+  controls?: ControlsHint,
+): Promise<PlaywrightSmokeResult> {
   // Dynamic import so qa-check.ts can detect the missing-dep case via a single
   // catch block. The string is built at runtime so `tsc --noEmit` doesn't
   // complain when `playwright` is not a declared dependency (optional peer).
@@ -253,6 +280,7 @@ export async function runPlaywrightSmoke(artifactPath: string): Promise<Playwrig
           firstInteraction: 'fail',
           crossBrowser: 'fail',
           pwaOffline: 'skipped',
+          phaserBooted: false,
           reason: `no <canvas> rendered within ${CANVAS_TIMEOUT_MS}ms (Phaser failed to boot)`,
         };
       }
@@ -273,26 +301,77 @@ export async function runPlaywrightSmoke(artifactPath: string): Promise<Playwrig
         /* Stage 2 will catch + report; Stage 1 staying false is just info. */
       }
 
+      // Stage 2 — at least one scene reached SYS.RUNNING(5). Failures here
+      // with phaserBooted=true usually mean the first scene is waiting on
+      // input (MenuScene) — try the spec.controls fallback synthesis before
+      // declaring fail (v0.5 PR-Controls).
       let phaserSceneRunning = false;
+      let phaserStartedViaControlsFallback = false;
       try {
         await page.waitForFunction(SCENE_RUNNING_PROBE, {
           timeout: SCENE_RUNNING_TIMEOUT_MS,
         });
         phaserSceneRunning = true;
       } catch {
-        // Stage 2 timeout: include the Stage 1 result in the reason so
-        // the verifier sees "lib booted but scene didn't transition" vs
-        // "nothing booted at all" without re-reading metadata.
-        return {
-          firstInteraction: 'fail',
-          crossBrowser: 'fail',
-          pwaOffline: 'skipped',
-          phaserBooted,
-          phaserSceneRunning: false,
-          reason: phaserBooted
-            ? `Phaser.Game booted but no scene reached SYS.RUNNING within ${SCENE_RUNNING_TIMEOUT_MS}ms — first scene likely waiting on user input or stalled in create() / asset preload`
-            : `Phaser failed to boot within ${PHASER_BOOTED_TIMEOUT_MS}ms (canvas attached but isBooted never reached true) — likely a runtime error in lib loader or initial pipeline`,
-        };
+        // v0.5 PR-Controls fallback. spec.controls.start[] = synthesizable
+        // keys that advance from MenuScene; pointer_fallback enables a canvas
+        // click as last resort. We try each input in turn, then re-wait
+        // SYS.RUNNING once. If still failing, qa.result records
+        // first_interaction='fail' with a clear "input synthesis exhausted"
+        // reason so verifier knows the game's controls metadata or
+        // MenuScene wiring is the gap, not a generic boot regression.
+        const startKeys = controls?.start ?? [];
+        const pointerFallback = controls?.pointer_fallback === true;
+        let inputAttempted = false;
+        for (const key of startKeys) {
+          if (typeof key !== 'string' || key.length === 0) continue;
+          inputAttempted = true;
+          try {
+            await page.keyboard.press(key);
+          } catch {
+            // unsupported key name — try the next one.
+            continue;
+          }
+        }
+        if (!inputAttempted && pointerFallback) {
+          inputAttempted = true;
+          try {
+            await page.click('canvas', { timeout: 1000 });
+          } catch {
+            // canvas not clickable — fall through to fail.
+          }
+        }
+        if (inputAttempted) {
+          try {
+            await page.waitForFunction(SCENE_RUNNING_PROBE, {
+              timeout: CONTROLS_FALLBACK_RETRY_MS,
+            });
+            phaserSceneRunning = true;
+            phaserStartedViaControlsFallback = true;
+          } catch {
+            // fall through to fail.
+          }
+        }
+        if (!phaserSceneRunning) {
+          const ctlSummary =
+            startKeys.length > 0
+              ? `controls.start=[${startKeys.join(',')}]`
+              : pointerFallback
+                ? 'pointer_fallback only'
+                : 'no controls in spec';
+          return {
+            firstInteraction: 'fail',
+            crossBrowser: 'fail',
+            pwaOffline: 'skipped',
+            phaserBooted,
+            phaserSceneRunning: false,
+            reason: phaserBooted
+              ? `Phaser.Game booted but no scene reached SYS.RUNNING within ${SCENE_RUNNING_TIMEOUT_MS}ms${
+                  inputAttempted ? ' even after controls fallback synthesis' : ''
+                } (${ctlSummary}) — first scene likely waiting on user input that the spec.controls block does not list`
+              : `Phaser failed to boot within ${PHASER_BOOTED_TIMEOUT_MS}ms (canvas attached but isBooted never reached true) — likely a runtime error in lib loader or initial pipeline`,
+          };
+        }
       }
 
       await new Promise((r) => setTimeout(r, CONSOLE_WATCH_MS));
@@ -304,6 +383,7 @@ export async function runPlaywrightSmoke(artifactPath: string): Promise<Playwrig
           pwaOffline: 'skipped',
           phaserBooted,
           phaserSceneRunning,
+          phaserStartedViaControlsFallback,
           reason: `pageerror: ${pageErrors[0]?.slice(0, 200)}`,
         };
       }
@@ -314,6 +394,7 @@ export async function runPlaywrightSmoke(artifactPath: string): Promise<Playwrig
           pwaOffline: 'skipped',
           phaserBooted,
           phaserSceneRunning,
+          phaserStartedViaControlsFallback,
           reason: `console error: ${consoleErrors[0]?.slice(0, 200)}`,
         };
       }
@@ -352,6 +433,7 @@ export async function runPlaywrightSmoke(artifactPath: string): Promise<Playwrig
         pwaOffline,
         phaserBooted,
         phaserSceneRunning,
+        phaserStartedViaControlsFallback,
       };
     } finally {
       await browser.close().catch(() => undefined);
@@ -379,6 +461,9 @@ interface PlaywrightPage {
     fn: string,
     opts?: { timeout?: number; polling?: number | string },
   ): Promise<unknown>;
+  // v0.5 PR-Controls — input synthesis surface for the Stage-2 fallback.
+  keyboard: { press: (key: string, opts?: { delay?: number }) => Promise<void> };
+  click(selector: string, opts?: { timeout?: number; force?: boolean }): Promise<void>;
 }
 interface PlaywrightConsoleMsg {
   type: () => string;
