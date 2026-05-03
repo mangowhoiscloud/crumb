@@ -15,6 +15,46 @@ tags: [studio, migration, big-bang, react, dockview, datadog, frontier]
 
 > One coherent rebuild that swaps Studio's vanilla-JS chassis for a React-native stack while preserving every section, every connection, and every datum surfaced today. Folds in the Datadog-grade redesign (PR #143), the inheritor backlog from the handoff (F4–F6, PR-O3–O5, W2–W4), and the cleanup queued in the Prune stream (chore/prune-dead-schema-kinds). Implementation is **gated on Prune-1/2/3 merging first** — the schema delta must settle before we redraw component boundaries on top of it.
 
+## 0.0 Vanilla → Big-bang cutoff (executed 2026-05-03)
+
+User directive 2026-05-03: *"빅뱅 왜 진행안했어. 지금 바닐라 어디까지 구현하고 빅뱅할래. 체계적으로 잡아."* — concern that the main agent was over-accumulating vanilla improvements while the React migration sat in plan limbo. Trigger criteria (Prune-1/2/3 merged + user explicit approval) all satisfied as of this commit. **M0 starts immediately**; no further vanilla feature work is queued except what is already shipping.
+
+### Vanilla last-call (cutoff frozen)
+
+These PRs land on vanilla because they are already in flight, address concrete user-requested defects, and feed the M2 baseline snapshot:
+
+| PR | Status | Why it stays on vanilla |
+|---|---|---|
+| #161 `feat(studio): adapter auth detail — plan tier + login expiry + .env support` | rebased, CI re-running | User-requested, implemented + once-CI-passing. The .env loader pre-reqs §13.1 portability work, so landing now means M0 starts with the correct auth-resolution chain. |
+| #164 `feat(studio): relocate sidebar toggle next to CRUMB STUDIO wordmark` | merged | Hamburger now matches Image #16 spec — captured in M2 visual baseline. |
+
+### Defers to big-bang — no longer on vanilla
+
+| Item | Lands as | Was tempted to vanilla? |
+|---|---|---|
+| Cascading new-session form (preset-chip + harness-row + model-row + multi-line goal + capability badges + selected model card panel + ⌘K palette + density toggle) | **M3** `feat/studio-v2-sidebar` | Yes — branch `feat/new-session-cascade` was started and **abandoned** at this cutoff. Full §6 spec lives in M3. |
+| F5 adapter modal advanced | M3 `<AdapterDoctorDialog>` | Yes — defer |
+| F6 block tear-off | M5 (free via dockview popout) | Yes — defer |
+| PR-O4 aggregate strip + sparkline | M6 (Tremor SparkAreaChart) | Yes — defer |
+| PR-O5 trace tree + cross-provider chip + lifecycle gauge | M6 | Yes — defer |
+| Service Map view | M4 `<ServiceMap>` | Never on vanilla — defer |
+| Critical-path overlay | M4 (toggle shared across viz tabs) | Never on vanilla — defer |
+| BubbleUp drag-select outlier mode | M4 (Waterfall) | Never on vanilla — defer |
+| W3 design_check Studio surface | M6 `<DesignCheckPanel>` | Reducer-side W3 still ships independently; UI surface defers |
+
+**Rule**: any new feature work that would land in `packages/studio/src/client/studio.{html,css,js}` must instead target `packages/studio/src/client-v2/` (the M0 scaffold output). The legacy bundle accepts only bug fixes that block the M2 baseline snapshot.
+
+### Big-bang execution order — locked
+
+- **M0 (NEXT)** `chore/studio-vite-scaffold` — Vite + React 19 + TypeScript scaffold at `packages/studio/src/client-v2/`. `?app=v2` route serves the new bundle; default `?app=v1` keeps vanilla live until M7.1.
+- **M1** `chore/studio-server-extract` — server.ts + siblings under `src/server/`.
+- **M2** `feat/studio-v2-shell-dockview` — dockview + shadcn + Tailwind v4 + Open Props + DESIGN.md (Stitch 9-section) publish + density toggle + visual baseline snapshot pinned.
+- **M3 → M11** per §7 roadmap.
+
+CI gates land alongside their M-PR per §13.3.1: M0 adds absolute-path / symlink scan + Vite-build budget; M2 adds visual snapshot diff + a11y AA; M3 onwards add per-panel snapshot baselines.
+
+The `[Unreleased]` CHANGELOG section gains a "v1 → v2 transition" subsection at this cutoff so the inheritor can read git history and know exactly when the vanilla → React fork happened.
+
 ## 0. Prime directive — preserve the visual, elevate everything underneath
 
 The current Studio's **visual layout is the production target**. Per user directive (2026-05-03 amendment): "전반적으로 현재 시각적인 레이아웃을 기반으로 프로덕션레벨로 기능성과 퀄리티를 올린다고 인지해." The migration is a **chassis swap, not a redesign** — the chassis (vanilla DOM mutation, hand-rolled splitters, monolithic studio.js) is replaced; the body (panel arrangement, colors, typography, scorecard composition, DAG layout geometry, swimlane row order, narrative + feed structure, slash bar quick-action chips, conn-state reconnect banner, splitter tooltips, view-tab list) is preserved pixel-equivalent.
