@@ -49,6 +49,27 @@ const PER_SPAWN_IDLE_TIMEOUT_MS = Number(process.env.CRUMB_PER_SPAWN_IDLE_MS) ||
  */
 const activeSpawns = new Map<Actor, AbortController>();
 
+/**
+ * Per-actor sub-2-second exit-1 streak — claude-code's `~/.claude.json`
+ * concurrent-write race (multi-cmux pane + Crumb actor spawns) makes the
+ * spawned `claude` binary fail in <1s with exit 1 while the JSON is
+ * being auto-restored. The race resolves itself in 1-2 seconds; we just
+ * need to NOT immediately respawn into the same race window.
+ *
+ * 2+ consecutive sub-2s exit-1 spawns of the same actor within 60s →
+ * cool-off 30 s before the next spawn + emit a system note so the
+ * operator (and Studio HealthBadge) sees what's happening.
+ */
+interface ShortFailureRecord {
+  count: number;
+  lastTs: number;
+}
+const shortFailureStreak = new Map<Actor, ShortFailureRecord>();
+const COOLOFF_THRESHOLD = 2;
+const COOLOFF_WINDOW_MS = 60_000;
+const COOLOFF_SLEEP_MS = 30_000;
+const SHORT_FAILURE_MS = 2_000;
+
 export interface DispatcherDeps {
   writer: TranscriptWriter;
   registry: AdapterRegistry;
@@ -134,6 +155,29 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
           metadata: { deterministic: true, tool: 'provider-activation-gate@v1' },
         });
         adapterId = 'claude-local';
+      }
+
+      // claude-code config-race cool-off: if the last 2+ spawns for
+      // this actor failed in <2 s within the last minute, sleep 30 s +
+      // clear the streak before re-spawning. Trying again immediately
+      // just lands inside the same `~/.claude.json` corruption window.
+      {
+        const streak = shortFailureStreak.get(effect.actor);
+        if (
+          streak &&
+          streak.count >= COOLOFF_THRESHOLD &&
+          Date.now() - streak.lastTs < COOLOFF_WINDOW_MS
+        ) {
+          await deps.writer.append({
+            session_id: deps.sessionId,
+            from: 'system',
+            kind: 'note',
+            body: `cool-off ${(COOLOFF_SLEEP_MS / 1000).toFixed(0)}s — ${effect.actor} hit ${streak.count} consecutive sub-${SHORT_FAILURE_MS}ms exit-1 spawns (likely claude-code .claude.json concurrent-write race; auto-restore needs a moment)`,
+            metadata: { deterministic: true, tool: 'cool-off-guard@v1' },
+          });
+          await new Promise((r) => setTimeout(r, COOLOFF_SLEEP_MS));
+          shortFailureStreak.delete(effect.actor);
+        }
       }
 
       // Pre-spawn adapter health probe (cached per adapter, ≤2s, no I/O on
@@ -412,6 +456,24 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         });
       }
 
+      // Track sub-2s exit-1 streak per actor for the cool-off guard
+      // above. Reset on any clean / long-running spawn.
+      if (
+        result.exitCode !== 0 &&
+        !timedOut &&
+        result.durationMs > 0 &&
+        result.durationMs < SHORT_FAILURE_MS
+      ) {
+        const prev = shortFailureStreak.get(effect.actor);
+        const within = prev && Date.now() - prev.lastTs < COOLOFF_WINDOW_MS ? prev.count : 0;
+        shortFailureStreak.set(effect.actor, {
+          count: within + 1,
+          lastTs: Date.now(),
+        });
+      } else if (result.exitCode === 0 || result.durationMs >= SHORT_FAILURE_MS) {
+        shortFailureStreak.delete(effect.actor);
+      }
+
       // Surface non-zero exit as kind=error so the reducer can trip the breaker.
       // Timeout is a special case: clearer body + structured data so observers
       // and the verifier can distinguish stalled spawn from genuine CLI failure.
@@ -540,15 +602,21 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
       break;
     }
     case 'done': {
+      // AGENTS.md invariant — `kind=done` is emitted by the `system`
+      // actor (the dispatcher itself). Earlier this code attributed it
+      // to `coordinator`, which conflicted with the §"Actors" table and
+      // confused the Studio Pipeline's `system → done` rendering.
+      // Unifying to `system` so every terminal arrival path (PASS via
+      // validator AND budget/error via this effect) reads consistently.
       await deps.writer.append({
         session_id: deps.sessionId,
-        from: 'coordinator',
+        from: 'system',
         kind: 'done',
         body: effect.reason,
       });
       await deps.writer.append({
         session_id: deps.sessionId,
-        from: 'coordinator',
+        from: 'system',
         kind: 'session.end',
         body: `session terminated: ${effect.reason}`,
       });

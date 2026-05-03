@@ -159,6 +159,19 @@ export interface ProgressLedger {
   // is auto-terminated with reason='ratchet_revert' to prevent unbounded loops.
   max_aggregate_so_far: number;
   max_aggregate_msg_id: string | null;
+
+  /**
+   * Narrative-emit flags — minimum set the reducer needs to detect
+   * "Phase B partial" so resumed spawns get an auto-debt sandwich_append
+   * telling the actor exactly what to finalize. Without these, a
+   * planner-lead that emitted step.design but never wrote spec.md /
+   * handed off would respawn into Read+Bash thrash and trip stuck_count.
+   * Set in the corresponding reducer kind cases; consumed by
+   * autoNarrativeDebt() in collectSandwichAppends().
+   */
+  phase_b_step_design_seen: boolean;
+  phase_b_spec_seen: boolean;
+  phase_b_handoff_to_builder_seen: boolean;
 }
 
 /**
@@ -235,6 +248,9 @@ export const initialState = (sessionId: string): CrumbState => ({
     per_spawn_started_at: null,
     max_aggregate_so_far: 0,
     max_aggregate_msg_id: null,
+    phase_b_step_design_seen: false,
+    phase_b_spec_seen: false,
+    phase_b_handoff_to_builder_seen: false,
   },
   last_message: null,
   last_qa_result: null,
