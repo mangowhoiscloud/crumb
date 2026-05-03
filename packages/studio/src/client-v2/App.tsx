@@ -29,7 +29,7 @@ import { BrandMark } from './components/BrandMark';
 import { ThemeToggle } from './components/ThemeToggle';
 import { DensityToggle } from './components/DensityToggle';
 import { Sidebar } from './panels/Sidebar';
-import { ViewPane } from './panels/ViewPane';
+import { Pipeline } from './panels/Pipeline';
 import { Narrative } from './panels/Narrative';
 import { Feed } from './panels/Feed';
 import { DetailRail } from './panels/DetailRail';
@@ -37,7 +37,7 @@ import { useSessions, useSessionsSseBridge } from './hooks/useSessions';
 
 const PANEL_COMPONENTS: Record<string, React.FC<IDockviewPanelProps>> = {
   sidebar: Sidebar,
-  viewPane: ViewPane,
+  pipeline: Pipeline,
   narrative: Narrative,
   feed: Feed,
   detailRail: DetailRail,
@@ -55,10 +55,11 @@ function onReady(event: DockviewReadyEvent): void {
     initialWidth: 240,
   });
 
-  // Main view pane (sits to the right of sidebar).
+  // Main view pane — Pipeline (M4). Waterfall + ServiceMap join as
+  // sibling tabs in the same group at M4-Waterfall + M4-Map PRs.
   const viewPane = api.addPanel({
-    id: 'viewPane',
-    component: 'viewPane',
+    id: 'pipeline',
+    component: 'pipeline',
     title: 'Pipeline',
     position: { referencePanel: sidebar.id, direction: 'right' },
   });
