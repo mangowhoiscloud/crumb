@@ -1,6 +1,6 @@
 {
   "name": "@crumb/studio",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "description": "Crumb Studio — local web console for spawning Crumb sessions, watching transcripts in real time, and intervening (approve / veto / pause / goto / swap / append). File-tail SSE server + browser UI; no cloud, no API key.",
   "license": "MIT",
   "author": "mango",
@@ -69,7 +69,7 @@
     "vite": "^6.0.7"
   },
   "peerDependencies": {
-    "crumb": "^0.4.0"
+    "crumb": "^1.0.0"
   },
   "peerDependenciesMeta": {
     "crumb": {

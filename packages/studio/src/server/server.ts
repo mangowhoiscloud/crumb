@@ -364,10 +364,18 @@ async function serveSessions(
  * what classifiedSnapshot already pays).
  */
 /** M10 — runSelfCheck cached for 30 s to avoid recomputing per /health hit. */
+export interface SelfCheckStep {
+  name: string;
+  status: 'pass' | 'fail';
+  duration_ms?: number;
+  message?: string;
+}
+
 let selfCheckCache: {
   verdict: 'ok' | 'degraded' | 'broken';
   duration_ms: number;
   steps_failed: number;
+  steps: SelfCheckStep[];
   cached_at: number;
 } | null = null;
 const SELF_CHECK_TTL_MS = 30_000;
@@ -375,7 +383,7 @@ const SELF_CHECK_TTL_MS = 30_000;
 interface SelfCheckReport {
   pause_resume_lifecycle: 'ok' | 'degraded' | 'broken';
   duration_ms: number;
-  steps: Array<{ status: 'pass' | 'fail' }>;
+  steps: SelfCheckStep[];
 }
 
 async function getSelfCheckSnapshot(): Promise<NonNullable<typeof selfCheckCache>> {
@@ -394,6 +402,13 @@ async function getSelfCheckSnapshot(): Promise<NonNullable<typeof selfCheckCache
       verdict: 'broken',
       duration_ms: 0,
       steps_failed: -1,
+      steps: [
+        {
+          name: 'crumb-self-check.import',
+          status: 'fail',
+          message: 'crumb peer-dep not resolvable from this Studio install',
+        },
+      ],
       cached_at: Date.now(),
     };
     return selfCheckCache;
@@ -403,6 +418,7 @@ async function getSelfCheckSnapshot(): Promise<NonNullable<typeof selfCheckCache
     verdict: report.pause_resume_lifecycle,
     duration_ms: report.duration_ms,
     steps_failed: report.steps.filter((s) => s.status === 'fail').length,
+    steps: report.steps,
     cached_at: Date.now(),
   };
   return selfCheckCache;
@@ -443,6 +459,7 @@ async function serveHealth(
         verdict: selfCheck.verdict,
         duration_ms: selfCheck.duration_ms,
         steps_failed: selfCheck.steps_failed,
+        steps: selfCheck.steps,
         cached_at: new Date(selfCheck.cached_at).toISOString(),
       },
     }),

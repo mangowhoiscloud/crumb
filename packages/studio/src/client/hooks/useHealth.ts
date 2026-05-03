@@ -10,6 +10,13 @@
 
 import { useQuery } from '@tanstack/react-query';
 
+export interface SelfCheckStep {
+  name: string;
+  status: 'pass' | 'fail';
+  duration_ms?: number;
+  message?: string;
+}
+
 export interface HealthSnapshot {
   ok: boolean;
   watcher_paths_tracked: number;
@@ -18,6 +25,7 @@ export interface HealthSnapshot {
     verdict: 'ok' | 'degraded' | 'broken';
     duration_ms: number;
     steps_failed: number;
+    steps?: SelfCheckStep[];
     cached_at: string;
   };
 }
