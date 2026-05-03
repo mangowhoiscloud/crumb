@@ -30,6 +30,8 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { DensityToggle } from './components/DensityToggle';
 import { Sidebar } from './panels/Sidebar';
 import { Pipeline } from './panels/Pipeline';
+import { Waterfall } from './panels/Waterfall';
+import { ServiceMap } from './panels/ServiceMap';
 import { Narrative } from './panels/Narrative';
 import { Feed } from './panels/Feed';
 import { DetailRail } from './panels/DetailRail';
@@ -38,6 +40,8 @@ import { useSessions, useSessionsSseBridge } from './hooks/useSessions';
 const PANEL_COMPONENTS: Record<string, React.FC<IDockviewPanelProps>> = {
   sidebar: Sidebar,
   pipeline: Pipeline,
+  waterfall: Waterfall,
+  serviceMap: ServiceMap,
   narrative: Narrative,
   feed: Feed,
   detailRail: DetailRail,
@@ -55,13 +59,24 @@ function onReady(event: DockviewReadyEvent): void {
     initialWidth: 240,
   });
 
-  // Main view pane — Pipeline (M4). Waterfall + ServiceMap join as
-  // sibling tabs in the same group at M4-Waterfall + M4-Map PRs.
+  // Main view pane — Pipeline + Waterfall + ServiceMap as sibling tabs.
   const viewPane = api.addPanel({
     id: 'pipeline',
     component: 'pipeline',
     title: 'Pipeline',
     position: { referencePanel: sidebar.id, direction: 'right' },
+  });
+  api.addPanel({
+    id: 'waterfall',
+    component: 'waterfall',
+    title: 'Waterfall',
+    position: { referencePanel: viewPane.id, direction: 'within' },
+  });
+  api.addPanel({
+    id: 'serviceMap',
+    component: 'serviceMap',
+    title: 'Service Map',
+    position: { referencePanel: viewPane.id, direction: 'within' },
   });
 
   // Narrative — bottom-left of the view pane.
