@@ -56,22 +56,39 @@ function expiryClass(iso: string): 'ok' | 'soon' | 'expired' {
 }
 
 export function AdapterRow({ adapter: a, onClick, inUse }: Props) {
-  const status: 'active' | 'maybe' | 'inactive' =
-    a.installed && a.authenticated === true
-      ? 'active'
-      : a.installed && a.authenticated !== false
-        ? 'maybe'
-        : 'inactive';
+  // v0.5 PR-Auth — explicit "expired" state. Backend sets
+  // `authenticated=false` + `login_expires_at` when the credential file
+  // exists but its exp claim has passed. Pre-v0.5 the row collapsed this
+  // case into "installed" + a separate red expiry chip — visually
+  // ambiguous (looked like "binary present, auth unknown"). Now it gets
+  // its own pill so the user sees "EXPIRED" front-and-center.
+  const isExpired = a.authenticated === false && !!a.login_expires_at;
+  const status: 'active' | 'maybe' | 'expired' | 'inactive' =
+    isExpired
+      ? 'expired'
+      : a.installed && a.authenticated === true
+        ? 'active'
+        : a.installed && a.authenticated !== false
+          ? 'maybe'
+          : 'inactive';
 
   const dotColor =
     status === 'active'
       ? 'var(--lime)'
       : status === 'maybe'
         ? 'var(--warn)'
-        : 'var(--ink-tertiary)';
+        : status === 'expired'
+          ? 'var(--audit-fg)'
+          : 'var(--ink-tertiary)';
 
   const pillText =
-    a.installed && a.authenticated === true ? 'auth ✓' : a.installed ? 'installed' : 'missing';
+    status === 'expired'
+      ? 'expired'
+      : a.installed && a.authenticated === true
+        ? 'auth ✓'
+        : a.installed
+          ? 'installed'
+          : 'missing';
 
   const planLabel = a.plan ? (PLAN_LABEL[a.plan] ?? a.plan) : null;
   const expiryStr = a.login_expires_at ? formatExpiry(a.login_expires_at) : null;
@@ -207,13 +224,17 @@ export function AdapterRow({ adapter: a, onClick, inUse }: Props) {
                 ? 'rgba(107,140,42,0.14)'
                 : status === 'maybe'
                   ? 'rgba(196,112,32,0.16)'
-                  : 'var(--surface-2)',
+                  : status === 'expired'
+                    ? 'rgba(184,67,28,0.14)'
+                    : 'var(--surface-2)',
             color:
               status === 'active'
                 ? 'var(--lime)'
                 : status === 'maybe'
                   ? 'var(--warn)'
-                  : 'var(--ink-tertiary)',
+                  : status === 'expired'
+                    ? 'var(--audit-fg)'
+                    : 'var(--ink-tertiary)',
           }}
         >
           {pillText}

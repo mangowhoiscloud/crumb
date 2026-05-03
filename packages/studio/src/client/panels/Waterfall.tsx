@@ -18,10 +18,36 @@
 
 import type { IDockviewPanelProps } from 'dockview-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useTranscriptStream } from '../hooks/useTranscriptStream';
+import { useTranscriptStream, type TranscriptEvent } from '../hooks/useTranscriptStream';
 import { useActiveSession, setSelectedNodeActor } from '../stores/selection';
 import { deriveSpans, type Span, type Verdict } from '../lib/spans';
 import { ALL_ACTORS } from './pipeline/layout';
+
+// v0.5 PR-Waterfall E — event kinds counted into the per-lane density
+// heatmap (non-span events that signal "actor was busy" without showing
+// up as a wall-clock bar). Skip dispatcher meta (tool.call, agent.wake/
+// stop, dispatch.spawn note) to avoid double-counting the bar area.
+const HEATMAP_KINDS = new Set([
+  'step.socratic',
+  'step.concept',
+  'step.research',
+  'step.research.video',
+  'step.design',
+  'step.judge',
+  'step.builder',
+  'spec',
+  'spec.update',
+  'build',
+  'qa.result',
+  'judge.score',
+  'verify.result',
+  'artifact.created',
+  'handoff.requested',
+  'handoff.rollback',
+  'error',
+  'note',
+  'user.intervene',
+]);
 
 function formatMs(ms: number): string {
   if (ms < 1000) return `${ms.toFixed(0)} ms`;
@@ -88,6 +114,22 @@ export function Waterfall(_props: IDockviewPanelProps) {
 
   const lanes = ALL_ACTORS.filter((actor) => spans.some((s) => s.actor === actor));
 
+  // v0.5 PR-Waterfall E — Layered Cost Strip (Phoenix Arize / OTel GenAI
+  // pattern). Sample cumulative tokens + cost at every agent.stop with
+  // metadata.{tokens_in,tokens_out,cost_usd}; render as a sticky SVG
+  // strip above the lanes. Pure derivation from stream.events; bumps on
+  // every backfill flush.
+  const costSamples = useMemo(() => buildCostSamples(stream.events), [stream.events]);
+
+  // v0.5 PR-Waterfall E — Per-lane event-density heatmap. Bin every
+  // HEATMAP_KINDS event into 1-s buckets keyed by actor; rendered as a
+  // CSS linear-gradient backdrop on the lane track so the eye sees
+  // "this actor was busy in seconds 12-15" even when no bar covered it.
+  const heatmapByActor = useMemo(
+    () => buildHeatmap(stream.events, t0, total),
+    [stream.events, t0, total],
+  );
+
   return (
     <div
       style={{
@@ -141,6 +183,7 @@ export function Waterfall(_props: IDockviewPanelProps) {
           {showSubSpans ? '◧ detailed' : '◨ compact'}
         </button>
       </div>
+      <CostStrip samples={costSamples} t0={t0} total={total} />
       <div
         style={{
           flex: 1,
@@ -160,6 +203,7 @@ export function Waterfall(_props: IDockviewPanelProps) {
             total={total}
             maxCost={maxCost}
             showSubSpans={showSubSpans}
+            heatmap={heatmapByActor.get(actor) ?? null}
           />
         ))}
       </div>
@@ -174,6 +218,7 @@ function Lane({
   total,
   maxCost,
   showSubSpans,
+  heatmap,
 }: {
   actor: string;
   spans: Span[];
@@ -181,8 +226,15 @@ function Lane({
   total: number;
   maxCost: number;
   showSubSpans: boolean;
+  heatmap: number[] | null;
 }) {
   const laneHeight = showSubSpans ? 32 : 22;
+  // v0.5 PR-Waterfall E — render the per-lane density heatmap as a
+  // backdrop CSS gradient. The gradient is stepped (no interpolation
+  // between buckets) so bins read as discrete frames — Tufte's
+  // "intense, simple, word-sized graphics" + horizon-graph compression
+  // (Heer et al., CHI 2009) without an extra row of vertical real estate.
+  const heatmapBg = heatmap ? heatmapToGradient(heatmap) : 'var(--surface-1)';
   return (
     <div
       style={{
@@ -209,7 +261,7 @@ function Lane({
         style={{
           position: 'relative',
           height: laneHeight,
-          background: 'var(--surface-1)',
+          background: heatmapBg,
           borderRadius: 'var(--r-xs)',
         }}
       >
@@ -371,6 +423,149 @@ function Empty({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+    </div>
+  );
+}
+
+// ─── v0.5 PR-Waterfall E — Layered Cost Strip + density heatmap ────────────
+
+interface CostSample {
+  ts: number;
+  tokens: number;
+  cost: number;
+}
+
+/**
+ * Cumulative tokens + cost samples derived from agent.stop events. The
+ * dispatcher folds usage into agent.stop.metadata at exit (live.ts:507);
+ * codex/gemini-local now report usage too (PR #214 cross-provider info
+ * parity), so this strip is no longer claude-only.
+ */
+function buildCostSamples(events: TranscriptEvent[]): CostSample[] {
+  let tokens = 0;
+  let cost = 0;
+  const out: CostSample[] = [];
+  for (const e of events) {
+    if (e.kind !== 'agent.stop') continue;
+    const md = (e.metadata ?? {}) as { tokens_in?: number; tokens_out?: number; cost_usd?: number };
+    tokens += (md.tokens_in ?? 0) + (md.tokens_out ?? 0);
+    cost += md.cost_usd ?? 0;
+    const ts = Date.parse(e.ts);
+    if (!Number.isFinite(ts)) continue;
+    out.push({ ts, tokens, cost });
+  }
+  return out;
+}
+
+/**
+ * Bin every HEATMAP_KINDS event into 1-second buckets per actor. Returns a
+ * Map<actor, number[]> where each array has `bucketCount` entries (count
+ * of events in that 1s window). Used by Lane() as a CSS linear-gradient
+ * backdrop — Tufte horizon-graph compression at zero extra row cost.
+ */
+function buildHeatmap(events: TranscriptEvent[], t0: number, total: number): Map<string, number[]> {
+  const BUCKET_MS = 1000;
+  const bucketCount = Math.max(1, Math.ceil(total / BUCKET_MS));
+  const byActor = new Map<string, number[]>();
+  for (const e of events) {
+    if (!e.from || !HEATMAP_KINDS.has(e.kind)) continue;
+    const ts = Date.parse(e.ts);
+    if (!Number.isFinite(ts)) continue;
+    const idx = Math.min(bucketCount - 1, Math.max(0, Math.floor((ts - t0) / BUCKET_MS)));
+    let arr = byActor.get(e.from);
+    if (!arr) {
+      arr = new Array(bucketCount).fill(0);
+      byActor.set(e.from, arr);
+    }
+    arr[idx] = (arr[idx] ?? 0) + 1;
+  }
+  return byActor;
+}
+
+/** Stepped CSS linear-gradient — discrete bins, alpha proportional to count. */
+function heatmapToGradient(row: number[]): string {
+  const max = row.reduce((m, v) => (v > m ? v : m), 0);
+  if (max === 0) return 'var(--surface-1)';
+  const stops: string[] = [];
+  for (let i = 0; i < row.length; i++) {
+    const a = row[i] === 0 ? 0 : 0.04 + 0.18 * (row[i]! / max);
+    const left = (i / row.length) * 100;
+    const right = ((i + 1) / row.length) * 100;
+    const rgba = `rgba(94,106,210,${a.toFixed(3)})`;
+    stops.push(`${rgba} ${left.toFixed(2)}%`);
+    stops.push(`${rgba} ${right.toFixed(2)}%`);
+  }
+  return `linear-gradient(to right, ${stops.join(', ')}), var(--surface-1)`;
+}
+
+/**
+ * Cost strip — sticky SVG above the lane scroll area. Tokens area
+ * (filled blue-ish) underlay + cost line (orange) overlay over the same
+ * t0..tMax window the bars use. Heights are normalized independently so
+ * the cost line stays visible even when cost is small relative to
+ * tokens. Empty when no agent.stop emitted usage yet.
+ */
+function CostStrip({
+  samples,
+  t0,
+  total,
+}: {
+  samples: CostSample[];
+  t0: number;
+  total: number;
+}) {
+  if (samples.length === 0) return null;
+  const lastSample = samples[samples.length - 1]!;
+  const maxTokens = lastSample.tokens || 1;
+  const maxCost = lastSample.cost || 0;
+  const W = 1000;
+  const H = 36;
+  const xs = (ts: number): number => ((ts - t0) / Math.max(1, total)) * W;
+  const ysTokens = (n: number): number => H - (n / maxTokens) * (H - 4) - 2;
+  const ysCost = (n: number): number => H - (n / Math.max(maxCost, 1e-9)) * (H - 4) - 2;
+  const tokenPathSteps = samples
+    .map((s) => `L${xs(s.ts).toFixed(2)},${ysTokens(s.tokens).toFixed(2)}`)
+    .join(' ');
+  const tokenArea = `M0,${H} L${xs(samples[0]!.ts).toFixed(2)},${H} ${tokenPathSteps} L${W},${ysTokens(lastSample.tokens).toFixed(2)} L${W},${H} Z`;
+  const costLine =
+    maxCost > 0
+      ? 'M' + samples.map((s) => `${xs(s.ts).toFixed(2)},${ysCost(s.cost).toFixed(2)}`).join(' L')
+      : '';
+  return (
+    <div
+      style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 5,
+        margin: '0 var(--space-3)',
+        height: 44,
+        display: 'grid',
+        gridTemplateColumns: '110px 1fr',
+        gap: 'var(--space-3)',
+        alignItems: 'center',
+        borderBottom: '1px solid var(--hairline)',
+        paddingBottom: 6,
+        background: 'var(--canvas)',
+      }}
+    >
+      <div
+        style={{
+          fontSize: 9,
+          fontFamily: 'var(--font-mono)',
+          color: 'var(--ink-tertiary)',
+          textAlign: 'right',
+          textTransform: 'uppercase',
+          letterSpacing: '0.4px',
+        }}
+      >
+        cost ↗ tokens
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: 36 }}>
+        <path d={tokenArea} fill="rgba(94,106,210,0.18)" stroke="rgba(94,106,210,0.55)" strokeWidth="1" />
+        {costLine && (
+          <path d={costLine} fill="none" stroke="var(--accent-warm, #FFB627)" strokeWidth="1.4" />
+        )}
+      </svg>
     </div>
   );
 }

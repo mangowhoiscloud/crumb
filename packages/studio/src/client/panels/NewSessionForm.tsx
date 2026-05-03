@@ -48,8 +48,12 @@ const PRESETS: Preset[] = [
   {
     id: 'bagelcode-cross-3way',
     label: 'cross-3way',
-    description: 'builder=codex · verifier=gemini-cli · rest=ambient',
-    requires: ['codex-local', 'gemini-cli-local'],
+    description: 'builder=codex · verifier=gemini-cli · rest=claude-local',
+    // v0.5 PR-Bindings — all 3 providers must be installed + authenticated.
+    // claude-local is required because planner-lead / researcher /
+    // coordinator slots fall back to ambient (= claude-local in the typical
+    // Claude Code entry). Was missing in the pre-v0.5 vanilla studio.
+    requires: ['claude-local', 'codex-local', 'gemini-cli-local'],
   },
   {
     id: 'sdk-enterprise',
@@ -73,12 +77,28 @@ export function NewSessionForm({ adapters, onSpawned }: Props) {
     builder: {},
     verifier: {},
   });
+  // v0.5 PR-Video — research video URLs (YouTube / mp4 / file path) sent
+  // as goal.data.video_refs. Toggle hides itself unless gemini-sdk OR
+  // gemini-cli-local is available + authenticated; researcher actor
+  // routes to gemini-sdk's multimodal video path when set, else stays
+  // text-only.
+  const [videoOn, setVideoOn] = useState(false);
+  const [videoRefsText, setVideoRefsText] = useState('');
   const [feedback, setFeedback] = useState<{ text: string; tone: 'ok' | 'err' } | null>(null);
   const [pending, setPending] = useState(false);
 
   const installedAdapters = useMemo(
     () => adapters.filter((a) => a.installed && a.authenticated !== false),
     [adapters],
+  );
+
+  // Video research is only meaningful when a gemini path is wired up.
+  const geminiAvailable = useMemo(
+    () =>
+      installedAdapters.some(
+        (a) => a.id === 'gemini-sdk' || a.id === 'gemini-cli-local',
+      ),
+    [installedAdapters],
   );
 
   const presetIsRunnable = (p: Preset): boolean =>
@@ -92,18 +112,41 @@ export function NewSessionForm({ adapters, onSpawned }: Props) {
     setPending(true);
     setFeedback({ text: 'spawning crumb run…', tone: 'ok' });
     try {
-      const body: { goal: string; preset?: string; bindings?: typeof bindings } = {
+      const body: {
+        goal: string;
+        preset?: string;
+        bindings?: typeof bindings;
+        video_refs?: string[];
+      } = {
         goal: goal.trim(),
       };
       if (preset) body.preset = preset;
-      // Only send bindings when the user customized any actor row.
+      // v0.5 PR-Bindings — bindings overlay applies even with a preset
+      // (preset-loader.ts §applyCliBindings overlays cliBindings on top
+      // of preset.actors[*]); pre-v0.5 the form blocked this branch
+      // because the backend ignored body.bindings unless ambient. Now
+      // forwarded as-is — repeated `--bind` CLI flags reach
+      // src/dispatcher/preset-loader.ts → highest-priority overlay.
       const customized = Object.values(bindings).some((b) => b.harness || b.model);
-      if (customized && !preset) body.bindings = bindings;
+      if (customized) body.bindings = bindings;
+      // v0.5 PR-Video — video_refs only when gemini is available AND
+      // toggle is on AND textarea has at least one non-empty line. Goal
+      // reducer flips state.goal_has_video_refs which routes researcher
+      // to the gemini-sdk video path (10fps frame sampling).
+      if (videoOn && geminiAvailable) {
+        const refs = videoRefsText
+          .split('\n')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+        if (refs.length > 0) body.video_refs = refs;
+      }
       await api.spawnRun(body);
       setFeedback({ text: 'spawned. transcript will appear below.', tone: 'ok' });
       setGoal('');
       setPreset('');
       setBindings({ 'planner-lead': {}, researcher: {}, builder: {}, verifier: {} });
+      setVideoOn(false);
+      setVideoRefsText('');
       onSpawned();
     } catch (err: unknown) {
       setFeedback({ text: (err as Error).message, tone: 'err' });
@@ -175,6 +218,52 @@ export function NewSessionForm({ adapters, onSpawned }: Props) {
         })}
       </div>
 
+      {/* v0.5 PR-Video — gemini-only toggle. Hidden entirely when no
+          gemini adapter is installed + authed. Researcher actor routes
+          to the gemini-sdk multimodal video path when refs[] non-empty
+          (10fps frame sampling, native YouTube URL); else stays
+          text-only via claude-local / ambient. */}
+      {geminiAvailable && (
+        <div style={{ fontSize: 12 }}>
+          <label
+            style={{
+              display: 'flex',
+              gap: 6,
+              alignItems: 'center',
+              color: 'var(--ink-muted)',
+              cursor: 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={videoOn}
+              onChange={(e) => setVideoOn(e.target.checked)}
+            />
+            <span>Video research (YouTube / mp4)</span>
+          </label>
+          {videoOn && (
+            <textarea
+              value={videoRefsText}
+              onChange={(e) => setVideoRefsText(e.target.value)}
+              rows={2}
+              placeholder="YouTube URLs or mp4 file paths, one per line"
+              style={{
+                marginTop: 'var(--space-1)',
+                width: '100%',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                padding: 'var(--space-2)',
+                border: '1px solid var(--hairline)',
+                borderRadius: 'var(--r-sm)',
+                background: 'var(--canvas)',
+                color: 'var(--ink)',
+                resize: 'vertical',
+              }}
+            />
+          )}
+        </div>
+      )}
+
       <details
         style={{ fontSize: 12 }}
         onToggle={(e) => {
@@ -182,7 +271,7 @@ export function NewSessionForm({ adapters, onSpawned }: Props) {
         }}
       >
         <summary style={{ cursor: 'pointer', color: 'var(--ink-muted)', userSelect: 'none' }}>
-          Custom binding (per-actor harness × model)
+          Custom binding (per-actor harness × model) — applied as override
         </summary>
         <div
           style={{
