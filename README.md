@@ -22,84 +22,106 @@ Built for the [Bagelcode New Title Team AI Developer recruitment task](https://c
 | "사용자가 협업 과정에 **개입하거나 관찰**" | 5 user.* events × 4 host = 20-cell matrix. Natural language → `kind=user.intervene`. |
 | "통신 방식 / 프로토콜 / UI **자유**" | JSONL transcript + 4 entry path (Claude Code / Codex / Gemini / headless). |
 | "AI 코딩 에이전트를 사용하여 개발" | Built with Claude Code + Codex; commits, sandwich files, helpers, OTel exporter all show provenance. |
-| "**README대로 실행**시 동작" | `npx tsx src/index.ts run --adapter mock` works with zero auth, deterministic. |
+| "**README대로 실행**시 동작" | `git clone … && npm run setup && npx crumb run --goal "…" --adapter mock` — zero auth, deterministic. |
 | "**.md 파일 포함**" | agents/*.md (5) + skills/*.md (5) + specialists/*.md (3) + .{claude,codex,gemini}/ entries (5). |
 | "JSONL **또는** 녹화" | `transcript.jsonl` 35 kinds; demo screencast follow-up. |
 
 ## Quickstart
 
-**End users** (no source clone — install from npm):
+**Two commands, no symlinks, no global install:**
 
 ```bash
-npm i -g crumb              # core CLI: crumb run / replay / event / model / doctor
-npm i -g @crumb/studio      # optional web console: crumb-studio
-crumb doctor                # verify auth + chromium binary cached (D6 portability ready)
-crumb-studio                # http://127.0.0.1:7321/ — local web console (auto-opens browser)
+git clone https://github.com/mangowhoiscloud/crumb.git && cd crumb
+npm run setup
 ```
 
-The two packages ship from the same monorepo (`mangowhoiscloud/crumb`) and share one SemVer cadence. `@crumb/studio` declares `crumb` as an **optional peer dependency** — Studio can watch existing sessions standalone, but spawning new sessions through the new-session form requires `crumb run` on `PATH`.
+`npm run setup` runs three idempotent steps inside the cloned directory:
 
-**Source / dev setup** (Streamlit-style — clone, build, link, run):
+1. `npm install` — fetches deps; the `postinstall` hook pre-caches the Playwright Chromium binary so `qa_check` D6 portability works on first run.
+2. `npm run build` — TypeScript compile of root + the `@crumb/studio` workspace.
+3. `crumb doctor` — environment probe (3 host CLIs, adapter health, recommended preset). Best-effort; partial auth is normal on first install.
+
+Then run Crumb without putting anything on your global `PATH` — both bin entries resolve via `npx` directly:
 
 ```bash
-git clone https://github.com/mangowhoiscloud/crumb.git && cd crumb && npm install && npm run build
-npm link                                          # one-time: register `crumb` + `crumb-studio` on PATH
-crumb doctor                                      # auth + chromium + Studio readiness
-crumb run --goal "60s match-3 combo bonus"        # → Studio auto-opens at http://localhost:7321
+npx crumb run --goal "60-second match-3 with combo bonus" --adapter mock --idle-timeout 5000
+npx crumb-studio                  # http://127.0.0.1:7321/ — auto-opens browser
 ```
 
-`crumb run` spawns Crumb Studio (the local read-only observation surface) automatically — Vite-style banner prints the URL plus a deep link to the just-started session. Disable with `--no-studio` or `CRUMB_NO_STUDIO=1` for CI / SSH / headless. Studio survives the run via `detached + unref`, so subsequent `crumb run` invocations re-use the existing Studio (chokidar watches new transcripts automatically).
+The `--adapter mock` line is the **deterministic happy-path smoke** — zero auth required, finishes in ~1 s, ends with a 26-event transcript and a PASS verdict. It's what the recruiter / evaluator should run first to confirm the install is healthy. Replay yields identical state (`npx crumb replay <session-id>`).
 
-To open Studio without starting a session, run `crumb studio` (alias for `crumb-studio`). It surfaces every existing session under `~/.crumb/projects/`, so it's safe to launch any time.
+> **Why no `npm link`, no global install?** Global symlinks tangle Node's resolution under monorepo workspaces, leak across user accounts on shared machines, and must be tracked manually for clean uninstall. `npx <bin>` resolves the workspace `bin` directly with zero global state, so `git clone`-and-delete is enough to remove every Crumb file.
 
-> Don't want global symlinks? Skip `npm link` and prefix every command with `npx` instead (`npx crumb run …`, `npx crumb studio`). `npx` resolves the workspace `bin` directly.
+> **`crumb` on npm is unrelated.** The npm package named `crumb` (v7.x) is a separate project with no connection to this repo. Crumb is currently **clone-only** (no npm publish until after the Bagelcode evaluation). Do not `npm i -g crumb` — it will not install this codebase.
 
-> **Skipping the Chromium download** (CI / air-gapped): `CRUMB_SKIP_PLAYWRIGHT_INSTALL=1 npm install`. The qa-check D6 portability gate stays signal-only; the D2 lint + size gate still runs.
+> **Skipping the Chromium download** (CI / air-gapped): `CRUMB_SKIP_PLAYWRIGHT_INSTALL=1 npm run setup`. The qa-check D6 portability gate stays signal-only; the D2 lint + size gate still runs.
 
-### A. Natural language (Claude Code user — recommended)
+### Update
 
 ```bash
-$ claude
-> /crumb 60초 매치-3 콤보 보너스 게임 만들어줘
+cd crumb && npm run update           # git pull --ff-only + setup again
 ```
 
-The `.claude/skills/crumb/SKILL.md` skill hands the pitch to headless `crumb run` and streams transcript events back. Natural-language interventions ("이 부분 다르게", "콤보 보너스 좀 더 짧게") flow back as `kind=user.intervene` events.
+Refuses to run if the working tree is dirty so local edits are never silently overwritten.
 
-### B. Mock adapter (no auth, deterministic)
+### Uninstall
+
+Crumb does not symlink anything onto your `PATH`, so removal is just file deletion:
 
 ```bash
-crumb run --goal "60-second match-3 with combo bonus" --adapter mock --idle-timeout 5000
+npm run uninstall                       # remove build artifacts (dist/, node_modules/)
+npm run uninstall -- --purge-data       # also remove ~/.crumb (sessions, projects)
+npm run uninstall -- --purge-browsers   # also remove the Playwright chromium cache
+rm -rf "$(pwd)"                         # finally, remove the clone itself
 ```
 
-Guaranteed to work with zero auth. Session ends with a **26-event v0.1 flow**: `session.start → goal → planner-lead (5 step + spec + handoff) → builder (artifact + build + handoff) → qa.result (system, deterministic ground truth) → verifier (4 step.judge inline + judge.score aggregate=28/30 PASS + handoff) → done → session.end`. Replay yields identical state.
-
-### C. Real agents via preset
+### Reset
 
 ```bash
-# Authenticate (any subset of these you have):
+npm run reset                        # rm -rf dist + node_modules; preserves ~/.crumb + chromium cache
+npm run setup                        # rebuild from a clean slate
+```
+
+Useful when the build is in a bad state or to reproduce "fresh-clone" issues without re-cloning.
+
+### Run with real agents (after `claude login` / `codex login` / `gemini login`)
+
+```bash
+# Authenticate the providers you have (any subset is fine):
 claude login           # Anthropic Claude Max
 codex login            # OpenAI Codex Plus
 gemini login           # Google Gemini Advanced
 
-# Pin the project + run from any dir:
+# Pin the project + run from any working directory:
 mkdir -p ~/projects/match3 && cd ~/projects/match3
-crumb init --pin --label "match3"
-crumb run --goal "60-second match-3 with combo bonus" --preset solo
+npx --prefix /path/to/crumb crumb init --pin --label "match3"
+npx --prefix /path/to/crumb crumb run --goal "60-second match-3 with combo bonus" --preset solo
 
 # Promote the result + export to a checkable folder:
-crumb release <session-ulid> --as v1 --label "demo"
-crumb copy-artifacts v1 --to ./demo
+npx --prefix /path/to/crumb crumb release <session-ulid> --as v1 --label "demo"
+npx --prefix /path/to/crumb crumb copy-artifacts v1 --to ./demo
 ```
 
-`provider × harness × model` decisions stay in **the user's hands** — Crumb never forces a default. Run `crumb doctor` to see which presets your environment can actually run.
+`--prefix` points npx at the cloned repo's workspace bin without a global symlink. Set `alias crumb='npx --prefix /path/to/crumb crumb'` in your shell rc if you'd like a shorter form. `provider × harness × model` decisions stay in **the user's hands** — Crumb never forces a default. Run `npx crumb doctor` to see which presets your environment can actually run.
+
+### Run from inside Claude Code (natural language)
+
+```text
+$ claude
+> /crumb 60초 매치-3 콤보 보너스 게임 만들어줘
+```
+
+The `.claude/skills/crumb/SKILL.md` skill hands the pitch to the headless `crumb run` resolved against the cloned repo and streams transcript events back. Natural-language interventions ("이 부분 다르게", "콤보 보너스 좀 더 짧게") flow back as `kind=user.intervene` events.
 
 ## Inspect a session
 
 ```bash
-crumb ls                                          # list every session under ~/.crumb/projects/*/sessions/
+npx crumb ls                                      # list every session under ~/.crumb/projects/*/sessions/
 jq -r '"\(.kind)\t\(.from)"' \
   ~/.crumb/projects/<project-id>/sessions/<ulid>/transcript.jsonl
-crumb replay <ulid>                               # re-derive state deterministically
+npx crumb replay <ulid>                           # re-derive state deterministically
+npx crumb status <ulid>                           # progress + last 10 events + scores
+npx crumb explain <kind>                          # schema lookup for any transcript kind
 ```
 
 ## Live studio (browser console)
@@ -110,7 +132,7 @@ without firewall prompts on macOS / Windows. Cross-platform (chokidar with
 WSL/NFS polling fallback, no platform-specific syscalls).
 
 ```bash
-# After `npm install && npm run build` (Quickstart step), start it:
+# After `npm run setup` (Quickstart step), start it from the cloned repo:
 npx crumb-studio                  # http://127.0.0.1:7321/  (auto-opens browser)
 npx crumb-studio --no-open        # headless / SSH / CI    (just print the URL)
 npx crumb-studio --port 8080      # alternate port
@@ -140,17 +162,42 @@ Cross-platform env knobs:
 
 ## CLI
 
+Every command below should be invoked via `npx crumb …` from the cloned repo (or `npx --prefix /path/to/crumb crumb …` from any other directory). `--version` and `-v` print the package version; the help text (`npx crumb --help`) carries the same table.
+
 | Command | What it does |
 |---|---|
 | `crumb run --goal "<pitch>" [--preset <name>] [--adapter <id>]` | Start a session |
 | `crumb event` | Subprocess agents pipe a JSON event in via stdin (transcript append) |
+| `crumb event tail [--all] [--kinds ...]` | Stream transcript events; private events filtered by default |
 | `crumb replay <session-dir>` | Re-derive state from `transcript.jsonl` (proves determinism) |
 | `crumb resume <session-id\|dir>` | Re-derive state + surface mid-flight resume command |
+| `crumb status <session-id\|dir>` | Progress + last 10 events + D1-D6 scorecard |
+| `crumb explain <kind>` | Transcript-kind schema lookup |
+| `crumb suggest <session-id\|dir>` | Recommend the next user action (approve / veto / pause / wait) |
+| `crumb tui <session-id\|dir>` | Blessed-based live observer (terminal) |
+| `crumb model [--show \| --apply "NL"]` | Per-actor model + effort + provider activation |
 | `crumb doctor` | Full environment check (3 host OAuth + adapter health + preset gating) |
 | `crumb config <natural-language>` | Preset recommendation from natural-language description |
 | `crumb debug <session-id\|dir>` | F1-F7 routing fault diagnosis from a transcript |
-| `crumb ls` | List `sessions/` with event counts |
-| `npx crumb-studio [--port 7321] [--bind 127.0.0.1] [--no-open]` | Live observability studio (HTTP + SSE) — see "Live studio" section above |
+| `crumb export <session-id\|dir> [--format ...]` | OTel GenAI / Anthropic / chrome://tracing export |
+| `crumb init [--host <name>] [--pin]` | Verify host entries / pin cwd to a stable project ULID |
+| `crumb ls` | List the current project's sessions |
+| `crumb release <session-id> [--as vN]` | Snapshot artifacts into versions/ + emit `kind=version.released` |
+| `crumb versions` | List released milestones with parent chain |
+| `crumb copy-artifacts <session-id\|vN> --to <dest>` | Copy frozen artifacts (Bagelcode submission) |
+| `crumb migrate [--dry-run]` | Move legacy `<cwd>/sessions/` into `~/.crumb/projects/<id>/sessions/` |
+| `crumb studio [--port ...] [--bind ...]` | Launch the web console (alias for `crumb-studio`) |
+| `crumb --version` / `-v` | Print package version |
+| `npx crumb-studio [--port 7321] [--bind 127.0.0.1] [--no-open]` | Live observability studio (HTTP + SSE) — see "Live studio" above |
+
+Lifecycle (npm scripts in the cloned repo):
+
+| Command | What it does |
+|---|---|
+| `npm run setup` | install + build + doctor (idempotent — also the update path) |
+| `npm run update` | `git pull --ff-only` then re-run setup; refuses a dirty tree |
+| `npm run uninstall [-- --purge-data] [-- --purge-browsers]` | Remove build artifacts; opt-in flags remove `~/.crumb` and Playwright cache |
+| `npm run reset` | Remove `dist/` + `node_modules/`; preserves `~/.crumb` and chromium cache |
 
 ## Architecture (v0.1, high level)
 

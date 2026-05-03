@@ -4,6 +4,29 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Truthful Quickstart + lifecycle scripts (setup/update/uninstall/reset) + version single-source (2026-05-03)
+
+Packaging + bootstrap rewrite so a fresh-clone evaluator (or any other user) can go from `git clone` to a passing mock-adapter run in two commands, with no global symlinks and no false promises.
+
+1. **README rewrite** — dropped the "End users — install from npm" section. Both `crumb` (npm registry — owned by an unrelated v7.x package) and `@crumb/studio` (404 — never published) were misleading. Crumb is currently clone-only; README states this explicitly.
+2. **Two-command Quickstart** — `git clone … && cd crumb && npm run setup`. The single npm script runs install + build + doctor idempotently. Re-runnable as the update path.
+3. **Symlink-free invocation** — `npm link` removed from the happy path per project policy (no global symlinks, no PATH mutation). Both bin entries are invoked via `npx crumb` / `npx crumb-studio`. From other directories, `npx --prefix /path/to/crumb crumb …` resolves the workspace bin directly.
+4. **Lifecycle scripts** — added `scripts/{setup,update,uninstall,reset}.mjs` (plain Node, no zx dep) wired through `package.json` `scripts`. Each script computes the repo root from `import.meta.url` so they work under any checkout location (evaluator's $HOME, /tmp, network mount, Docker volume) without baked-in absolute paths.
+   - `npm run uninstall` only removes build artifacts by default. `--purge-data` opt-in for `~/.crumb`, `--purge-browsers` opt-in for the Playwright cache. The user owns those bytes.
+   - `npm run update` refuses to run on a dirty tree so local edits are never silently overwritten.
+   - `npm run reset` preserves `~/.crumb` and the chromium cache so a regression bisect doesn't pay the chromium download tax.
+5. **Version single-source** — `src/cli.ts`'s hardcoded `Crumb v0.1.0` removed. New `readPackageVersion()` reads `package.json` once at startup; help banner + new `--version` / `-v` / `version` subcommand all draw from the same source. `node dist/index.js --version` now prints `0.4.0`, matching the package.
+6. **Node engine guard at bin entry** — `src/index.ts` checks `process.versions.node` major before importing anything else and exits with a clear hint if Node < 18 (n8n bin pattern). Avoids opaque `SyntaxError` traces under system Node 14/16.
+7. **Path leak scrub in shipped scripts** — `packages/studio/src/cli.ts` help example replaced `/Users/mango/.crumb` with `~/.crumb` and a generic placeholder. `scripts/spike-env-propagation.sh` now derives `REPO_ROOT` from its own location instead of hardcoding `/Users/mango/workspace/crumb`. Test fixture paths under `packages/studio/src/paths.test.ts` still contain machine-shaped strings — those are intentional pattern-matching inputs, not runtime paths.
+8. **Korean README synced** — same Quickstart / lifecycle / CLI table delta in `README.ko.md`.
+
+Follow-ups (separate PRs):
+- §11.1 of `wiki/synthesis/bagelcode-studio-big-bang-update-2026-05-03.md` — purge `packages/dashboard/` filesystem cruft and `Dashboard*` symbol leftovers.
+- AGENTS.md `Don't` augmentation: ban absolute path hardcoding + `npm link` symlinks (per user directive 2026-05-03).
+- Bagelcode-evaluation-time decision: scoped npm publish (`@mangowhoiscloud/crumb` + `@mangowhoiscloud/crumb-studio`) vs. permanent clone-only.
+
+Verification: `npm run lint:all && npm run typecheck && npm run format:check && npm test && npm run build` — all pass; `node dist/index.js --version` prints `0.4.0`; `npm run setup` is idempotent on a clean checkout.
+
 ### Added — Genre + persistence profile axes (4×4 matrix) + 2 new specialists (Bundles 1+2, 2026-05-03)
 
 Extends Crumb from a single-genre prototype harness (Phaser-portrait casual mobile) to a 4-genre × 4-persistence matrix while keeping the un-flagged default (`auto-detect` × `local-only`) bit-identical to prior behavior. Lifts the §2 Three.js ban for the opt-in `flash-3d-arcade` profile only and lifts the §1.1 "no worker tier" rule for the opt-in `edge-orm` persistence profile only.

@@ -121,7 +121,7 @@ Env (precedence: --home > CRUMB_HOMES > CRUMB_HOME > $HOME/.crumb):
 
 Examples:
   crumb-studio --home ~/.crumb --home /tmp/crumb-test-home
-  CRUMB_HOMES=/Users/mango/.crumb:/tmp/crumb-real-home crumb-studio
+  CRUMB_HOMES=~/.crumb:/path/to/other-home crumb-studio
 `);
 }
 

@@ -50,6 +50,10 @@
     "test:watch": "vitest",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
+    "setup": "node scripts/setup.mjs",
+    "update": "node scripts/update.mjs",
+    "uninstall": "node scripts/uninstall.mjs",
+    "reset": "node scripts/reset.mjs",
     "postinstall": "node scripts/qa-postinstall.js"
   },
   "keywords": [
