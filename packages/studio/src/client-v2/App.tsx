@@ -28,6 +28,7 @@ import {
 import { BrandMark } from './components/BrandMark';
 import { ThemeToggle } from './components/ThemeToggle';
 import { DensityToggle } from './components/DensityToggle';
+import { HealthBadge } from './components/HealthBadge';
 import { Sidebar } from './panels/Sidebar';
 import { Pipeline } from './panels/Pipeline';
 import { Waterfall } from './panels/Waterfall';
@@ -135,6 +136,7 @@ export function App() {
         <span style={{ color: 'var(--ink-subtle)', fontSize: 12 }}>
           v2 preview · {sessions.data ? `${sessions.data.sessions.length} sessions` : 'loading…'}
         </span>
+        <HealthBadge />
         <DensityToggle />
         <ThemeToggle />
       </header>
