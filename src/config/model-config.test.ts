@@ -39,8 +39,6 @@ describe('defaultConfig', () => {
       expect(c.actors[actor]?.model).toBe('claude-opus-4-7');
       expect(c.actors[actor]?.effort).toBe('high');
     }
-    expect(c.actors['builder-fallback']?.harness).toBe('claude-code');
-    expect(c.actors['builder-fallback']?.model).toBe('claude-sonnet-4-6');
   });
 
   it('all 3 local providers enabled by default', () => {
@@ -139,7 +137,7 @@ describe('formatConfig', () => {
     expect(out).toContain('## providers');
     expect(out).toContain('## actors');
     expect(out).toContain('claude-opus-4-7');
-    expect(out).toContain('claude-sonnet-4-6');
+    expect(out).toContain('claude-haiku-4-5');
   });
 });
 
@@ -165,7 +163,7 @@ describe('committed .crumb/config.toml', () => {
     const live = loadConfig(repoRoot);
     // Coordinator's `low` is the v0.3.1 quick-think router decision (see test
     // above); guarding the rest prevents accidental drift.
-    for (const name of ['planner-lead', 'builder', 'verifier', 'builder-fallback'] as const) {
+    for (const name of ['planner-lead', 'builder', 'verifier'] as const) {
       expect(live.actors[name]?.effort).toBe('high');
     }
   });

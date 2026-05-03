@@ -217,7 +217,7 @@ export function registerWriteTools(server: McpServer, root: string): void {
           .string()
           .optional()
           .describe(
-            'Target actor (planner-lead / builder / verifier / builder-fallback / researcher / coordinator). Used by goto / append / pause-actor / resume-actor / reset_circuit / swap.',
+            'Target actor (planner-lead / builder / verifier / researcher / coordinator). Used by goto / append / pause-actor / resume-actor / reset_circuit / swap.',
           ),
         swap_to: z
           .string()

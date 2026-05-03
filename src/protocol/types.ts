@@ -10,7 +10,6 @@ export type Actor =
   | 'researcher'
   | 'builder'
   | 'verifier'
-  | 'builder-fallback'
   | 'validator'
   | 'system';
 

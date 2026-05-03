@@ -33,9 +33,8 @@ The `.gemini/extensions/crumb/` extension provides:
 |---|---|
 | coordinator | ambient (entry host = gemini-cli when entered via `/crumb` here) |
 | planner-lead | ambient |
-| builder | `codex` + `gpt-5.5-codex` (cross-provider for cross-assemble) |
+| builder | `codex` + `gpt-5.5-codex` (cross-provider for cross-assemble; reducer adapter-swaps to claude-local on circuit OPEN — PR-Prune-2 collapsed the prior builder-fallback actor into this) |
 | **verifier** | **`gemini-cli` + `gemini-3-1-pro`** ← Gemini's natural seat |
-| builder-fallback | ambient |
 
 **Why Gemini = verifier in the default preset**: Gemini 3.1 Pro's multimodal capability is well-suited for screenshot-based grading of the multi-file PWA under `artifacts/game/` (D1 spec_fit + D3 semantic). CourtEval's 4 sub-step (Grader → Critic → Defender → Re-grader, ACL 2025) runs inline within the verifier spawn; D2 / D6 are looked up from the prior `qa.result` (deterministic, dispatcher-emitted, no LLM).
 

@@ -42,7 +42,7 @@ export function diagnose(transcript: Message[], state: CrumbState): FaultDetecti
     evidence_msg_id: f1?.id,
     evidence_detail: f1?.body,
     suggested_action:
-      'crumb doctor 로 환경 점검. 미로그인 host 발견 시 builder-fallback OR mock preset 으로 전환',
+      'crumb doctor 로 환경 점검. 미로그인 host 발견 시 mock preset 으로 전환 (builder 회로가 OPEN 되면 reducer 가 자동으로 adapter 를 claude-local 로 swap)',
   });
 
   // F2: subprocess timeout (idle-timeout 발생)

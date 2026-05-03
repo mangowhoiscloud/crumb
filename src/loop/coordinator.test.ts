@@ -52,7 +52,7 @@ async function makeSession(): Promise<{
   // Stub agents/<name>.md so dispatcher's sandwich resolution doesn't ENOENT.
   const repoRoot = resolve(dir, 'repo');
   await mkdir(resolve(repoRoot, 'agents'), { recursive: true });
-  for (const name of ['planner-lead', 'builder', 'verifier', 'builder-fallback', 'coordinator']) {
+  for (const name of ['planner-lead', 'builder', 'verifier', 'coordinator']) {
     await writeFile(resolve(repoRoot, 'agents', `${name}.md`), `# stub ${name}\n`);
   }
   const transcriptPath = resolve(sessionDir, 'transcript.jsonl');

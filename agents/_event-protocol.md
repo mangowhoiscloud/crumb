@@ -1,6 +1,6 @@
 # Crumb Event Emission Protocol
 
-> Every Crumb sandwich agent emits transcript events through the `crumb event` CLI helper. This file is the canonical reference; each Lead sandwich (`planner-lead.md`, `engineering-lead.md`, `builder-fallback.md`, `coordinator.md`) appends a copy of this protocol so the agent doesn't have to read external files.
+> Every Crumb sandwich agent emits transcript events through the `crumb event` CLI helper. This file is the canonical reference; each Lead sandwich (`planner-lead.md`, `researcher.md`, `builder.md`, `verifier.md`, `coordinator.md`) appends a copy of this protocol so the agent doesn't have to read external files.
 
 ## Environment (set by the adapter)
 
@@ -39,9 +39,9 @@ Always quote the heredoc tag (`<<'JSON'`) so the shell does not expand `$` insid
 | Sandwich | Required `kind` sequence |
 |---|---|
 | **planner-lead** | `step.socratic` (×N), `step.concept`, `step.research`, `step.design`, `artifact.created` (×3), `spec`, `handoff.requested` |
-| **engineering-lead** | `step.builder`, `step.qa`, `step.judge` (×4: grader/critic/defender/regrader), `artifact.created`, `judge.score`, `verify.result`, `handoff.requested` |
-| **builder-fallback** | Same as engineering-lead, plus `audit` events for `fallback_activated` / `fallback_completed` |
-| **coordinator** | `agent.wake`, `agent.stop`, `hook`, `done` (router only — does not write artifacts) |
+| **builder** | `build`, `artifact.created`, `handoff.requested` (qa.result is emitted by the dispatcher's qa_check effect, not the builder) |
+| **verifier** | `step.judge` (×4: grader/critic/defender/regrader), `judge.score`, `verify.result`, `handoff.requested` |
+| **coordinator** | `agent.wake`, `agent.stop`, `done` (router only — does not write artifacts; user modals surface as `effect.type=hook`, not transcript lines) |
 
 ## Validation rules to remember
 

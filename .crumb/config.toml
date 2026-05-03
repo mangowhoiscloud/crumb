@@ -68,8 +68,3 @@ effort = "high"
 harness = "claude-code"
 model = "claude-opus-4-7"
 effort = "high"
-
-[actors."builder-fallback"]
-harness = "claude-code"
-model = "claude-sonnet-4-6"
-effort = "high"

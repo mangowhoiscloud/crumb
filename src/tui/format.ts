@@ -16,7 +16,6 @@ const ACTOR_TAG: Record<Actor, string> = {
   researcher: 'cyan',
   builder: 'magenta',
   verifier: 'yellow',
-  'builder-fallback': 'red',
   validator: 'gray',
   system: 'gray',
 };
@@ -28,7 +27,6 @@ const ACTOR_GLYPH: Record<Actor, string> = {
   researcher: '🔍',
   builder: '🟣',
   verifier: '🟠',
-  'builder-fallback': '🌹',
   validator: '⚙',
   system: '⚙',
 };

@@ -3,8 +3,9 @@
  * subprocess. Sandwich is injected via stdin (Codex prefers Markdown over XML).
  *
  * If `codex` is unavailable on this machine the adapter health-check fails; the
- * Coordinator should then OPEN the builder circuit and route to
- * builder-fallback (claude-local).
+ * Coordinator should then OPEN the builder circuit, which the reducer handles
+ * by setting adapter_override.builder='claude-local' and respawning the same
+ * builder actor (PR-Prune-2 collapsed the prior builder-fallback path).
  *
  * Lifecycle helpers (env / abort / health / default-prompt) are shared with
  * claude-local + gemini-local via `./_shared.ts`.

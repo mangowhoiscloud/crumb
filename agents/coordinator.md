@@ -1,8 +1,8 @@
 ---
 name: coordinator
 description: >-
-  Crumb hub orchestrator (the host harness itself). Routes between planner-lead, builder,
-  verifier, and builder-fallback. Maintains task/progress ledgers, applies the validator,
+  Crumb hub orchestrator (the host harness itself). Routes between planner-lead, researcher,
+  builder, and verifier. Maintains task/progress ledgers, applies the validator,
   dispatches the qa_check effect after `build`. Routing decisions are pure functions in
   src/reducer/index.ts; this sandwich is the human-readable contract for the hub actor —
   it does NOT spawn directly. Injected as a Markdown body via the host CLI's system-prompt
@@ -53,7 +53,7 @@ This table mirrors the reducer's `case` branches. The sandwich's instruction is 
 | `qa.result` | `spawn(verifier)` | verifier |
 | `judge.score` verdict=PASS | `done(verdict_pass)` | — |
 | `judge.score` verdict=PARTIAL | `hook(partial)` | (user modal) |
-| `judge.score` verdict=FAIL/REJECT | `rollback → planner-lead` (respec) **OR** `spawn(builder-fallback)` if `circuit_breaker.builder.state === 'OPEN'` | planner-lead / builder-fallback |
+| `judge.score` verdict=FAIL/REJECT | `rollback → planner-lead` (Critical) **OR** respawn `builder` (Important/Minor; if `circuit_breaker.builder.state === 'OPEN'` adapter swap to claude-local first; if already swapped → `done(builder_circuit_open)`) | planner-lead / builder |
 | `user.veto` | `spawn(last_active_actor)` with `instructionOverride` + carries `sandwich_appends` snapshot | (rebound to planner-lead or builder) |
 | `user.intervene` (no data) | add fact (constraint), no spawn | (next pending) |
 | `user.intervene` `data.target_actor=<a>` | tag fact `@<a>`, no spawn | (constraint visible to next spawn of `<a>`) |
