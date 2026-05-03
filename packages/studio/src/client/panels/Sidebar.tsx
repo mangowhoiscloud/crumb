@@ -19,6 +19,7 @@ import { useMemo, useState } from 'react';
 import { useDoctor } from '../hooks/useDoctor';
 import { useSessions } from '../hooks/useSessions';
 import { AdapterRow } from '../components/AdapterRow';
+import { AdapterSetupModal } from '../components/AdapterSetupModal';
 import { SessionRow } from '../components/SessionRow';
 import { setActiveSession, useActiveSession } from '../stores/selection';
 import { NewSessionForm } from './NewSessionForm';
@@ -28,6 +29,12 @@ export function Sidebar(_props: IDockviewPanelProps) {
   const sessions = useSessions();
   const active = useActiveSession();
   const [showForm, setShowForm] = useState(false);
+  // v0.5 PR-Auth — adapter click → setup modal. Selected adapter id
+  // resolves the latest probe result via doctor.data so the modal stays
+  // in sync with refetch (Re-check button) without prop drilling.
+  const [selectedAdapterId, setSelectedAdapterId] = useState<string | null>(null);
+  const selectedAdapter =
+    doctor.data?.adapters.find((a) => a.id === selectedAdapterId) ?? null;
 
   const projectGroups = useMemo(() => {
     if (!sessions.data) return [];
@@ -67,7 +74,11 @@ export function Sidebar(_props: IDockviewPanelProps) {
         {doctor.isLoading && <Empty text="probing…" />}
         {doctor.error && <Empty text={`error: ${(doctor.error as Error).message}`} tone="error" />}
         {doctor.data?.adapters.map((a) => (
-          <AdapterRow key={a.id} adapter={a} />
+          <AdapterRow
+            key={a.id}
+            adapter={a}
+            onClick={() => setSelectedAdapterId(a.id)}
+          />
         ))}
       </div>
 
@@ -131,6 +142,12 @@ export function Sidebar(_props: IDockviewPanelProps) {
           <Empty text="no sessions yet — hit ＋ to start one" />
         )}
       </div>
+
+      <AdapterSetupModal
+        adapter={selectedAdapter}
+        onClose={() => setSelectedAdapterId(null)}
+        onRefetch={() => void doctor.refetch()}
+      />
     </div>
   );
 }
