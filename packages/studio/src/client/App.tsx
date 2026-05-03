@@ -39,7 +39,9 @@ import { DetailRail } from './panels/DetailRail';
 import { SlashBar } from './panels/SlashBar';
 import { Scorecard } from './panels/Scorecard';
 import { ErrorBudgetStrip } from './panels/ErrorBudgetStrip';
+import { useEffect } from 'react';
 import { useSessions, useSessionsSseBridge } from './hooks/useSessions';
+import { setActiveSession, useActiveSession } from './stores/selection';
 
 const PANEL_COMPONENTS: Record<string, React.FC<IDockviewPanelProps>> = {
   sidebar: Sidebar,
@@ -151,6 +153,20 @@ export function App() {
   // Live sessions cache + SSE bridge. Sidebar re-reads via useSessions().
   const sessions = useSessions();
   useSessionsSseBridge();
+  const activeSession = useActiveSession();
+
+  // Auto-select on first load: pick the live session if any, else the
+  // most-recently-active. The /api/sessions response is sorted by
+  // `last_activity_at` desc server-side, so `sessions[0]` is the right
+  // pick when nothing is selected yet. Without this the user lands on a
+  // studio with empty panels until they click — a real complaint.
+  useEffect(() => {
+    if (activeSession) return;
+    const list = sessions.data?.sessions ?? [];
+    if (list.length === 0) return;
+    const pick = list.find((s) => s.derived_state === 'live') ?? list[0];
+    if (pick) setActiveSession(pick.session_id);
+  }, [activeSession, sessions.data]);
 
   return (
     <div
