@@ -8,36 +8,36 @@
  */
 :root {
   /* Light theme (default) — Crumb logo derived */
-  --canvas: #FDF3E7;
-  --surface-1: #F5E9D5;
-  --surface-2: #EDDFC4;
-  --surface-3: #E5D5B3;
-  --hairline: #D8C39C;
-  --hairline-strong: #C0A77B;
+  --canvas: #fdf3e7;
+  --surface-1: #f5e9d5;
+  --surface-2: #eddfc4;
+  --surface-3: #e5d5b3;
+  --hairline: #d8c39c;
+  --hairline-strong: #c0a77b;
   --ink: #623819;
-  --ink-muted: #825A36;
-  --ink-subtle: #A07F58;
-  --ink-tertiary: #B89B78;
-  --primary: #DAAB78;
-  --primary-hover: #C89460;
+  --ink-muted: #825a36;
+  --ink-subtle: #a07f58;
+  --ink-tertiary: #b89b78;
+  --primary: #daab78;
+  --primary-hover: #c89460;
 
   /* Semantic — light variants (WCAG ≥4.5:1 against canvas) */
-  --audit-bg: #FBE6EB;
-  --audit-fg: #B23A60;
-  --lime: #5C7A0E;
-  --warn: #A85A1F;
-  --accent-grep: #D67635;
-  --accent-grep-active: #B05420;
+  --audit-bg: #fbe6eb;
+  --audit-fg: #b23a60;
+  --lime: #5c7a0e;
+  --warn: #a85a1f;
+  --accent-grep: #d67635;
+  --accent-grep-active: #b05420;
 
   /* Actor lane colors — light variants */
-  --actor-user: #5C5DAB;
-  --actor-coordinator: #7A7F88;
-  --actor-planner-lead: #A85A1F;
-  --actor-researcher: #5E4674;
-  --actor-builder: #5C7A0E;
-  --actor-verifier: #B23A60;
-  --actor-validator: #A85A1F;
-  --actor-system: #A0876B;
+  --actor-user: #5c5dab;
+  --actor-coordinator: #7a7f88;
+  --actor-planner-lead: #a85a1f;
+  --actor-researcher: #5e4674;
+  --actor-builder: #5c7a0e;
+  --actor-verifier: #b23a60;
+  --actor-validator: #a85a1f;
+  --actor-system: #a0876b;
 
   --r-xs: 4px;
   --r-sm: 6px;
@@ -47,7 +47,7 @@
 }
 
 /* Dark theme — preserved from v0.4 Linear chassis */
-[data-theme="dark"] {
+[data-theme='dark'] {
   --canvas: #010102;
   --surface-1: #0f1011;
   --surface-2: #141516;
@@ -92,33 +92,53 @@
   font-weight: 800;
   font-display: swap;
   src:
-    local('Cabinet Grotesk Extrabold'),
-    local('CabinetGrotesk-Extrabold'),
-    local('Cabinet Grotesk Bold'),
-    local('CabinetGrotesk-Bold'),
-    local('SF Pro Rounded Black'),
+    local('Cabinet Grotesk Extrabold'), local('CabinetGrotesk-Extrabold'),
+    local('Cabinet Grotesk Bold'), local('CabinetGrotesk-Bold'), local('SF Pro Rounded Black'),
     local('SF Pro Rounded Bold');
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
-html, body {
+html,
+body {
   background: var(--canvas);
   color: var(--ink);
-  font-family: ui-sans-serif, -apple-system, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+  font-family:
+    ui-sans-serif,
+    -apple-system,
+    'SF Pro Display',
+    'Segoe UI',
+    system-ui,
+    sans-serif;
   font-size: 14px;
   line-height: 1.5;
   letter-spacing: -0.05px;
   height: 100%;
 }
 
-body { display: grid; grid-template-columns: var(--sessions-w, 240px) 4px 1fr; height: 100vh; transition: grid-template-columns 220ms ease; }
+body {
+  display: grid;
+  grid-template-columns: var(--sessions-w, 240px) 4px 1fr;
+  height: 100vh;
+  transition: grid-template-columns 220ms ease;
+}
 /* F4 — collapsed sidebar: zero out both the sessions column and the resize
  * handle column; CSS transition above carries the slide. JS toggles the
  * data attribute on click + persists in localStorage (crumb.sessions-collapsed). */
-body[data-sidebar-collapsed="1"] { grid-template-columns: 0 0 1fr; }
-body[data-sidebar-collapsed="1"] aside.sessions { overflow: hidden; visibility: hidden; }
-body[data-sidebar-collapsed="1"] .resize-handle-sessions { display: none; }
+body[data-sidebar-collapsed='1'] {
+  grid-template-columns: 0 0 1fr;
+}
+body[data-sidebar-collapsed='1'] aside.sessions {
+  overflow: hidden;
+  visibility: hidden;
+}
+body[data-sidebar-collapsed='1'] .resize-handle-sessions {
+  display: none;
+}
 
 /* Draggable resize handles — Mac/Windows native-feel split bars. */
 .resize-handle {
@@ -157,14 +177,27 @@ body[data-sidebar-collapsed="1"] .resize-handle-sessions { display: none; }
   font-weight: 600;
   margin-right: 8px;
 }
-.resume-btn:hover { filter: brightness(1.1); }
-.resume-btn:disabled { opacity: 0.6; cursor: wait; }
+.resume-btn:hover {
+  filter: brightness(1.1);
+}
+.resume-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
 
 /* Transcript viewer */
-.transcript-view { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.transcript-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
 .transcript-toolbar {
-  display: flex; gap: 8px; align-items: center;
-  padding: 8px 12px; border-bottom: 1px solid var(--hairline);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--hairline);
   font-size: 12px;
   flex-wrap: wrap;
 }
@@ -172,15 +205,26 @@ body[data-sidebar-collapsed="1"] .resize-handle-sessions { display: none; }
   flex: 1 1 160px;
   min-width: 80px;
   max-width: 320px;
-  background: var(--canvas); color: var(--ink);
-  border: 1px solid var(--hairline); border-radius: var(--r-sm);
-  padding: 4px 8px; font-family: ui-monospace, monospace; font-size: 11px;
+  background: var(--canvas);
+  color: var(--ink);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 4px 8px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
   text-overflow: ellipsis;
 }
 .transcript-content {
-  flex: 1; overflow: auto; padding: 8px 12px; margin: 0;
-  font-family: ui-monospace, monospace; font-size: 11px; line-height: 1.5;
-  white-space: pre-wrap; word-break: break-all; background: var(--canvas);
+  flex: 1;
+  overflow: auto;
+  padding: 8px 12px;
+  margin: 0;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: var(--canvas);
 }
 
 aside.sessions {
@@ -211,7 +255,7 @@ aside.sessions {
    * `color` here — that would override stroke fills via currentColor. */
 }
 .brand-text {
-  font-family: 'Crumb Brand', ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+  font-family: 'Crumb Brand', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
   font-weight: 800;
   font-size: 14px;
   letter-spacing: 0.4px;
@@ -235,7 +279,9 @@ aside.sessions {
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 .theme-toggle:hover {
   background: var(--surface-2);
@@ -254,32 +300,84 @@ aside.sessions h2 {
   padding: 10px 16px;
   border-left: 2px solid transparent;
   cursor: pointer;
-  transition: background 60ms ease, border-color 60ms ease;
+  transition:
+    background 60ms ease,
+    border-color 60ms ease;
 }
-.session-row:hover { background: var(--surface-1); }
-.session-row.active { border-left-color: var(--primary); background: var(--surface-2); }
-.session-row .row-id { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 11px; color: var(--ink-subtle); }
-.session-row .row-goal { color: var(--ink); margin-top: 2px; font-size: 13px; }
-.session-row .row-meta { color: var(--ink-subtle); font-size: 11px; margin-top: 2px; }
+.session-row:hover {
+  background: var(--surface-1);
+}
+.session-row.active {
+  border-left-color: var(--primary);
+  background: var(--surface-2);
+}
+.session-row .row-id {
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 11px;
+  color: var(--ink-subtle);
+}
+.session-row .row-goal {
+  color: var(--ink);
+  margin-top: 2px;
+  font-size: 13px;
+}
+.session-row .row-meta {
+  color: var(--ink-subtle);
+  font-size: 11px;
+  margin-top: 2px;
+}
 .session-row .row-dot {
-  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
-  background: var(--ink-tertiary); margin-right: 6px; vertical-align: 1px;
-  transition: background 200ms ease, box-shadow 200ms ease;
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-tertiary);
+  margin-right: 6px;
+  vertical-align: 1px;
+  transition:
+    background 200ms ease,
+    box-shadow 200ms ease;
 }
 /* v3.5 state-aware sidebar dots — bootstrap classifier output */
-.session-row.state-live    .row-dot { background: var(--lime); box-shadow: 0 0 6px var(--lime); }
-.session-row.state-idle    .row-dot { background: var(--warn); }
-.session-row.state-interrupted .row-dot { background: var(--audit-fg); box-shadow: 0 0 4px rgba(250, 127, 170, 0.4); }
-.session-row.state-abandoned   .row-dot { background: var(--ink-tertiary); opacity: 0.4; }
-.session-row.state-terminal    .row-dot { background: var(--ink-subtle); opacity: 0.6; }
-.session-row.state-terminal { opacity: 0.78; }
-.session-row.state-abandoned { opacity: 0.55; }
-.session-row.state-interrupted .row-id::after { content: ' · ⏸'; color: var(--audit-fg); }
+.session-row.state-live .row-dot {
+  background: var(--lime);
+  box-shadow: 0 0 6px var(--lime);
+}
+.session-row.state-idle .row-dot {
+  background: var(--warn);
+}
+.session-row.state-interrupted .row-dot {
+  background: var(--audit-fg);
+  box-shadow: 0 0 4px rgba(250, 127, 170, 0.4);
+}
+.session-row.state-abandoned .row-dot {
+  background: var(--ink-tertiary);
+  opacity: 0.4;
+}
+.session-row.state-terminal .row-dot {
+  background: var(--ink-subtle);
+  opacity: 0.6;
+}
+.session-row.state-terminal {
+  opacity: 0.78;
+}
+.session-row.state-abandoned {
+  opacity: 0.55;
+}
+.session-row.state-interrupted .row-id::after {
+  content: ' · ⏸';
+  color: var(--audit-fg);
+}
 /* Legacy `.live` class kept for backward compat with any external SSE subscribers. */
-.session-row.live .row-dot { background: var(--lime); box-shadow: 0 0 6px var(--lime); }
-.project-group { margin-bottom: 8px; }
+.session-row.live .row-dot {
+  background: var(--lime);
+  box-shadow: 0 0 6px var(--lime);
+}
+.project-group {
+  margin-bottom: 8px;
+}
 .project-label {
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 10px;
   font-weight: 500;
   color: var(--ink-tertiary);
@@ -290,7 +388,12 @@ aside.sessions h2 {
   background: var(--surface-1);
 }
 
-main { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
 
 header.summary {
   border-bottom: 1px solid var(--hairline);
@@ -328,7 +431,9 @@ header.summary h1 {
   font-size: 22px;
   font-weight: 500;
   letter-spacing: -0.4px;
-  display: flex; align-items: center; gap: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 header.summary .goal {
   color: var(--ink-muted);
@@ -336,13 +441,21 @@ header.summary .goal {
   margin-top: 4px;
 }
 .metrics-row {
-  display: flex; gap: 20px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  display: flex;
+  gap: 20px;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 12px;
   color: var(--ink-muted);
 }
-.metrics-row dt { color: var(--ink-subtle); text-transform: uppercase; letter-spacing: 0.4px; font-size: 10px; }
-.metrics-row dd { color: var(--ink); }
+.metrics-row dt {
+  color: var(--ink-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-size: 10px;
+}
+.metrics-row dd {
+  color: var(--ink);
+}
 
 .pill {
   display: inline-block;
@@ -353,10 +466,22 @@ header.summary .goal {
   letter-spacing: 0.4px;
   text-transform: uppercase;
 }
-.pill.ok { background: rgba(39, 166, 68, 0.15); color: #5fcb7e; }
-.pill.partial { background: rgba(255, 178, 135, 0.18); color: var(--warn); }
-.pill.err { background: rgba(250, 127, 170, 0.18); color: var(--audit-fg); }
-.pill.muted { background: var(--surface-2); color: var(--ink-subtle); }
+.pill.ok {
+  background: rgba(39, 166, 68, 0.15);
+  color: #5fcb7e;
+}
+.pill.partial {
+  background: rgba(255, 178, 135, 0.18);
+  color: var(--warn);
+}
+.pill.err {
+  background: rgba(250, 127, 170, 0.18);
+  color: var(--audit-fg);
+}
+.pill.muted {
+  background: var(--surface-2);
+  color: var(--ink-subtle);
+}
 
 /* v3.4 Console mode — DAG topology + weaving + console input */
 section.dag {
@@ -401,21 +526,44 @@ section.dag h2 {
   border-top-width: 1.4px;
   border-top-style: solid;
 }
-.dag-legend .lg-flow::before      { border-color: var(--primary); }
-.dag-legend .lg-respawn::before   { border-color: #3b82f6; border-top-style: dashed; }
-.dag-legend .lg-rollback::before  { border-color: #d97706; border-top-style: dashed; }
-.dag-legend .lg-terminal::before  { border-color: var(--lime); border-top-width: 1.8px; }
-.dag-legend .lg-audit::before     { border-color: var(--audit-fg); border-top-style: dotted; }
-.dag-legend .lg-intervene::before { border-color: var(--ink-tertiary); border-top-style: dotted; }
-.dag-legend .lg-resume::before    { border-color: #06b6d4; }
-.lg-shapes { margin-left: auto; }
+.dag-legend .lg-flow::before {
+  border-color: var(--primary);
+}
+.dag-legend .lg-respawn::before {
+  border-color: #3b82f6;
+  border-top-style: dashed;
+}
+.dag-legend .lg-rollback::before {
+  border-color: #d97706;
+  border-top-style: dashed;
+}
+.dag-legend .lg-terminal::before {
+  border-color: var(--lime);
+  border-top-width: 1.8px;
+}
+.dag-legend .lg-audit::before {
+  border-color: var(--audit-fg);
+  border-top-style: dotted;
+}
+.dag-legend .lg-intervene::before {
+  border-color: var(--ink-tertiary);
+  border-top-style: dotted;
+}
+.dag-legend .lg-resume::before {
+  border-color: #06b6d4;
+}
+.lg-shapes {
+  margin-left: auto;
+}
 .lg-shape-svg {
   width: 200px;
   height: 14px;
   display: inline-block;
   vertical-align: middle;
 }
-.lg-shape-svg circle, .lg-shape-svg polygon, .lg-shape-svg rect {
+.lg-shape-svg circle,
+.lg-shape-svg polygon,
+.lg-shape-svg rect {
   fill: var(--surface-2);
   stroke: var(--ink-tertiary);
   stroke-width: 1;
@@ -437,11 +585,26 @@ section.dag h2 {
   stroke-width: 0.5;
   stroke-dasharray: 4 3;
 }
-.dag-phase.phase-A rect { fill: rgba(124, 58, 237, 0.04); stroke: rgba(124, 58, 237, 0.18); }  /* violet — Spec */
-.dag-phase.phase-B rect { fill: rgba(59, 130, 246, 0.03); stroke: rgba(59, 130, 246, 0.18); }  /* blue — Build */
-.dag-phase.phase-C rect { fill: rgba(34, 197, 94, 0.03);  stroke: rgba(34, 197, 94, 0.20); }   /* green — QA */
-.dag-phase.phase-D rect { fill: rgba(202, 138, 4, 0.03);  stroke: rgba(202, 138, 4, 0.20); }   /* amber — Verify */
-.dag-phase.phase-E rect { fill: rgba(22, 163, 74, 0.04);  stroke: rgba(22, 163, 74, 0.22); }   /* lime-green — Done */
+.dag-phase.phase-A rect {
+  fill: rgba(124, 58, 237, 0.04);
+  stroke: rgba(124, 58, 237, 0.18);
+} /* violet — Spec */
+.dag-phase.phase-B rect {
+  fill: rgba(59, 130, 246, 0.03);
+  stroke: rgba(59, 130, 246, 0.18);
+} /* blue — Build */
+.dag-phase.phase-C rect {
+  fill: rgba(34, 197, 94, 0.03);
+  stroke: rgba(34, 197, 94, 0.2);
+} /* green — QA */
+.dag-phase.phase-D rect {
+  fill: rgba(202, 138, 4, 0.03);
+  stroke: rgba(202, 138, 4, 0.2);
+} /* amber — Verify */
+.dag-phase.phase-E rect {
+  fill: rgba(22, 163, 74, 0.04);
+  stroke: rgba(22, 163, 74, 0.22);
+} /* lime-green — Done */
 .dag-phase .phase-label {
   font-size: 9px;
   font-family: ui-monospace, monospace;
@@ -454,7 +617,9 @@ section.dag h2 {
   fill: var(--surface-2);
   stroke: var(--hairline-strong);
   stroke-width: 1.5;
-  transition: fill 200ms ease, stroke 200ms ease;
+  transition:
+    fill 200ms ease,
+    stroke 200ms ease;
 }
 .dag-node.shape-hexagon path {
   fill: var(--canvas);
@@ -486,20 +651,25 @@ section.dag h2 {
 }
 .dag-node text {
   font-size: 11px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   fill: var(--ink-muted);
   text-anchor: middle;
   font-weight: 500;
 }
-.dag-node.active text { fill: var(--canvas); font-weight: 600; }
-.dag-node.shape-hexagon text { fill: var(--lime); }
+.dag-node.active text {
+  fill: var(--canvas);
+  font-weight: 600;
+}
+.dag-node.shape-hexagon text {
+  fill: var(--lime);
+}
 /* PR-J' (Candidate 4) — runtime badge under each node.
  * LangSmith / Langfuse / Phoenix per-step token+cost+latency convention,
  * compact monospace, dimmed so it reads as supplementary data not as
  * primary node identity. Recently-active actor's badge brightens. */
 .dag-node-badge {
   font-size: 9px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   fill: var(--ink-tertiary);
   text-anchor: middle;
   letter-spacing: 0.2px;
@@ -517,43 +687,92 @@ section.dag h2 {
   stroke-dasharray: 2 2;
   opacity: 0.7;
 }
-.dag-node.node-validator text { fill: var(--audit-fg); }
+.dag-node.node-validator text {
+  fill: var(--audit-fg);
+}
 .dag-edge {
   fill: none;
   stroke-width: 1.4;
 }
 /* Typed edges — semantics match src/reducer/index.ts (post PR-G) */
-.dag-edge.edge-flow      { stroke: var(--primary); opacity: 0.8; }
-.dag-edge.edge-respawn   { stroke: #3b82f6; stroke-dasharray: 6 3; opacity: 0.9; }
-.dag-edge.edge-rollback  { stroke: #d97706; stroke-dasharray: 5 3; opacity: 0.9; }
-.dag-edge.edge-terminal  { stroke: var(--lime); stroke-width: 1.8; opacity: 0.95; }
-.dag-edge.edge-audit     { stroke: var(--audit-fg); stroke-dasharray: 1 3; opacity: 0.65; }
-.dag-edge.edge-intervene { stroke: var(--ink-tertiary); stroke-dasharray: 1 3; opacity: 0.45; }
-.dag-edge.edge-resume    { stroke: #06b6d4; opacity: 0.85; }
+.dag-edge.edge-flow {
+  stroke: var(--primary);
+  opacity: 0.8;
+}
+.dag-edge.edge-respawn {
+  stroke: #3b82f6;
+  stroke-dasharray: 6 3;
+  opacity: 0.9;
+}
+.dag-edge.edge-rollback {
+  stroke: #d97706;
+  stroke-dasharray: 5 3;
+  opacity: 0.9;
+}
+.dag-edge.edge-terminal {
+  stroke: var(--lime);
+  stroke-width: 1.8;
+  opacity: 0.95;
+}
+.dag-edge.edge-audit {
+  stroke: var(--audit-fg);
+  stroke-dasharray: 1 3;
+  opacity: 0.65;
+}
+.dag-edge.edge-intervene {
+  stroke: var(--ink-tertiary);
+  stroke-dasharray: 1 3;
+  opacity: 0.45;
+}
+.dag-edge.edge-resume {
+  stroke: #06b6d4;
+  opacity: 0.85;
+}
 /* PR-J' — Datadog Service Map "throughput=thickness" + X-Ray "latency=color"
  * idiom. Untraversed edges keep their static styling above; once an event
  * actually flows through them this session the .edge-traversed class
  * brightens them and the per-edge stroke-width inline attribute (set by
  * renderDag) widens them. .edge-slow adds a red wash for avg > 5s. */
-.dag-edge-group.edge-traversed .dag-edge { opacity: 1; }
-.dag-edge-group.edge-slow .dag-edge { stroke: #dc2626 !important; }
+.dag-edge-group.edge-traversed .dag-edge {
+  opacity: 1;
+}
+.dag-edge-group.edge-slow .dag-edge {
+  stroke: #dc2626 !important;
+}
 .edge-count {
   font-size: 8px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   fill: var(--ink-subtle);
   text-anchor: middle;
   letter-spacing: 0.3px;
   pointer-events: none;
 }
 /* Arrowheads inherit per-type stroke via the marker definitions in JS. */
-.arrow-head { fill: currentColor; stroke: none; }
-.arrow-flow      { color: var(--primary); }
-.arrow-respawn   { color: #3b82f6; }
-.arrow-rollback  { color: #d97706; }
-.arrow-terminal  { color: var(--lime); }
-.arrow-audit     { color: var(--audit-fg); }
-.arrow-intervene { color: var(--ink-tertiary); }
-.arrow-resume    { color: #06b6d4; }
+.arrow-head {
+  fill: currentColor;
+  stroke: none;
+}
+.arrow-flow {
+  color: var(--primary);
+}
+.arrow-respawn {
+  color: #3b82f6;
+}
+.arrow-rollback {
+  color: #d97706;
+}
+.arrow-terminal {
+  color: var(--lime);
+}
+.arrow-audit {
+  color: var(--audit-fg);
+}
+.arrow-intervene {
+  color: var(--ink-tertiary);
+}
+.arrow-resume {
+  color: #06b6d4;
+}
 /* Edge labels — inline next to arc apex */
 .edge-label {
   font-size: 9px;
@@ -562,11 +781,23 @@ section.dag h2 {
   text-anchor: middle;
   pointer-events: none;
 }
-.edge-label-respawn  { fill: #3b82f6; }
-.edge-label-rollback { fill: #d97706; }
-.edge-label-terminal { fill: var(--lime); font-weight: 600; }
-.edge-label-resume   { fill: #06b6d4; }
-.edge-label-audit    { fill: var(--audit-fg); opacity: 0.85; }
+.edge-label-respawn {
+  fill: #3b82f6;
+}
+.edge-label-rollback {
+  fill: #d97706;
+}
+.edge-label-terminal {
+  fill: var(--lime);
+  font-weight: 600;
+}
+.edge-label-resume {
+  fill: #06b6d4;
+}
+.edge-label-audit {
+  fill: var(--audit-fg);
+  opacity: 0.85;
+}
 .dag-ripple {
   fill: none;
   stroke: var(--primary);
@@ -575,11 +806,21 @@ section.dag h2 {
   pointer-events: none;
 }
 @keyframes ripple-flow {
-  0%   { opacity: 0; stroke-dasharray: 0 200; }
-  20%  { opacity: 1; }
-  100% { opacity: 0; stroke-dasharray: 200 0; }
+  0% {
+    opacity: 0;
+    stroke-dasharray: 0 200;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    stroke-dasharray: 200 0;
+  }
 }
-.dag-ripple.flow { animation: ripple-flow 1500ms ease-out; }
+.dag-ripple.flow {
+  animation: ripple-flow 1500ms ease-out;
+}
 
 section.console-input {
   border-top: 1px solid var(--hairline);
@@ -587,20 +828,24 @@ section.console-input {
   padding: 10px 16px 14px;
 }
 .console-row {
-  display: flex; gap: 8px; align-items: center;
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
-.console-row input[type="text"] {
+.console-row input[type='text'] {
   flex: 1;
   background: var(--canvas);
   color: var(--ink);
   border: 1px solid var(--hairline);
   border-radius: var(--r-md);
   padding: 8px 12px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 13px;
   outline: none;
 }
-.console-row input[type="text"]:focus { border-color: var(--primary); }
+.console-row input[type='text']:focus {
+  border-color: var(--primary);
+}
 .console-row button {
   background: var(--primary);
   color: var(--ink);
@@ -611,10 +856,17 @@ section.console-input {
   font-weight: 500;
   cursor: pointer;
 }
-.console-row button:hover { background: var(--primary-hover); }
-.console-row button:disabled { opacity: 0.4; cursor: not-allowed; }
+.console-row button:hover {
+  background: var(--primary-hover);
+}
+.console-row button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .console-hints {
-  display: flex; gap: 6px; flex-wrap: wrap;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
   margin-top: 6px;
 }
 .console-hints button {
@@ -627,7 +879,10 @@ section.console-input {
   font-family: ui-monospace, monospace;
   cursor: pointer;
 }
-.console-hints button:hover { border-color: var(--primary); color: var(--ink); }
+.console-hints button:hover {
+  border-color: var(--primary);
+  color: var(--ink);
+}
 .console-feedback {
   font-size: 11px;
   color: var(--ink-subtle);
@@ -635,8 +890,12 @@ section.console-input {
   font-family: ui-monospace, monospace;
   min-height: 14px;
 }
-.console-feedback.ok { color: #5fcb7e; }
-.console-feedback.err { color: var(--audit-fg); }
+.console-feedback.ok {
+  color: #5fcb7e;
+}
+.console-feedback.err {
+  color: var(--audit-fg);
+}
 
 /* v3.4 Logs view (ArgoCD-inspired) */
 nav.view-tabs {
@@ -657,19 +916,32 @@ nav.view-tabs button {
   text-transform: uppercase;
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  transition: color 100ms ease, border-color 100ms ease;
+  transition:
+    color 100ms ease,
+    border-color 100ms ease;
 }
-nav.view-tabs button:hover { color: var(--ink-muted); }
+nav.view-tabs button:hover {
+  color: var(--ink-muted);
+}
 nav.view-tabs button.active {
   color: var(--ink);
   border-bottom-color: var(--primary);
 }
 
-.view-pane { display: none; flex: 1; min-height: 0; flex-direction: column; }
-.view-pane.active { display: flex; }
+.view-pane {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+.view-pane.active {
+  display: flex;
+}
 
 section.logs {
-  flex: 1; min-height: 0; overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
   background: var(--canvas);
   display: grid;
   grid-template-columns: 200px 1fr;
@@ -684,31 +956,45 @@ section.logs {
   border-left: 2px solid transparent;
   cursor: pointer;
   font-size: 12px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   color: var(--ink-muted);
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: background 60ms ease, border-color 60ms ease;
+  transition:
+    background 60ms ease,
+    border-color 60ms ease;
 }
-.logs-actor-row:hover { background: var(--surface-1); }
+.logs-actor-row:hover {
+  background: var(--surface-1);
+}
 .logs-actor-row.active {
   border-left-color: var(--primary);
   background: var(--surface-2);
   color: var(--ink);
 }
 .logs-actor-row .dot {
-  width: 6px; height: 6px; border-radius: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
   background: var(--ink-tertiary);
 }
 .logs-actor-row.live .dot {
   background: var(--lime);
   box-shadow: 0 0 6px var(--lime);
 }
-.logs-actor-row.errored .dot { background: var(--audit-fg); }
-.logs-pane { display: flex; flex-direction: column; min-height: 0; }
+.logs-actor-row.errored .dot {
+  background: var(--audit-fg);
+}
+.logs-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 .logs-toolbar {
-  display: flex; gap: 8px; align-items: center;
+  display: flex;
+  gap: 8px;
+  align-items: center;
   padding: 8px 14px;
   border-bottom: 1px solid var(--hairline);
   background: var(--surface-1);
@@ -716,7 +1002,7 @@ section.logs {
   color: var(--ink-subtle);
   flex-wrap: wrap;
 }
-.logs-toolbar input[type="text"] {
+.logs-toolbar input[type='text'] {
   flex: 1 1 160px;
   min-width: 80px;
   max-width: 320px;
@@ -730,8 +1016,15 @@ section.logs {
   outline: none;
   text-overflow: ellipsis;
 }
-.logs-toolbar input[type="text"]:focus { border-color: var(--primary); }
-.logs-toolbar label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+.logs-toolbar input[type='text']:focus {
+  border-color: var(--primary);
+}
+.logs-toolbar label {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  cursor: pointer;
+}
 .logs-toolbar button {
   background: var(--surface-2);
   color: var(--ink-muted);
@@ -742,7 +1035,10 @@ section.logs {
   font-family: ui-monospace, monospace;
   cursor: pointer;
 }
-.logs-toolbar button:hover { color: var(--ink); border-color: var(--primary); }
+.logs-toolbar button:hover {
+  color: var(--ink);
+  border-color: var(--primary);
+}
 
 /*
  * v0.5 PR-6 — connection-status pill (5 states). Datadog/Honeycomb live-tail
@@ -756,23 +1052,31 @@ section.logs {
   padding: 3px 9px;
   border-radius: 999px;
   font-size: 10.5px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   letter-spacing: 0.2px;
   text-transform: uppercase;
   border: 1px solid transparent;
   flex: 0 0 auto;
 }
 .logs-conn-dot {
-  width: 7px; height: 7px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex: 0 0 auto;
 }
-.logs-conn-label { font-weight: 600; }
-.logs-conn-msg { font-weight: 400; opacity: 0.85; text-transform: none; letter-spacing: 0; }
+.logs-conn-label {
+  font-weight: 600;
+}
+.logs-conn-msg {
+  font-weight: 400;
+  opacity: 0.85;
+  text-transform: none;
+  letter-spacing: 0;
+}
 .logs-conn-status.state-idle,
 .logs-conn-status.state-awaiting-actor {
   color: var(--ink-tertiary);
-  background: rgba(120, 120, 120, 0.10);
+  background: rgba(120, 120, 120, 0.1);
   border-color: rgba(120, 120, 120, 0.25);
 }
 .logs-conn-status.state-idle .logs-conn-dot,
@@ -781,8 +1085,8 @@ section.logs {
 }
 .logs-conn-status.state-connecting {
   color: #f59e0b;
-  background: rgba(245, 158, 11, 0.10);
-  border-color: rgba(245, 158, 11, 0.30);
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.3);
 }
 .logs-conn-status.state-connecting .logs-conn-dot {
   background: #f59e0b;
@@ -790,13 +1094,20 @@ section.logs {
   box-shadow: 0 0 6px rgba(245, 158, 11, 0.55);
 }
 @keyframes logs-conn-spin {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(0.6); opacity: 0.4; }
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
 }
 .logs-conn-status.state-streaming {
   color: #10b981;
-  background: rgba(16, 185, 129, 0.10);
-  border-color: rgba(16, 185, 129, 0.30);
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.3);
 }
 .logs-conn-status.state-streaming .logs-conn-dot {
   background: #10b981;
@@ -804,13 +1115,18 @@ section.logs {
   animation: logs-conn-pulse 2s ease-in-out infinite;
 }
 @keyframes logs-conn-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 .logs-conn-status.state-stalled {
   color: #f59e0b;
   background: rgba(245, 158, 11, 0.13);
-  border-color: rgba(245, 158, 11, 0.40);
+  border-color: rgba(245, 158, 11, 0.4);
 }
 .logs-conn-status.state-stalled .logs-conn-dot {
   background: #f59e0b;
@@ -837,7 +1153,9 @@ section.logs {
   text-transform: none;
   letter-spacing: 0;
 }
-.logs-conn-retry:hover { background: rgba(255, 255, 255, 0.06); }
+.logs-conn-retry:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
 
 /*
  * v0.5 PR-6 — "Jump to live" floating button. GitHub Actions / ArgoCD pattern:
@@ -853,15 +1171,23 @@ section.logs {
   border: 1px solid var(--primary-hover, var(--primary));
   border-radius: 999px;
   padding: 6px 14px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 11px;
   cursor: pointer;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
   z-index: 5;
 }
-.logs-jump-live:hover { filter: brightness(1.08); }
-.logs-jump-live-arrow { display: inline-block; margin-right: 4px; font-weight: 700; }
-.logs-pane { position: relative; }
+.logs-jump-live:hover {
+  filter: brightness(1.08);
+}
+.logs-jump-live-arrow {
+  display: inline-block;
+  margin-right: 4px;
+  font-weight: 700;
+}
+.logs-pane {
+  position: relative;
+}
 
 /*
  * v0.5 PR-6 — empty-state copy variants (Supabase Logs Explorer pattern,
@@ -869,28 +1195,54 @@ section.logs {
  * can tell at a glance whether they're loading, waiting on a spawn, or
  * disconnected.
  */
-.logs-empty.logs-empty--loading { color: #f59e0b; }
-.logs-empty.logs-empty--never-spawned { color: var(--ink-muted); }
-.logs-empty.logs-empty--never-spawned::before { content: "🌱 "; }
-.logs-empty.logs-empty--waiting { color: #10b981; }
-.logs-empty.logs-empty--waiting::before { content: "✓ "; }
-.logs-empty.logs-empty--errored { color: #ef4444; }
-.logs-empty.logs-empty--errored::before { content: "⚠ "; }
+.logs-empty.logs-empty--loading {
+  color: #f59e0b;
+}
+.logs-empty.logs-empty--never-spawned {
+  color: var(--ink-muted);
+}
+.logs-empty.logs-empty--never-spawned::before {
+  content: '🌱 ';
+}
+.logs-empty.logs-empty--waiting {
+  color: #10b981;
+}
+.logs-empty.logs-empty--waiting::before {
+  content: '✓ ';
+}
+.logs-empty.logs-empty--errored {
+  color: #ef4444;
+}
+.logs-empty.logs-empty--errored::before {
+  content: '⚠ ';
+}
 
 .logs-content {
-  flex: 1; min-height: 0; overflow: auto;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   padding: 12px 16px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 11.5px;
   line-height: 1.45;
   color: var(--ink-muted);
   white-space: pre;
   background: var(--canvas);
 }
-.logs-content .log-line { padding: 0 4px; border-radius: 2px; }
-.logs-content .log-line.stderr { color: var(--audit-fg); }
-.logs-content .log-line.section { color: var(--lime); font-weight: 600; }
-.logs-content .log-line.has-match { background: rgba(255, 159, 28, 0.06); }
+.logs-content .log-line {
+  padding: 0 4px;
+  border-radius: 2px;
+}
+.logs-content .log-line.stderr {
+  color: var(--audit-fg);
+}
+.logs-content .log-line.section {
+  color: var(--lime);
+  font-weight: 600;
+}
+.logs-content .log-line.has-match {
+  background: rgba(255, 159, 28, 0.06);
+}
 
 /* IDE-style grep substring highlight (Logs / Transcript / Live feed) */
 mark.grep-hit {
@@ -925,8 +1277,13 @@ mark.grep-hit.active {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.grep-controls .grep-count.has-hits { color: var(--accent-grep); }
-.grep-controls .grep-count.no-hits { color: var(--ink-tertiary); opacity: 0.5; }
+.grep-controls .grep-count.has-hits {
+  color: var(--accent-grep);
+}
+.grep-controls .grep-count.no-hits {
+  color: var(--ink-tertiary);
+  opacity: 0.5;
+}
 .grep-controls button.grep-nav {
   background: var(--surface-2);
   color: var(--ink-muted);
@@ -989,7 +1346,7 @@ section.waterfall {
   padding: 8px 16px;
   border-bottom: 1px solid var(--hairline);
   font-size: 11px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   color: var(--ink-muted);
   background: var(--surface-1);
 }
@@ -998,8 +1355,13 @@ section.waterfall {
   letter-spacing: 0.4px;
   color: var(--ink-tertiary);
 }
-.waterfall-toolbar-hint { color: var(--ink-tertiary); }
-.waterfall-toolbar-axis { color: var(--ink-muted); white-space: nowrap; }
+.waterfall-toolbar-hint {
+  color: var(--ink-tertiary);
+}
+.waterfall-toolbar-axis {
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
 .waterfall-body {
   flex: 1 1 auto;
   overflow-y: auto;
@@ -1019,10 +1381,12 @@ section.waterfall {
   gap: 8px;
   font-size: 11px;
   color: var(--ink-muted);
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
 }
 .waterfall-lane-label .glyph {
-  width: 8px; height: 8px; border-radius: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 .waterfall-lane-track {
   position: relative;
@@ -1038,7 +1402,9 @@ section.waterfall {
   border-radius: 3px;
   cursor: pointer;
   overflow: hidden;
-  transition: filter 80ms ease, outline-color 80ms ease;
+  transition:
+    filter 80ms ease,
+    outline-color 80ms ease;
   outline: 1px solid transparent;
   min-width: 2px;
 }
@@ -1052,7 +1418,7 @@ section.waterfall {
   left: 6px;
   transform: translateY(-50%);
   font-size: 10px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   color: var(--ink);
   white-space: nowrap;
   pointer-events: none;
@@ -1075,8 +1441,12 @@ section.waterfall {
   animation: waterfall-in-flight 1.6s linear infinite;
 }
 @keyframes waterfall-in-flight {
-  0% { background-position: 0 0; }
-  100% { background-position: 24px 0; }
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 24px 0;
+  }
 }
 .waterfall-tick {
   position: absolute;
@@ -1100,7 +1470,7 @@ section.waterfall {
   border-radius: var(--r-sm);
   padding: 6px 10px;
   font-size: 11px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   white-space: nowrap;
   pointer-events: none;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
@@ -1121,9 +1491,15 @@ section.waterfall {
   padding: 0 16px;
   border-right: 1px solid var(--hairline);
   height: 100%;
-  display: flex; align-items: center; gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.lane-label .glyph { width: 8px; height: 8px; border-radius: 50%; }
+.lane-label .glyph {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
 .lane-events {
   position: relative;
   height: 100%;
@@ -1137,19 +1513,31 @@ section.waterfall {
 .evt {
   display: inline-block;
   padding: 4px 8px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 11px;
   color: var(--ink);
   background: var(--surface-1);
   border: 1px solid var(--hairline);
   border-radius: var(--r-sm);
   cursor: pointer;
-  transition: transform 80ms ease, border-color 80ms ease, background 80ms ease;
+  transition:
+    transform 80ms ease,
+    border-color 80ms ease,
+    background 80ms ease;
   flex: 0 0 auto;
 }
-.evt:hover { border-color: var(--primary); background: var(--surface-2); }
-.evt.deterministic { border-color: var(--lime); }
-.evt.audit { border-color: var(--audit-fg); background: var(--audit-bg); color: var(--audit-fg); }
+.evt:hover {
+  border-color: var(--primary);
+  background: var(--surface-2);
+}
+.evt.deterministic {
+  border-color: var(--lime);
+}
+.evt.audit {
+  border-color: var(--audit-fg);
+  background: var(--audit-bg);
+  color: var(--audit-fg);
+}
 /*
  * v0.5 PR-7 — fresh animation now slides in from the LEFT (events
  * accumulate left-to-right chronologically; the newest chip should
@@ -1157,11 +1545,22 @@ section.waterfall {
  * User feedback: opacity-fade flicker on session switch should target
  * the same left edge for consistency with chronological reading.
  */
-.evt.fresh { animation: fresh 1200ms ease; }
+.evt.fresh {
+  animation: fresh 1200ms ease;
+}
 @keyframes fresh {
-  0% { transform: translateX(-6px); opacity: 0; border-color: var(--primary-hover); }
-  60% { transform: translateX(0); opacity: 1; }
-  100% { border-color: var(--hairline); }
+  0% {
+    transform: translateX(-6px);
+    opacity: 0;
+    border-color: var(--primary-hover);
+  }
+  60% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    border-color: var(--hairline);
+  }
 }
 
 /*
@@ -1211,7 +1610,7 @@ section.waterfall {
   border: 1px solid var(--hairline);
   font-size: 10px;
   font-weight: 700;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1243,7 +1642,7 @@ section.waterfall {
   margin-bottom: 6px;
 }
 .detail-group-badge {
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 10px;
   letter-spacing: 0.4px;
   color: var(--primary);
@@ -1260,7 +1659,11 @@ section.waterfall {
   margin-bottom: 6px;
   letter-spacing: 0.2px;
 }
-.detail-thread-nav { display: flex; gap: 6px; margin-bottom: 6px; }
+.detail-thread-nav {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
 .detail-nav-btn {
   background: var(--surface-2);
   border: 1px solid var(--hairline);
@@ -1270,9 +1673,14 @@ section.waterfall {
   font-size: 10px;
   font-family: ui-monospace, monospace;
   cursor: pointer;
-  transition: border-color 80ms ease, color 80ms ease;
+  transition:
+    border-color 80ms ease,
+    color 80ms ease;
 }
-.detail-nav-btn:hover { color: var(--ink); border-color: var(--primary); }
+.detail-nav-btn:hover {
+  color: var(--ink);
+  border-color: var(--primary);
+}
 
 /* Tag pills (Honeycomb attribute facet pattern) */
 .detail-tags {
@@ -1283,7 +1691,7 @@ section.waterfall {
 }
 .detail-tag {
   display: inline-flex;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 9.5px;
   border: 1px solid var(--hairline);
   border-radius: 3px;
@@ -1302,8 +1710,12 @@ section.waterfall {
   padding: 2px 6px;
   letter-spacing: 0.2px;
 }
-.detail-tag.tag-deterministic .detail-tag-val { color: var(--lime); }
-.detail-tag.tag-cross-provider .detail-tag-val { color: #f59e0b; }
+.detail-tag.tag-deterministic .detail-tag-val {
+  color: var(--lime);
+}
+.detail-tag.tag-cross-provider .detail-tag-val {
+  color: #f59e0b;
+}
 
 /* Audit banner — Datadog "anomaly" surface */
 .detail-audit-banner {
@@ -1319,7 +1731,9 @@ section.waterfall {
 }
 
 /* Resource bar (token / cost / latency breakdown) */
-.detail-resource-bar { margin-bottom: 10px; }
+.detail-resource-bar {
+  margin-bottom: 10px;
+}
 .rbar {
   display: flex;
   height: 14px;
@@ -1328,7 +1742,12 @@ section.waterfall {
   background: var(--surface-2);
   border: 1px solid var(--hairline);
 }
-.rbar-empty { justify-content: center; align-items: center; font-size: 9px; color: var(--ink-tertiary); }
+.rbar-empty {
+  justify-content: center;
+  align-items: center;
+  font-size: 9px;
+  color: var(--ink-tertiary);
+}
 .rbar-seg {
   display: flex;
   align-items: center;
@@ -1341,10 +1760,20 @@ section.waterfall {
   overflow: hidden;
   min-width: 0;
 }
-.rbar-seg-label { padding: 0 4px; }
-.rbar-cache { background: color-mix(in oklab, var(--lime) 70%, transparent); color: var(--bg, #0b0c0d); }
-.rbar-in    { background: color-mix(in oklab, var(--primary) 80%, transparent); }
-.rbar-out   { background: color-mix(in oklab, #06b6d4 75%, transparent); color: var(--bg, #0b0c0d); }
+.rbar-seg-label {
+  padding: 0 4px;
+}
+.rbar-cache {
+  background: color-mix(in oklab, var(--lime) 70%, transparent);
+  color: var(--bg, #0b0c0d);
+}
+.rbar-in {
+  background: color-mix(in oklab, var(--primary) 80%, transparent);
+}
+.rbar-out {
+  background: color-mix(in oklab, #06b6d4 75%, transparent);
+  color: var(--bg, #0b0c0d);
+}
 .rbar-meta {
   display: flex;
   gap: 14px;
@@ -1353,7 +1782,11 @@ section.waterfall {
   font-size: 10px;
   color: var(--ink-muted);
 }
-.rbar-meta-cell { display: inline-flex; gap: 5px; align-items: baseline; }
+.rbar-meta-cell {
+  display: inline-flex;
+  gap: 5px;
+  align-items: baseline;
+}
 .rbar-meta-k {
   font-size: 8.5px;
   text-transform: uppercase;
@@ -1386,7 +1819,10 @@ aside.detail h3 {
   text-transform: none;
   letter-spacing: 0;
 }
-.detail-copy-btn:hover { color: var(--ink); border-color: var(--primary); }
+.detail-copy-btn:hover {
+  color: var(--ink);
+  border-color: var(--primary);
+}
 
 .detail-thread {
   font-size: 11px;
@@ -1418,8 +1854,14 @@ aside.detail h3 {
   border-bottom: 1px solid var(--hairline);
   padding-bottom: 6px;
 }
-.spread-toolbar-label { font-weight: 600; color: var(--ink); }
-.spread-toolbar-hint { color: var(--ink-tertiary); font-size: 9.5px; }
+.spread-toolbar-label {
+  font-weight: 600;
+  color: var(--ink);
+}
+.spread-toolbar-hint {
+  color: var(--ink-tertiary);
+  font-size: 9.5px;
+}
 .detail-spread-cards {
   display: flex;
   gap: 12px;
@@ -1482,7 +1924,10 @@ aside.detail h3 {
   font-family: ui-monospace, monospace;
   cursor: pointer;
 }
-.spread-card-copy:hover { color: var(--ink); border-color: var(--primary); }
+.spread-card-copy:hover {
+  color: var(--ink);
+  border-color: var(--primary);
+}
 .spread-card-audit {
   background: color-mix(in oklab, var(--audit-fg) 14%, transparent);
   color: var(--audit-fg);
@@ -1551,21 +1996,51 @@ aside.detail h3 {
 .lane-events.session-switch-cascade .evt {
   animation: evt-cascade 240ms ease both;
 }
-.lane-events.session-switch-cascade .evt:nth-child(1)  { animation-delay: 0ms; }
-.lane-events.session-switch-cascade .evt:nth-child(2)  { animation-delay: 12ms; }
-.lane-events.session-switch-cascade .evt:nth-child(3)  { animation-delay: 24ms; }
-.lane-events.session-switch-cascade .evt:nth-child(4)  { animation-delay: 36ms; }
-.lane-events.session-switch-cascade .evt:nth-child(5)  { animation-delay: 48ms; }
-.lane-events.session-switch-cascade .evt:nth-child(6)  { animation-delay: 60ms; }
-.lane-events.session-switch-cascade .evt:nth-child(7)  { animation-delay: 72ms; }
-.lane-events.session-switch-cascade .evt:nth-child(8)  { animation-delay: 84ms; }
-.lane-events.session-switch-cascade .evt:nth-child(9)  { animation-delay: 96ms; }
-.lane-events.session-switch-cascade .evt:nth-child(10) { animation-delay: 108ms; }
-.lane-events.session-switch-cascade .evt:nth-child(11) { animation-delay: 120ms; }
-.lane-events.session-switch-cascade .evt:nth-child(12) { animation-delay: 130ms; }
+.lane-events.session-switch-cascade .evt:nth-child(1) {
+  animation-delay: 0ms;
+}
+.lane-events.session-switch-cascade .evt:nth-child(2) {
+  animation-delay: 12ms;
+}
+.lane-events.session-switch-cascade .evt:nth-child(3) {
+  animation-delay: 24ms;
+}
+.lane-events.session-switch-cascade .evt:nth-child(4) {
+  animation-delay: 36ms;
+}
+.lane-events.session-switch-cascade .evt:nth-child(5) {
+  animation-delay: 48ms;
+}
+.lane-events.session-switch-cascade .evt:nth-child(6) {
+  animation-delay: 60ms;
+}
+.lane-events.session-switch-cascade .evt:nth-child(7) {
+  animation-delay: 72ms;
+}
+.lane-events.session-switch-cascade .evt:nth-child(8) {
+  animation-delay: 84ms;
+}
+.lane-events.session-switch-cascade .evt:nth-child(9) {
+  animation-delay: 96ms;
+}
+.lane-events.session-switch-cascade .evt:nth-child(10) {
+  animation-delay: 108ms;
+}
+.lane-events.session-switch-cascade .evt:nth-child(11) {
+  animation-delay: 120ms;
+}
+.lane-events.session-switch-cascade .evt:nth-child(12) {
+  animation-delay: 130ms;
+}
 @keyframes evt-cascade {
-  0%   { opacity: 0; transform: translateX(-4px); }
-  100% { opacity: 1; transform: translateX(0); }
+  0% {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 /*
@@ -1576,18 +2051,24 @@ aside.detail h3 {
  * remainder. Datadog/Linear right-rail convention.
  */
 aside.detail {
-  position: fixed; right: 0; top: 0; bottom: 0; width: var(--detail-w, 420px);
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--detail-w, 420px);
   background: var(--surface-1);
   border-left: 1px solid var(--hairline);
   display: flex;
   flex-direction: column;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 12px;
   color: var(--ink-muted);
   transform: translateX(100%);
   transition: transform 140ms ease;
 }
-aside.detail.open { transform: translateX(0); }
+aside.detail.open {
+  transform: translateX(0);
+}
 aside.detail .detail-header {
   flex: 0 0 auto;
   position: sticky;
@@ -1609,7 +2090,9 @@ aside.detail h3 {
   color: var(--ink-subtle);
   margin-bottom: 12px;
 }
-aside.detail .detail-header h3 { margin-bottom: 8px; }
+aside.detail .detail-header h3 {
+  margin-bottom: 8px;
+}
 aside.detail pre {
   background: var(--canvas);
   border: 1px solid var(--hairline);
@@ -1624,12 +2107,20 @@ aside.detail .close {
   position: absolute;
   top: 8px;
   right: 12px;
-  width: 26px; height: 26px; border-radius: var(--r-sm);
-  border: 1px solid var(--hairline); background: var(--canvas); color: var(--ink-muted);
-  cursor: pointer; font-size: 14px;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline);
+  background: var(--canvas);
+  color: var(--ink-muted);
+  cursor: pointer;
+  font-size: 14px;
   z-index: 6;
 }
-aside.detail .close:hover { color: var(--ink); border-color: var(--primary); }
+aside.detail .close:hover {
+  color: var(--ink);
+  border-color: var(--primary);
+}
 
 /*
  * v0.5 PR-9: cross-actor event paginator. Lets the user step through
@@ -1649,7 +2140,7 @@ aside.detail .close:hover { color: var(--ink); border-color: var(--primary); }
   border: 1px solid var(--hairline);
   border-radius: var(--r-sm);
   font-size: 11px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   color: var(--ink-muted);
 }
 .detail-event-btn {
@@ -1665,9 +2156,19 @@ aside.detail .close:hover { color: var(--ink); border-color: var(--primary); }
   border-color: var(--primary);
   color: var(--ink);
 }
-.detail-event-btn[disabled] { opacity: 0.35; cursor: not-allowed; }
-.detail-event-pos { flex: 1 1 auto; text-align: center; color: var(--ink); }
-.detail-event-pos strong { color: var(--primary); font-weight: 700; }
+.detail-event-btn[disabled] {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.detail-event-pos {
+  flex: 1 1 auto;
+  text-align: center;
+  color: var(--ink);
+}
+.detail-event-pos strong {
+  color: var(--primary);
+  font-weight: 700;
+}
 
 section.scorecard {
   border-top: 1px solid var(--hairline);
@@ -1690,7 +2191,7 @@ section.scorecard {
   color: var(--ink-subtle);
 }
 .dim .value {
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 18px;
   color: var(--ink);
   margin-top: 4px;
@@ -1709,11 +2210,13 @@ section.scorecard {
   color: var(--audit-fg);
   padding: 10px 24px;
   font-size: 12px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   border-bottom: 1px solid var(--audit-fg);
   letter-spacing: 0.2px;
 }
-#audit-banner.show { display: block; }
+#audit-banner.show {
+  display: block;
+}
 
 /*
  * v0.5 welcome banner — first-visit only, dismissible. Read-only observation
@@ -1730,7 +2233,10 @@ section.scorecard {
   line-height: 1.5;
   color: var(--ink);
 }
-.welcome-banner-body { flex: 1 1 auto; min-width: 0; }
+.welcome-banner-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .welcome-banner-title {
   display: inline-block;
   font-weight: 600;
@@ -1738,12 +2244,14 @@ section.scorecard {
   margin-right: 8px;
   letter-spacing: 0.2px;
 }
-.welcome-banner-text { color: var(--ink-muted); }
+.welcome-banner-text {
+  color: var(--ink-muted);
+}
 .welcome-banner-text code {
   background: rgba(0, 0, 0, 0.25);
   padding: 1px 6px;
   border-radius: 3px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 11px;
   color: var(--ink);
 }
@@ -1758,7 +2266,9 @@ section.scorecard {
   padding: 0 4px;
   transition: color 120ms ease;
 }
-.welcome-banner-close:hover { color: var(--ink); }
+.welcome-banner-close:hover {
+  color: var(--ink);
+}
 
 /*
  * v0.5 PR-5 — connection-state pill. Sticky-top with red pulse so the user
@@ -1775,7 +2285,7 @@ section.scorecard {
   color: #e04848;
   padding: 8px 24px;
   font-size: 12px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   letter-spacing: 0.2px;
 }
 .conn-state-dot {
@@ -1788,10 +2298,17 @@ section.scorecard {
   flex: 0 0 auto;
 }
 @keyframes conn-state-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
-.conn-state-text { flex: 1 1 auto; }
+.conn-state-text {
+  flex: 1 1 auto;
+}
 .conn-state-retry {
   background: rgba(224, 72, 72, 0.15);
   color: #e04848;
@@ -1801,7 +2318,9 @@ section.scorecard {
   font-size: 11px;
   font-family: inherit;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
 }
 .conn-state-retry:hover {
   background: rgba(224, 72, 72, 0.3);
@@ -1833,12 +2352,17 @@ section.scorecard {
   color: var(--ink-muted);
   border: 1px solid var(--hairline);
   border-radius: var(--r-sm);
-  width: 22px; height: 22px;
-  font-size: 14px; line-height: 1;
+  width: 22px;
+  height: 22px;
+  font-size: 14px;
+  line-height: 1;
   cursor: pointer;
   padding: 0;
 }
-.icon-btn:hover { color: var(--ink); border-color: var(--primary); }
+.icon-btn:hover {
+  color: var(--ink);
+  border-color: var(--primary);
+}
 #new-session-form {
   padding: 8px 16px 12px;
   border-bottom: 1px solid var(--hairline);
@@ -1855,8 +2379,14 @@ section.scorecard {
   outline: none;
   margin-bottom: 6px;
 }
-#new-session-goal:focus { border-color: var(--primary); }
-.new-session-row { display: flex; gap: 4px; align-items: center; }
+#new-session-goal:focus {
+  border-color: var(--primary);
+}
+.new-session-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
 .adapter-pick-label {
   font-size: 10px;
   color: var(--ink-tertiary);
@@ -1893,19 +2423,26 @@ section.scorecard {
 }
 .session-row .row-close {
   position: absolute;
-  top: 6px; right: 8px;
+  top: 6px;
+  right: 8px;
   background: transparent;
   border: none;
   color: var(--ink-tertiary);
-  font-size: 14px; line-height: 1;
+  font-size: 14px;
+  line-height: 1;
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 3px;
   opacity: 0;
   transition: opacity 60ms ease;
 }
-.session-row:hover .row-close { opacity: 1; }
-.session-row .row-close:hover { color: var(--audit-fg); background: var(--surface-2); }
+.session-row:hover .row-close {
+  opacity: 1;
+}
+.session-row .row-close:hover {
+  color: var(--audit-fg);
+  background: var(--surface-2);
+}
 /* PR-G7-B — resume button. Sits to the left of the close ×, only on resumable
  * sessions. Uses --primary so it reads as an action, not a destructive op. */
 .session-row .row-resume {
@@ -1924,7 +2461,9 @@ section.scorecard {
   transition: opacity 60ms ease;
   font-weight: 600;
 }
-.session-row:hover .row-resume { opacity: 1; }
+.session-row:hover .row-resume {
+  opacity: 1;
+}
 .session-row .row-resume:hover {
   color: var(--ink);
   background: color-mix(in oklab, var(--primary) 30%, transparent);
@@ -1953,7 +2492,9 @@ section.scorecard {
   transition: opacity 60ms ease;
   font-weight: 600;
 }
-.session-row:hover .row-cancel { opacity: 1; }
+.session-row:hover .row-cancel {
+  opacity: 1;
+}
 .session-row .row-cancel:hover {
   color: var(--ink);
   background: color-mix(in oklab, var(--audit-fg) 30%, transparent);
@@ -1999,20 +2540,24 @@ section.scorecard {
   padding: 6px 12px 6px 0;
   border-right: 1px solid var(--hairline);
 }
-.sc-composite.sc-empty { color: var(--ink-tertiary); }
+.sc-composite.sc-empty {
+  color: var(--ink-tertiary);
+}
 .sc-headline {
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 22px;
   font-weight: 600;
   color: var(--ink);
   letter-spacing: 0.4px;
   line-height: 1;
 }
-.sc-composite.sc-empty .sc-headline { color: var(--ink-tertiary); }
+.sc-composite.sc-empty .sc-headline {
+  color: var(--ink-tertiary);
+}
 .sc-verdict-pill {
   display: inline-block;
   align-self: flex-start;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 9.5px;
   font-weight: 600;
   text-transform: uppercase;
@@ -2021,23 +2566,50 @@ section.scorecard {
   border-radius: 999px;
   border: 1px solid currentColor;
 }
-.sc-verdict-pass    { color: var(--lime); background: color-mix(in oklab, var(--lime) 15%, transparent); }
-.sc-verdict-partial { color: #f59e0b; background: color-mix(in oklab, #f59e0b 15%, transparent); }
+.sc-verdict-pass {
+  color: var(--lime);
+  background: color-mix(in oklab, var(--lime) 15%, transparent);
+}
+.sc-verdict-partial {
+  color: #f59e0b;
+  background: color-mix(in oklab, #f59e0b 15%, transparent);
+}
 .sc-verdict-fail,
-.sc-verdict-reject  { color: #dc2626; background: color-mix(in oklab, #dc2626 15%, transparent); }
-.sc-verdict-pending { color: var(--ink-tertiary); background: var(--surface-2); border-color: var(--hairline); }
+.sc-verdict-reject {
+  color: #dc2626;
+  background: color-mix(in oklab, #dc2626 15%, transparent);
+}
+.sc-verdict-pending {
+  color: var(--ink-tertiary);
+  background: var(--surface-2);
+  border-color: var(--hairline);
+}
 .sc-delta {
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 10px;
   letter-spacing: 0.3px;
 }
-.sc-delta-up   { color: var(--lime); }
-.sc-delta-down { color: #f59e0b; }
-.sc-delta-label { color: var(--ink-tertiary); margin-left: 2px; }
+.sc-delta-up {
+  color: var(--lime);
+}
+.sc-delta-down {
+  color: #f59e0b;
+}
+.sc-delta-label {
+  color: var(--ink-tertiary);
+  margin-left: 2px;
+}
 
 /* ── Radar (CourtEval spider plot) ──────────────────────────────────── */
-.sc-radar { display: flex; align-items: center; justify-content: center; }
-.sc-radar-svg { width: 80px; height: 80px; }
+.sc-radar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sc-radar-svg {
+  width: 80px;
+  height: 80px;
+}
 .sc-radar-grid {
   fill: none;
   stroke: var(--hairline);
@@ -2051,7 +2623,7 @@ section.scorecard {
 }
 .sc-radar-axis-label {
   font-size: 7.5px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   fill: var(--ink-tertiary);
   text-anchor: middle;
   letter-spacing: 0.2px;
@@ -2075,12 +2647,14 @@ section.scorecard {
   grid-template-columns: 26px 88px 1fr 36px 38px auto;
   align-items: center;
   gap: 8px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 10px;
   color: var(--ink);
   min-height: 18px;
 }
-.sc-row-empty .sc-row-bar-fill { background: var(--hairline); }
+.sc-row-empty .sc-row-bar-fill {
+  background: var(--hairline);
+}
 .sc-row-key {
   font-weight: 600;
   color: var(--ink-muted);
@@ -2101,7 +2675,11 @@ section.scorecard {
 .sc-row-bar-fill {
   position: absolute;
   inset: 0 auto 0 0;
-  background: linear-gradient(90deg, var(--primary) 0%, color-mix(in oklab, var(--lime) 60%, var(--primary)) 100%);
+  background: linear-gradient(
+    90deg,
+    var(--primary) 0%,
+    color-mix(in oklab, var(--lime) 60%, var(--primary)) 100%
+  );
   transition: width 220ms ease;
 }
 .sc-row-value {
@@ -2125,9 +2703,18 @@ section.scorecard {
   background: var(--surface-2);
   border: 1px solid var(--hairline);
 }
-.sc-row-source.src-llm  { color: var(--primary); border-color: color-mix(in oklab, var(--primary) 50%, var(--hairline)); }
-.sc-row-source.src-qa   { color: var(--lime);    border-color: color-mix(in oklab, var(--lime) 50%, var(--hairline)); }
-.sc-row-source.src-auto { color: #f59e0b;        border-color: color-mix(in oklab, #f59e0b 50%, var(--hairline)); }
+.sc-row-source.src-llm {
+  color: var(--primary);
+  border-color: color-mix(in oklab, var(--primary) 50%, var(--hairline));
+}
+.sc-row-source.src-qa {
+  color: var(--lime);
+  border-color: color-mix(in oklab, var(--lime) 50%, var(--hairline));
+}
+.sc-row-source.src-auto {
+  color: #f59e0b;
+  border-color: color-mix(in oklab, #f59e0b 50%, var(--hairline));
+}
 .sc-row-trail {
   font-size: 9px;
   color: var(--audit-fg);
@@ -2140,9 +2727,16 @@ section.scorecard {
 }
 
 /* v3.5 — Output (artifact iframe) tab */
-section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+section.output {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 .output-toolbar {
-  display: flex; gap: 8px; align-items: center;
+  display: flex;
+  gap: 8px;
+  align-items: center;
   padding: 8px 14px;
   border-bottom: 1px solid var(--hairline);
   background: var(--surface-1);
@@ -2169,14 +2763,19 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   font-family: ui-monospace, monospace;
   cursor: pointer;
 }
-.output-toolbar button:hover { color: var(--ink); border-color: var(--primary); }
+.output-toolbar button:hover {
+  color: var(--ink);
+  border-color: var(--primary);
+}
 .output-frame-wrap {
-  flex: 1; min-height: 0;
+  flex: 1;
+  min-height: 0;
   background: #000;
   position: relative;
 }
 .output-frame-wrap iframe {
-  width: 100%; height: 100%;
+  width: 100%;
+  height: 100%;
   border: none;
   background: #fff;
 }
@@ -2211,7 +2810,7 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   flex: 1;
   overflow-y: auto;
   padding: 6px 14px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 11px;
   line-height: 1.55;
 }
@@ -2237,7 +2836,9 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   border-top: 1px solid var(--hairline);
 }
 .console-feed-toolbar {
-  display: flex; gap: 8px; align-items: center;
+  display: flex;
+  gap: 8px;
+  align-items: center;
   padding: 6px 14px;
   border-bottom: 1px solid var(--hairline);
   background: var(--surface-1);
@@ -2247,8 +2848,21 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   letter-spacing: 0.4px;
   flex-wrap: wrap;
 }
-.console-feed-title { color: var(--ink-muted); flex: 0 0 auto; }
-.console-feed-status { color: var(--ink-tertiary); flex: 1 1 80px; min-width: 0; font-family: ui-monospace, monospace; text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.console-feed-title {
+  color: var(--ink-muted);
+  flex: 0 0 auto;
+}
+.console-feed-status {
+  color: var(--ink-tertiary);
+  flex: 1 1 80px;
+  min-width: 0;
+  font-family: ui-monospace, monospace;
+  text-transform: none;
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .feed-grep-input {
   flex: 0 1 140px;
   min-width: 80px;
@@ -2264,7 +2878,9 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   outline: none;
   text-overflow: ellipsis;
 }
-.feed-grep-input:focus { border-color: var(--primary); }
+.feed-grep-input:focus {
+  border-color: var(--primary);
+}
 .ghost-btn {
   background: var(--surface-2);
   color: var(--ink-muted);
@@ -2277,13 +2893,19 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
-.ghost-btn:hover { color: var(--ink); border-color: var(--primary); }
-.ghost-btn.paused { color: var(--warn); border-color: var(--warn); }
+.ghost-btn:hover {
+  color: var(--ink);
+  border-color: var(--primary);
+}
+.ghost-btn.paused {
+  color: var(--warn);
+  border-color: var(--warn);
+}
 .console-feed-body {
   flex: 1;
   overflow-y: auto;
   padding: 6px 14px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   font-size: 11px;
   line-height: 1.5;
 }
@@ -2315,27 +2937,51 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   pointer-events: none;
   user-select: none;
 }
-.feed-line[data-repeat-count="2"] .feed-repeat-badge,
-.feed-line[data-repeat-count="3"] .feed-repeat-badge,
-.feed-line[data-repeat-count="4"] .feed-repeat-badge {
+.feed-line[data-repeat-count='2'] .feed-repeat-badge,
+.feed-line[data-repeat-count='3'] .feed-repeat-badge,
+.feed-line[data-repeat-count='4'] .feed-repeat-badge {
   background: color-mix(in oklab, var(--primary) 70%, transparent);
 }
-.feed-line[data-repeat-count]:not([data-repeat-count="1"]):not([data-repeat-count="2"]):not([data-repeat-count="3"]):not([data-repeat-count="4"]) .feed-repeat-badge {
+.feed-line[data-repeat-count]:not([data-repeat-count='1']):not([data-repeat-count='2']):not(
+    [data-repeat-count='3']
+  ):not([data-repeat-count='4'])
+  .feed-repeat-badge {
   background: color-mix(in oklab, var(--lime) 60%, transparent);
   color: var(--bg);
 }
-.feed-line .feed-ts { color: var(--ink-tertiary); }
-.feed-line .feed-actor { color: var(--ink-subtle); }
-.feed-line .feed-body { color: var(--ink-muted); }
+.feed-line .feed-ts {
+  color: var(--ink-tertiary);
+}
+.feed-line .feed-actor {
+  color: var(--ink-subtle);
+}
+.feed-line .feed-body {
+  color: var(--ink-muted);
+}
 .feed-line.kind-error .feed-body,
-.feed-line.kind-audit .feed-body { color: var(--audit-fg); }
+.feed-line.kind-audit .feed-body {
+  color: var(--audit-fg);
+}
 .feed-line.kind-spec .feed-body,
 .feed-line.kind-build .feed-body,
-.feed-line.kind-judge .feed-body { color: var(--lime); }
-.feed-line.kind-handoff .feed-body { color: var(--primary-hover); }
-.feed-line.kind-log .feed-body { color: var(--ink-muted); opacity: 0.85; }
-.feed-line.kind-log.stderr .feed-body { color: var(--audit-fg); opacity: 0.95; }
-.feed-line.kind-system .feed-body { color: var(--ink-tertiary); font-style: italic; }
+.feed-line.kind-judge .feed-body {
+  color: var(--lime);
+}
+.feed-line.kind-handoff .feed-body {
+  color: var(--primary-hover);
+}
+.feed-line.kind-log .feed-body {
+  color: var(--ink-muted);
+  opacity: 0.85;
+}
+.feed-line.kind-log.stderr .feed-body {
+  color: var(--audit-fg);
+  opacity: 0.95;
+}
+.feed-line.kind-system .feed-body {
+  color: var(--ink-tertiary);
+  font-style: italic;
+}
 
 /* Claude-Code-style stream-json rendering above per-session chat input.
    Mirrors the ⏺ assistant text + ⎿ tool-result convention from `claude` CLI
@@ -2349,7 +2995,7 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   line-height: 1.5;
 }
 .feed-line.kind-tool-call .feed-body {
-  color: var(--accent-warm, #FFB627);
+  color: var(--accent-warm, #ffb627);
   opacity: 0.92;
   font-family: ui-monospace, monospace;
 }
@@ -2360,13 +3006,13 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   font-size: 10.5px;
 }
 .feed-line.kind-tool-error .feed-body {
-  color: var(--audit-fg, #E04848);
+  color: var(--audit-fg, #e04848);
   padding-left: 16px;
   font-size: 10.5px;
   font-weight: 500;
 }
 .feed-line.kind-turn-complete .feed-body {
-  color: var(--accent-warm, #FFB627);
+  color: var(--accent-warm, #ffb627);
   font-weight: 600;
   letter-spacing: 0.2px;
 }
@@ -2385,7 +3031,9 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
 /* ───────────────────────────────────────────────────────────────────────── */
 /* Adapter status sidebar (v3.5) — left rail, above sessions                */
 /* ───────────────────────────────────────────────────────────────────────── */
-.adapter-list { padding: 4px 0 8px; }
+.adapter-list {
+  padding: 4px 0 8px;
+}
 .adapter-empty {
   padding: 6px 16px;
   font-size: 11px;
@@ -2400,22 +3048,36 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   padding: 6px 16px 6px 14px;
   cursor: pointer;
   border-left: 2px solid transparent;
-  transition: background 80ms ease, border-color 80ms ease;
+  transition:
+    background 80ms ease,
+    border-color 80ms ease;
 }
-.adapter-row:hover { background: var(--surface-1); }
+.adapter-row:hover {
+  background: var(--surface-1);
+}
 .adapter-row .adapter-dot {
-  width: 8px; height: 8px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--ink-tertiary);
-  transition: background 200ms ease, box-shadow 200ms ease;
+  transition:
+    background 200ms ease,
+    box-shadow 200ms ease;
 }
 .adapter-row.active .adapter-dot {
   background: var(--lime);
   box-shadow: 0 0 6px var(--lime);
 }
-.adapter-row.maybe .adapter-dot { background: var(--warn); }
-.adapter-row.in-use { border-left-color: var(--lime); background: var(--surface-2); }
-.adapter-row .adapter-info { min-width: 0; }
+.adapter-row.maybe .adapter-dot {
+  background: var(--warn);
+}
+.adapter-row.in-use {
+  border-left-color: var(--lime);
+  background: var(--surface-2);
+}
+.adapter-row .adapter-info {
+  min-width: 0;
+}
 .adapter-row .adapter-name {
   font-size: 12px;
   color: var(--ink);
@@ -2433,9 +3095,17 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   text-overflow: ellipsis;
 }
 .adapter-row.inactive .adapter-name,
-.adapter-row.inactive .adapter-meta { color: var(--ink-tertiary); opacity: 0.55; }
-.adapter-row.inactive { cursor: pointer; }
-.adapter-row.inactive:hover .adapter-name { color: var(--accent-warm, #FFB627); opacity: 0.85; }
+.adapter-row.inactive .adapter-meta {
+  color: var(--ink-tertiary);
+  opacity: 0.55;
+}
+.adapter-row.inactive {
+  cursor: pointer;
+}
+.adapter-row.inactive:hover .adapter-name {
+  color: var(--accent-warm, #ffb627);
+  opacity: 0.85;
+}
 .adapter-row .adapter-pill {
   font-size: 9px;
   font-family: ui-monospace, monospace;
@@ -2457,6 +3127,41 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   color: var(--ink-tertiary);
 }
 
+/* v0.4.4 adapter-auth-detail — plan + expiry chips next to the install/auth
+ * pill. Plan chip is informational (subdued); expiry chip warns when login
+ * is close to running out so the user knows to re-auth before a session
+ * spawns. Hidden when the doctor probe didn't surface plan / expiry. */
+.adapter-row .adapter-pills {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.adapter-row .adapter-plan,
+.adapter-row .adapter-expiry {
+  font-size: 9px;
+  font-family: ui-monospace, monospace;
+  padding: 1px 5px;
+  border-radius: var(--r-pill);
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  background: var(--surface-2);
+  color: var(--ink-subtle);
+  border: 1px solid var(--hairline);
+}
+.adapter-row .adapter-expiry.soon {
+  background: rgba(255, 178, 135, 0.14);
+  color: var(--warn);
+  border-color: rgba(255, 178, 135, 0.3);
+}
+.adapter-row .adapter-expiry.expired {
+  background: rgba(250, 127, 170, 0.14);
+  color: var(--audit-fg);
+  border-color: rgba(250, 127, 170, 0.3);
+}
+
 /* ───────────────────────────────────────────────────────────────────────── */
 /* New session form — preset chips + per-actor binding chips               */
 /* ───────────────────────────────────────────────────────────────────────── */
@@ -2475,9 +3180,15 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   color: var(--ink-muted);
   cursor: pointer;
   font-family: ui-monospace, monospace;
-  transition: border-color 80ms ease, background 80ms ease, color 80ms ease;
+  transition:
+    border-color 80ms ease,
+    background 80ms ease,
+    color 80ms ease;
 }
-.preset-chip:hover { border-color: var(--primary); color: var(--ink); }
+.preset-chip:hover {
+  border-color: var(--primary);
+  color: var(--ink);
+}
 .preset-chip.active {
   background: rgba(94, 106, 210, 0.18);
   border-color: var(--primary);
@@ -2499,7 +3210,9 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   user-select: none;
   letter-spacing: 0.2px;
 }
-.adv-binding summary:hover { color: var(--ink-subtle); }
+.adv-binding summary:hover {
+  color: var(--ink-subtle);
+}
 .bindings-grid {
   display: grid;
   grid-template-columns: 80px 1fr 1fr;
@@ -2521,20 +3234,31 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   border-radius: var(--r-sm);
   font-family: ui-monospace, monospace;
 }
-.bindings-grid select:disabled { opacity: 0.4; cursor: not-allowed; }
+.bindings-grid select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 /* v0.4 Video research toggle (Gemini-only — hidden when neither gemini-sdk
    nor gemini-cli-local is available). Lives inside <details id="new-session-advanced">
    so collapses with the rest of the custom binding panel. */
-.video-research { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--hairline); }
+.video-research {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--hairline);
+}
 .video-research-toggle {
-  display: inline-flex; gap: 6px; align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
   cursor: pointer;
   font-size: 11px;
   color: var(--ink-muted);
   user-select: none;
 }
-.video-research-toggle input[type="checkbox"] { accent-color: var(--primary); }
+.video-research-toggle input[type='checkbox'] {
+  accent-color: var(--primary);
+}
 .video-research-refs {
   width: 100%;
   margin-top: 6px;
@@ -2548,7 +3272,9 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   outline: none;
   resize: vertical;
 }
-.video-research-refs:focus { border-color: var(--primary); }
+.video-research-refs:focus {
+  border-color: var(--primary);
+}
 
 /* ───────────────────────────────────────────────────────────────────────── */
 /* Adapter setup modal — install / auth guide                              */
@@ -2626,7 +3352,10 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   color: var(--canvas);
   border-color: var(--primary);
 }
-.adapter-modal-row button:hover { color: var(--ink); border-color: var(--primary); }
+.adapter-modal-row button:hover {
+  color: var(--ink);
+  border-color: var(--primary);
+}
 .adapter-modal-close {
   position: absolute;
   top: 8px;
@@ -2640,4 +3369,6 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   font-size: 18px;
   line-height: 1;
 }
-.adapter-modal-close:hover { color: var(--ink); }
+.adapter-modal-close:hover {
+  color: var(--ink);
+}
