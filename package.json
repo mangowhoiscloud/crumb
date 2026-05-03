@@ -54,6 +54,7 @@
     "update": "node scripts/update.mjs",
     "uninstall": "node scripts/uninstall.mjs",
     "reset": "node scripts/reset.mjs",
+    "sandwich:update-hashes": "tsx scripts/update-sandwich-hashes.mjs",
     "postinstall": "node scripts/qa-postinstall.js"
   },
   "keywords": [
