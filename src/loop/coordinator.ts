@@ -81,6 +81,16 @@ export interface RunOptions {
    * register a hanging stub the mock adapter cannot impersonate.
    */
   extraAdapters?: Adapter[];
+  /**
+   * v0.4 video research — list of YouTube URLs or local paths under
+   * `<sessionDir>/inbox/`. When non-empty, the goal event carries
+   * `data.video_refs = [...]` so the reducer's goal handler can flip
+   * `state.goal_has_video_refs = true`, routing the researcher to the
+   * gemini-sdk video path (10fps frame sampling). Empty / undefined keeps
+   * the existing text-only research flow. Studio's "Video research" toggle
+   * exposes this; CLI exposes via `--video-refs <url>,<url>,...`.
+   */
+  videoRefs?: string[];
 }
 
 // Wall-clock defaults raised v0.4.1: builder spawns observed at 10+ min for
@@ -215,6 +225,12 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
       from: 'user',
       kind: 'goal',
       body: opts.goal,
+      // v0.4: pass video_refs through goal.data so reducer.case 'goal' picks
+      // them up and flips goal_has_video_refs. When absent, researcher uses
+      // text-only path (existing behavior — empty array same as undefined).
+      ...(opts.videoRefs && opts.videoRefs.length > 0
+        ? { data: { video_refs: opts.videoRefs } }
+        : {}),
     });
   }
 

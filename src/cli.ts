@@ -131,6 +131,16 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
   // or fast mock runs). Default `undefined` → dispatcher's PER_SPAWN_TIMEOUT_MS.
   const perSpawnTimeoutFlag = args.flags.get('per-spawn-timeout');
   const perSpawnTimeoutMs = perSpawnTimeoutFlag ? Number(perSpawnTimeoutFlag) : undefined;
+  // v0.4: --video-refs <url1>,<url2>,... — populates goal.data.video_refs so
+  // reducer routes researcher to the gemini-sdk video path. Skipped (text-only)
+  // when absent. Studio's "Video research" toggle lands here via /api/crumb/run.
+  const videoRefsFlag = args.flags.get('video-refs');
+  const videoRefs = videoRefsFlag
+    ? videoRefsFlag
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+    : undefined;
 
   // eslint-disable-next-line no-console
   console.log(`[crumb] session=${sessionId} dir=${sessionDir}`);
@@ -157,6 +167,7 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
       sessionId,
       repoRoot,
       adapterOverride,
+      ...(videoRefs && videoRefs.length > 0 ? { videoRefs } : {}),
       presetName,
       idleTimeoutMs,
       perSpawnTimeoutMs,
