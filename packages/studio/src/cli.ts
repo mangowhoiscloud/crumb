@@ -33,6 +33,12 @@ interface Args {
   pollInterval?: number;
   /** v0.3.1: repeatable --home flag. Empty array → fall through to env / default. */
   homes: string[];
+  /**
+   * v0.5: write the actual bound port + URL to this file once the server is
+   * listening. Used by `crumb run` (PR #115 ensureStudioRunning) to discover
+   * which ephemeral port the detached child grabbed when 7321 was occupied.
+   */
+  portFile?: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -50,6 +56,8 @@ function parseArgs(argv: string[]): Args {
     } else if (arg === '--home' && argv[i + 1]) {
       // Repeatable: each --home extends the watch set.
       a.homes.push(argv[++i]!);
+    } else if (arg === '--port-file' && argv[i + 1]) {
+      a.portFile = argv[++i]!;
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
@@ -77,17 +85,21 @@ Options:
   --home <path>         Crumb home to watch. Repeatable — passes are merged.
                         v0.3.1: replaces single-CRUMB_HOME limitation; sessions
                         from every listed home appear together.
-  --port <n>            HTTP port (default 7321)
+  --port <n>            HTTP port (default 7321; auto-walks +1 on EADDRINUSE
+                        unless CRUMB_STUDIO_STRICT_PORT=1)
   --bind <ip>           Bind address (default 127.0.0.1; use 0.0.0.0 for LAN)
   --no-open             Don't auto-launch a browser
   --poll-interval <ms>  Polling interval when chokidar polling is active (default 250)
+  --port-file <path>    Write {port, bind, url} JSON once listening (v0.5 —
+                        used by 'crumb run' to discover ephemeral ports)
   -h, --help            Show this help
 
 Env (precedence: --home > CRUMB_HOMES > CRUMB_HOME > $HOME/.crumb):
-  CRUMB_HOMES           v0.3.1 multi-home, path-list separated (':' POSIX, ';' Windows)
-  CRUMB_HOME            Legacy single-home
-  CRUMB_POLL=1          Force chokidar polling (WSL / Docker / NFS)
-  CRUMB_NO_OPEN=1       Headless mode without --no-open flag
+  CRUMB_HOMES                v0.3.1 multi-home, path-list separated (':' POSIX, ';' Windows)
+  CRUMB_HOME                 Legacy single-home
+  CRUMB_POLL=1               Force chokidar polling (WSL / Docker / NFS)
+  CRUMB_NO_OPEN=1            Headless mode without --no-open flag
+  CRUMB_STUDIO_STRICT_PORT=1 Disable ephemeral port walk (Streamlit/n8n style)
 
 Examples:
   crumb-studio --home ~/.crumb --home /tmp/crumb-test-home
@@ -110,6 +122,21 @@ async function main(): Promise<void> {
     opts.globs = homesToGlobs(args.homes);
   }
   const server = await startStudioServer(opts);
+
+  // v0.5 — Persist actual port for parent processes to discover when the
+  // ephemeral fallback walked from the requested 7321. Best-effort: a write
+  // failure should not block the server.
+  if (args.portFile) {
+    try {
+      const { writeFileSync } = await import('node:fs');
+      writeFileSync(
+        args.portFile,
+        JSON.stringify({ port: server.port, bind: server.bind, url: server.url }),
+      );
+    } catch {
+      // ignore — parent will fall back to the requested port heuristic
+    }
+  }
 
   // Vite-style banner — frontier convention (Vite / Next.js / Streamlit /
   // Gradio all converge on this 3-4 line "Local / Network / hint" shape).
