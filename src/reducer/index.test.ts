@@ -1258,4 +1258,178 @@ describe('reducer', () => {
     // No spawn-verifier effect should slip through.
     expect(effects.find((e) => e.type === 'spawn')).toBeUndefined();
   });
+
+  // ─── v0.5 PR-Inbox-Console — Tier 1 ack + Tier 3 consumed_intervene_ids ──
+
+  it('v0.5 Tier 1: every user.* event emits a kind=ack append with metadata.ack_for', () => {
+    for (const kind of [
+      'user.intervene',
+      'user.pause',
+      'user.resume',
+      'user.approve',
+      'user.veto',
+    ] as const) {
+      const s = initialState('sess-test');
+      const ev = fixed({ from: 'user', kind, body: kind === 'user.veto' ? '' : 'do thing' });
+      const { effects } = reduce(s, ev);
+      const ack = effects.find(
+        (e): e is Extract<Effect, { type: 'append' }> =>
+          e.type === 'append' && e.message.kind === 'ack',
+      );
+      expect(ack, `${kind} should emit kind=ack`).toBeDefined();
+      expect(ack!.message.from).toBe('system');
+      expect(ack!.message.metadata).toMatchObject({
+        ack_for: ev.id,
+        deterministic: true,
+        tool: 'inbox-ack@v1',
+      });
+      // Ack body is non-empty + deterministic (pure function of event).
+      expect(typeof ack!.message.body).toBe('string');
+      expect(ack!.message.body!.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('v0.5 Tier 1: ackBodyFor uses event.data fields (target_actor / goto / swap / cancel)', () => {
+    const s0 = initialState('sess-test');
+    // /goto verifier — ack body carries the actor name.
+    const goto = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      data: { goto: 'verifier' },
+    });
+    const ack1 = reduce(s0, goto).effects.find(
+      (e) => e.type === 'append' && e.message.kind === 'ack',
+    ) as Extract<Effect, { type: 'append' }>;
+    expect(ack1.message.body).toBe('goto verifier');
+
+    // @builder body — sandwich_append on next spawn is the routed effect,
+    // ack body confirms the append intent.
+    const sw = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      body: 'use red palette',
+      data: { target_actor: 'builder', sandwich_append: 'use red palette' },
+    });
+    const ack2 = reduce(s0, sw).effects.find(
+      (e) => e.type === 'append' && e.message.kind === 'ack',
+    ) as Extract<Effect, { type: 'append' }>;
+    expect(ack2.message.body).toContain('appended to next');
+    expect(ack2.message.body).toContain('@builder');
+
+    // /swap builder=mock — ack body shows from→to.
+    const swap = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      data: { swap: { from: 'builder', to: 'mock' } },
+    });
+    const ack3 = reduce(s0, swap).effects.find(
+      (e) => e.type === 'append' && e.message.kind === 'ack',
+    ) as Extract<Effect, { type: 'append' }>;
+    expect(ack3.message.body).toBe('swapped builder → mock');
+
+    // /cancel @builder — ack body confirms target.
+    const cancel = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      data: { cancel: 'builder' },
+    });
+    const ack4 = reduce(s0, cancel).effects.find(
+      (e) => e.type === 'append' && e.message.kind === 'ack',
+    ) as Extract<Effect, { type: 'append' }>;
+    expect(ack4.message.body).toBe('cancelled @builder');
+
+    // /pause @planner-lead — ack body uses the actor pause scope.
+    const pause = fixed({
+      from: 'user',
+      kind: 'user.pause',
+      data: { actor: 'planner-lead' },
+    });
+    const ack5 = reduce(s0, pause).effects.find(
+      (e) => e.type === 'append' && e.message.kind === 'ack',
+    ) as Extract<Effect, { type: 'append' }>;
+    expect(ack5.message.body).toBe('paused @planner-lead');
+  });
+
+  it('v0.5 Tier 2: /ask <enum> emits kind=note with metadata.in_reply_to', () => {
+    const s = initialState('sess-test');
+    s.progress_ledger.session_started_at = '2026-05-04T02:50:00.000Z';
+    const ask = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      body: '/ask status',
+      data: { ask: 'status' },
+    });
+    const { effects } = reduce(s, ask);
+    const note = effects.find(
+      (e): e is Extract<Effect, { type: 'append' }> =>
+        e.type === 'append' && e.message.kind === 'note',
+    );
+    expect(note).toBeDefined();
+    expect(note!.message.from).toBe('system');
+    expect(note!.message.metadata).toMatchObject({
+      in_reply_to: ask.id,
+      tool: 'ask-formatter@v1',
+      deterministic: true,
+    });
+    // Body is a state snapshot — must contain "session" prefix from formatStatus.
+    expect(note!.message.body).toContain('session');
+  });
+
+  it('v0.5 Tier 2: invalid /ask query produces ack but no note', () => {
+    const s = initialState('sess-test');
+    const ask = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      body: '/ask whatever',
+      data: { ask_invalid: 'whatever' }, // inbox parser routes non-enum here
+    });
+    const { effects } = reduce(s, ask);
+    const note = effects.find((e) => e.type === 'append' && e.message.kind === 'note');
+    expect(note).toBeUndefined();
+    // But ack still fires.
+    const ack = effects.find((e) => e.type === 'append' && e.message.kind === 'ack');
+    expect(ack).toBeDefined();
+  });
+
+  it('v0.5 Tier 3: user.* push pending_intervene_ids; spawn drains onto first SpawnEffect', () => {
+    let s = initialState('sess-test');
+    // Fire a user.intervene that targets the builder shorthand path
+    // (PR-G7-A: target_actor + body + no other ops → spawn that actor).
+    const ev = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      body: 'use codex-local',
+      data: { target_actor: 'builder' },
+    });
+    const r = reduce(s, ev);
+    s = r.state;
+    // Drain happened: pending list is empty after the reduction.
+    expect(s.progress_ledger.pending_intervene_ids).toEqual([]);
+    // SpawnEffect carries consumed_intervene_ids = [ev.id].
+    const spawn = r.effects.find(
+      (e): e is Extract<Effect, { type: 'spawn' }> => e.type === 'spawn',
+    );
+    expect(spawn).toBeDefined();
+    expect(spawn!.consumed_intervene_ids).toEqual([ev.id]);
+  });
+
+  it('v0.5 Tier 3: user.* without spawn keeps pending_intervene_ids set for next spawn', () => {
+    let s = initialState('sess-test');
+    // /pause @builder — no spawn effect produced; pending_intervene_ids
+    // accumulates so the *next* spawn (e.g. user.resume → re-spawn the
+    // queued actor) gets credit.
+    const pause = fixed({
+      from: 'user',
+      kind: 'user.pause',
+      data: { actor: 'builder' },
+    });
+    const r = reduce(s, pause);
+    s = r.state;
+    expect(s.progress_ledger.pending_intervene_ids).toEqual([pause.id]);
+    // No spawn this turn; ack still fires.
+    expect(r.effects.some((e) => e.type === 'spawn')).toBe(false);
+    expect(
+      r.effects.some((e) => e.type === 'append' && e.message.kind === 'ack'),
+    ).toBe(true);
+  });
 });
