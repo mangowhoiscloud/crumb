@@ -860,11 +860,27 @@ section.swimlane {
   position: relative; /* anchor for the count badge */
 }
 .evt.grouped {
-  /* Slight left-edge accent so groups read as "this is multiple events"
-     without changing color cardinality with audit/deterministic states. */
-  box-shadow: -2px 0 0 0 var(--primary-hover);
-  padding-right: 18px; /* room for the badge so the kind label doesn't overlap */
+  /* v0.5 PR-8: dropped the left-edge purple accent — user feedback was
+     that it competed visually with audit/deterministic state colors and
+     wasn't carrying meaning beyond the count badge itself. The badge
+     alone is the canonical "this is multiple events" signal now.
+     Kept the right padding so the badge has room. */
+  padding-right: 18px;
 }
+/*
+ * v0.5 PR-8: unread badge.
+ *
+ * Color discipline (user feedback — 형광색 위 흰 숫자가 안 보임):
+ *   - default badge: dark surface (`--surface-2`) with `--ink` text. Reads
+ *     as a subtle indicator, never demands attention. iMessage gray-pill
+ *     unread convention rather than the noisy "red dot everywhere" anti-
+ *     pattern.
+ *   - audit badge: keep red on red-tinted bg (audit context already loud)
+ *   - deterministic badge: drop the lime fill (white-on-lime had poor
+ *     contrast — WCAG AA fails at ~1.4:1) and use the same dark surface
+ *     with a lime border instead, so the dim-2 status reads through the
+ *     border without hurting legibility.
+ */
 .evt-count {
   position: absolute;
   top: -6px;
@@ -873,20 +889,29 @@ section.swimlane {
   height: 18px;
   padding: 0 5px;
   border-radius: 9px;
-  background: var(--primary);
+  background: var(--surface-2);
   color: var(--ink);
+  border: 1px solid var(--hairline);
   font-size: 10px;
   font-weight: 700;
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
   pointer-events: none; /* let chip click through to its own handler */
   letter-spacing: 0;
 }
-.evt.audit .evt-count { background: var(--audit-fg); color: var(--audit-bg); }
-.evt.deterministic .evt-count { background: var(--lime); }
+.evt.audit .evt-count {
+  background: var(--audit-bg);
+  color: var(--audit-fg);
+  border-color: var(--audit-fg);
+}
+.evt.deterministic .evt-count {
+  background: var(--surface-2);
+  color: var(--ink);
+  border-color: var(--lime);
+}
 
 /*
  * v0.5 PR-7 — group paginator inside the detail panel. WhatsApp/Slack
