@@ -1137,7 +1137,7 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
 .preset-chip.disabled {
   opacity: 0.4;
   cursor: not-allowed;
-  text-decoration: line-through;
+  /* No line-through — fade-out alone is the affordance, per UX feedback. */
 }
 .adv-binding {
   margin-top: 4px;

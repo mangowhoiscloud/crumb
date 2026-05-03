@@ -360,6 +360,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
             message: {
               session_id: next.session_id,
               from: 'system',
+              parent_event_id: event.id, // C2 — wire thread navigation in studio
               kind: 'audit',
               body: `fallback_activated — builder circuit OPEN (${eng.consecutive_failures} consecutive failures)`,
               data: {
@@ -620,13 +621,13 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           message: {
             session_id: next.session_id,
             from: 'system',
+            parent_event_id: event.id, // C2 — message-level parent so studio thread nav works
             kind: 'note',
             body: `handoff.requested to=${event.to} from=${event.from} — no reducer routing for this pair (acknowledged as no-op)`,
             data: {
               event: 'handoff_unrouted',
               from: event.from,
               to: event.to,
-              parent_event_id: event.id,
             },
             metadata: { deterministic: true, tool: 'reducer-handoff-default@v1' },
           },
