@@ -1838,9 +1838,25 @@ function _summarizeToolResult(content, isError) {
 function renderStreamJsonLine(raw) {
   // Cheap pre-check: stream-json lines start with '{'. Anything else is plain
   // log output and should fall through to the raw renderer.
+  //
+  // Return contract (intentional null vs empty-array distinction):
+  //   - return null   → NOT stream-json (caller falls through to raw render
+  //                     so plain-log lines stay visible in the feed)
+  //   - return []     → IS stream-json, parsed cleanly, but no narrative
+  //                     bubbles to render (caller skips → suppressed from
+  //                     feed). Prevents the raw `{"type":"assistant",...}`
+  //                     blob with empty thinking content / signature payload
+  //                     from leaking into the live exec feed when it has
+  //                     no user-facing content. Full raw stream is still
+  //                     visible in the Logs view (spawn-*.log on disk).
+  //   - return [bubble, …] → render each bubble.
   if (!raw || raw.charCodeAt(0) !== 123) return null;
   let obj;
-  try { obj = JSON.parse(raw); } catch { return null; }
+  try {
+    obj = JSON.parse(raw);
+  } catch {
+    return null;
+  }
   if (!obj || typeof obj !== 'object' || !obj.type) return null;
 
   if (obj.type === 'assistant') {
@@ -1859,7 +1875,7 @@ function renderStreamJsonLine(raw) {
         out.push({ glyph: '·', body: '(thinking)', kindClass: 'thinking' });
       }
     }
-    return out.length ? out : null;
+    return out; // [] = parsed but no narrative; caller skips (suppressed)
   }
 
   if (obj.type === 'user') {
@@ -1877,7 +1893,7 @@ function renderStreamJsonLine(raw) {
         });
       }
     }
-    return out.length ? out : null;
+    return out; // [] = parsed but no narrative; caller skips
   }
 
   if (obj.type === 'system') {
@@ -1912,7 +1928,7 @@ function renderStreamJsonLine(raw) {
         kindClass: 'system',
       }];
     }
-    return null; // other system subtypes — silent
+    return []; // other system subtypes — silent (parsed, suppressed)
   }
 
   if (obj.type === 'result') {
@@ -1925,8 +1941,8 @@ function renderStreamJsonLine(raw) {
     return [{ glyph: '✓', body, kindClass: 'turn-complete' }];
   }
 
-  if (obj.type === 'rate_limit_event') return null; // silent
-  return null;
+  if (obj.type === 'rate_limit_event') return []; // silent (parsed, suppressed)
+  return []; // unknown obj.type but valid stream-json shape — suppress raw blob
 }
 
 // ─── v3.5 Adapter status sidebar + new-session preset chips + setup modal ──
