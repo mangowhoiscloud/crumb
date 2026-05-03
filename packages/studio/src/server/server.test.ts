@@ -34,10 +34,35 @@ describeServer('studio server', () => {
     );
     const server = await startStudioServer({ port: 0, bind: '127.0.0.1', glob });
     try {
+      // M7.1 default — React v2 bundle (or the "not built" fallback when
+      // dist/client-v2/ is absent in CI without a prior `npm run build`).
       const r = await fetchText(server.url);
-      expect(r.status).toBe(200);
-      // Doctype is case-insensitive per HTML spec; prettier emits lowercase.
+      expect(r.status === 200 || r.status === 503).toBe(true);
       expect(r.body).toMatch(/<!doctype html>/i);
+      // Both the live v2 bundle and the fallback share the "Crumb" title prefix.
+      expect(r.body).toContain('Crumb');
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('serves the v1 vanilla bundle via ?app=v1 escape hatch', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'crumb-dash-'));
+    process.env.CRUMB_HOME = home;
+    const glob = posix.join(
+      home.split(sep).join('/'),
+      'projects',
+      '*',
+      'sessions',
+      '*',
+      'transcript.jsonl',
+    );
+    const server = await startStudioServer({ port: 0, bind: '127.0.0.1', glob });
+    try {
+      const r = await fetchText(server.url + '?app=v1');
+      expect(r.status).toBe(200);
+      expect(r.body).toMatch(/<!doctype html>/i);
+      // Vanilla bundle's <title> is preserved as-is until M8 deletion.
       expect(r.body).toContain('Crumb · Live Studio');
     } finally {
       await server.close();

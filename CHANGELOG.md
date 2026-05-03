@@ -4,6 +4,16 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Studio default flipped to v2 React shell (M7.1 — `?app=v1` reserved as escape hatch, 2026-05-03)
+
+`/` now serves the React + dockview bundle (`dist/client-v2/index.html`). Legacy vanilla bundle (`packages/studio/src/client/studio.{html,css,js}`) is still reachable via `?app=v1` until M8 deletes it.
+
+Why now: with M2 → M7 shipped (shell + sidebar + pipeline + waterfall + service map + bottom panels + slash bar + scorecard + error-budget + logs + output + transcript + tool-trace + design-check + versions), the React shell reaches feature parity with the vanilla bundle plus adds interactive Pipeline canvas (drag + pan + zoom), independent panel docking with popout windows, density toggle, theme-token system, score-source attribution badges, tool-call trace, Versions browser, DesignCheckPanel rail mode. Default flip lets fresh users land on the modern surface without typing `?app=v2`.
+
+Escape hatch: any user who needs the vanilla bundle appends `?app=v1`. The v2 fallback page (when `dist/client-v2/` is missing) links back to `?app=v1` so a build-failure user isn't stranded.
+
+Hard gate: M8 deletes `client/studio.{html,css,js}` + the `?app=v1` escape hatch + the `serveHtml(STUDIO_HTML)` path. Until M8 lands the vanilla bundle stays as a one-flag fallback.
+
 ### Added — qa-runner per-`PersistenceProfile` smoke (Phase 7 — local-only Dexie + edge-orm wrangler probe, 2026-05-03)
 
 Closes the `task_ledger.persistence_profile` deferred-reader from PR #154 (feat/agent-specs-game-genres). qa-runner now reads the profile from `QaCheckEffect`, dispatches to a per-profile smoke runner, and surfaces the result in `qa.result.data.persistence_check`. Verifier reads it as supplemental D2 evidence: `status === 'fail'` forces `exec_exit_code = 1`; `partial` and `skipped` do not penalize (PARTIAL = "evidence absent", per `agents/specialists/game-design.md` §1.4 fallback semantics).
