@@ -110,8 +110,23 @@
 
   <div class="view-pane active" id="view-pipeline">
     <section class="dag" id="dag-section">
-      <h2>Pipeline DAG · weaving</h2>
-      <svg class="dag-svg" id="dag-svg" viewBox="0 0 820 215" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="dag-header">
+        <h2>Pipeline · v0.4.2</h2>
+        <div class="dag-legend" id="dag-legend">
+          <span class="lg lg-flow">flow</span>
+          <span class="lg lg-respawn">respawn</span>
+          <span class="lg lg-rollback">rollback</span>
+          <span class="lg lg-fallback">fallback</span>
+          <span class="lg lg-terminal">PASS</span>
+          <span class="lg lg-audit">audit</span>
+          <span class="lg lg-intervene">intervene</span>
+          <span class="lg lg-resume">resume</span>
+          <span class="lg-shapes">
+            <svg class="lg-shape-svg" viewBox="0 0 110 14"><circle cx="7" cy="7" r="6" /><text x="18" y="11">actor</text><polygon points="44,1 56,4 56,10 44,13 32,10 32,4" /><text x="62" y="11">effect</text><rect x="84" y="2" width="22" height="10" rx="5" /><text x="90" y="11">done</text></svg>
+          </span>
+        </div>
+      </div>
+      <svg class="dag-svg" id="dag-svg" viewBox="0 0 1100 320" preserveAspectRatio="xMidYMid meet"></svg>
     </section>
 
     <section class="swimlane" id="swimlane">

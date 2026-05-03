@@ -4,6 +4,31 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Pipeline DAG visualization overhaul (PR-H) (2026-05-03)
+
+Pre-PR-G the studio's Pipeline tab DAG was a stale 3-phase 215px graph with one feedback edge (verifier → planner-lead) — wrong post-PR-G routing where Important/Minor deviations now respawn the builder, not the planner. Plus several gaps: no labels on edges, no resume cycle, no validator-as-effect distinction, `system` node was confusingly labeled "qa-check".
+
+**Re-audited every routing rule** in `src/reducer/index.ts` against the new DAG and fixed mismatches. Spec for the new DAG lives at `wiki/diagrams/pipeline-v0.4.md` (Mermaid source at `pipeline-v0.4.mmd`).
+
+`packages/studio/src/client/studio.{html,css,js}`:
+- **Layout**: 3 phases × 215px → **5 phases × 320px** (1100×320 viewport). Phases now match the reducer's case-routing layers: A·Spec / B·Build / C·QA / D·Verify / E·Done. Phase backgrounds color-coded translucent.
+- **Node shapes** (semantic): circle (LLM-driven actor), hexagon (deterministic effect — `qa_check`, `validator`), diamond (user external input), rounded box (terminal — `done`). Was: every node was a circle.
+- **`qa_check` node** (was `system` mislabeled). The `from='system'` events with `metadata.tool=qa-check-effect@v1` now ripple from the qa_check node via a `rippleFromActor()` translation so the visualization matches the semantic role, not the legacy `from` field.
+- **Three feedback edges from verifier** (was: one). Important/Minor (PR-G2 default) → respawn `builder` w/ sandwich_append (blue dashed). Critical → rollback `planner-lead` (amber dashed). circuit OPEN → `builder-fallback` (red dashed). Color-coded labels on each.
+- **Resume cycle edge** `done → coordinator` (cyan solid, big over-the-top arc) wires PR-G7-B's resume button + `crumb resume --run` into the canonical flow.
+- **8 typed edges** (was 6): `flow / respawn / rollback / fallback / terminal / audit / intervene / resume`. Each gets its own color, stroke-dasharray, arrowhead marker, and label color.
+- **Per-edge labels** above midpoint / arc apex (kind names, deviation types, PASS verdict). Was: no edge labels.
+- **Always-visible legend** above the SVG (8 edge types + 3 node shapes inline mini-svg) — frontier UX (Anthropic Console / Vertex Trace Viewer) keeps the legend on-screen rather than hover-only.
+- **Edge ripple animations** updated for the post-PR-G routing — `weaveTargetForVerdict` reads `scores.deviation.type` and routes Important → builder (was: always planner). New `handoff.rollback` case wired into `weaveOnAppend`.
+
+`design/DESIGN.md` — new §5.5 "Pipeline DAG (top of the Pipeline tab)" section spec'ing the layout, shapes, edge taxonomy, and live behavior. Cites the canonical Mermaid source so future edits stay in sync.
+
+`wiki/diagrams/pipeline-v0.4.{mmd,md}` (NEW):
+- `pipeline-v0.4.mmd` — Mermaid 11+ flowchart matching the studio DAG 1:1. Renderable via `mermaid.live` editor for hiring-panel slides / static documentation.
+- `pipeline-v0.4.md` — wiki page with the Mermaid embed + routing rule table cited against `src/reducer/index.ts` + node shape & edge type tables + "why three feedback edges" rationale.
+
+Verification: `npm run lint && npm run typecheck && npm run format:check && npm test && npm run build` — 460 tests pass (no test pinned to old DAG layout). Studio HTML re-inlined to 146KB. Live verified at http://127.0.0.1:7321/.
+
 ### Changed — Audit Q5: studio append-handler fan-out (8 → 1 dispatcher) (2026-05-03)
 
 Post-#106 audit Q5 cleanup. The studio client (`packages/studio/src/client/studio.js`) had **8 independent** `es.addEventListener('append', ...)` registrations on the same EventSource. Each parsed `e.data` separately (8× JSON.parse cost per event) and re-filtered by `session_id` independently (8× `if (d.session_id === activeSession)` checks). For high-throughput sessions (multi-file PWA build emits 20+ artifact.created events back-to-back) this was measurable.
