@@ -1,21 +1,16 @@
 /**
- * M2 — Studio v2 dockview shell.
+ * Studio dockview shell.
  *
  * Per the migration plan §0 prime directive ("preserve the visual,
- * elevate everything underneath"), this shell renders the same panel
- * arrangement the v1 vanilla bundle has today — sidebar (Brand +
- * Adapters + Sessions placeholders) on the left, main area (view-pane
- * + bottom-group with Narrative + Feed siblings) on the right, status
- * bar across the bottom.
+ * elevate everything underneath"), this shell renders the canonical
+ * panel arrangement: sidebar (Brand + Adapters + Sessions) on the
+ * left, main area (view-pane + bottom-group with Narrative + Feed
+ * siblings) on the right, scorecard + error-budget strips above the
+ * dockview frame, slash bar + status bar across the bottom.
  *
  * dockview is configured to NOT show its default Material chrome.
  * Tab bars, panel headers, and resize handles are styled to match
- * v1's hairline borders + cream surfaces (see styles/globals.css).
- *
- * Panels are intentionally empty placeholders here — M3 fills the
- * sidebar, M4 fills Pipeline / Waterfall / Map, M5 wires Narrative +
- * Feed to SSE + inbox POST, M6 fills Scorecard / Logs / Output /
- * Transcript / DesignCheck.
+ * the brand's hairline borders + cream surfaces (see styles/globals.css).
  */
 
 import {
@@ -176,7 +171,7 @@ export function App() {
         </span>
         <span style={{ flex: 1 }} />
         <span style={{ color: 'var(--ink-subtle)', fontSize: 12 }}>
-          v2 preview · {sessions.data ? `${sessions.data.sessions.length} sessions` : 'loading…'}
+          {sessions.data ? `${sessions.data.sessions.length} sessions` : 'loading…'}
         </span>
         <HealthBadge />
         <DensityToggle />
@@ -204,7 +199,7 @@ export function App() {
           color: 'var(--ink-subtle)',
         }}
       >
-        <span>v0.4 (M7)</span>
+        <span>v0.4 (M8)</span>
         <span style={{ flex: 1 }} />
         <span>⌘B sidebar · Drag tabs to dock · Drag a tab out for popout</span>
       </footer>

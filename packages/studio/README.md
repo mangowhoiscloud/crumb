@@ -54,8 +54,8 @@ Resolution order: `--home` flags (repeatable) > `CRUMB_HOMES` > `CRUMB_HOME` > `
 
 ## Architecture
 
-- **No bundler.** The browser client is a single inlined HTML/CSS/JS payload generated at build time (`scripts/inline-client.mjs` → `dist/studio-html.generated.js`). Avoids `__dirname` / `import.meta.url` fragility under `npm publish` / global install / monorepo workspace symlinks.
-- **No client framework.** Vanilla DOM, < 100 KB minified, < 10 ms boot.
+- **Vite + React 19 + dockview.** Static SPA bundle output to `dist/client/`, served by the Node http server at `/`. Resolved via `import.meta.url` so npm-link / npm-i-g installs all locate the bundle correctly (no symlinks per §13.1 portability).
+- **shadcn-flavored UI primitives** + Open Props design tokens (`--canvas`, `--ink`, `--actor-<actor>`, `--tone-{pass,partial,fail,pending}`, `--src-{llm,qa,auto}`). Light + dark theme, comfortable + compact density.
 - **chokidar tail.** `transcript.jsonl` watcher emits one SSE per appended line; the client folds events into the pipeline view incrementally.
 - **API surface** (read-only except `POST /api/inbox/<sid>` and `POST /api/run`):
   - `GET /api/health` — bootstrap state classifier (live / idle / interrupted / abandoned / terminal counts)

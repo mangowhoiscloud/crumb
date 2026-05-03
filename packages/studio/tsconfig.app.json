@@ -20,6 +20,6 @@
     "verbatimModuleSyntax": false,
     "types": ["vite/client", "node"]
   },
-  "include": ["src/client-v2/**/*"],
+  "include": ["src/client/**/*"],
   "exclude": ["node_modules", "dist"]
 }
