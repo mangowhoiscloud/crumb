@@ -81,9 +81,16 @@ export function startInboxWatcher(opts: InboxWatcherOptions): InboxWatcherHandle
     try {
       const stat = statSync(opts.inboxPath);
       if (stat.size > lastSize) {
-        const buf = readFileSync(opts.inboxPath, 'utf-8');
-        const newPart = buf.slice(lastSize);
+        // `lastSize` and `stat.size` are byte counts. Read as Buffer and
+        // slice by bytes — slicing a JS string by `lastSize` would index
+        // UTF-16 code units instead, which truncates incorrectly when
+        // earlier lines contain multi-byte characters (e.g. Korean: each
+        // char is 3 bytes in UTF-8 / 1 code unit in UTF-16, so a Korean
+        // line shifts the byte/char correspondence by 2 per character).
+        const fullBuf = readFileSync(opts.inboxPath);
+        const newBuf = fullBuf.subarray(lastSize);
         lastSize = stat.size;
+        const newPart = newBuf.toString('utf-8');
         const lines = newPart.split('\n');
         // The last element is whatever's after the final newline. If the user
         // hasn't terminated their line yet, defer it — bump lastSize back so
