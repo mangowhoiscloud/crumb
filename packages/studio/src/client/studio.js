@@ -381,6 +381,49 @@ function renderHeader() {
     banner.textContent = '★ ' + m.audit_count + ' anti-deception audit event' + (m.audit_count === 1 ? '' : 's') + ' fired in this session.';
     banner.classList.add('show');
   } else banner.classList.remove('show');
+  // v0.5 PR-O2 — budget burndown strip.
+  renderBudgetStrip(m?.budget);
+}
+
+/**
+ * v0.5 PR-O2 — render the three budget meters (respec / verify / tokens).
+ *
+ * Color thresholds match operator-action zones:
+ *   < 60%  green  — plenty of headroom
+ *   < 90%  amber  — warning, consider intervening
+ *   ≥ 90%  red    — about to hit the automatic cutoff
+ *
+ * OpenAI Preparedness Framework + Stripe Sigma usage panel convention —
+ * surface the burn rate while the operator can still act, not after the
+ * reducer fires `kind=done` with reason=too_many_*.
+ */
+function renderBudgetStrip(budget) {
+  const strip = $('budget-strip');
+  if (!strip) return;
+  if (!budget) {
+    strip.style.display = 'none';
+    return;
+  }
+  strip.style.display = '';
+  paintMeter('budget-respec', budget.respec_count, budget.respec_max, (n) => n);
+  paintMeter('budget-verify', budget.verify_count, budget.verify_max, (n) => n);
+  paintMeter('budget-tokens', budget.token_total, budget.token_hard_cap, formatTokens);
+}
+
+function paintMeter(rootId, used, max, fmt) {
+  const root = $(rootId);
+  if (!root) return;
+  const ratio = max > 0 ? used / max : 0;
+  const fill = root.querySelector('.budget-meter-fill');
+  const value = root.querySelector('.budget-meter-value');
+  if (!fill || !value) return;
+  const pct = Math.max(0, Math.min(1, ratio));
+  fill.style.width = (pct * 100).toFixed(1) + '%';
+  root.classList.remove('zone-ok', 'zone-warn', 'zone-crit');
+  if (ratio >= 0.9) root.classList.add('zone-crit');
+  else if (ratio >= 0.6) root.classList.add('zone-warn');
+  else root.classList.add('zone-ok');
+  value.textContent = fmt(used) + ' / ' + fmt(max);
 }
 
 /**

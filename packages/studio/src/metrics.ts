@@ -17,6 +17,31 @@ export interface ActorTotals {
   events: number;
 }
 
+/**
+ * v0.5 PR-O2 — Session-level budget burndown counters.
+ *
+ * Mirrors the reducer's progress_ledger fields (respec_count, verify_count,
+ * session_token_total) without re-importing the reducer (the studio package
+ * is a sibling, not a child, of src/). The constants are duplicated; if the
+ * reducer caps drift we'll catch it via the e2e test that exercises a full
+ * cycle.
+ *
+ * Why this matters: today the operator can't tell whether a session is
+ * about to hit RESPEC_MAX (3) or VERIFY_MAX (5) until the reducer emits
+ * `kind=done` with reason=too_many_*. By the time that lands the run has
+ * already been spent. Surfacing `*_used / *_max` in the header lets the
+ * operator intervene (e.g. /approve a PARTIAL verdict) before the
+ * automatic cutoff.
+ */
+export interface SessionBudget {
+  respec_count: number;
+  respec_max: number;
+  verify_count: number;
+  verify_max: number;
+  token_total: number;
+  token_hard_cap: number;
+}
+
 export interface SessionMetrics {
   events: number;
   turns: number;
@@ -34,8 +59,16 @@ export interface SessionMetrics {
   per_actor: Record<string, ActorTotals>;
   last_verdict: Verdict | null;
   last_aggregate: number | null;
+  budget: SessionBudget;
   done: boolean;
 }
+
+// Duplicated from src/reducer/index.ts. Both should stay in sync; if the
+// reducer raises caps the studio number will lag until this constant is
+// bumped — surface drift via the e2e test.
+const STUDIO_RESPEC_MAX = 3;
+const STUDIO_VERIFY_MAX = 5;
+const STUDIO_TOKEN_HARD_CAP_DEFAULT = 300_000;
 
 export function computeMetrics(transcript: DashboardMessage[]): SessionMetrics {
   let tokens_in = 0;
@@ -99,6 +132,22 @@ export function computeMetrics(transcript: DashboardMessage[]): SessionMetrics {
     if (m.kind === 'done' || m.kind === 'session.end') done = true;
   }
 
+  // v0.5 PR-O2 — budget counters mirrored from the reducer's progress_ledger.
+  // We re-derive from transcript instead of importing reducer state because
+  // (a) studio is a sibling package that mustn't depend on src/, and
+  // (b) reducer state isn't on the SSE wire — but every event that mutates
+  //     these counters IS, so a forward scan is sufficient + cheap.
+  let respec_count = 0;
+  let verify_count = 0;
+  let token_total = 0;
+  for (const m of transcript) {
+    if (m.kind === 'spec.update') respec_count += 1;
+    if (m.kind === 'judge.score') verify_count += 1;
+    const md = m.metadata ?? {};
+    if (typeof md.tokens_in === 'number') token_total += md.tokens_in;
+    if (typeof md.tokens_out === 'number') token_total += md.tokens_out;
+  }
+
   // Anthropic API conventions:
   //   `usage.input_tokens`               = cache-miss prefix
   //   `usage.cache_read_input_tokens`    = cache hit
@@ -114,6 +163,8 @@ export function computeMetrics(transcript: DashboardMessage[]): SessionMetrics {
     if (Number.isFinite(first) && Number.isFinite(last)) wall_ms = Math.max(0, last - first);
   }
   const sorted = [...latencies].sort((a, b) => a - b);
+
+  const tokenHardCap = Number(process.env.CRUMB_TOKEN_BUDGET_HARD) || STUDIO_TOKEN_HARD_CAP_DEFAULT;
 
   return {
     events: transcript.length,
@@ -132,6 +183,14 @@ export function computeMetrics(transcript: DashboardMessage[]): SessionMetrics {
     per_actor: perActor,
     last_verdict: lastVerdict,
     last_aggregate: lastAggregate,
+    budget: {
+      respec_count,
+      respec_max: STUDIO_RESPEC_MAX,
+      verify_count,
+      verify_max: STUDIO_VERIFY_MAX,
+      token_total,
+      token_hard_cap: tokenHardCap,
+    },
     done,
   };
 }
