@@ -73,3 +73,42 @@ body {
 [data-density='compact'] {
   --dv-tabs-and-actions-container-height: 28px;
 }
+
+/* React Flow Controls + MiniMap — default chrome is light-on-light,
+ * so the zoom / fit / lock buttons disappear against our cream canvas.
+ * Re-skin with brand tokens so they read on both light + dark themes. */
+.react-flow__controls {
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  box-shadow: 0 4px 12px color-mix(in oklab, var(--ink) 8%, transparent);
+  overflow: hidden;
+}
+.react-flow__controls-button {
+  background: var(--surface-card);
+  color: var(--ink);
+  border-bottom: 1px solid var(--hairline-soft);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.react-flow__controls-button:last-child {
+  border-bottom: none;
+}
+.react-flow__controls-button:hover {
+  background: var(--surface-1);
+  color: var(--primary);
+}
+.react-flow__controls-button svg {
+  fill: currentColor;
+  width: 14px;
+  height: 14px;
+}
+.react-flow__minimap {
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  box-shadow: 0 4px 12px color-mix(in oklab, var(--ink) 8%, transparent);
+}

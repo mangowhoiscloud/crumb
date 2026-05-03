@@ -211,9 +211,30 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
       // v0.1: build → deterministic qa-check effect (no LLM). qa.result event flows back.
       // See [[bagelcode-system-architecture-v0.1]] §4.2 (per-turn flow), §7 (3-layer scoring).
       const artifacts = event.artifacts ?? next.task_ledger.artifacts;
-      const lastArtifact = artifacts[artifacts.length - 1];
-      const artifactPath = lastArtifact?.path ?? 'artifacts/game.html';
-      const artifactSha = lastArtifact?.sha256;
+      // Pick the HTML entry point, NOT the last-emitted artifact. The
+      // earlier "last in array" rule mis-targeted multi-file PWA bundles
+      // (20+ artifact.created events) when a non-HTML file like
+      // `GameScene.js` happened to be emitted last → qa-check ran HTML
+      // lint against a JS file → deterministic FAIL → verifier rollback
+      // loop until wall-clock cap. Priority order:
+      //   1. multi-file profile entry (`artifacts/game/index.html`)
+      //   2. legacy single-file profile entry (`artifacts/game.html`)
+      //   3. any other `.html` file (best-effort fallback)
+      //   4. literal default `artifacts/game.html` (when no artifacts emitted yet)
+      const pickEntry = (): { path: string; sha256?: string } | undefined => {
+        const byPath = (suffix: string) =>
+          artifacts.find((a) => a.path === suffix || a.path.endsWith('/' + suffix));
+        return (
+          byPath('artifacts/game/index.html') ??
+          byPath('game/index.html') ??
+          byPath('artifacts/game.html') ??
+          byPath('game.html') ??
+          artifacts.find((a) => a.path.endsWith('.html'))
+        );
+      };
+      const entry = pickEntry();
+      const artifactPath = entry?.path ?? 'artifacts/game.html';
+      const artifactSha = entry?.sha256;
       // Stash the builder's provider so anti-deception Rule 4 (self-bias risk)
       // can compare it against the verifier's provider on judge.score events.
       next.last_builder_provider = event.metadata?.provider ?? null;
