@@ -2252,3 +2252,22 @@ refreshAdapterList();
 renderPresetChips();
 renderBindingsGrid();
 
+// v0.5 — first-visit welcome banner with the read-only invariant message.
+// Dismiss persists in localStorage; clear `crumb.studio.welcome.dismissed` to
+// re-show. No-op when localStorage is unavailable (private browsing,
+// sandboxed iframe, etc.) — banner just stays hidden, which is the safe
+// default for repeat visitors.
+(function setupWelcomeBanner() {
+  const KEY = 'crumb.studio.welcome.dismissed';
+  const banner = document.getElementById('welcome-banner');
+  const close = document.getElementById('welcome-banner-close');
+  if (!banner || !close) return;
+  let dismissed = false;
+  try { dismissed = localStorage.getItem(KEY) === '1'; } catch (_) {}
+  if (!dismissed) banner.style.display = 'flex';
+  close.addEventListener('click', () => {
+    banner.style.display = 'none';
+    try { localStorage.setItem(KEY, '1'); } catch (_) {}
+  });
+})();
+

@@ -78,6 +78,22 @@
 <div class="resize-handle resize-handle-sessions" id="sessions-resize" title="Drag to resize sessions pane"></div>
 
 <main>
+  <!--
+    v0.5 first-visit welcome banner — read-only observation invariant
+    documented inline so the user understands the contract on day one.
+    Dismissed via the × button; localStorage key `crumb.studio.welcome.dismissed`
+    keeps it gone across reloads. Re-show by clearing the key in DevTools.
+    Backed by ArtifactsBench / Karpathy autoresearch read-only dashboard
+    convention (see PR #115 frontier survey).
+  -->
+  <div id="welcome-banner" class="welcome-banner" style="display:none;">
+    <div class="welcome-banner-body">
+      <span class="welcome-banner-title">👋 Crumb Studio</span>
+      <span class="welcome-banner-text">Read-only observation surface. Sessions auto-detected at <code>~/.crumb/projects/</code>. Mutations route through transcript intervention only — <code>crumb pause</code> / <code>veto</code> / <code>approve</code> / <code>redo</code>, never via this dashboard.</span>
+    </div>
+    <button id="welcome-banner-close" class="welcome-banner-close" title="Dismiss (won't show again)" aria-label="Dismiss welcome banner">×</button>
+  </div>
+
   <header class="summary">
     <div>
       <h1 id="header-title"><span class="pill muted">no session</span></h1>

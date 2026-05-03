@@ -181,6 +181,83 @@ async function checkHtmlhint(): Promise<HostStatus> {
   return { host: 'htmlhint (built-in)', status: 'OK', detail: '자체 regex (4 lint rule)' };
 }
 
+/**
+ * v0.5 — Crumb Studio readiness. Three observable signals so the user knows
+ * `crumb run` will be able to auto-spawn Studio (PR #115):
+ *   1. `crumb-studio` binary present at workspace dist or via PATH
+ *   2. port 7321 free (or already serving Crumb Studio — both are OK)
+ *   3. ~/.crumb/projects/ exists and is watchable (chokidar source)
+ */
+async function checkStudio(): Promise<HostStatus> {
+  const { existsSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { resolve, join } = await import('node:path');
+  const { request } = await import('node:http');
+  const here = fileURLToPath(import.meta.url);
+  // helpers/doctor.ts → walk up to repo root (3 levels: helpers → src → root).
+  const repoRoot = resolve(here, '..', '..', '..');
+  const dist = resolve(repoRoot, 'packages', 'studio', 'dist', 'cli.js');
+  const envBin = process.env.CRUMB_STUDIO_BIN;
+  const binPresent = (envBin && existsSync(envBin)) || existsSync(dist);
+  if (!binPresent) {
+    return {
+      host: 'crumb-studio (binary)',
+      status: 'MISSING',
+      detail: 'dist/cli.js absent — run `npm run build` to enable Studio auto-spawn',
+      action_required:
+        'cd ' + repoRoot + ' && npm run build (or set CRUMB_STUDIO_BIN to a packaged shim)',
+    };
+  }
+
+  // Probe :7321 — running Crumb instance (any 2xx/3xx/4xx) or free port both OK.
+  const port = Number(process.env.CRUMB_STUDIO_PORT ?? 7321);
+  const probe = await new Promise<'running' | 'free' | 'occupied'>((res) => {
+    const req = request(
+      { host: '127.0.0.1', port, path: '/', method: 'HEAD', timeout: 200 },
+      (response) => {
+        response.resume();
+        const sc = response.statusCode ?? 0;
+        // Crumb Studio responds 200 on /; if something else is on this port we
+        // surface it so the user can free it before `crumb run`.
+        res(sc < 500 ? 'running' : 'occupied');
+      },
+    );
+    req.on('error', () => res('free'));
+    req.on('timeout', () => {
+      req.destroy();
+      res('free');
+    });
+    req.end();
+  });
+
+  // ~/.crumb/projects/ existence — chokidar watch root. (ensureCrumbHome
+  // creates it on first `crumb run`, but doctor runs before that, so a missing
+  // dir here is only a hint, not a fail.)
+  const { homedir } = await import('node:os');
+  const projectsDir = join(homedir(), '.crumb', 'projects');
+  const projectsPresent = existsSync(projectsDir);
+
+  if (probe === 'occupied') {
+    return {
+      host: 'crumb-studio (port 7321)',
+      status: 'DEGRADED',
+      detail: `port ${port} occupied by another process — Studio auto-spawn will fail`,
+      action_required: `lsof -i :${port}  →  kill the offender, or set CRUMB_STUDIO_PORT=<free-port>`,
+    };
+  }
+
+  const detailParts = [
+    binPresent ? 'binary OK' : 'binary missing',
+    probe === 'running' ? `running at :${port}` : `port ${port} free`,
+    projectsPresent ? '~/.crumb/projects ready' : '~/.crumb/projects not yet created',
+  ];
+  return {
+    host: 'crumb-studio (auto-spawn)',
+    status: 'OK',
+    detail: detailParts.join(' / '),
+  };
+}
+
 export async function runDoctor(): Promise<DoctorReport> {
   const hosts = await Promise.all([
     checkClaude(),
@@ -188,6 +265,7 @@ export async function runDoctor(): Promise<DoctorReport> {
     checkGemini(),
     checkPlaywright(),
     checkChromiumBinary(),
+    checkStudio(),
     checkHtmlhint(),
   ]);
   const claudeOk = hosts[0].status === 'OK';
