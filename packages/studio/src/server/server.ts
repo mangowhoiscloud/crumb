@@ -41,6 +41,7 @@ import { probeAdapters } from './doctor.js';
 import { EventBus, type LiveEvent } from './event-bus.js';
 import { computeMetrics } from './metrics.js';
 import { sandwichPath, sessionDirFromTranscript } from './paths.js';
+import { listProjectVersions, resolveProjectVersion } from './versions.js';
 import { SessionWatcher } from './watcher.js';
 
 const HEARTBEAT_MS = 15_000;
@@ -141,6 +142,23 @@ export async function startStudioServer(opts: StudioServerOptions = {}): Promise
     const artifactMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/artifact\/(.+)$/);
     if (req.method === 'GET' && artifactMatch) {
       return void serveArtifactFile(res, watcher, artifactMatch[1]!, artifactMatch[2]!);
+    }
+    // M7 — /api/projects/:pid/versions (GET — list released versions)
+    const versionsListMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/versions$/);
+    if (req.method === 'GET' && versionsListMatch) {
+      return void serveVersionsList(res, versionsListMatch[1]!);
+    }
+    // M7 — /api/projects/:pid/versions/:v/artifact/* (GET — serve frozen artifact)
+    const versionArtifactMatch = url.pathname.match(
+      /^\/api\/projects\/([^/]+)\/versions\/([^/]+)\/artifact\/(.+)$/,
+    );
+    if (req.method === 'GET' && versionArtifactMatch) {
+      return void serveVersionArtifact(
+        res,
+        versionArtifactMatch[1]!,
+        versionArtifactMatch[2]!,
+        versionArtifactMatch[3]!,
+      );
     }
     // /api/crumb/run (POST — spawn `crumb run --goal <text>` as a child process)
     if (req.method === 'POST' && url.pathname === '/api/crumb/run') {
@@ -797,6 +815,93 @@ async function serveArtifactFile(
   }
   const sessionDir = sessionDirFromTranscript(match.transcript_path);
   const artifactsRoot = join(sessionDir, 'artifacts');
+  const decoded = decodeURIComponent(relPath);
+  const target = join(artifactsRoot, decoded);
+  if (!target.startsWith(artifactsRoot)) {
+    res.statusCode = 400;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end('path escapes artifacts/');
+    return;
+  }
+  try {
+    const buf = await readFile(target);
+    const ext = decoded.split('.').pop()?.toLowerCase() ?? '';
+    const contentType =
+      ext === 'html'
+        ? 'text/html; charset=utf-8'
+        : ext === 'js' || ext === 'mjs'
+          ? 'application/javascript; charset=utf-8'
+          : ext === 'css'
+            ? 'text/css; charset=utf-8'
+            : ext === 'json' || ext === 'webmanifest'
+              ? 'application/json; charset=utf-8'
+              : ext === 'svg'
+                ? 'image/svg+xml'
+                : ext === 'png'
+                  ? 'image/png'
+                  : ext === 'jpg' || ext === 'jpeg'
+                    ? 'image/jpeg'
+                    : ext === 'md'
+                      ? 'text/markdown; charset=utf-8'
+                      : 'application/octet-stream';
+    res.setHeader('content-type', contentType);
+    res.setHeader('cache-control', 'no-cache');
+    res.end(buf);
+  } catch {
+    res.statusCode = 404;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end(`artifact not found: ${decoded}`);
+  }
+}
+
+/**
+ * GET /api/projects/:pid/versions — list released milestones for the project.
+ *
+ * Walks every active CRUMB_HOME and returns parsed manifests, oldest-first.
+ * Stripped of `version_dir` so the absolute path doesn't leak across the
+ * wire (§13.1 portability — server-resolved paths only).
+ */
+async function serveVersionsList(res: http.ServerResponse, projectId: string): Promise<void> {
+  try {
+    const rows = await listProjectVersions(projectId);
+    const safe = rows.map(({ version_dir: _omit, ...rest }) => rest);
+    res.setHeader('content-type', 'application/json');
+    res.setHeader('cache-control', 'no-cache');
+    res.end(JSON.stringify({ versions: safe }));
+  } catch (err) {
+    res.statusCode = 500;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end(`failed to list versions: ${(err as Error).message}`);
+  }
+}
+
+/**
+ * GET /api/projects/:pid/versions/:v/artifact/* — serve a frozen artifact.
+ *
+ * Mirrors `serveArtifactFile` (session artifact serving) shape so the Output
+ * panel's Source toggle (Session | Version) can swap iframe URL with the
+ * same content-type negotiation. Path traversal guarded the same way.
+ */
+async function serveVersionArtifact(
+  res: http.ServerResponse,
+  projectId: string,
+  versionRef: string,
+  relPath: string,
+): Promise<void> {
+  if (relPath.includes('..') || relPath.startsWith('/')) {
+    res.statusCode = 400;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end('invalid path');
+    return;
+  }
+  const version = await resolveProjectVersion(projectId, versionRef);
+  if (!version) {
+    res.statusCode = 404;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end(`version not found: ${projectId}/${versionRef}`);
+    return;
+  }
+  const artifactsRoot = join(version.version_dir, 'artifacts');
   const decoded = decodeURIComponent(relPath);
   const target = join(artifactsRoot, decoded);
   if (!target.startsWith(artifactsRoot)) {
