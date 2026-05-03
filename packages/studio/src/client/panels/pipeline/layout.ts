@@ -47,6 +47,14 @@ const FORWARD_EDGES: Array<[Actor, Actor, string]> = [
   ['coordinator', 'planner-lead', 'spec'],
   ['planner-lead', 'researcher', 'evidence'],
   ['planner-lead', 'builder', 'build'],
+  // builder → system: dispatcher's qa_check deterministic effect runs
+  // after every `kind=build`, emitting `kind=qa.result` from the system
+  // actor (no LLM). This is the D2 / D6 ground-truth source per
+  // AGENTS.md invariant 4.
+  ['builder', 'system', 'qa_check'],
+  // system → verifier: verifier reads qa.result for the deterministic
+  // dimensions before running CourtEval on the LLM-judged ones.
+  ['system', 'verifier', 'qa.result'],
   ['builder', 'verifier', 'verify'],
   ['verifier', 'validator', 'audit'],
   // Terminal milestone — kind=done lands here.
@@ -64,10 +72,14 @@ const BACK_EDGES: Array<[Actor, Actor, string]> = [['researcher', 'planner-lead'
  */
 const ROLLBACK_EDGES: Array<[Actor, Actor, string]> = [
   // verifier FAIL / Important deviation → respawn builder with feedback.
-  ['verifier', 'builder', 'rollback (FAIL)'],
-  // verifier Critical deviation OR validator audit caught fabrication
-  // → unwind all the way to planner-lead Phase B re-spec.
-  ['validator', 'planner-lead', 'rollback (Critical)'],
+  ['verifier', 'builder', 'rollback (Important)'],
+  // verifier Critical deviation → directly unwinds to planner-lead
+  // (skips validator audit) per code-review-protocol.md taxonomy.
+  ['verifier', 'planner-lead', 'rollback (Critical)'],
+  // validator audit catching fabrication / anti-deception breach also
+  // unwinds to planner-lead — slower path, after verifier already
+  // shipped a verdict.
+  ['validator', 'planner-lead', 'rollback (audit)'],
 ];
 
 export function buildDefaultLayout(): { nodes: Node<ActorNodeData>[]; edges: Edge[] } {
