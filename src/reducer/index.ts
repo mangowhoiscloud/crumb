@@ -8,6 +8,7 @@
 
 import type { Actor, Message, Scores, Verdict } from '../protocol/types.js';
 import type { CrumbState } from '../state/types.js';
+import { isGenreProfile, isPersistenceProfile } from '../state/types.js';
 import type { Effect } from '../effects/types.js';
 import { checkAntiDeception } from '../validator/anti-deception.js';
 
@@ -107,9 +108,23 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
       // can route. true → gemini-sdk (programmatic video evidence), false →
       // claude-local / ambient (LLM-driven text research). Replaces the previous
       // gemini-sdk text-only stub which emitted empty reference_games[] regardless.
-      const goalData = (event.data ?? {}) as { video_refs?: unknown };
+      const goalData = (event.data ?? {}) as {
+        video_refs?: unknown;
+        genre_profile?: unknown;
+        persistence_profile?: unknown;
+      };
       const refs = Array.isArray(goalData.video_refs) ? goalData.video_refs : [];
       next.goal_has_video_refs = refs.some((r) => typeof r === 'string' && r.length > 0);
+      // v0.4: explicit profile pre-selection from CLI flags / Studio picker.
+      // When absent, leave undefined so planner-lead resolves via researcher
+      // proposal (genre) + leaderboard-marker trigger logic (persistence).
+      // See agents/specialists/game-design.md §1.3 / §1.4.
+      if (isGenreProfile(goalData.genre_profile)) {
+        next.task_ledger.genre_profile = goalData.genre_profile;
+      }
+      if (isPersistenceProfile(goalData.persistence_profile)) {
+        next.task_ledger.persistence_profile = goalData.persistence_profile;
+      }
       next.progress_ledger.next_speaker = 'planner-lead';
       effects.push({
         type: 'spawn',

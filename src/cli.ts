@@ -24,7 +24,13 @@ import { runSession } from './loop/coordinator.js';
 import { readAll } from './transcript/reader.js';
 import { getTranscriptWriter, type TranscriptWriter } from './transcript/writer.js';
 import { reduce } from './reducer/index.js';
-import { initialState } from './state/types.js';
+import {
+  initialState,
+  isGenreProfile,
+  isPersistenceProfile,
+  GENRE_PROFILES,
+  PERSISTENCE_PROFILES,
+} from './state/types.js';
 import { ClaudeLocalAdapter } from './adapters/claude-local.js';
 import { CodexLocalAdapter } from './adapters/codex-local.js';
 import {
@@ -143,6 +149,20 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
         .map((s) => s.trim())
         .filter((s) => s.length > 0)
     : undefined;
+  // v0.4: --genre / --persistence flags pre-select profile axes. When absent
+  // the planner-lead resolves auto-detect (genre) / runs §1.4 trigger
+  // (persistence). Validate against the enum so a typo dies fast at CLI
+  // boundary instead of silently dropping in the reducer.
+  const genreProfile = args.flags.get('genre');
+  if (genreProfile && !isGenreProfile(genreProfile)) {
+    throw new Error(`--genre must be one of: ${GENRE_PROFILES.join(' | ')}; got: ${genreProfile}`);
+  }
+  const persistenceProfile = args.flags.get('persistence');
+  if (persistenceProfile && !isPersistenceProfile(persistenceProfile)) {
+    throw new Error(
+      `--persistence must be one of: ${PERSISTENCE_PROFILES.join(' | ')}; got: ${persistenceProfile}`,
+    );
+  }
 
   // eslint-disable-next-line no-console
   console.log(`[crumb] session=${sessionId} dir=${sessionDir}`);
@@ -179,6 +199,8 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
       repoRoot,
       adapterOverride,
       ...(videoRefs && videoRefs.length > 0 ? { videoRefs } : {}),
+      ...(genreProfile ? { genreProfile } : {}),
+      ...(persistenceProfile ? { persistenceProfile } : {}),
       presetName,
       idleTimeoutMs,
       perSpawnTimeoutMs,
@@ -1285,6 +1307,15 @@ Flags (run):
                       명시 없으면 ambient (entry host 따라감).
   --adapter <id>      force every actor to one adapter (override preset). claude-local /
                       codex-local / mock. 디버깅용.
+  --genre <profile>   v0.4: pre-select genre profile. one of:
+                        auto-detect (default — researcher proposes)
+                        casual-portrait | pixel-arcade | sidescroll-2d | flash-3d-arcade
+                      see agents/specialists/game-design.md §1.3.
+  --persistence <p>   v0.4: pre-select persistence profile. one of:
+                        local-only (default Dexie) | postgres-anon (Supabase) |
+                        edge-orm (Cloudflare D1 + Drizzle, opt-in worker tier) |
+                        firebase-realtime (alpha)
+                      see agents/specialists/game-design.md §1.4.
 
 Env (subprocess agents only):
   CRUMB_TRANSCRIPT_PATH  full path to transcript.jsonl

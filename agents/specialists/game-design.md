@@ -235,17 +235,194 @@ end-to-end.
 "Anonymous auth + RLS for game leaderboards" (2025-11), `pg_cron` materialized
 view refresh pattern (2024-2025 leaderboard hot-row mitigation).
 
-## §2 Forbidden
+### §1.3 Genre profile axis (v0.4 — 4 profiles)
 
-| Forbidden | Reason |
-|---|---|
-| ❌ npm bundlers (webpack / vite / parcel / esbuild) | produces output that needs `npm install` to evaluate; defeats "run as the README says" |
-| ❌ native engine output (Unity / Godot / Unreal binaries) | not portable, not LLM-emit-able in plain text |
-| ❌ Three.js / Babylon | outside the casual mobile envelope |
-| ❌ external asset URLs except embedded `data:` URIs and the Phaser CDN | breaks offline run |
-| ❌ Phaser 2 syntax | use 3.80+ (Scene class, ArcadePhysics, etc.) |
-| ❌ network requests at runtime | game must run offline after CDN load |
-| ❌ proprietary game references (IAP, ads, live ops) | P0 scope |
+Orthogonal to §1.1 (envelope) and §1.2 / §1.4 (persistence). Set via `task_ledger.genre_profile`:
+- Studio picker / `crumb run --genre <profile>` — explicit
+- researcher named-game lock-in (`agents/researcher.md` §1.5) when `auto-detect` (default)
+
+§1.1 above is the **profile A baseline** (`casual-portrait`). Profiles B–C adapt the envelope per below; profile D (`flash-3d-arcade`) replaces the framework entirely.
+
+#### §1.3.A `casual-portrait` (default — un-flagged sessions land here)
+
+- Stack: Phaser 3.80 + Canvas 2D + portrait 320–428
+- Use case: match-3 / merge / clicker / tap-runner / drop-and-stack
+- §1.1 envelope applies as-is — no changes
+
+#### §1.3.B `pixel-arcade`
+
+- Stack: Phaser 3.80 + `pixelArt: true` + locked palette + integer-aligned positions
+- Orientation: portrait OR landscape
+- Use case: top-down pixel adventure / pixel platformer (small) / shmup
+- Adaptations to §1.1:
+  - `gameConfig.js`: `{ pixelArt: true, roundPixels: true }`
+  - `index.html` adds `image-rendering: pixelated` on `<canvas>`
+  - All sprite positions integer-aligned (`Math.round`); subpixel motion forbidden
+  - Locked palette from lospec.com (16 / 25 colors max — PICO-8 / NES / GameBoy DMG-04)
+  - Sprite gen procedural-first (`fillRect(x,y,1,1)` 1-pixel discipline); PixelLab.ai API allowed as fallback (4/8-direction walks)
+  - Animation: 4-frame walk @ 8 fps, 2-frame idle @ 4 fps (NES family standard)
+  - Screen shake: integer-snapped 2 / 4 / 8 px tiers (no float interpolation — see `agents/specialists/game-vibe.md` §pixel)
+  - Anti-aliased text forbidden (use bitmap font sprite)
+
+#### §1.3.C `sidescroll-2d`
+
+- Stack: Phaser 3.80 + ArcadePhysics + landscape 16:9 (640×360 logical, scaled)
+- Use case: side-scrolling platformer / horizontal shmup / autoscroll runner
+- Adaptations to §1.1:
+  - `gameConfig.js`: `{ physics: { default: 'arcade', arcade: { gravity: { y: 800 }, debug: false } } }`
+  - File-count cap raised to ≤ 30 (entities/, levels/, systems/state-machines)
+  - Bundle cap raised to ≤ 8 MB (allow tilemap atlas)
+  - Camera: `cameras.main.startFollow(player, true, 0.1, 0.1)` (smooth lerp)
+  - Parallax: 3–5 TileSprite layers at scrollFactor 0.2 / 0.5 / 1.0 / 1.5 / 2.0
+  - Hit-stop: on damage, `physics.world.timeScale = 0` for 16–32 ms (see `game-vibe.md` §sidescroll)
+  - Coyote time: 80–120 ms grace after leaving floor
+  - Jump buffer: 80–120 ms input grace before landing
+  - Player state machine: `idle | run | jump | fall | hurt | dead` in `src/entities/Player.js`
+  - Level data: 2D array of tile indices in `src/levels/<id>.json` (procedural OR hand-authored; no `.tmx`)
+  - Touch fallback: on-screen DPad (left half = move, right half = jump/action) in `src/systems/InputManager.js`
+
+#### §1.3.D `flash-3d-arcade` (envelope-relaxed — opt-in only, never auto-selected)
+
+- Stack: Three.js r170+ via CDN + WebGL2 + landscape 16:9
+- Use case: low-poly racer / asteroid shooter / dogfight / 3rd-person runner / first-person arcade (Flash-era newgrounds.com homage)
+- **Adaptations REPLACE §1.1** (not extend):
+  - Framework: Three.js r170 (CDN unpkg + importmap)
+    ```html
+    <script type="importmap">
+      { "imports": { "three": "https://unpkg.com/three@0.170/build/three.module.js" } }
+    </script>
+    ```
+  - Renderer: `WebGLRenderer({ antialias: true })`, `outputColorSpace = SRGBColorSpace`
+  - Geometry: `BoxGeometry / SphereGeometry / CylinderGeometry / TorusGeometry / PlaneGeometry` primitives only (v0.1 of profile D — keeps emit surface in plaintext)
+  - Material: `MeshBasicMaterial / MeshStandardMaterial / MeshLambertMaterial` (no `MeshPhysicalMaterial` — LLM struggles with PBR per utsubo 2026)
+  - Lighting: `AmbientLight + DirectionalLight` (no shadow maps for v0.1; flat-look "Flash" homage)
+  - Camera: `PerspectiveCamera fov=75`; `OrbitControls` (exploration) OR fixed 3rd-person (racer)
+  - Scene: ≤ 100 meshes (draw call budget for mobile WebGL2)
+  - Post-FX (optional): `EffectComposer + UnrealBloomPass + FilmPass` (Flash-era CRT vibe)
+  - Physics (optional): `cannon-es` OR `rapier3d` (CDN-loadable) OR Three-native raycasting only
+  - File count: ≤ 30
+  - Bundle: ≤ 12 MB (Three.js core ~700 KB + post-fx ~50 KB + cannon-es ~150 KB + own code)
+  - Boot scene replaced: `src/main.js` instantiates `Scene + Camera + Renderer + animate()` loop directly (no Phaser scene manager)
+- **§2 forbidden list relaxed for this profile only** (Three.js entry inverted; see §2 update below)
+- Forbidden under §1.3.D specifically (additive to §2):
+  - glTF / FBX / OBJ imports (v0.1 — primitives only)
+  - PBR materials with `envMap / roughnessMap / metalnessMap`
+  - Real-time shadows (use baked AO via vertex colors)
+  - Skinned mesh animation (use `Object3D` translation/rotation)
+  - Multiplayer / WebRTC / VR / AR
+- Frontier backing: Three.js 270× downloads vs Babylon, 337× vs PlayCanvas (utsubo 2026); llms.txt support (utsubo 2026); Pieter Levels Vibe Coding Game Jam 2025-Q4
+
+### §1.4 Persistence profile axis (v0.4 — 4 profiles)
+
+Orthogonal to §1.3. Set via `task_ledger.persistence_profile`:
+- Studio picker / `crumb run --persistence <profile>` — explicit
+- planner-lead step.spec auto-set when `kind=goal` body matches leaderboard markers (existing §1.2 trigger preserved)
+- Default: `local-only` for un-flagged sessions
+
+#### §1.4.local-only — IndexedDB + Dexie (new default)
+
+Pure browser-side persistence. No env vars. No worker tier. ~50 MB / origin practical (browser-enforced).
+
+- Add to §1.1 file tree: `src/systems/PersistenceManager.js` — Dexie wrapper
+- Implementation:
+  ```js
+  // src/systems/PersistenceManager.js
+  import Dexie from 'https://esm.sh/dexie@4'
+  const db = new Dexie('crumb-game-<slug>')
+  db.version(1).stores({
+    runs: '++id, score, duration_ms, seed, created_at',
+    best: '&game_slug, best_score'
+  })
+  export async function saveRun({ score, duration_ms, seed }) {
+    return db.runs.add({ score, duration_ms, seed, created_at: Date.now() })
+  }
+  export async function topScores(limit = 10) {
+    return db.runs.orderBy('score').reverse().limit(limit).toArray()
+  }
+  ```
+- qa-runner D2 ground truth: Playwright headless verifies:
+  - (a) `Dexie` imports without throwing
+  - (b) `db.runs.add(...)` returns numeric id
+  - (c) `db.runs.orderBy('score').reverse().limit(10)` returns array
+- No env required. **Default behavior for un-flagged sessions** (replaces silent "no persistence").
+- Frontier backing: Dexie.org 2026; PkgPulse 2026 (`useLiveQuery` makes IndexedDB the single source of truth).
+
+#### §1.4.postgres-anon — Supabase + anon-auth + RLS
+
+See §1.2 above for full schema + qa.result invariants. Triggered by leaderboard markers (existing trigger logic preserved).
+
+#### §1.4.edge-orm — Cloudflare D1 + Drizzle ORM + Worker (envelope-relaxed)
+
+**Lifts §1.1 "no worker tier" — opt-in only.** Adds a Cloudflare Pages Function (`functions/api/runs.ts`) that the browser hits via `fetch('/api/runs')`.
+
+- Add to file tree:
+  - `functions/api/runs.ts` — Cloudflare Pages Function (TypeScript)
+  - `functions/schema.ts` — Drizzle schema
+  - `wrangler.toml` — Cloudflare config + D1 binding
+  - `src/systems/PersistenceManager.js` — `fetch('/api/runs', ...)` wrapper
+- Schema:
+  ```typescript
+  // functions/schema.ts
+  import { sqliteTable, integer, text } from 'drizzle-orm/sqlite-core'
+  export const runs = sqliteTable('runs', {
+    id:          integer('id').primaryKey({ autoIncrement: true }),
+    game_slug:   text('game_slug').notNull(),
+    score:       integer('score').notNull(),
+    duration_ms: integer('duration_ms').notNull(),
+    seed:        text('seed'),
+    created_at:  integer('created_at').notNull()
+  })
+  ```
+- Worker:
+  ```typescript
+  // functions/api/runs.ts
+  import { drizzle } from 'drizzle-orm/d1'
+  import { runs } from '../schema'
+  export const onRequestPost: PagesFunction<{DB: D1Database}> = async (ctx) => {
+    const db = drizzle(ctx.env.DB)
+    const body = await ctx.request.json()
+    await db.insert(runs).values({ ...body, created_at: Date.now() })
+    return Response.json({ ok: true })
+  }
+  ```
+- qa-runner D2 ground truth: spawns `wrangler dev` (default port 8787) and verifies:
+  - (a) `wrangler dev` boots
+  - (b) `POST /api/runs` returns 200 with valid body
+  - (c) D1 migration applies cleanly (`wrangler d1 migrations apply <db> --local`)
+  - (d) `GET /api/runs?game_slug=<x>&limit=10` returns ordered rows
+- **Soft fallback**: when `wrangler` CLI is not on PATH → qa-runner emits `kind=note` with `data.reason="wrangler_not_found"`, downgrades D2 to PARTIAL (mirrors §1.2 `CRUMB_PG_URL`-missing fallback).
+- Tradeoff: type-safe end-to-end + single-digit-ms edge queries; but requires `wrangler` CLI (`npm install -g wrangler`) for full qa.result.
+- **Forbidden under §1.4.edge-orm specifically**: writing to D1 from anywhere except the Worker (no direct browser → D1 — Workers-only access model is the security boundary).
+- Frontier backing: orm.drizzle.team Cloudflare D1 docs ("Drizzle ORM lives on the Edge"); DEV 2025-2026 ("SQLite at the Edge Without the Pain").
+
+#### §1.4.firebase-realtime — alpha (P0 제외)
+
+Reserved profile name. Not implemented in v0.4. Use case: live ghost replay, multi-cursor co-op.
+
+#### §1.4 trigger logic (planner-lead step.spec)
+
+```
+if --persistence flag set or task_ledger.persistence_profile pre-populated:
+  → use that
+elif kind=goal body matches leaderboard markers
+     ("랭킹" | "leaderboard" | "ranking" | "high score" | "기록" | "하이스코어" | "점수 저장" | "score persistence"):
+  → postgres-anon (existing §1.2 trigger preserved for backward compat)
+else:
+  → local-only (new default)
+```
+
+## §2 Forbidden (v0.4 — genre/persistence-profile-aware)
+
+| Forbidden | Reason | Profile exception? |
+|---|---|---|
+| ❌ npm bundlers (webpack / vite / parcel / esbuild) | produces output that needs `npm install` to evaluate; defeats "run as the README says" | none |
+| ❌ native engine output (Unity / Godot / Unreal binaries) | not portable, not LLM-emit-able in plain text | none |
+| ❌ Three.js / Babylon | outside casual mobile envelope (profiles A–C) | **§1.3.D `flash-3d-arcade` allows Three.js r170 only** |
+| ❌ Worker / server tier | static-PWA envelope (profiles A–C + persistence local-only / postgres-anon) | **§1.4.edge-orm allows a Cloudflare Pages Function only** |
+| ❌ external asset URLs except embedded `data:` URIs and the Phaser CDN | breaks offline run | profile-D extends allowlist to `unpkg.com/three@0.170/*` |
+| ❌ Phaser 2 syntax | use 3.80+ (Scene class, ArcadePhysics, etc.) | N/A under §1.3.D (Three.js doesn't use Phaser) |
+| ❌ network requests at runtime (game state) | game must run offline after CDN load | **§1.4.edge-orm allows same-origin `/api/*` only** |
+| ❌ proprietary game references (IAP, ads, live ops) | P0 scope | none |
 
 ## §2.5 Visual identity input — DESIGN.md (VoltAgent format)
 
@@ -409,10 +586,10 @@ Planner-lead's final synth combines step.research + step.design into `artifacts/
 
 | Actor | Reads | Why |
 |---|---|---|
-| `researcher` | §1 envelope (rejects out-of-envelope mechanic suggestions) + §3 video evidence schema (output format) + §4 synth schema (output format) | Sandwich inline-specialist |
-| `planner-lead` step.design | §1 envelope (rejects visual choices that violate it) + §5 DESIGN.md synth format | Sandwich inline-specialist |
-| `builder` | §1 envelope + §2 forbidden (binding constraint while writing `artifacts/game/**`) + §5 (reads `artifacts/DESIGN.md` per format) | Sandwich §"Inputs" |
-| `verifier` | §1 + §2 (D6.portability via qa.result lookup) + §3.3/§4 evidence schema (D5 anti-deception rule) | CourtEval D5/D6 input |
+| `researcher` | §1 envelope (rejects out-of-envelope mechanic suggestions) + §1.3 genre profile axis (proposes profile when `auto-detect`) + §3 video evidence schema + §4 synth schema | Sandwich inline-specialist |
+| `planner-lead` step.design | §1 envelope + §1.3 genre profile (selects template + envelope adaptations) + §1.4 persistence profile (selects PersistenceManager template) + §5 DESIGN.md synth format | Sandwich inline-specialist |
+| `builder` | §1 envelope + §1.3 (file-tree template + framework + envelope adaptations per profile) + §1.4 (PersistenceManager + qa-runner expectations) + §2 forbidden (binding while writing `artifacts/game/**`) + §5 (reads `artifacts/DESIGN.md` per format) | Sandwich §"Inputs" |
+| `verifier` | §1 + §1.3 (per-genre rubric) + §1.4 (per-persistence qa.result invariants) + §2 (D6.portability via qa.result lookup) + §3.3/§4 evidence schema (D5 anti-deception rule) | CourtEval D5/D6 input |
 
 ## §6.5 LLM playthrough — verifier responsibility (v0.3.1)
 
