@@ -1,223 +1,222 @@
 # Crumb
 
-> Multi-agent execution harness for casual game prototyping. Pitch a game in one line; multi-host AI coding agents collaborate through Planner → Builder → deterministic QA check → Verifier (CourtEval); intervene anytime via natural language.
+> Multi-agent execution harness for casual game prototyping. Pitch a game in one line; AI coding agents (Claude Code / Codex / Gemini CLI) collaborate through Planner → Builder → deterministic QA → Verifier; you watch, intervene, release. Every step is a replay-deterministic transcript.
 
 [![CI](https://github.com/mangowhoiscloud/crumb/actions/workflows/ci.yml/badge.svg)](https://github.com/mangowhoiscloud/crumb/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Crumb is named after** (1) the small piece of a bagel — Bagelcode's signature, (2) the **breadcrumb pattern** widely used in LLM agent systems for path tracing and error steering (Hansel & Gretel metaphor), (3) the breadcrumb trail of agent decisions left in `transcript.jsonl` for the user to follow.
+Built for the [Bagelcode New Title Team AI Developer recruitment task](https://career.bagelcode.com/ko/o/208045) (deadline 2026-05-03 23:59 KST). 한국어 문서: [README.ko.md](./README.ko.md).
 
-## What it is
+---
 
-Crumb treats multi-agent collaboration as an **observable execution protocol**, not just a chat interface. Every message, tool call, artifact, user intervention, deterministic QA result, judge score, and reasoning summary is recorded as a **replay-deterministic JSONL transcript** (35 kinds × 11 fields × 13 specialist steps × 8 actors).
+## What you'll get in 5 minutes
 
-Built for the [Bagelcode New Title Team AI Developer recruitment task](https://career.bagelcode.com/ko/o/208045) (2026-05-03 deadline). See [README.ko.md](./README.ko.md) for Korean.
+After running two commands you'll have:
 
-### Mail verbatim alignment (recruiter ctrl-F)
+1. **A working browser console** at `http://127.0.0.1:7321/` (Crumb Studio) — sidebar with sessions, interactive Pipeline canvas, live transcript feed, sandboxed iframe Output preview, scorecard with anti-deception source attribution.
+2. **A first session** that you can spawn with one CLI line — even with zero auth (mock adapter, deterministic in ~1 second).
+3. **A real game** when you're ready: log into Claude Code (Max subscription **strongly recommended** — see below), pitch in natural language, and watch the agents collaborate.
 
-| Mail keyword | Where it lands in Crumb |
-|---|---|
-| "Claude Code, Codex, Gemini CLI **등 다양한 에이전트를 동시에 사용**" | `bagelcode-cross-3way` preset (default) — builder=Codex, verifier=Gemini, rest=ambient. 3-host first-class. |
-| "여러 AI 에이전트가 **서로 통신**" | 8 actors × 35 transcript kinds, `kind=handoff.{requested,rollback}` between actors. |
-| "사용자가 협업 과정에 **개입하거나 관찰**" | 5 user.* events × 4 host = 20-cell matrix. Natural language → `kind=user.intervene`. |
-| "통신 방식 / 프로토콜 / UI **자유**" | JSONL transcript + 4 entry path (Claude Code / Codex / Gemini / headless). |
-| "AI 코딩 에이전트를 사용하여 개발" | Built with Claude Code + Codex; commits, sandwich files, helpers, OTel exporter all show provenance. |
-| "**README대로 실행**시 동작" | `git clone … && npm run setup && npx crumb run --goal "…" --adapter mock` — zero auth, deterministic. |
-| "**.md 파일 포함**" | agents/*.md (5) + skills/*.md (5) + specialists/*.md (3) + .{claude,codex,gemini}/ entries (5). |
-| "JSONL **또는** 녹화" | `transcript.jsonl` 35 kinds; demo screencast follow-up. |
+The same transcript powers replay (`crumb replay`), debugging (`crumb debug`), and OTel export (`crumb export`) — there is no hidden state.
 
-## Quickstart
+---
 
-**Two commands, no symlinks, no global install:**
+## Quickstart (zero auth)
+
+> Requires **Node 18+** (works on macOS / Linux / Windows / WSL2).
 
 ```bash
-git clone https://github.com/mangowhoiscloud/crumb.git && cd crumb
+git clone https://github.com/mangowhoiscloud/crumb.git
+cd crumb
 npm run setup
 ```
 
-`npm run setup` runs three idempotent steps inside the cloned directory:
+`npm run setup` is a single idempotent command that:
 
-1. `npm install` — fetches deps; the `postinstall` hook pre-caches the Playwright Chromium binary so `qa_check` D6 portability works on first run.
-2. `npm run build` — TypeScript compile of root + the `@crumb/studio` workspace.
-3. `crumb doctor` — environment probe (3 host CLIs, adapter health, recommended preset). Best-effort; partial auth is normal on first install.
+1. Installs npm dependencies (the `postinstall` hook pre-caches Playwright Chromium so the deterministic `qa_check` D6 portability gate works on first run).
+2. Builds both the root package and `@crumb/studio` workspace (TypeScript compile + Vite client bundle).
+3. Runs `crumb doctor` — a read-only environment probe that tells you which presets your machine can run (best-effort; partial auth is fine on first install).
 
-Then run Crumb without putting anything on your global `PATH` — both bin entries resolve via `npx` directly:
+**Skip the Chromium download** (CI / air-gapped):
+
+```bash
+CRUMB_SKIP_PLAYWRIGHT_INSTALL=1 npm run setup
+```
+
+Then run a deterministic smoke session — **no auth required**, finishes in ~1 second:
 
 ```bash
 npx crumb run --goal "60-second match-3 with combo bonus" --adapter mock --idle-timeout 5000
-npx crumb-studio                  # http://127.0.0.1:7321/ — auto-opens browser
 ```
 
-The `--adapter mock` line is the **deterministic happy-path smoke** — zero auth required, finishes in ~1 s, ends with a 26-event transcript and a PASS verdict. It's what the recruiter / evaluator should run first to confirm the install is healthy. Replay yields identical state (`npx crumb replay <session-id>`).
-
-> **Why no `npm link`, no global install?** Global symlinks tangle Node's resolution under monorepo workspaces, leak across user accounts on shared machines, and must be tracked manually for clean uninstall. `npx <bin>` resolves the workspace `bin` directly with zero global state, so `git clone`-and-delete is enough to remove every Crumb file.
-
-> **`crumb` on npm is unrelated.** The npm package named `crumb` (v7.x) is a separate project with no connection to this repo. Crumb is currently **clone-only** (no npm publish until after the Bagelcode evaluation). Do not `npm i -g crumb` — it will not install this codebase.
-
-> **Skipping the Chromium download** (CI / air-gapped): `CRUMB_SKIP_PLAYWRIGHT_INSTALL=1 npm run setup`. The qa-check D6 portability gate stays signal-only; the D2 lint + size gate still runs.
-
-### Update
+You'll see a 26-event transcript and a `PASS` verdict. Replay yields identical state:
 
 ```bash
-cd crumb && npm run update           # git pull --ff-only + setup again
+npx crumb replay <session-id>      # the session-id is printed at the top of the run output
 ```
 
-Refuses to run if the working tree is dirty so local edits are never silently overwritten.
+> **Why `npx`, not `npm link` or `npm i -g`?** Global symlinks tangle Node's resolution under monorepo workspaces and leak across user accounts. `npx <bin>` resolves the workspace bin directly with zero global state, so removing the clone is enough to uninstall every Crumb file.
 
-### Uninstall
+> **`crumb` on npm is a different package.** The npm package named `crumb` (v7.x) is unrelated to this repository. Crumb is **clone-only** until after the Bagelcode evaluation. Do not `npm i -g crumb` — it will not install this codebase.
 
-Crumb does not symlink anything onto your `PATH`, so removal is just file deletion:
+---
+
+## Live Studio (the browser console)
+
+Crumb ships a single-binary Node HTTP + SSE server. Default port `7321`, bound to `127.0.0.1` only — no firewall prompt on macOS / Windows.
 
 ```bash
-npm run uninstall                       # remove build artifacts (dist/, node_modules/)
-npm run uninstall -- --purge-data       # also remove ~/.crumb (sessions, projects)
-npm run uninstall -- --purge-browsers   # also remove the Playwright chromium cache
-rm -rf "$(pwd)"                         # finally, remove the clone itself
+npx crumb-studio                   # http://127.0.0.1:7321/  (auto-opens browser)
+npx crumb-studio --no-open         # headless / SSH / CI    (just print the URL)
+npx crumb-studio --port 8080       # alternate port
 ```
 
-### Reset
+What the browser surface gives you:
+
+| Surface | What it shows |
+|---|---|
+| **Sidebar** | Project-grouped session list. ＋ button starts a new `crumb run` (cascading goal + preset + per-actor binding form). HealthBadge + theme + density toggles in the header. |
+| **Scorecard strip** | D1–D6 composite headline + 6-axis radar + drilldown rows + sparkline trajectory + verdict pill. Every score row carries a `LLM` / `QA` / `AUTO` source-attribution chip per AGENTS.md anti-deception invariant. |
+| **Error budget strip** | respec / verify / token bars; tone shifts amber at 60%, red at 85% so you can intervene before the reducer cuts the run off. |
+| **Pipeline tab** (interactive) | React Flow + dagre canvas. 8 actor nodes with lane colors, drag-to-rearrange, layout persists per session and per project. Click a node → DetailRail flips to NodeInspector. **Sticky-Note annotations**, **Save default layout**, **Export / Import JSON** (M9 polish). |
+| **Waterfall + Service Map tabs** | Wall-clock per-actor lanes; handoff edge aggregation. |
+| **Logs / Output / Transcript tabs** | Per-actor spawn-log tail; sandboxed iframe game preview; grep-filtered transcript flat scroll. **Output Source toggle** (Session ↔ Version) so you can swap to any frozen release manifest's artifacts in one click. |
+| **Tool Trace tab** | Per-actor grouped `tool.call` events with cumulative ms — useful when an adapter is "thinking" and you want to know what it's actually doing. |
+| **Versions tab** | Released milestone browser. Click a row → Output panel pins to that frozen release; ↩ button returns to live. |
+| **Bottom panels** | Agent Narrative + Live Execution Feed (independently dockable, drag-out into popout windows). |
+| **Slash bar** | `/approve`, `/veto <reason>`, `/pause [@actor]`, `/goto <actor>`, `/swap <from>=<adapter>`, `/append <text>`, `@<actor> <body>`, plain text → `kind=user.intervene`. |
+| **Detail rail** | Quad-mode dispatch: Pipeline node inspector → DesignCheckPanel (when qa.result has design_check) → event detail → outlier mode (future). |
+
+Drag any tab out of the dock for a popout window (`window.open` + `BroadcastChannel`). Theme + density + minimap state all persist in `localStorage`.
+
+---
+
+## Run with real agents
+
+Crumb is built around the recruiter mail's "Claude Code, Codex, Gemini CLI 등 동시 사용" requirement. Authenticate the providers you have — **any subset is fine**, and Crumb never forces a default. `crumb doctor` shows you exactly which presets your environment can actually run.
+
+> **Recommended: Claude Code with a Max plan.** The default ambient binding pairs Crumb with whichever host CLI you launched from; if that's Claude Code, every actor goes through Anthropic's Claude. The free `claude` plan rate-limits hard during multi-step planning + verification flows, so Max (or higher) is what we use for evaluator-grade runs. If you only have the free tier, prefer `--adapter mock` for the smoke run and `solo` preset (single-host single-model) for full sessions.
 
 ```bash
-npm run reset                        # rm -rf dist + node_modules; preserves ~/.crumb + chromium cache
-npm run setup                        # rebuild from a clean slate
-```
+# Authenticate the providers you have:
+claude login            # Anthropic Claude Max — recommended baseline
+codex login             # OpenAI Codex Plus    — optional (enables cross-3way)
+gemini login            # Google Gemini Advanced — optional (enables cross-3way)
 
-Useful when the build is in a bad state or to reproduce "fresh-clone" issues without re-cloning.
+# Then either pitch in natural language from inside Claude Code:
+$ claude
+> /crumb 60초 매치-3 콤보 보너스 게임 만들어줘
 
-### Run with real agents (after `claude login` / `codex login` / `gemini login`)
-
-```bash
-# Authenticate the providers you have (any subset is fine):
-claude login           # Anthropic Claude Max
-codex login            # OpenAI Codex Plus
-gemini login           # Google Gemini Advanced
-
-# Pin the project + run from any working directory:
+# …or run headless from any directory (pin to a stable project ULID first):
 mkdir -p ~/projects/match3 && cd ~/projects/match3
 npx --prefix /path/to/crumb crumb init --pin --label "match3"
 npx --prefix /path/to/crumb crumb run --goal "60-second match-3 with combo bonus" --preset solo
 
-# Promote the result + export to a checkable folder:
+# Promote the result to a frozen release + export to a checkable folder:
 npx --prefix /path/to/crumb crumb release <session-ulid> --as v1 --label "demo"
 npx --prefix /path/to/crumb crumb copy-artifacts v1 --to ./demo
 ```
 
-`--prefix` points npx at the cloned repo's workspace bin without a global symlink. Set `alias crumb='npx --prefix /path/to/crumb crumb'` in your shell rc if you'd like a shorter form. `provider × harness × model` decisions stay in **the user's hands** — Crumb never forces a default. Run `npx crumb doctor` to see which presets your environment can actually run.
+Use `alias crumb='npx --prefix /path/to/crumb crumb'` in your shell rc to drop the `--prefix` once you've used Crumb a few times.
 
-### Run from inside Claude Code (natural language)
+### Preset options (you choose; Crumb never forces)
 
-```text
-$ claude
-> /crumb 60초 매치-3 콤보 보너스 게임 만들어줘
-```
+`provider × harness × model` per actor — picked by **you**. Run `crumb doctor` to see which are reachable in your environment.
 
-The `.claude/skills/crumb/SKILL.md` skill hands the pitch to the headless `crumb run` resolved against the cloned repo and streams transcript events back. Natural-language interventions ("이 부분 다르게", "콤보 보너스 좀 더 짧게") flow back as `kind=user.intervene` events.
+| Preset | Binding | Use case |
+|---|---|---|
+| **(no preset)** ambient | Every actor follows the entry host (e.g. claude-code + claude-opus) | Simplest path; whatever you have authenticated |
+| **`bagelcode-cross-3way`** | builder=Codex / verifier=Gemini / rest=ambient | Recruiter mail verbatim — 3-provider cross-assemble |
+| **`mock`** | All actors = mock adapter, deterministic | CI / no auth / 1-second smoke |
+| **`sdk-enterprise`** | API key direct (subscription bypass) | Production / ToS-safe / enterprise key holders |
+| **`solo`** | Single entry host, single model | Minimal-setup demo |
+
+Cross-provider is **not a separate flag** — it's just one preset's use case. Preset files live at `.crumb/presets/*.toml`.
+
+---
 
 ## Inspect a session
 
 ```bash
-npx crumb ls                                      # list every session under ~/.crumb/projects/*/sessions/
-jq -r '"\(.kind)\t\(.from)"' \
-  ~/.crumb/projects/<project-id>/sessions/<ulid>/transcript.jsonl
-npx crumb replay <ulid>                           # re-derive state deterministically
-npx crumb status <ulid>                           # progress + last 10 events + scores
-npx crumb explain <kind>                          # schema lookup for any transcript kind
+npx crumb ls                                      # every session under ~/.crumb/projects/*/sessions/
+npx crumb status <session-id>                     # progress + last 10 events + D1-D6 scorecard
+npx crumb suggest <session-id>                    # recommend the next user action (approve / veto / pause / wait)
+npx crumb explain <kind>                          # transcript-kind schema lookup
+npx crumb replay <session-id>                     # re-derive state deterministically
+npx crumb debug <session-id>                      # F1-F7 routing fault diagnosis
+npx crumb export <session-id> --format otel       # OTel GenAI / Anthropic / chrome-trace
+npx crumb tui <session-id>                        # blessed-based live observer (terminal)
+
+# raw transcript — JSONL with 35 kinds:
+jq -r '"\(.kind)\t\(.from)\t\(.body // "")"' \
+   ~/.crumb/projects/<project-id>/sessions/<session-id>/transcript.jsonl
 ```
 
-## Live studio (browser console)
+---
 
-The studio is a single-binary Node HTTP + SSE server. **Default port `7321`,
-bound to `127.0.0.1` only**, so a fresh checkout → fresh browser tab works
-without firewall prompts on macOS / Windows. Cross-platform (chokidar with
-WSL/NFS polling fallback, no platform-specific syscalls).
+## CLI cheat sheet
 
-```bash
-# After `npm run setup` (Quickstart step), start it from the cloned repo:
-npx crumb-studio                  # http://127.0.0.1:7321/  (auto-opens browser)
-npx crumb-studio --no-open        # headless / SSH / CI    (just print the URL)
-npx crumb-studio --port 8080      # alternate port
-npx crumb-studio --bind 0.0.0.0   # expose on LAN / SSH tunnel (firewall prompt)
-```
-
-Once it's up, the browser surfaces:
-
-| View | What it shows |
-|---|---|
-| **Sidebar (left)** | Project-grouped session list. ＋ button starts a new `crumb run` (goal + preset form). Hover any session row → × dismisses it from the studio (transcript on disk untouched). |
-| **Header strip** | D1–D6 source-of-truth scorecard, always visible, updates per `kind=judge.score`. |
-| **Pipeline tab** | 9-actor DAG topology (lime pulse on the active actor, lavender ripple "weaving" each transcript event sender → next-likely target) + per-actor swimlane chip timeline. |
-| **Logs tab** (ArgoCD-inspired) | Per-actor live tail of `<session>/agent-workspace/<actor>/spawn-*.log` (full stdout / stderr from every adapter spawn). Filter / follow / clear / copy. DAG node click jumps here. |
-| **Output tab** | Sandboxed iframe live-rendering `artifacts/game/index.html`. Reload + open-in-new-tab. Playable in-place. |
-| **Live execution feed** (above input) | Terminal-style stream of every transcript event for the active session **and** every chunk of every actor's spawn log. Color-coded by kind class. |
-| **Console input** (bottom) | Slash commands (`/approve` `/veto <reason>` `/pause [@actor]` `/goto <actor>` `/note <text>`), `@actor` mentions, plain-text user.intervene. **`/crumb <goal>`** spawns a brand-new session. |
-| **Detail panel** (right, click an event) | Pipeline-position narrative ("PHASE B → C — Spec sealed"), parent → this → children thread, sandwich preview per actor, per-actor mini-console. |
-
-Cross-platform env knobs:
-
-| Variable | Effect |
-|---|---|
-| `CRUMB_HOME` | Override `~/.crumb` (sandbox / CI / multi-user setups) |
-| `CRUMB_POLL=1` | Force chokidar polling (WSL2 / Docker / NFS / SMB) |
-| `CRUMB_NO_OPEN=1` | Don't auto-launch a browser (equivalent to `--no-open`) |
-
-## CLI
-
-Every command below should be invoked via `npx crumb …` from the cloned repo (or `npx --prefix /path/to/crumb crumb …` from any other directory). `--version` and `-v` print the package version; the help text (`npx crumb --help`) carries the same table.
+Every command is invoked via `npx crumb …` from the cloned repo (or `npx --prefix /path/to/crumb crumb …` from any other directory). `npx crumb --help` prints the same table.
 
 | Command | What it does |
 |---|---|
 | `crumb run --goal "<pitch>" [--preset <name>] [--adapter <id>]` | Start a session |
 | `crumb event` | Subprocess agents pipe a JSON event in via stdin (transcript append) |
 | `crumb event tail [--all] [--kinds ...]` | Stream transcript events; private events filtered by default |
-| `crumb replay <session-dir>` | Re-derive state from `transcript.jsonl` (proves determinism) |
-| `crumb resume <session-id\|dir>` | Re-derive state + surface mid-flight resume command |
-| `crumb status <session-id\|dir>` | Progress + last 10 events + D1-D6 scorecard |
+| `crumb replay <session>` | Re-derive state from `transcript.jsonl` (proves determinism) |
+| `crumb resume <session>` | Re-derive state + surface mid-flight resume command |
+| `crumb status <session>` | Progress + last 10 events + D1-D6 scorecard |
 | `crumb explain <kind>` | Transcript-kind schema lookup |
-| `crumb suggest <session-id\|dir>` | Recommend the next user action (approve / veto / pause / wait) |
-| `crumb tui <session-id\|dir>` | Blessed-based live observer (terminal) |
+| `crumb suggest <session>` | Recommend the next user action |
+| `crumb tui <session>` | Blessed-based live observer (terminal) |
 | `crumb model [--show \| --apply "NL"]` | Per-actor model + effort + provider activation |
 | `crumb doctor` | Full environment check (3 host OAuth + adapter health + preset gating) |
-| `crumb config <natural-language>` | Preset recommendation from natural-language description |
-| `crumb debug <session-id\|dir>` | F1-F7 routing fault diagnosis from a transcript |
-| `crumb export <session-id\|dir> [--format ...]` | OTel GenAI / Anthropic / chrome://tracing export |
-| `crumb init [--host <name>] [--pin]` | Verify host entries / pin cwd to a stable project ULID |
+| `crumb config <NL>` | Preset recommendation from natural-language description |
+| `crumb debug <session>` | F1-F7 routing fault diagnosis from a transcript |
+| `crumb export <session>` | OTel GenAI / Anthropic / chrome-trace export |
+| `crumb init [--pin]` | Verify host entries / pin cwd to a stable project ULID |
 | `crumb ls` | List the current project's sessions |
-| `crumb release <session-id> [--as vN]` | Snapshot artifacts into versions/ + emit `kind=version.released` |
+| `crumb release <session> [--as vN]` | Snapshot artifacts into versions/ + emit `kind=version.released` |
 | `crumb versions` | List released milestones with parent chain |
-| `crumb copy-artifacts <session-id\|vN> --to <dest>` | Copy frozen artifacts (Bagelcode submission) |
+| `crumb copy-artifacts <session\|vN> --to <dest>` | Copy frozen artifacts (Bagelcode submission) |
 | `crumb migrate [--dry-run]` | Move legacy `<cwd>/sessions/` into `~/.crumb/projects/<id>/sessions/` |
-| `crumb studio [--port ...] [--bind ...]` | Launch the web console (alias for `crumb-studio`) |
-| `crumb --version` / `-v` | Print package version |
-| `npx crumb-studio [--port 7321] [--bind 127.0.0.1] [--no-open]` | Live observability studio (HTTP + SSE) — see "Live studio" above |
+| `crumb-studio [--port 7321] [--bind 127.0.0.1] [--no-open]` | Live observability studio (HTTP + SSE) |
 
-Lifecycle (npm scripts in the cloned repo):
+### Lifecycle scripts (npm)
 
 | Command | What it does |
 |---|---|
 | `npm run setup` | install + build + doctor (idempotent — also the update path) |
 | `npm run update` | `git pull --ff-only` then re-run setup; refuses a dirty tree |
 | `npm run uninstall [-- --purge-data] [-- --purge-browsers]` | Remove build artifacts; opt-in flags remove `~/.crumb` and Playwright cache |
-| `npm run reset` | Remove `dist/` + `node_modules/`; preserves `~/.crumb` and chromium cache |
+| `npm run reset` | Remove `dist/` + `node_modules/`; preserves `~/.crumb` + chromium cache |
 
-## Architecture (v0.1, high level)
+### Cross-platform env knobs
+
+| Variable | Effect |
+|---|---|
+| `CRUMB_HOME` | Override `~/.crumb` (sandbox / CI / multi-user setups) |
+| `CRUMB_HOMES` | Path-list of multiple homes (the studio merges sessions across all) |
+| `CRUMB_POLL=1` | Force chokidar polling (WSL2 / Docker / NFS / SMB) |
+| `CRUMB_NO_OPEN=1` | Don't auto-launch a browser (equivalent to `--no-open`) |
+| `CRUMB_SKIP_PLAYWRIGHT_INSTALL=1` | Skip the Chromium download in `npm run setup` |
+
+---
+
+## Architecture (one screen)
 
 ```
 USER (natural language) ─ goal/intervene ───▶ COORDINATOR (host harness itself)
                                         │ Task tool spawn (depth=1)
-              ┌──────────────────┬───────┴────────┬──────────────┬─────────────────┐
-              ▼                  ▼                ▼              ▼                 ▼
-        PLANNER LEAD       RESEARCHER ★       BUILDER ★      VERIFIER ★       BUILDER FALLBACK
-        (Socratic +        (v0.3.0:             (sandwich +    (CourtEval        (when Codex dies)
-         Concept;          gemini-sdk          5 skill —      inline 4 sub-
-         then handoff      Gemini 3.1 Pro      tdd-iron-law,  step: grader/
-         to researcher;    @ 10fps native      verification-  critic/
-         resume for        YouTube URL;        before-        defender/
-         Design + Synth)   step.research.      completion,    regrader)
-                           video × N +         code-review,
-        2 specialist       step.research       parallel-
-        inline +           synthesis)          dispatch,
-        game-design.md                         subagent-spawn)
-        contract
+              ┌──────────────────┬───────┴────────┬──────────────┐
+              ▼                  ▼                ▼              ▼
+        PLANNER LEAD         RESEARCHER         BUILDER       VERIFIER
+        (Socratic +          (gemini-sdk        (sandwich +    (CourtEval
+         Concept; then        Gemini 3.1 Pro    5 procedural   inline 4
+         handoff to           native YouTube    skills)        sub-step)
+         researcher;          URL @ 10fps)
+         resume for
+         Design + Synth)
               │                  │                │              │
               └──────────────────┴────────┬───────┴──────────────┘
                                           │
@@ -225,116 +224,95 @@ USER (natural language) ─ goal/intervene ───▶ COORDINATOR (host harnes
                             emits kind=qa.result (D2/D6 ground truth)
                                           │
                                           ▼
-                              transcript.jsonl (40 kind, append-only)
+                              transcript.jsonl (35 kinds, append-only)
                                           │
                                           ▼
                               control plane (pure reducer + state)
 ```
 
-- **Outer 6 actors** (incl. researcher v0.3.0) + **2 specialist** (planner inline) + **1 contract** (game-design.md, 4+ actors inline-read) + **5 skill** (procedural workflow)
+- **5 actors** + **2 specialists** (planner inline) + **1 contract** (`agents/specialists/game-design.md`) + **5 procedural skills**
 - **Multi-host 4 entry**: Claude Code skill / Codex CLI / Gemini CLI / headless `crumb run`
 - **Schema**: 35 kinds × 11 fields × 13 specialist steps × 8 actors × OTel GenAI alias
-- **3-layer scoring**: reducer-auto (D3/D4) + qa-check-effect (D2/D6, deterministic) + verifier-llm (D1, semantic)
+- **3-layer scoring**: reducer-auto (D4 + auto components of D3/D5) + qa-check-effect (D2/D6, deterministic) + verifier-llm (D1 + LLM components of D3/D5)
 - **Cost**: $0/session via subscriptions (Claude Max + Codex Plus + Gemini Advanced) — or `--adapter mock` for free
 - **Configurability**: `(harness × provider × model)` 3-tuple per actor; user picks via preset; ambient fallback follows entry host
 
-For the full canonical spec, see [wiki/concepts/bagelcode-system-architecture-v0.1.md](./wiki/concepts/bagelcode-system-architecture-v0.1.md).
+For the canonical spec, see [`wiki/concepts/bagelcode-system-architecture-v0.1.md`](./wiki/concepts/bagelcode-system-architecture-v0.1.md).
 
-## Preset options
+---
 
-`provider × harness × model` per actor — picked by you, never forced. Run `crumb doctor` to see which are reachable in your environment.
-
-| Preset | Binding | Use case |
-|---|---|---|
-| **(no preset)** ambient | Every actor follows entry host (e.g. claude-code + claude-opus-4-7) | Simplest path; whatever you have authenticated |
-| **`bagelcode-cross-3way`** | builder=codex+gpt-5.5-codex / verifier=gemini-cli+gemini-3-1-pro / rest=ambient | Bagelcode mail verbatim ("Claude Code, Codex, Gemini CLI 등 동시 사용" — *use Claude Code, Codex, Gemini CLI etc. simultaneously*). 3-provider cross-assemble |
-| **`mock`** | All actors = mock adapter | CI / no auth / deterministic demo |
-| **`sdk-enterprise`** | API key direct (subscription bypass) | Production; ToS-safe (avoids Anthropic 3rd-party OAuth restriction) |
-| **`solo`** | Single entry host, single model | Minimal-setup demo |
-
-Preset files live at `.crumb/presets/*.toml`. Cross-provider is **not a separate flag** — it's just one preset's use case.
-
-## Why these decisions?
-
-Every architecture choice traces to 2026 frontier research:
-
-- **Multi-host × 3-tuple actor binding** — Claude Code / Codex / Gemini / OpenCode CLI convergence (2026-04) on 7 common primitives. → [wiki/references/bagelcode-frontier-cli-convergence-2026.md](./wiki/references/bagelcode-frontier-cli-convergence-2026.md)
-- **5-actor split (builder ⫶ verifier)** — actor-level provider boundary required for true cross-assemble (sandwich-internal step boundary insufficient). → [wiki/concepts/bagelcode-verifier-isolation-matrix.md](./wiki/concepts/bagelcode-verifier-isolation-matrix.md) (20 sources × 4 dimensions)
-- **3-layer scoring** — CourtEval ACL 2025 + G-Eval + position-bias IJCNLP 2025 + self-bias NeurIPS 2024 + multi-judge consensus 97-98% F1. → [wiki/references/bagelcode-llm-judge-frontier-2026.md](./wiki/references/bagelcode-llm-judge-frontier-2026.md)
-- **Deterministic qa_check before verifier** — Karpathy P4 anti-deception ratchet + obra/superpowers TDD Iron Law (89K stars). LLM judge can't fake D2 (exec) when the dispatcher produces ground truth.
-- **Hub-Ledger-Spoke topology** — Lanham 2026-04 (centralized 4.4× error containment vs independent 17.2× amplification).
-- **4-actor short relay** — MIT decision theory (5-stage relay → 22.5% accuracy regression).
-- **Subprocess injection over CLAUDE.md auto-load** — Karpathy LLM.txt + AGENTS.md (Linux Foundation standard) keep agent identity controllable.
-- **OTel GenAI alias** — Datadog / Vertex / Anthropic Console / Phoenix / Langfuse export-ready.
-- **User-controlled preset** — Anthropic 2026-03 "wrong tradeoff" ("we should never have forced default reasoning effort"). `provider × harness × model` is yours to pick.
-
-See [wiki/synthesis/bagelcode-frontier-rationale-5-claims.md](./wiki/synthesis/bagelcode-frontier-rationale-5-claims.md) and [wiki/synthesis/bagelcode-host-harness-decision.md](./wiki/synthesis/bagelcode-host-harness-decision.md) for the full citation chains.
-
-## Output
-
-A successful session produces:
+## Output (what a session produces)
 
 ```
-sessions/<session-id>/
-├── transcript.jsonl                    # Replay-deterministic event log (35 kind × 11 field)
+~/.crumb/projects/<project-id>/sessions/<session-id>/
+├── transcript.jsonl                    # Replay-deterministic event log (35 × 11)
 ├── ledgers/
 │   ├── task.json                       # Cumulative facts (transcript-derivable)
 │   └── progress.json                   # Per-turn state (transcript-derivable)
 ├── artifacts/
 │   ├── game/                           # Phaser 3.80 multi-file PWA — open game/index.html
-│   │   ├── index.html                  #   entry (viewport, manifest link, sw.js register)
-│   │   ├── manifest.webmanifest        #   PWA install descriptor
+│   │   ├── index.html                  #   entry (viewport, manifest, sw.js register)
+│   │   ├── manifest.webmanifest
 │   │   ├── sw.js                       #   cache-first service worker (offline)
 │   │   ├── icon-192.png / icon-512.png
-│   │   ├── src/main.js + src/{config,scenes,entities,systems}/  # ES modules
-│   │   └── migrations/0001_init.sql    #   only when --persistence postgres opted in
+│   │   └── src/main.js + src/{config,scenes,entities,systems}/
 │   ├── spec.md                         # Acceptance criteria + rule book
 │   ├── DESIGN.md                       # Color / mechanics / motion spec
-│   └── tuning.json                     # Balance numbers (Unity ScriptableObject importable)
-├── exports/                            # ★ v0.1 — observability handoff
+│   └── tuning.json                     # Balance numbers
+├── exports/
 │   ├── otel.jsonl                      # OpenTelemetry GenAI Semantic Conventions
-│   ├── anthropic-trace.json            # Anthropic Console import format
+│   ├── anthropic-trace.json
 │   └── chrome-trace.json               # chrome://tracing visualization
-└── index.html                          # ★ v0.1 — auto-generated post-session HTML summary
+└── index.html                          # Auto-generated post-session HTML summary
 ```
 
-These are the **input asset** for a downstream Unity team — Crumb is the *prototype-validation layer* before Bagelcode's production Unity workflow.
+`crumb release <session-id> --as v1` snapshots `artifacts/` into `~/.crumb/projects/<project-id>/versions/v1/` (immutable; manifest.toml carries scorecard + sha256s). `crumb copy-artifacts v1 --to ./demo` is the Bagelcode submission line.
 
-## Status
+---
 
-```
-✅ Schema v0.1 — 35 kind × 11 field × 13 step × 9 from + D1-D6 source-of-truth scoring
-✅ Pure reducer — circuit breaker, adaptive stop, rollback, user.veto rebound (vitest)
-✅ Adapters — claude-local / codex-local / gemini-local / mock
-✅ Live dispatcher — spawn / append / hook / rollback / stop / done / qa_check
-✅ qa_check effect — deterministic ground truth (no LLM, htmlhint + playwright headless smoke)
-✅ Preset loader — (harness × provider × model) 3-tuple binding with ambient fallback
-✅ CLI — run / event / replay / resume / doctor / config / debug / ls
-✅ Skill — .claude/skills/crumb/SKILL.md (Claude Code natural-language entry)
-✅ Summary — auto-generated index.html + OTel/Anthropic/Chrome trace exports
-✅ CI — lint + typecheck + format + test (Node 18/20/22) + schema validation
+## Troubleshooting
 
-🟡 Real end-to-end run with claude-local + codex-local + gemini-local (env propagation spike pending)
-🟡 Persistence boost — flock + adapter_session_id metadata for `crumb resume` live re-entry (P1)
-🟡 MCP Provider — localhost:8765 cross-host fan-in (P1)
-🟡 --strict-cross-provider — full Builder=OpenAI / Verifier=Anthropic via host Task subagent (P1)
-🟡 Demo screencast
-```
+| Symptom | Fix |
+|---|---|
+| `Studio bundle not built` page on `http://127.0.0.1:7321/` | Run `npm run build --workspace=@crumb/studio` and reload, or just re-run `npm run setup`. |
+| `port 7321 already in use` | `lsof -ti:7321 \| xargs -r kill -9` (one-shot), or pass `--port 8080`. |
+| `claude doctor` shows broken auth even after `claude login` | Open Claude Code's settings, confirm the active org has Max access; the free plan rate-limits multi-step flows. |
+| Playwright Chromium download fails | Re-run with `CRUMB_SKIP_PLAYWRIGHT_INSTALL=1 npm run setup`. The qa-check D6 portability gate then stays signal-only; D2 lint + size still runs. |
+| `CRUMB_POLL=1` is needed under WSL2 / Docker / NFS / SMB | chokidar's native watcher misses some virtualized filesystems; polling fixes it. |
+| Sessions vanish from the sidebar after restart | Studio dismisses are volatile — the transcript on disk is untouched; restart picks up everything under `~/.crumb/projects/*/sessions/`. |
+
+---
+
+## Why these decisions?
+
+Every architecture choice traces to 2026 frontier research:
+
+- **Multi-host × 3-tuple actor binding** — Claude Code / Codex / Gemini / OpenCode CLI convergence on 7 common primitives. → [wiki/references/bagelcode-frontier-cli-convergence-2026.md](./wiki/references/bagelcode-frontier-cli-convergence-2026.md)
+- **Actor split (builder ⫶ verifier)** — actor-level provider boundary required for true cross-assemble. → [wiki/concepts/bagelcode-verifier-isolation-matrix.md](./wiki/concepts/bagelcode-verifier-isolation-matrix.md)
+- **3-layer scoring** — CourtEval ACL 2025 + G-Eval + position-bias IJCNLP 2025 + self-bias NeurIPS 2024 + multi-judge consensus 97-98% F1. → [wiki/references/bagelcode-llm-judge-frontier-2026.md](./wiki/references/bagelcode-llm-judge-frontier-2026.md)
+- **Deterministic qa_check before verifier** — Karpathy P4 anti-deception ratchet + obra/superpowers TDD Iron Law. LLM judge can't fake D2 (exec) when the dispatcher produces ground truth.
+- **Hub-Ledger-Spoke topology** — Lanham 2026-04 (centralized 4.4× error containment vs independent 17.2× amplification).
+- **Subprocess injection over CLAUDE.md auto-load** — Karpathy LLM.txt + AGENTS.md (Linux Foundation standard).
+- **OTel GenAI alias** — Datadog / Vertex / Anthropic Console / Phoenix / Langfuse export-ready.
+- **User-controlled preset** — Anthropic 2026-03 "wrong tradeoff": `provider × harness × model` is yours to pick.
+
+See [wiki/synthesis/bagelcode-frontier-rationale-5-claims.md](./wiki/synthesis/bagelcode-frontier-rationale-5-claims.md) and [wiki/synthesis/bagelcode-host-harness-decision.md](./wiki/synthesis/bagelcode-host-harness-decision.md) for full citation chains.
+
+---
 
 ## Documentation
 
-- [AGENTS.md](./AGENTS.md) — For agents/contributors working on this repo (Linux Foundation Agentic AI Foundation standard)
-- [agents/_event-protocol.md](./agents/_event-protocol.md) — How sandwich agents emit transcript events via `crumb event`
+- [AGENTS.md](./AGENTS.md) — universal contributor + AI-agent identity (Linux Foundation Agentic AI Foundation standard)
+- [agents/_event-protocol.md](./agents/_event-protocol.md) — sandwich agents emit transcript events via `crumb event`
 - [protocol/schema.md](./protocol/schema.md) — 1-page transcript spec
 - [protocol/schemas/message.schema.json](./protocol/schemas/message.schema.json) — JSON Schema (draft 2020-12)
 - [.claude/skills/crumb/SKILL.md](./.claude/skills/crumb/SKILL.md) — Claude Code host harness entry
 - [.crumb/presets/](./.crumb/presets/) — `bagelcode-cross-3way` / `mock` / `sdk-enterprise` / `solo`
 - [wiki/](./wiki/) — Bagelcode design rationale (subset of mango-wiki, 35 pages)
-  - [bagelcode-system-architecture-v0.1.md](./wiki/concepts/bagelcode-system-architecture-v0.1.md) — ★ canonical v0.1 system architecture
-  - [bagelcode-host-harness-decision.md](./wiki/synthesis/bagelcode-host-harness-decision.md) — Hybrid (Skill + headless CLI) lock
-  - [bagelcode-verifier-isolation-matrix.md](./wiki/concepts/bagelcode-verifier-isolation-matrix.md) — 20-source matrix (cross-provider opt-in backing)
-  - [bagelcode-final-design-2026.md](./wiki/concepts/bagelcode-final-design-2026.md) — §3-§9 (envelope / cache / OTel) still valid in v0.1
+- [CHANGELOG.md](./CHANGELOG.md) — release notes (Keep a Changelog 1.1.0)
+
+---
 
 ## License
 
-MIT
+MIT — see [LICENSE](./LICENSE).
