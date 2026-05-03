@@ -125,14 +125,27 @@ function parseSlash(line: string, sessionId: string): DraftMessage | null {
         data: rest ? { target_msg_id: rest } : undefined,
       };
     case 'goto': {
+      // /goto <actor> [body…]
+      // The optional body becomes BOTH the user.intervene body
+      // (visible in transcript) AND a sandwich_append for the next
+      // spawn of <actor> (via reducer's user.intervene case →
+      // collectSandwichAppends). So `/goto planner-lead Phase B
+      // 마무리…` reaches the spawned actor's system prompt directly,
+      // not just the transcript.
       const g = rest.match(/^([\w-]+)(?:\s+(.*))?$/);
       if (g && isActor(g[1])) {
+        const body = g[2]?.trim() || undefined;
+        const data: Record<string, unknown> = { goto: g[1] };
+        if (body) {
+          data.target_actor = g[1];
+          data.sandwich_append = body;
+        }
         return {
           session_id: sessionId,
           from: 'user',
           kind: 'user.intervene',
-          body: g[2]?.trim() || undefined,
-          data: { goto: g[1] },
+          ...(body ? { body } : {}),
+          data,
         };
       }
       return null;

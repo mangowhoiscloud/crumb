@@ -93,6 +93,13 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
 
   const effects: Effect[] = [];
 
+  // Phase B narrative-emit flags. Set unconditionally before the switch
+  // so the corresponding kind cases don't have to remember to flag.
+  // Consumed by autoNarrativeDebt() when assembling sandwich_appends.
+  if (event.from === 'planner-lead' && event.kind === 'step.design') {
+    next.progress_ledger.phase_b_step_design_seen = true;
+  }
+
   switch (event.kind) {
     case 'session.start': {
       // Capture wall-clock start once (loop watchdog SIGTERMs after 30min).
@@ -148,6 +155,7 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
 
     case 'spec':
     case 'spec.update': {
+      next.progress_ledger.phase_b_spec_seen = true;
       const ac = (event.data?.acceptance_criteria as string[] | undefined) ?? [];
       next.task_ledger.acceptance_criteria = ac;
       for (const item of ac) {
@@ -539,6 +547,12 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
     }
 
     case 'handoff.requested': {
+      // Track planner-lead → builder handoff explicitly so the
+      // narrative-debt detector can clear Phase B finalize debt once
+      // the handoff lands.
+      if (event.from === 'planner-lead' && event.to === 'builder') {
+        next.progress_ledger.phase_b_handoff_to_builder_seen = true;
+      }
       // Most handoffs are acknowledged here as no-ops — the actual spawn happens
       // via routing on the *content* event (spec / verify.result). Researcher is
       // the exception (v0.3.0): planner-lead emits handoff.requested(to=researcher)
@@ -993,11 +1007,57 @@ function collectSandwichAppends(
   state: CrumbState,
   actor: Actor,
 ): { source_id: string; text: string }[] {
-  return state.task_ledger.facts
+  const fromFacts = state.task_ledger.facts
     .filter(
       (f) => f.category === 'sandwich_append' && (!f.target_actor || f.target_actor === actor),
     )
     .map((f) => ({ source_id: f.source_id, text: f.text }));
+
+  // Auto-debt resolver — when the reducer can detect the actor came back
+  // mid-Phase-B (e.g. step.design emitted but no `kind=spec` written
+  // and no `kind=handoff.requested` to builder), inject a focused
+  // sandwich_append telling the actor exactly what to finalize.
+  // Without this, resumed planner-lead spawns just do Read/Bash/thinking
+  // and exit with no narrative emit, tripping stuck_count → pause.
+  const debt = autoNarrativeDebt(state, actor);
+  if (debt) {
+    fromFacts.push({ source_id: 'reducer:auto-narrative-debt', text: debt });
+  }
+  return fromFacts;
+}
+
+/**
+ * Detect "narrative debt" for the actor we're about to spawn — situations
+ * where the reducer's flags show partial progress but the required emit
+ * hasn't happened. Returns a focused sandwich_append (or null).
+ *
+ * Currently covers the planner-lead Phase B finalize pattern (the most
+ * common stall the operator hits on `crumb resume`).
+ */
+function autoNarrativeDebt(state: CrumbState, actor: Actor): string | null {
+  if (actor !== 'planner-lead') return null;
+  const p = state.progress_ledger;
+  if (!p.phase_b_step_design_seen) return null;
+  if (p.phase_b_spec_seen && p.phase_b_handoff_to_builder_seen) return null;
+
+  return [
+    'AUTO-DEBT (reducer-detected): Phase B finalize is overdue.',
+    p.phase_b_spec_seen
+      ? 'You already wrote spec.md but never handed off — emit `kind=handoff.requested` with `data.to="builder"` and a summary in `body`.'
+      : 'Your previous spawn emitted `kind=step.design` but never wrote `artifacts/spec.md` or `artifacts/DESIGN.md`. Finalize now:',
+    p.phase_b_spec_seen
+      ? null
+      : '  1. `Write` `artifacts/spec.md` (acceptance criteria + rule book; emit `kind=spec` with the full body inline).',
+    p.phase_b_spec_seen
+      ? null
+      : '  2. `Write` `artifacts/DESIGN.md` (color palette + mechanics + motion timing; reference §5 of game-design.md).',
+    p.phase_b_handoff_to_builder_seen
+      ? null
+      : `  ${p.phase_b_spec_seen ? '1' : '3'}. Emit \`kind=handoff.requested\` with \`data.to="builder"\` so the dispatcher spawns the builder.`,
+    'Do NOT loop on Read/Bash diagnostics — the reducer already saw step.design; trust it and finalize.',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function pickAdapter(
