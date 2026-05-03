@@ -20,7 +20,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename, join, relative } from 'node:path';
 
 import { parse as parseToml, stringify as stringifyToml, type JsonMap } from '@iarna/toml';
 
@@ -143,8 +143,15 @@ export function deriveSourceEventId(events: Message[]): string | undefined {
 }
 
 /**
- * Copy artifacts/* from sessionDir to versionDir/artifacts/, recording sha256 per file.
- * No links — pure copies, so the version is durable even if the source session is deleted.
+ * Copy artifacts/** from sessionDir to versionDir/artifacts/, recording sha256
+ * per file keyed by path relative to artifacts/. Pure copies (no symlinks)
+ * so the version stays durable even if the source session is deleted.
+ *
+ * v0.4.3: walks recursively. Earlier versions only enumerated top-level
+ * `readdir(srcDir)` entries which silently dropped multi-file Phaser PWAs
+ * (artifacts/game/index.html + artifacts/game/src/main.js + …) from the
+ * release. The audit lives in
+ * wiki/synthesis/bagelcode-studio-big-bang-update-2026-05-03.md §14.3.
  */
 export async function snapshotArtifacts(
   sessionDir: string,
@@ -155,13 +162,28 @@ export async function snapshotArtifacts(
   if (!existsSync(srcDir)) return {};
   await mkdir(dstDir, { recursive: true });
   const out: Record<string, string> = {};
-  const files = await readdir(srcDir);
-  for (const f of files) {
-    const src = join(srcDir, f);
-    const dst = join(dstDir, f);
-    await copyFile(src, dst);
-    const buf = await readFile(src);
-    out[basename(f)] = createHash('sha256').update(buf).digest('hex');
+
+  async function walk(currentSrc: string, currentDst: string): Promise<void> {
+    const entries = await readdir(currentSrc, { withFileTypes: true });
+    for (const entry of entries) {
+      const src = join(currentSrc, entry.name);
+      const dst = join(currentDst, entry.name);
+      if (entry.isDirectory()) {
+        await mkdir(dst, { recursive: true });
+        await walk(src, dst);
+      } else if (entry.isFile()) {
+        await copyFile(src, dst);
+        const buf = await readFile(src);
+        // Key on relative path (e.g. "game/src/main.js"), not basename, so
+        // nested files don't collide on basename within the manifest.
+        const relKey = relative(srcDir, src).split(/[\\/]/).join('/');
+        out[relKey] = createHash('sha256').update(buf).digest('hex');
+      }
+      // Skip symlinks intentionally — version snapshots must be self-contained
+      // (per §14.5 invariants) and following a symlink could escape srcDir.
+    }
   }
+
+  await walk(srcDir, dstDir);
   return out;
 }
