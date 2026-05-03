@@ -2122,8 +2122,12 @@ onSessionSelect(() => {
 //                                  agent.wake / error / handoff / plain
 //                                  log / system. Same body/grep/pause/clear
 //                                  controls as before.
-// The horizontal handle (`#feedstack-resize`) writes `--narrative-h` to
-// `<body>` and persists in localStorage `crumb.narrative-h`.
+// PR-W-Studio-A — feed on TOP, narrative on BOTTOM (swapped from v0.4.2).
+// Splitter (`#feedstack-resize`) writes `--feedstack-feed-h` (vertical) or
+// `--feedstack-feed-w` (horizontal) on the `.feedstack` container itself
+// and persists per-orientation in localStorage. Orient toggle button
+// (`#feedstack-orient`) flips data-orient between vertical (stacked) and
+// horizontal (side-by-side) — VSCode terminal pane convention.
 
 let feedPaused = false;
 let narrativePaused = false;
@@ -2322,20 +2326,176 @@ function classifyKindForFeed(kind) {
   return '';
 }
 
+// v0.5 PR-W-Studio-A — kind-specific feed formatters. The default
+// `[kind] body` rendering is fine for unknown kinds, but several event
+// kinds carry richer structured data (D1-D6 scores, exec_exit_code,
+// tokens/cost/cache, deviation type) that the generic JSON.stringify
+// truncation buries. Per-kind formatters surface what's actually
+// load-bearing per row, like Datadog's per-event field projection.
+//
+// Each formatter returns the body string to display; metadata (ts, actor,
+// kindClass) is filled in by feedLineFromTranscriptEvent. Returning null
+// falls back to the generic renderer.
+function _fmtNum(n) {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return '?';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+  return String(Math.round(n));
+}
+function _fmtCost(usd) {
+  if (typeof usd !== 'number' || !Number.isFinite(usd)) return '?';
+  return '$' + usd.toFixed(usd < 0.01 ? 4 : 3);
+}
+function _fmtMs(ms) {
+  if (typeof ms !== 'number' || !Number.isFinite(ms)) return '?';
+  if (ms >= 60000) return (ms / 60000).toFixed(1) + 'm';
+  if (ms >= 1000) return (ms / 1000).toFixed(1) + 's';
+  return ms + 'ms';
+}
+function _fmtScores(scores) {
+  if (!scores || typeof scores !== 'object') return '';
+  const dims = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6']
+    .map((k) => {
+      const e = scores[k];
+      const v = typeof e === 'number' ? e : (e && typeof e === 'object' ? e.score : null);
+      return typeof v === 'number' ? `${k}=${v.toFixed(1)}` : null;
+    })
+    .filter(Boolean);
+  return dims.join(' ');
+}
+
+const FEED_FORMATTERS = {
+  'session.start': (m) => {
+    const goal = m.body || (m.data && m.data.goal) || '';
+    const preset = m.data && m.data.preset ? `preset=${m.data.preset}` : '';
+    return `🌱 session_start ${goal ? '· ' + goal.slice(0, 80) : ''} ${preset}`.trim();
+  },
+  'session.end': (m) => {
+    return `🛑 session_end · ${m.body || ''}`.trim();
+  },
+  'goal': (m) => {
+    return `🎯 goal · ${(m.body || '').slice(0, 120)}`;
+  },
+  'agent.wake': (m) => {
+    return `▶ wake @${m.from}` + (m.body ? ` · ${m.body.slice(0, 80)}` : '');
+  },
+  'agent.stop': (m) => {
+    const md = m.metadata || {};
+    const parts = [];
+    if (md.latency_ms) parts.push(_fmtMs(md.latency_ms));
+    if (typeof md.tokens_in === 'number') parts.push(`in=${_fmtNum(md.tokens_in)}`);
+    if (typeof md.tokens_out === 'number') parts.push(`out=${_fmtNum(md.tokens_out)}`);
+    if (typeof md.cache_read === 'number' && md.cache_read > 0) {
+      const ratio = md.tokens_in ? Math.round((md.cache_read / md.tokens_in) * 100) : null;
+      parts.push(`cache=${_fmtNum(md.cache_read)}` + (ratio !== null ? `(${ratio}%)` : ''));
+    }
+    if (typeof md.cost_usd === 'number') parts.push(_fmtCost(md.cost_usd));
+    return `■ stop @${m.from}` + (parts.length ? ` · ${parts.join(' · ')}` : '');
+  },
+  'spec': (m) => {
+    const acCount = m.data && Array.isArray(m.data.acceptance_criteria)
+      ? m.data.acceptance_criteria.length
+      : null;
+    return `📜 spec @${m.from}` + (acCount !== null ? ` · ac=${acCount}` : '') +
+      (m.body ? ` · ${m.body.slice(0, 80)}` : '');
+  },
+  'build': (m) => {
+    const fileCount = m.data && Array.isArray(m.data.artifacts) ? m.data.artifacts.length : null;
+    return `🔨 build @${m.from}` + (fileCount !== null ? ` · ${fileCount} files` : '') +
+      (m.body ? ` · ${m.body.slice(0, 60)}` : '');
+  },
+  'artifact.created': (m) => {
+    const path = (m.data && m.data.path) || '';
+    const sha = (m.data && m.data.sha256) ? m.data.sha256.slice(0, 8) : '';
+    return `📄 artifact ${path}${sha ? ' · sha=' + sha : ''}`;
+  },
+  'qa.result': (m) => {
+    const md = m.data || {};
+    const exit = md.exec_exit_code;
+    const acTotal = Array.isArray(md.ac_results) ? md.ac_results.length : null;
+    const acPass = Array.isArray(md.ac_results)
+      ? md.ac_results.filter((r) => r && r.pass === true).length
+      : null;
+    const parts = [];
+    if (typeof exit === 'number') parts.push(`exit=${exit}`);
+    if (acTotal !== null) parts.push(`ac=${acPass}/${acTotal}`);
+    if (md.duration_ms) parts.push(_fmtMs(md.duration_ms));
+    return `✅ qa.result` + (parts.length ? ` · ${parts.join(' · ')}` : '');
+  },
+  'judge.score': (m) => {
+    const md = m.scores || m.data || {};
+    const verdict = md.verdict || (m.data && m.data.verdict) || '';
+    const dims = _fmtScores(md);
+    const dev = md.deviation && md.deviation.type ? `dev=${md.deviation.type}` : '';
+    const verdictGlyph = verdict === 'PASS' ? '✓' : verdict === 'PARTIAL' ? '~' : verdict === 'FAIL' || verdict === 'REJECT' ? '✗' : '·';
+    return `${verdictGlyph} judge ${verdict}` + (dims ? ` · ${dims}` : '') + (dev ? ` · ${dev}` : '');
+  },
+  'verify.result': (m) => {
+    return `${m.body ? m.body.slice(0, 100) : '✓ verify.result'}`;
+  },
+  'step.research': (m) => {
+    const md = m.data || {};
+    const refs = Array.isArray(md.reference_games) ? md.reference_games.length : null;
+    const lessons = Array.isArray(md.design_lessons) ? md.design_lessons.length : null;
+    return `🔬 research @${m.from}` +
+      (refs !== null ? ` · ${refs} refs` : '') +
+      (lessons !== null ? ` · ${lessons} lessons` : '');
+  },
+  'step.research.video': (m) => {
+    const md = m.data || {};
+    const ext = Array.isArray(md.mechanics_extracted) ? md.mechanics_extracted.length : 0;
+    const oo = Array.isArray(md.mechanics_out_of_envelope) ? md.mechanics_out_of_envelope.length : 0;
+    return `📹 research.video @${m.from} · ${ext}+${oo} mechanics${oo ? ' (oo:' + oo + ')' : ''}`;
+  },
+  'handoff.requested': (m) => {
+    const to = m.to || (m.data && m.data.to) || '?';
+    return `→ handoff @${m.from} → @${to}` + (m.body ? ` · ${m.body.slice(0, 60)}` : '');
+  },
+  'handoff.rollback': (m) => {
+    const to = m.to || (m.data && m.data.to) || '?';
+    return `↺ rollback → @${to}` + (m.body ? ` · ${m.body.slice(0, 60)}` : '');
+  },
+  'audit': (m) => {
+    const rule = (m.data && m.data.rule) || '';
+    return `⚠ audit ${rule ? rule : ''}` + (m.body ? ` · ${m.body.slice(0, 100)}` : '');
+  },
+  'error': (m) => {
+    return `❌ error @${m.from} · ${(m.body || '').slice(0, 140)}`;
+  },
+  'done': (m) => {
+    const reason = (m.data && m.data.reason) || m.body || '';
+    return `🏁 done · ${reason}`;
+  },
+  'user.intervene': (m) => {
+    const md = m.data || {};
+    const verb = md.cancel ? `/cancel ${md.cancel}` : md.goto ? `/goto ${md.goto}` :
+      md.swap ? `/swap ${md.swap.from}=${md.swap.to}` : md.reset_circuit ? `/reset-circuit` :
+      md.sandwich_append ? `/append` : md.target_actor ? `@${md.target_actor}` : '';
+    return `👤 ${verb || 'intervene'}` + (m.body ? ` · ${m.body.slice(0, 100)}` : '');
+  },
+  'user.approve': () => `👤 ✓ approve`,
+  'user.veto': (m) => `👤 ✗ veto${m.data && m.data.target_msg_id ? ' ' + m.data.target_msg_id : ''}`,
+  'user.pause': (m) => `👤 ⏸ pause${m.data && m.data.actor ? ' @' + m.data.actor : ' (global)'}`,
+  'user.resume': (m) => `👤 ▶ resume${m.data && m.data.actor ? ' @' + m.data.actor : ''}`,
+  'note': (m) => `· ${(m.body || '').slice(0, 140)}`,
+};
+
 function feedLineFromTranscriptEvent(msg) {
   if (!msg) return null;
-  let body = msg.body || '';
-  if (!body && msg.data) {
-    try {
-      body = JSON.stringify(msg.data).slice(0, 200);
-    } catch {
-      body = '(data)';
+  const formatter = FEED_FORMATTERS[msg.kind];
+  let body;
+  if (formatter) {
+    body = formatter(msg);
+  } else {
+    let raw = msg.body || '';
+    if (!raw && msg.data) {
+      try { raw = JSON.stringify(msg.data).slice(0, 200); } catch { raw = '(data)'; }
     }
+    body = '[' + msg.kind + '] ' + raw;
   }
   return {
     ts: msg.ts,
     actor: msg.from,
-    body: '[' + msg.kind + '] ' + body,
+    body,
     kindClass: classifyKindForFeed(msg.kind),
   };
 }
@@ -2784,21 +2944,116 @@ makeResizable(
   'crumb.detail-w',
   () => parseInt(getComputedStyle(document.body).getPropertyValue('--detail-w'), 10) || 420,
 );
-// v0.4.2 — narrative / feed split (horizontal handle, drag-down grows narrative).
-// Clamp [80, viewport-300] so the user can't shrink past the controls or
-// blow out the live-feed below the input bar's safe space.
-makeResizable(
-  'feedstack-resize',
-  (start, abs, dy) => {
-    const cap = Math.max(120, window.innerHeight - 300);
-    const h = abs ? start : Math.max(80, Math.min(cap, start + (dy ?? 0)));
-    document.body.style.setProperty('--narrative-h', h + 'px');
-    if (!abs) localStorage.setItem('crumb.narrative-h', String(h));
-  },
-  'crumb.narrative-h',
-  () => parseInt(getComputedStyle(document.body).getPropertyValue('--narrative-h'), 10) || 220,
-  'y',
-);
+// v0.5 PR-W-Studio-A — feedstack splitter + orientation toggle.
+//
+// Two interacting features in one block:
+// (a) Resize handle that drives `--feedstack-feed-h` (vertical mode) or
+//     `--feedstack-feed-w` (horizontal mode). Drag axis adapts to the
+//     parent's `data-orient`. Clamp keeps the controls reachable.
+// (b) Orientation toggle button (#feedstack-orient) flips between vertical
+//     (stacked, default) and horizontal (side-by-side) layouts, mirroring
+//     VSCode terminal panel "move to side" behavior. Both axes persist
+//     independently in localStorage so toggling preserves the last size.
+//
+// The custom handle replaces makeResizable() because the axis is dynamic
+// (decided per-mousedown by the parent's data-orient).
+(function feedstackInit() {
+  const stack = $('feedstack');
+  const handle = $('feedstack-resize');
+  const orientBtn = $('feedstack-orient');
+  if (!stack || !handle) return;
+
+  const orient = () => stack.dataset.orient || 'vertical';
+  const persistedOrient = localStorage.getItem('crumb.feedstack.orient');
+  if (persistedOrient === 'horizontal' || persistedOrient === 'vertical') {
+    stack.dataset.orient = persistedOrient;
+  }
+  // Restore size for whichever orientation we're starting in.
+  const restoreSize = () => {
+    if (orient() === 'vertical') {
+      const h = Number(localStorage.getItem('crumb.feedstack.feed-h')) || 220;
+      stack.style.setProperty('--feedstack-feed-h', h + 'px');
+    } else {
+      const w = localStorage.getItem('crumb.feedstack.feed-w') || '50%';
+      stack.style.setProperty('--feedstack-feed-w', /\d/.test(w) ? w : '50%');
+    }
+  };
+  restoreSize();
+
+  if (orientBtn) {
+    const updateGlyph = () => {
+      orientBtn.textContent = orient() === 'vertical' ? '⊟' : '⊞';
+    };
+    updateGlyph();
+    orientBtn.addEventListener('click', () => {
+      const next = orient() === 'vertical' ? 'horizontal' : 'vertical';
+      stack.dataset.orient = next;
+      localStorage.setItem('crumb.feedstack.orient', next);
+      restoreSize();
+      updateGlyph();
+    });
+  }
+
+  // Custom drag — axis from parent's data-orient. This guarantees the
+  // splitter "narrows the side you drag toward": drag down → top (feed)
+  // grows = bottom (narrative) narrows; drag right → left (feed) grows =
+  // right (narrative) narrows. Same intuition both modes.
+  let dragging = false;
+  let startCoord = 0;
+  let startSize = 0;
+  let dragOrient = 'vertical';
+
+  const onMove = (e) => {
+    if (!dragging) return;
+    const o = dragOrient;
+    const pos = e.touches
+      ? (o === 'vertical' ? e.touches[0].clientY : e.touches[0].clientX)
+      : (o === 'vertical' ? e.clientY : e.clientX);
+    const d = pos - startCoord;
+    if (o === 'vertical') {
+      const cap = Math.max(120, window.innerHeight - 300);
+      const next = Math.max(80, Math.min(cap, startSize + d));
+      stack.style.setProperty('--feedstack-feed-h', next + 'px');
+      localStorage.setItem('crumb.feedstack.feed-h', String(next));
+    } else {
+      const cap = Math.max(180, stack.clientWidth - 200);
+      const next = Math.max(180, Math.min(cap, startSize + d));
+      stack.style.setProperty('--feedstack-feed-w', next + 'px');
+      localStorage.setItem('crumb.feedstack.feed-w', String(next) + 'px');
+    }
+    e.preventDefault();
+  };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener('touchend', onUp);
+  };
+  const onDown = (e) => {
+    dragging = true;
+    dragOrient = orient();
+    handle.classList.add('dragging');
+    startCoord = e.touches
+      ? (dragOrient === 'vertical' ? e.touches[0].clientY : e.touches[0].clientX)
+      : (dragOrient === 'vertical' ? e.clientY : e.clientX);
+    if (dragOrient === 'vertical') {
+      startSize = parseInt(getComputedStyle(stack).getPropertyValue('--feedstack-feed-h'), 10) || 220;
+    } else {
+      const feedEl = $('console-feed-section');
+      startSize = feedEl ? feedEl.getBoundingClientRect().width : (stack.clientWidth / 2);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchend', onUp);
+    e.preventDefault();
+  };
+  handle.addEventListener('mousedown', onDown);
+  handle.addEventListener('touchstart', onDown, { passive: false });
+})();
 
 // (2) Click-outside-to-close detail pane. Avoids closing on its own resize handle.
 document.addEventListener('mousedown', (e) => {

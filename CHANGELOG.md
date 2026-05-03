@@ -4,6 +4,41 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Studio feedstack: live-feed on top, narrative on bottom + VSCode-style orient toggle + datadog-grade kind formatters (W-Studio-A) (2026-05-03)
+
+Three coupled improvements to the live execution feed + agent narrative panels per user feedback:
+
+1. **Position swap** — live execution feed is now on TOP, agent narrative on BOTTOM. The previous layout (narrative top, feed bottom from PR #118) put coordinator-level events farther from the user's eye than the per-actor narrative bubbles, but session-level signal (errors, audit, judge.score) is more often what the user is scanning for.
+2. **VSCode terminal-style orientation toggle** — new `⊟ ⊞` button in the feed toolbar flips the layout between vertical (stacked, default) and horizontal (side-by-side). Splitter axis adapts (row-resize ↔ col-resize) without code change because the parent's `data-orient` is read at drag-start. Both axes persist independently in localStorage so toggling restores the last size.
+3. **Datadog-grade kind-specific feed formatters** — replaced the generic `[kind] body` rendering with per-kind projection of the actually-load-bearing fields. The previous generic JSON.stringify-truncation buried the most useful information (D1-D6 scores, exec_exit_code, tokens/cost/cache) under boilerplate.
+
+**HTML/CSS** (`packages/studio/src/client/studio.{html,css}`):
+
+- Both `<section class="console-feed">` and `<section class="console-narrative">` now wrap inside a `<section class="feedstack" data-orient="vertical">` grid container. Splitter sits between them.
+- Feed comes first in DOM order; narrative second.
+- New `<button id="feedstack-orient" class="ghost-btn">` in the feed toolbar — text content is `⊟` in vertical mode, `⊞` in horizontal.
+- CSS grid template flips: `grid-template-rows: var(--feedstack-feed-h, 220px) 4px 1fr` (vertical) vs `grid-template-columns: var(--feedstack-feed-w, 50%) 4px 1fr` (horizontal).
+- Resize handle's cursor + axis adapt via `:not(:hover)` selectors on `data-orient`. Background hover still uses `--primary` so the affordance reads.
+
+**JS** (`packages/studio/src/client/studio.js`):
+
+- New IIFE `feedstackInit()` replaces the prior `makeResizable('feedstack-resize', …, 'y')` call. The custom drag handler reads `stack.dataset.orient` at mousedown, picks `clientY` or `clientX` accordingly, and writes `--feedstack-feed-h` or `--feedstack-feed-w`. Both axes persist (`crumb.feedstack.feed-h`, `crumb.feedstack.feed-w`, `crumb.feedstack.orient`).
+- Drag direction → which panel narrows: vertical drag-down → top (feed) grows = bottom (narrative) narrows; vertical drag-up → top narrows. Horizontal drag-right → left (feed) grows = right (narrative) narrows. Same intuition both modes (the panel you drag *toward* narrows).
+- New `FEED_FORMATTERS` table (object indexed by kind) — 18 per-kind formatters covering: `session.start/end`, `goal`, `agent.wake/stop`, `spec`, `build`, `artifact.created`, `qa.result` (exit + AC pass/total + duration), `judge.score` (verdict glyph + D1-D6 + deviation type), `verify.result`, `step.research` (refs/lessons count), `step.research.video` (mechanics + out-of-envelope count), `handoff.requested/rollback`, `audit` (rule + body), `error`, `done`, `user.intervene/approve/veto/pause/resume`, `note`. Helper formatters `_fmtNum` / `_fmtCost` / `_fmtMs` / `_fmtScores` for consistent number rendering.
+- `feedLineFromTranscriptEvent()` now dispatches to a registered formatter when present; falls back to the legacy `[kind] body` rendering for unrecognized kinds.
+
+**Drag direction semantics (matches user spec)**:
+- 위로 올리면 상단이 좁아지고 → drag splitter UP → top (feed) narrows ✓
+- 밑으로 내리면 하단이 좁아지도록 → drag splitter DOWN → bottom (narrative) narrows ✓
+- Same in horizontal: drag-left narrows left, drag-right narrows right.
+
+**Out of scope (deferred)**:
+- True tear-off (window.open + cross-window sync) — separate PR. The current "horizontal" mode is the foundational step toward VSCode pane behavior; tear-off is the next jump.
+- Transcript view multi-render modes — separate PR.
+- User-input bar polish — separate PR.
+
+Verification: `npm run lint:all && npm run typecheck && npm run format:check && npm test && npm run build` — 466/466 tests pass, lint clean, format clean.
+
 ### Added — DAG runtime data overlay: per-actor badges + edge throughput/latency encoding (PR-J') (2026-05-03)
 
 PR-J (chip-swimlane → Gantt waterfall) was abandoned per user feedback ("main 의 chip 디자인 마음에 듦"). Replaced with the lighter-touch Candidate 4 from the same frontier observability survey: keep main's chip event dashboard intact, instead bind runtime data onto the existing DAG nodes + edges. Frontier convergence: LangSmith / Langfuse / Phoenix per-step token + cost + latency badges (under-node), Datadog Service Map throughput-as-thickness (edge), AWS X-Ray latency-as-color (slow edges turn red).

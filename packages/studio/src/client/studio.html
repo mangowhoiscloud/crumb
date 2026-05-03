@@ -238,37 +238,49 @@
     </section>
   </div>
 
-  <section class="console-narrative" id="console-narrative-section">
-    <div class="console-feed-toolbar">
-      <span class="console-feed-title">Agent narrative</span>
-      <span id="console-narrative-status" class="console-feed-status">stream-json bubbles · ⏺ tool / ⎿ result / ✓ turn</span>
-      <input type="text" id="console-narrative-grep" class="feed-grep-input" placeholder="grep…" autocomplete="off">
-      <span class="grep-controls">
-        <span id="console-narrative-grep-count" class="grep-count">—</span>
-        <button id="console-narrative-grep-prev" class="grep-nav" title="Previous match (Shift+Enter)" disabled>↑</button>
-        <button id="console-narrative-grep-next" class="grep-nav" title="Next match (Enter)" disabled>↓</button>
-      </span>
-      <button id="console-narrative-pause" class="ghost-btn">pause</button>
-      <button id="console-narrative-clear" class="ghost-btn">clear</button>
-    </div>
-    <div class="console-narrative-body" id="console-narrative-body"></div>
-  </section>
-  <div class="resize-handle resize-handle-feedstack" id="feedstack-resize" title="Drag to resize narrative / live-feed split"></div>
-
-  <section class="console-feed" id="console-feed-section">
-    <div class="console-feed-toolbar">
-      <span class="console-feed-title">Live execution feed</span>
-      <span id="console-feed-status" class="console-feed-status">—</span>
-      <input type="text" id="console-feed-grep" class="feed-grep-input" placeholder="grep…" autocomplete="off">
-      <span class="grep-controls">
-        <span id="console-feed-grep-count" class="grep-count">—</span>
-        <button id="console-feed-grep-prev" class="grep-nav" title="Previous match (Shift+Enter)" disabled>↑</button>
-        <button id="console-feed-grep-next" class="grep-nav" title="Next match (Enter)" disabled>↓</button>
-      </span>
-      <button id="console-feed-pause" class="ghost-btn">pause</button>
-      <button id="console-feed-clear" class="ghost-btn">clear</button>
-    </div>
-    <div class="console-feed-body" id="console-feed-body"></div>
+  <!--
+    v0.5 PR-W-Studio-A — feedstack: live execution feed (top) + agent narrative
+    (bottom), swappable orientation (vertical default / horizontal side-by-side
+    via #feedstack-orient toggle), draggable splitter between them.
+    The container is a CSS grid that rewrites grid-template-rows vs
+    grid-template-columns based on data-orient. Splitter axis adapts
+    accordingly (row-resize ↔ col-resize). Sizes persist in localStorage
+    (`crumb.feedstack.feed-h` for vertical, `crumb.feedstack.feed-w` for
+    horizontal, `crumb.feedstack.orient` for the layout mode itself).
+  -->
+  <section class="feedstack" id="feedstack" data-orient="vertical">
+    <section class="console-feed" id="console-feed-section">
+      <div class="console-feed-toolbar">
+        <span class="console-feed-title">Live execution feed</span>
+        <span id="console-feed-status" class="console-feed-status">—</span>
+        <input type="text" id="console-feed-grep" class="feed-grep-input" placeholder="grep…" autocomplete="off">
+        <span class="grep-controls">
+          <span id="console-feed-grep-count" class="grep-count">—</span>
+          <button id="console-feed-grep-prev" class="grep-nav" title="Previous match (Shift+Enter)" disabled>↑</button>
+          <button id="console-feed-grep-next" class="grep-nav" title="Next match (Enter)" disabled>↓</button>
+        </span>
+        <button id="feedstack-orient" class="ghost-btn" title="Toggle layout: vertical (stacked) ↔ horizontal (side-by-side)">⊟</button>
+        <button id="console-feed-pause" class="ghost-btn">pause</button>
+        <button id="console-feed-clear" class="ghost-btn">clear</button>
+      </div>
+      <div class="console-feed-body" id="console-feed-body"></div>
+    </section>
+    <div class="resize-handle resize-handle-feedstack" id="feedstack-resize" title="Drag to resize feed / narrative split"></div>
+    <section class="console-narrative" id="console-narrative-section">
+      <div class="console-feed-toolbar">
+        <span class="console-feed-title">Agent narrative</span>
+        <span id="console-narrative-status" class="console-feed-status">stream-json bubbles · ⏺ tool / ⎿ result / ✓ turn</span>
+        <input type="text" id="console-narrative-grep" class="feed-grep-input" placeholder="grep…" autocomplete="off">
+        <span class="grep-controls">
+          <span id="console-narrative-grep-count" class="grep-count">—</span>
+          <button id="console-narrative-grep-prev" class="grep-nav" title="Previous match (Shift+Enter)" disabled>↑</button>
+          <button id="console-narrative-grep-next" class="grep-nav" title="Next match (Enter)" disabled>↓</button>
+        </span>
+        <button id="console-narrative-pause" class="ghost-btn">pause</button>
+        <button id="console-narrative-clear" class="ghost-btn">clear</button>
+      </div>
+      <div class="console-narrative-body" id="console-narrative-body"></div>
+    </section>
   </section>
 
   <section class="console-input" id="console-section">

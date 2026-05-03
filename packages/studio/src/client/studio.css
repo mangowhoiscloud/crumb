@@ -1524,16 +1524,60 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   background: #fff;
 }
 
-/* v3.5 — live execution feed (terminal-like) right above the input.
- * v0.4.2 — Agent narrative panel sits above; horizontal resize handle
- * between them writes to --narrative-h (default 220px). */
-.console-narrative {
+/* v3.5 — live execution feed + agent narrative.
+ * v0.5 PR-W-Studio-A — wrapped in `.feedstack` grid container. Live feed
+ * is now on TOP, agent narrative on BOTTOM (swapped from v0.4.2 which had
+ * narrative on top). Orientation toggle (vertical default / horizontal
+ * side-by-side) flips grid-template-rows ↔ grid-template-columns; splitter
+ * axis adapts (row-resize ↔ col-resize).
+ *
+ * Vertical mode (data-orient="vertical"):
+ *   ┌──────────────────────────┐
+ *   │  console-feed (top)      │  height = var(--feedstack-feed-h, 220px)
+ *   ├──── feedstack-resize ────┤  4px row-resize
+ *   │  console-narrative (bot) │  fills remaining 1fr
+ *   └──────────────────────────┘
+ *   Drag splitter UP   → top (feed) narrows  ✓
+ *   Drag splitter DOWN → bottom (narrative) narrows  ✓
+ *
+ * Horizontal mode (data-orient="horizontal"):
+ *   ┌─────────┬───┬───────────┐
+ *   │  feed   │ ╫ │ narrative │  width = var(--feedstack-feed-w, 50%) / 1fr
+ *   │ (left)  │   │ (right)   │
+ *   └─────────┴───┴───────────┘
+ *
+ * Persistence: localStorage `crumb.feedstack.orient`,
+ * `crumb.feedstack.feed-h` (vertical), `crumb.feedstack.feed-w` (horizontal).
+ */
+.feedstack {
+  display: grid;
   border-top: 1px solid var(--hairline);
   background: var(--canvas);
+  min-height: 200px;
+}
+.feedstack[data-orient="vertical"] {
+  grid-template-columns: 1fr;
+  grid-template-rows: var(--feedstack-feed-h, 220px) 4px 1fr;
+}
+.feedstack[data-orient="horizontal"] {
+  grid-template-rows: 1fr;
+  grid-template-columns: var(--feedstack-feed-w, 50%) 4px 1fr;
+  min-height: 240px;
+}
+.feedstack .console-feed,
+.feedstack .console-narrative {
   display: flex;
   flex-direction: column;
-  height: var(--narrative-h, 220px);
-  min-height: 80px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--canvas);
+}
+.feedstack[data-orient="vertical"] .console-narrative {
+  border-top: 1px solid var(--hairline);
+}
+.feedstack[data-orient="horizontal"] .console-narrative {
+  border-left: 1px solid var(--hairline);
 }
 .console-narrative-body {
   flex: 1;
@@ -1544,23 +1588,21 @@ section.output { flex: 1; min-height: 0; display: flex; flex-direction: column; 
   line-height: 1.55;
 }
 .resize-handle-feedstack {
-  height: 4px;
-  width: 100%;
-  cursor: row-resize;
   background: transparent;
-  flex: 0 0 auto;
+  transition: background 120ms ease;
+}
+.feedstack[data-orient="vertical"] .resize-handle-feedstack {
+  cursor: row-resize;
+}
+.feedstack[data-orient="horizontal"] .resize-handle-feedstack {
+  cursor: col-resize;
 }
 .resize-handle-feedstack:hover,
 .resize-handle-feedstack.dragging {
   background: var(--primary, #4a90e2);
 }
 .console-feed {
-  border-top: 1px solid var(--hairline);
   background: var(--canvas);
-  display: flex;
-  flex-direction: column;
-  max-height: 220px;
-  min-height: 120px;
 }
 .console-feed-toolbar {
   display: flex; gap: 8px; align-items: center;
