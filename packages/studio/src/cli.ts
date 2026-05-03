@@ -111,16 +111,30 @@ async function main(): Promise<void> {
   }
   const server = await startStudioServer(opts);
 
+  // Vite-style banner — frontier convention (Vite / Next.js / Streamlit /
+  // Gradio all converge on this 3-4 line "Local / Network / hint" shape).
+  const networkHint =
+    args.bind === '127.0.0.1' || args.bind === 'localhost'
+      ? 'use --bind 0.0.0.0 to expose'
+      : `bound to ${args.bind}`;
   // eslint-disable-next-line no-console
-  console.log(`crumb studio listening on ${server.url}`);
+  console.log('');
+  // eslint-disable-next-line no-console
+  console.log(`  \x1b[32m➜\x1b[0m  Crumb Studio   ${server.url}`);
+  // eslint-disable-next-line no-console
+  console.log(`  \x1b[32m➜\x1b[0m  Network        ${networkHint}`);
   if (args.homes.length > 0) {
     // eslint-disable-next-line no-console
-    console.log(`watching ${args.homes.length} home(s):`);
+    console.log(`  \x1b[32m➜\x1b[0m  Watching       ${args.homes.length} home(s)`);
     for (const h of args.homes) {
       // eslint-disable-next-line no-console
-      console.log(`  - ${h}`);
+      console.log(`                    ${h}`);
     }
   }
+  // eslint-disable-next-line no-console
+  console.log(`  \x1b[32m➜\x1b[0m  Press Ctrl+C to stop`);
+  // eslint-disable-next-line no-console
+  console.log('');
   openBrowser(server.url, { autoOpen: args.open });
 
   const shutdown = async (): Promise<void> => {

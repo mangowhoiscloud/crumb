@@ -15,6 +15,8 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync, createReadStream } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { request as httpRequest } from 'node:http';
 import { createInterface } from 'node:readline';
 import { ulid } from 'ulid';
 
@@ -150,6 +152,15 @@ async function cmdRun(args: ParsedArgs): Promise<void> {
   }
   // eslint-disable-next-line no-console
   console.log(`[crumb] adapter=${adapterOverride ?? '(preset or ambient)'} repo=${repoRoot}`);
+
+  // v0.5 — Studio auto-spawn (Streamlit/Vite frontier convention).
+  // Skipped via --no-studio flag or CRUMB_NO_STUDIO=1 env (CI / SSH / headless).
+  // Detached + unref'd so it outlives this run; the existing chokidar watcher
+  // picks up the new transcript automatically.
+  const studioDisabled = args.flags.has('no-studio') || process.env.CRUMB_NO_STUDIO === '1';
+  if (!studioDisabled) {
+    await ensureStudioRunning(sessionId, sessionDir);
+  }
 
   // v0.3.0: write meta.json on start. If --session refers to an existing meta we
   // patch its status; otherwise create a fresh one. This makes resume + ls O(1).
@@ -1057,6 +1068,109 @@ async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const c of process.stdin) chunks.push(Buffer.from(c));
   return Buffer.concat(chunks).toString('utf8');
+}
+
+/**
+ * v0.5 Studio auto-spawn (Streamlit / Vite / Gradio frontier convention).
+ *
+ * Probes http://127.0.0.1:7321 first; if a Studio is already running, prints
+ * the deeplink to the just-started session and returns. Otherwise spawns
+ * `crumb-studio` as a detached child, so it outlives this run and watches
+ * subsequent sessions via chokidar without re-spawn.
+ *
+ * Disabled by --no-studio flag or CRUMB_NO_STUDIO=1 env (CI / SSH / headless).
+ *
+ * Architecture invariant: Studio is a read-only observation surface — the
+ * append-only transcript stays the single source of truth, mutations route
+ * through `crumb pause / veto / approve / redo`, never through Studio's HTTP
+ * surface. This auto-spawn does not change that contract.
+ */
+async function ensureStudioRunning(sessionId: string, sessionDir: string): Promise<void> {
+  const port = Number(process.env.CRUMB_STUDIO_PORT ?? 7321);
+  const url = `http://127.0.0.1:${port}/`;
+  const sessionUrl = `${url}#/session/${sessionId}`;
+
+  const alreadyRunning = await probeStudio(port);
+  if (alreadyRunning) {
+    // eslint-disable-next-line no-console
+    console.log('');
+    // eslint-disable-next-line no-console
+    console.log(`  \x1b[32m➜\x1b[0m  Studio (existing)  ${url}`);
+    // eslint-disable-next-line no-console
+    console.log(`  \x1b[32m➜\x1b[0m  Session            ${sessionId}`);
+    // eslint-disable-next-line no-console
+    console.log(`  \x1b[2m   transcript        ${resolve(sessionDir, 'transcript.jsonl')}\x1b[0m`);
+    // eslint-disable-next-line no-console
+    console.log('');
+    return;
+  }
+
+  // Resolve the studio CLI: bin from the linked workspace, or fallback to npx.
+  const studioBin = resolveStudioBin();
+  if (!studioBin) {
+    // eslint-disable-next-line no-console
+    console.log('');
+    // eslint-disable-next-line no-console
+    console.log(
+      '  \x1b[33m⚠\x1b[0m  Studio binary not found — run `npm run build` or skip with --no-studio.',
+    );
+    // eslint-disable-next-line no-console
+    console.log('');
+    return;
+  }
+
+  const child = spawn(process.execPath, [studioBin], {
+    detached: true,
+    stdio: 'ignore',
+    env: { ...process.env, CRUMB_NO_OPEN: process.env.CRUMB_NO_OPEN ?? '1' },
+  });
+  child.unref();
+
+  // eslint-disable-next-line no-console
+  console.log('');
+  // eslint-disable-next-line no-console
+  console.log(`  \x1b[32m➜\x1b[0m  Crumb Studio    ${url}  \x1b[2m(read-only observation)\x1b[0m`);
+  // eslint-disable-next-line no-console
+  console.log(`  \x1b[32m➜\x1b[0m  Session         ${sessionId}`);
+  // eslint-disable-next-line no-console
+  console.log(`  \x1b[32m➜\x1b[0m  Deep link       ${sessionUrl}`);
+  // eslint-disable-next-line no-console
+  console.log(`  \x1b[2m   Disable        --no-studio  or  CRUMB_NO_STUDIO=1\x1b[0m`);
+  // eslint-disable-next-line no-console
+  console.log('');
+}
+
+async function probeStudio(port: number): Promise<boolean> {
+  return new Promise((resolveProbe) => {
+    const req = httpRequest(
+      { host: '127.0.0.1', port, path: '/', method: 'HEAD', timeout: 200 },
+      (res) => {
+        res.resume();
+        resolveProbe(res.statusCode !== undefined && res.statusCode < 500);
+      },
+    );
+    req.on('error', () => resolveProbe(false));
+    req.on('timeout', () => {
+      req.destroy();
+      resolveProbe(false);
+    });
+    req.end();
+  });
+}
+
+function resolveStudioBin(): string | null {
+  // Resolution order matches the runtime install paths:
+  //   1. CRUMB_STUDIO_BIN env override (CI / packaged shim)
+  //   2. workspace dist (built from `npm run build`)
+  //   3. globally installed `@crumb/studio`
+  if (process.env.CRUMB_STUDIO_BIN && existsSync(process.env.CRUMB_STUDIO_BIN)) {
+    return process.env.CRUMB_STUDIO_BIN;
+  }
+  const here = fileURLToPath(import.meta.url);
+  const repoRootGuess = inferRepoRoot() ?? resolve(here, '..', '..');
+  const workspaceDist = resolve(repoRootGuess, 'packages', 'studio', 'dist', 'cli.js');
+  if (existsSync(workspaceDist)) return workspaceDist;
+  return null;
 }
 
 function printHelp(): void {
