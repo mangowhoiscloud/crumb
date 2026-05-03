@@ -4201,19 +4201,39 @@ function openAdapterModal(adapterId) {
   const stateLine = a.installed
     ? (a.authenticated === true ? '✓ installed and authenticated' : a.authenticated === null ? '◐ installed (auth not probed)' : '✗ installed but auth missing')
     : '✗ not installed';
+  // F5 — copyable command block. The 📋 button copies the <pre> body via
+  // navigator.clipboard.writeText; falls back silently when clipboard API is
+  // blocked by the browser (file:// origin, sandboxed iframe). Button label
+  // flips to ✓ for 1.2s on success so the user sees feedback.
+  const copyBlock = (label, cmd) =>
+    '<div class="adapter-modal-step">' +
+      '<div class="adapter-modal-step-label">' + label + '</div>' +
+      '<div class="adapter-modal-cmdrow">' +
+        '<pre>' + escapeHTML(cmd) + '</pre>' +
+        '<button class="adapter-modal-copy" type="button" data-copy="' + escapeHTML(cmd) + '" title="Copy to clipboard" aria-label="Copy to clipboard">📋</button>' +
+      '</div>' +
+    '</div>';
+  // F5 — API-key row. Surfaced when the adapter has an api_key_envvar slot.
+  // Shows envvar name + presence so the user can tell at a glance whether the
+  // headless route is live (binary login is the primary path; API key is the
+  // fallback that works in headless / CI / sandboxed environments).
+  const apiKeyBlock = a.api_key_envvar
+    ? '<div class="adapter-modal-step">' +
+        '<div class="adapter-modal-step-label">API key (headless)</div>' +
+        '<div>' +
+          (a.api_key_set ? '✓ <code>' + escapeHTML(a.api_key_envvar) + '</code> set in this server process' :
+            '✗ <code>' + escapeHTML(a.api_key_envvar) + '</code> unset · primary path is the binary /login above') +
+        '</div>' +
+      '</div>'
+    : '';
   const blocks = [
     '<div class="adapter-modal-step">' +
       '<div class="adapter-modal-step-label">current status</div>' +
       '<div>' + escapeHTML(stateLine) + (a.version ? ' · ' + escapeHTML(a.version) : '') + '</div>' +
     '</div>',
-    a.install_hint ? '<div class="adapter-modal-step">' +
-      '<div class="adapter-modal-step-label">' + (a.installed ? 'reinstall' : 'install') + '</div>' +
-      '<pre>' + escapeHTML(a.install_hint) + '</pre>' +
-    '</div>' : '',
-    a.auth_hint ? '<div class="adapter-modal-step">' +
-      '<div class="adapter-modal-step-label">login</div>' +
-      '<pre>' + escapeHTML(a.auth_hint) + '</pre>' +
-    '</div>' : '',
+    a.install_hint ? copyBlock(a.installed ? 'reinstall' : 'install', a.install_hint) : '',
+    a.auth_hint ? copyBlock('login', a.auth_hint) : '',
+    apiKeyBlock,
     a.models?.length ? '<div class="adapter-modal-step">' +
       '<div class="adapter-modal-step-label">models</div>' +
       '<div style="font-size:11px;color:var(--ink-subtle);font-family:ui-monospace,monospace;">' +
@@ -4222,6 +4242,28 @@ function openAdapterModal(adapterId) {
     '</div>' : '',
   ].filter(Boolean).join('');
   body.innerHTML = blocks;
+  // F5 — wire copy buttons. Native event delegation via querySelectorAll so we
+  // don't need a global delegate; cleaned up automatically when innerHTML re-runs.
+  body.querySelectorAll('.adapter-modal-copy').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const cmd = btn.getAttribute('data-copy') || '';
+      try {
+        await navigator.clipboard.writeText(cmd);
+        const orig = btn.textContent;
+        btn.textContent = '✓';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = orig;
+          btn.classList.remove('copied');
+        }, 1200);
+      } catch (_) {
+        // clipboard blocked — surface via feedback row so the user knows.
+        const fb = $('adapter-modal-feedback');
+        fb.textContent = 'clipboard unavailable — copy the command manually';
+        fb.className = 'console-feedback warn';
+      }
+    });
+  });
   $('adapter-modal-feedback').textContent = '';
   $('adapter-modal').style.display = 'flex';
 }

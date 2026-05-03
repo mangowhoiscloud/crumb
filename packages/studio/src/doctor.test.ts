@@ -58,4 +58,62 @@ describe('probeAdapters', () => {
       }
     }
   });
+
+  // F5 — adapter modal advanced
+
+  it('F5: install_hint matches process.platform when per-OS table provided', async () => {
+    const adapters = await probeAdapters();
+    const claude = adapters.find((a) => a.id === 'claude-local');
+    expect(claude).toBeDefined();
+    expect(claude!.install_hint).toBeDefined();
+    if (process.platform === 'win32') {
+      expect(claude!.install_hint).toContain('powershell');
+    } else {
+      // darwin + linux both share the curl|bash path
+      expect(claude!.install_hint).toContain('claude.ai/install.sh');
+    }
+  });
+
+  it('F5: surfaces api_key_envvar for binary adapters that also accept env-var auth', async () => {
+    const adapters = await probeAdapters();
+    expect(adapters.find((a) => a.id === 'claude-local')!.api_key_envvar).toBe('ANTHROPIC_API_KEY');
+    expect(adapters.find((a) => a.id === 'codex-local')!.api_key_envvar).toBe('OPENAI_API_KEY');
+    expect(adapters.find((a) => a.id === 'gemini-cli-local')!.api_key_envvar).toBe(
+      'GEMINI_API_KEY',
+    );
+    // Mock has no API key path.
+    expect(adapters.find((a) => a.id === 'mock')!.api_key_envvar).toBeUndefined();
+  });
+
+  it('F5: api_key_set reflects whether the envvar is populated in the server process', async () => {
+    const savedAnthropic = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    let adapters = await probeAdapters();
+    let claude = adapters.find((a) => a.id === 'claude-local');
+    expect(claude!.api_key_set).toBe(false);
+
+    process.env.ANTHROPIC_API_KEY = 'sk-test-123';
+    adapters = await probeAdapters();
+    claude = adapters.find((a) => a.id === 'claude-local');
+    expect(claude!.api_key_set).toBe(true);
+
+    if (savedAnthropic === undefined) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = savedAnthropic;
+  });
+
+  it('F5: binary-installed + api_key_set → authenticated=true (headless route)', async () => {
+    // Even when /login state can't be probed without a costly spawn, the
+    // presence of the API key guarantees headless auth works. Keeps the
+    // adapter chip green for users on the env-var route.
+    const savedClaude = process.env.ANTHROPIC_API_KEY;
+    process.env.ANTHROPIC_API_KEY = 'sk-test-123';
+    const adapters = await probeAdapters();
+    const claude = adapters.find((a) => a.id === 'claude-local');
+    if (claude!.installed) {
+      // CI runners typically have neither — only assert when claude binary exists.
+      expect(claude!.authenticated).toBe(true);
+    }
+    if (savedClaude === undefined) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = savedClaude;
+  });
 });
