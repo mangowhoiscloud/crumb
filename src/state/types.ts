@@ -71,10 +71,10 @@ export interface ProgressLedger {
   adapter_override: Partial<Record<Actor, string>>;
   circuit_breaker: Partial<Record<Actor, CircuitInfo>>;
   /**
-   * v0.2.0 — global pause state. When true, the reducer emits `kind: 'hook'` instead of
-   * `kind: 'spawn'` so dispatched effects can surface the pause without losing the
-   * routing decision. `kind=user.resume` clears it. Mirrors LangGraph's interrupt-then-
-   * resume pattern (interrupt() + Command(resume=...)).
+   * v0.2.0 — global pause state. When true, the reducer emits effect `type: 'hook'`
+   * instead of `type: 'spawn'` so dispatched effects can surface the pause without
+   * losing the routing decision. `kind=user.resume` clears it. Mirrors LangGraph's
+   * interrupt-then-resume pattern (interrupt() + Command(resume=...)).
    */
   paused: boolean;
   /**

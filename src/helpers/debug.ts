@@ -73,7 +73,7 @@ export function diagnose(transcript: Message[], state: CrumbState): FaultDetecti
     suggested_action: 'sandwich 안 emit 형식 점검 (kind / from enum 일치 여부)',
   });
 
-  // F4: qa.result 누락 (build 후 verify.request 가 qa.result 없이 발생)
+  // F4: qa.result 누락 (build 후 verifier 가 qa.result 없이 호출)
   const builds = transcript.filter((m) => m.kind === 'build');
   const qaResults = transcript.filter((m) => m.kind === 'qa.result');
   const f4 = builds.length > qaResults.length;

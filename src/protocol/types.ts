@@ -18,7 +18,6 @@ export type Kind =
   // session lifecycle
   | 'session.start'
   | 'session.end'
-  | 'session.forked'
   | 'agent.wake'
   | 'agent.stop'
   // planning
@@ -31,15 +30,11 @@ export type Kind =
   // v0.1: deterministic ground truth (dispatcher emit, no LLM)
   | 'qa.result'
   // verification
-  | 'verify.request'
   | 'verify.result'
   | 'judge.score'
   | 'done'
-  // agent thinking + dialog
+  // agent thinking + dialog (agent.thought_summary kept for verifier input filtering)
   | 'agent.thought_summary'
-  | 'question'
-  | 'answer'
-  | 'debate'
   | 'note'
   // step markers (Lead-internal sequential roles)
   | 'step.socratic'
@@ -56,18 +51,15 @@ export type Kind =
   | 'user.resume'
   // routing + audit
   | 'handoff.requested'
-  | 'handoff.accepted'
   | 'handoff.rollback'
   | 'artifact.created'
   // v0.3.0: version milestones (immutable releases under projects/<id>/versions/<vN>/)
   | 'version.released'
-  | 'version.refinement'
-  | 'ack'
   | 'error'
   | 'audit'
+  // tool tap (dispatcher emits tool.call from stream-json; tool.result reserved for paired emit)
   | 'tool.call'
-  | 'tool.result'
-  | 'hook';
+  | 'tool.result';
 
 export type Step =
   | 'socratic'

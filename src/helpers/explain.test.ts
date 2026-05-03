@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { KIND_REGISTRY, explainKind, formatExplain } from './explain.js';
 
 describe('KIND_REGISTRY coverage', () => {
-  it('covers every Kind in the union (44 in v0.3.0; +session.forked +version.released +version.refinement +step.research.video)', () => {
-    // 44 = 5 system + 11 workflow + 5 dialogue + 6 step + 5 user + 3 handoff + 7 meta + 2 version.
-    // v0.3.0 storage refactor added session.forked under "system" and 2 "version" kinds.
-    // v0.3.0 researcher actor added step.research.video under "step" for per-clip video evidence.
-    expect(Object.keys(KIND_REGISTRY)).toHaveLength(44);
+  it('covers every Kind in the union (35 after PR-Prune-1)', () => {
+    // 35 = 4 system + 10 workflow + 2 dialogue + 6 step + 5 user + 2 handoff + 5 meta + 1 version.
+    // PR-Prune-1 dropped 9 never-emitted kinds (session.forked, verify.request, question,
+    // answer, debate, version.refinement, ack, handoff.accepted, hook). agent.thought_summary
+    // kept for verifier input filtering; tool.call/tool.result kept as the dispatcher's
+    // stream-json tap pair (live.ts:322 emits tool.call).
+    expect(Object.keys(KIND_REGISTRY)).toHaveLength(35);
     const required = [
       'qa.result',
       'judge.score',
@@ -16,7 +18,7 @@ describe('KIND_REGISTRY coverage', () => {
       'done',
       'user.intervene',
       'step.judge',
-      'hook',
+      'tool.call',
     ];
     for (const k of required) expect(KIND_REGISTRY).toHaveProperty(k);
   });
