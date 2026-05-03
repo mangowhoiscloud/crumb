@@ -49,16 +49,24 @@ const FORWARD_EDGES: Array<[Actor, Actor, string]> = [
   ['planner-lead', 'builder', 'build'],
   // builder → system: dispatcher's qa_check deterministic effect runs
   // after every `kind=build`, emitting `kind=qa.result` from the system
-  // actor (no LLM). This is the D2 / D6 ground-truth source per
-  // AGENTS.md invariant 4.
-  ['builder', 'system', 'qa_check'],
+  // actor (no LLM, rule-based — DOCTYPE/viewport/Phaser-CDN/script-body
+  // lint + Playwright smoke). This is the D2 / D6 ground-truth source
+  // per AGENTS.md invariant 4.
+  ['builder', 'system', 'qa_check (rule-based)'],
   // system → verifier: verifier reads qa.result for the deterministic
   // dimensions before running CourtEval on the LLM-judged ones.
-  ['system', 'verifier', 'qa.result'],
+  ['system', 'verifier', 'qa.result (rule)'],
   ['builder', 'verifier', 'verify'],
   ['verifier', 'validator', 'audit'],
-  // Terminal milestone — kind=done lands here.
-  ['validator', 'done', 'done'],
+  // Terminal milestone — kind=done lands here. Two arrival paths:
+  ['validator', 'done', 'done (PASS)'],
+  // system → done: alternate terminal path. Reducer emits `kind=done`
+  // from the system actor when the run hits a deterministic budget /
+  // circuit gate before the validator clears it — too_many_respec,
+  // too_many_verify, token_cap_exceeded, circuit_breaker_open, or an
+  // unrecoverable error. The status reason is on the done event's
+  // `data.reason` field.
+  ['system', 'done', 'done (budget/error)'],
 ];
 
 /** Cooperative back-edges (normal flow). Phase A → researcher → Phase B. */
