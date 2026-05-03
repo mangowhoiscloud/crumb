@@ -4,6 +4,36 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Removed — Legacy v1 vanilla Studio bundle + `?app=v1` escape hatch (M8 cleanup, 2026-05-03)
+
+Hard delete of every v1 surface now that M7.1 flipped the default to React + dockview and downstream M-PRs have reached parity:
+
+- `packages/studio/src/client/studio.{html,css,js}` (vanilla DOM bundle, 6,694 LoC)
+- `packages/studio/scripts/inline-client.mjs` (build-time HTML inliner)
+- `packages/studio/src/server/studio-html.{ts,generated.ts}` (re-export bridge + auto-generated payload)
+- `serveHtml(STUDIO_HTML)` request handler + `?app=v1` URL gate
+
+Renames per migration plan §7 row M8:
+
+- `packages/studio/src/client-v2/` → `packages/studio/src/client/` (single canonical client surface; "v2" naming leak removed)
+- `packages/studio/tsconfig.client-v2.json` → `tsconfig.app.json` (Vite community convention)
+- `serveHtmlV2()` → `serveHtmlClient()`, `serveV2Asset()` → `serveClientAsset()`
+- `dist/client-v2/` → `dist/client/` (Vite output)
+
+Wiring:
+
+- `packages/studio/package.json` — drops `inline-client` script + the `scripts/inline-client.mjs` files entry; `prebuild` simplifies to `vite build`; `typecheck` swaps to `tsconfig.app.json`.
+- `packages/studio/vite.config.ts` — `root` and `outDir` rewritten to the renamed paths; comment updated to reflect the post-M8 layout.
+- `packages/studio/src/server/server.ts` — `STUDIO_HTML` import deleted; `/` always serves React; v2-not-built fallback page no longer mentions a v1 link (none exists).
+- `packages/studio/src/server/server.test.ts` — v1 escape-hatch case removed; default-route assertion accepts both 200 (live bundle) and 503 (not-built fallback).
+- `packages/studio/README.md` — Architecture section rewritten; "No bundler / Vanilla DOM" replaced with "Vite + React 19 + dockview".
+- `packages/studio/src/client/index.html` — `<title>` drops "(v2 preview)"; head comment trimmed of M0/§0.0 cutoff text.
+- `packages/studio/src/client/App.tsx` — header docstring + footer label cleaned of M-series/v2-preview leftovers.
+
+Bundle change: drops the ~260 KB inlined vanilla payload from production. The Studio package now ships exactly one client (React) at `dist/client/`.
+
+Hard gate: this PR is irreversible. Anyone wanting the legacy bundle must check out a tag prior to v1.0.0.
+
 ### Changed — Studio default flipped to v2 React shell (M7.1 — `?app=v1` reserved as escape hatch, 2026-05-03)
 
 `/` now serves the React + dockview bundle (`dist/client-v2/index.html`). Legacy vanilla bundle (`packages/studio/src/client/studio.{html,css,js}`) is still reachable via `?app=v1` until M8 deletes it.
