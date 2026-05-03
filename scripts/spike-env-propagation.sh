@@ -13,6 +13,11 @@
 
 set -uo pipefail
 
+# Path policy: derive REPO_ROOT from this script's own location so the spike
+# runs unchanged on any machine (evaluator's $HOME, CI, /tmp clone, etc).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 SPIKE_DIR="/tmp/crumb-spike-$(date +%s)"
 mkdir -p "$SPIKE_DIR"
 
@@ -89,7 +94,7 @@ echo "─── Q4: crumb event callable from child ───"
 if command -v npx >/dev/null 2>&1; then
   cd "$SPIKE_DIR"
   Q4_OUT=$(echo '{"from":"system","kind":"note","body":"Q4 spike — crumb event from child cwd","metadata":{"visibility":"public"}}' \
-    | npx --prefix /Users/mango/workspace/crumb tsx /Users/mango/workspace/crumb/src/index.ts event 2>&1 || echo "ERROR")
+    | npx --prefix "$REPO_ROOT" tsx "$REPO_ROOT/src/index.ts" event 2>&1 || echo "ERROR")
   if [ -s "$CRUMB_TRANSCRIPT_PATH" ] && grep -q "Q4 spike" "$CRUMB_TRANSCRIPT_PATH"; then
     record "Q4 crumb-event-call" "PASS" "child cwd successfully appended to transcript"
   else
@@ -103,8 +108,8 @@ echo
 
 # ── Q5: Sandwich format conversion (XML → Markdown for Codex) ─────────────────
 echo "─── Q5: Sandwich format check ───"
-if [ -f "/Users/mango/workspace/crumb/agents/coordinator.md" ]; then
-  if grep -q "^<role>" /Users/mango/workspace/crumb/agents/coordinator.md; then
+if [ -f "$REPO_ROOT/agents/coordinator.md" ]; then
+  if grep -q "^<role>" "$REPO_ROOT/agents/coordinator.md"; then
     record "Q5 sandwich-format" "PASS" "coordinator.md uses XML tags (claude-code primary format)"
   else
     record "Q5 sandwich-format" "FAIL" "coordinator.md missing expected XML structure"

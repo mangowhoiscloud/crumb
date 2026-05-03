@@ -13,7 +13,7 @@
 
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync, createReadStream } from 'node:fs';
+import { existsSync, createReadStream, readFileSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { request as httpRequest } from 'node:http';
@@ -85,6 +85,31 @@ function parseArgs(argv: string[]): ParsedArgs {
  * works from any cwd without `--root` (Bagelcode reviewer expectation:
  * clone → npm install → crumb run with no host-specific paths).
  */
+/**
+ * Read package.json#version once, cached. Falls back to '0.0.0-dev' if the
+ * package.json cannot be located (single-file install scenario). Single
+ * source of truth for the CLI's --version output and printHelp() banner.
+ */
+let cachedVersion: string | null = null;
+function readPackageVersion(): string {
+  if (cachedVersion !== null) return cachedVersion;
+  const root = inferRepoRoot();
+  if (root) {
+    try {
+      const raw = readFileSync(resolve(root, 'package.json'), 'utf8');
+      const parsed = JSON.parse(raw) as { version?: string };
+      if (typeof parsed.version === 'string' && parsed.version.length > 0) {
+        cachedVersion = parsed.version;
+        return cachedVersion;
+      }
+    } catch {
+      // fall through to default
+    }
+  }
+  cachedVersion = '0.0.0-dev';
+  return cachedVersion;
+}
+
 function inferRepoRoot(): string | null {
   // import.meta.url resolves to dist/cli.js (after build) or src/cli.ts (tsx);
   // either way the repo root is 2 levels up.
@@ -1243,9 +1268,14 @@ function resolveStudioBin(): string | null {
   return null;
 }
 
+function printVersion(): void {
+  // eslint-disable-next-line no-console
+  console.log(readPackageVersion());
+}
+
 function printHelp(): void {
   // eslint-disable-next-line no-console
-  console.log(`Crumb v0.1.0 — multi-agent execution harness
+  console.log(`Crumb v${readPackageVersion()} — multi-agent execution harness
 
 Usage:
   crumb run --goal "<game pitch>" [--session <id>] [--preset <name>] [--adapter <id>]
@@ -1364,6 +1394,12 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       break;
     case 'studio':
       await cmdStudio(args);
+      break;
+    case 'version':
+    case '--version':
+    case '-v':
+    case '-V':
+      printVersion();
       break;
     case 'help':
     case '--help':

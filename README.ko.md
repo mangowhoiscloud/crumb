@@ -24,73 +24,106 @@
 | "사용자가 협업 과정에 **개입하거나 관찰**" | 5 user.* event × 4 host = 20-cell matrix. 자연어 → `kind=user.intervene`. |
 | "통신 방식 / 프로토콜 / UI **자유**" | JSONL transcript + 4 entry path (Claude Code / Codex / Gemini / headless). |
 | "AI 코딩 에이전트를 사용하여 개발" | Claude Code + Codex 로 직접 개발 — commits, sandwich, helpers, OTel exporter 가 흔적. |
-| "**README대로 실행**시 동작" | `npx tsx src/index.ts run --adapter mock` 인증 0, 결정론. |
+| "**README대로 실행**시 동작" | `git clone … && npm run setup && npx crumb run --goal "…" --adapter mock` — 인증 0, 결정론. |
 | "**.md 파일 포함**" | agents/*.md (5) + skills/*.md (5) + specialists/*.md (3) + .{claude,codex,gemini}/ entries (5). |
 | "JSONL **또는** 녹화" | `transcript.jsonl` 35 kind; 데모 스크린캐스트 follow-up. |
 
 ## 빠른 시작
 
-**최초 1회 셋업** (Streamlit 스타일 — clone / build / link / run):
+**두 줄, 심링크 없음, 글로벌 설치 없음:**
 
 ```bash
-git clone https://github.com/mangowhoiscloud/crumb.git && cd crumb && npm install && npm run build
-npm link                                          # 1회: `crumb` + `crumb-studio` 가 PATH 에 등록
-crumb doctor                                      # auth + chromium + Studio 점검
-crumb run --goal "60초 매치-3 콤보 보너스"        # → http://localhost:7321 으로 Studio 자동 오픈
+git clone https://github.com/mangowhoiscloud/crumb.git && cd crumb
+npm run setup
 ```
 
-`crumb run` 이 Crumb Studio (로컬 read-only 관측 surface) 를 자동 spawn — Vite-style banner 가 URL + 방금 시작한 세션 deep link 까지 출력. CI / SSH / headless 환경에서는 `--no-studio` 또는 `CRUMB_NO_STUDIO=1` 로 비활성화. Studio 는 `detached + unref` 로 run 종료 후에도 살아있어 다음 `crumb run` 호출 시 재spawn 없이 그대로 재사용 (chokidar 가 새 transcript 를 자동 watch).
+`npm run setup` 은 클론 디렉터리 안에서 idempotent 한 3단계를 실행:
 
-세션 시작 없이 Studio 만 띄우고 싶다면 `crumb studio` (= `crumb-studio` alias). `~/.crumb/projects/` 의 모든 기존 세션이 보이므로 언제든 안전하게 호출 가능.
+1. `npm install` — 의존성 + `postinstall` hook 으로 Playwright Chromium 사전 캐시 (D6 portability 첫 실행부터 동작).
+2. `npm run build` — 루트 + `@crumb/studio` workspace TypeScript 컴파일.
+3. `crumb doctor` — 환경 probe (3 host CLI / adapter / 추천 preset). best-effort — 첫 설치 시 부분 인증은 정상.
 
-> 글로벌 symlink 가 싫다면 `npm link` 를 건너뛰고 모든 명령에 `npx` 를 붙이면 된다 (`npx crumb run …`, `npx crumb studio`). `npx` 가 workspace `bin` 을 직접 resolve.
-
-> **Chromium 다운로드 건너뛰기** (CI / air-gapped 환경): `CRUMB_SKIP_PLAYWRIGHT_INSTALL=1 npm install`. qa-check D6 portability gate 는 signal-only 로 남고, D2 lint + size gate 는 그대로 동작.
-
-### A. 자연어 (Claude Code 사용자 — 권장)
+전역 PATH 에 아무 것도 등록하지 않고 양쪽 bin 을 `npx` 로 직접 호출:
 
 ```bash
-$ claude
-> /crumb 60초 매치-3 콤보 보너스 게임 만들어줘
+npx crumb run --goal "60-second match-3 with combo bonus" --adapter mock --idle-timeout 5000
+npx crumb-studio                  # http://127.0.0.1:7321/ — 브라우저 자동 오픈
 ```
 
-`.claude/skills/crumb/SKILL.md` skill 이 피치를 받아 headless `crumb run` 호출 + transcript 이벤트 스트리밍. 자연어 추가 발화 ("이 부분 다르게", "콤보 보너스 좀 더 짧게") 도 `kind=user.intervene` 으로 자동 라우팅.
+`--adapter mock` 한 줄이 **결정론 happy-path smoke** — 인증 0, 약 1 초 만에 26-event transcript + PASS verdict 으로 종료. 평가자가 처음 실행해 install 건강성을 확인하기에 가장 적합. `npx crumb replay <session-id>` 로 동일 상태 재현 가능.
 
-### B. Mock adapter (인증 없음, 결정론)
+> **왜 `npm link` / 글로벌 install 안 쓰나?** 글로벌 symlink 는 monorepo workspace 의 Node resolution 을 꼬이게 만들고, 공유 머신에서 사용자 계정을 넘어 leak 되며, 깨끗한 uninstall 을 위해 수동 추적이 필요합니다. `npx <bin>` 은 workspace `bin` 을 zero global state 로 resolve — `git clone`-and-delete 만으로 모든 Crumb 파일이 사라집니다.
+
+> **npm 의 `crumb` 는 무관 패키지입니다.** npm 에 등록된 `crumb` (v7.x) 은 이 저장소와 관련 없는 다른 프로젝트입니다. Crumb 은 현재 **clone-only** (Bagelcode 평가 전 npm publish 보류). `npm i -g crumb` 하지 마세요 — 이 코드베이스가 설치되지 않습니다.
+
+> **Chromium 다운로드 건너뛰기** (CI / air-gapped 환경): `CRUMB_SKIP_PLAYWRIGHT_INSTALL=1 npm run setup`. qa-check D6 portability gate 는 signal-only 로 남고, D2 lint + size gate 는 그대로 동작.
+
+### 업데이트
 
 ```bash
-crumb run --goal "60-second match-3 with combo bonus" --adapter mock --idle-timeout 5000
+cd crumb && npm run update           # git pull --ff-only 후 setup 재실행
 ```
 
-인증 0 으로 동작 보장. **26-event v0.1 flow** 생성: `session.start → goal → planner-lead (5 step + spec + handoff) → builder (artifact + build + handoff) → qa.result (system, deterministic ground truth) → verifier (4 step.judge inline + judge.score aggregate=28/30 PASS + handoff) → done → session.end`. replay 결과 동일.
+작업 트리가 dirty 면 실행을 거부 — 로컬 수정이 침묵 속에 덮이지 않습니다.
 
-### C. 실 에이전트 (preset 선택)
+### 언인스톨
+
+Crumb 은 PATH 에 어떤 것도 symlink 하지 않으므로 제거 = 파일 삭제:
 
 ```bash
-# 인증 (있는 것만):
+npm run uninstall                       # 빌드 산출물 제거 (dist/, node_modules/)
+npm run uninstall -- --purge-data       # ~/.crumb (sessions, projects) 도 제거
+npm run uninstall -- --purge-browsers   # Playwright chromium 캐시도 제거
+rm -rf "$(pwd)"                         # 마지막으로 클론 디렉터리 자체 제거
+```
+
+### 리셋
+
+```bash
+npm run reset                        # dist/ + node_modules/ 만 삭제. ~/.crumb / chromium 캐시는 보존
+npm run setup                        # clean slate 에서 재빌드
+```
+
+빌드가 망가졌거나 "fresh-clone 상태 재현" 이 필요할 때 (재클론 없이) 사용.
+
+### 실 에이전트로 실행 (`claude login` / `codex login` / `gemini login` 후)
+
+```bash
+# 가지고 있는 provider 만 인증:
 claude login           # Anthropic Claude Max
 codex login            # OpenAI Codex Plus
 gemini login           # Google Gemini Advanced
 
-# 프로젝트 핀 + 임의 디렉터리에서 실행:
+# 임의 작업 디렉터리에서 프로젝트 pin + 실행:
 mkdir -p ~/projects/match3 && cd ~/projects/match3
-crumb init --pin --label "match3"
-crumb run --goal "60-second match-3 with combo bonus" --preset solo
+npx --prefix /path/to/crumb crumb init --pin --label "match3"
+npx --prefix /path/to/crumb crumb run --goal "60-second match-3 with combo bonus" --preset solo
 
 # 결과 promote + checkable 폴더로 export:
-crumb release <session-ulid> --as v1 --label "demo"
-crumb copy-artifacts v1 --to ./demo
+npx --prefix /path/to/crumb crumb release <session-ulid> --as v1 --label "demo"
+npx --prefix /path/to/crumb crumb copy-artifacts v1 --to ./demo
 ```
 
-`provider × harness × model` 결정은 **사용자 통제권** — Crumb 은 강제 default 박지 않음. `crumb doctor` 로 환경에서 어떤 preset 이 실 동작 가능한지 확인.
+`--prefix` 는 npx 가 글로벌 symlink 없이 클론된 repo 의 workspace bin 을 가리키도록 합니다. 짧게 쓰려면 shell rc 에 `alias crumb='npx --prefix /path/to/crumb crumb'` 추가. `provider × harness × model` 결정은 **사용자 통제권** — Crumb 은 강제 default 박지 않음. `npx crumb doctor` 로 환경에서 어떤 preset 이 실 동작 가능한지 확인.
+
+### Claude Code 안에서 자연어로 실행
+
+```text
+$ claude
+> /crumb 60초 매치-3 콤보 보너스 게임 만들어줘
+```
+
+`.claude/skills/crumb/SKILL.md` skill 이 피치를 받아 클론된 repo 의 headless `crumb run` 을 호출하고 transcript 이벤트를 스트리밍. 자연어 추가 발화 ("이 부분 다르게", "콤보 보너스 좀 더 짧게") 도 `kind=user.intervene` 으로 자동 라우팅.
 
 ## 세션 검사
 
 ```bash
-crumb ls                                          # ~/.crumb/projects/*/sessions/ 모든 세션
+npx crumb ls                                      # ~/.crumb/projects/*/sessions/ 모든 세션
 jq -r '"\(.kind)\t\(.from)"' \
   ~/.crumb/projects/<project-id>/sessions/<ulid>/transcript.jsonl
-crumb replay <ulid>                               # 결정론 재실행
+npx crumb replay <ulid>                           # 결정론 재실행
+npx crumb status <ulid>                           # 진행 상황 + last 10 events + 점수
+npx crumb explain <kind>                          # transcript kind schema lookup
 ```
 
 ## 라이브 대시보드 (브라우저 콘솔)
@@ -98,7 +131,7 @@ crumb replay <ulid>                               # 결정론 재실행
 대시보드는 단일 바이너리 Node HTTP + SSE 서버. **기본 포트 `7321`, `127.0.0.1` 만 바인드** — 새 체크아웃 + 새 브라우저 탭이 macOS / Windows 방화벽 prompt 없이 즉시 동작. Cross-platform (chokidar + WSL/NFS polling fallback, 플랫폼-특화 syscall 0).
 
 ```bash
-# `npm install && npm run build` (빠른 시작 단계) 후:
+# `npm run setup` (빠른 시작 단계) 후, 클론된 repo 안에서:
 npx crumb-studio                  # http://127.0.0.1:7321/  (브라우저 자동 오픈)
 npx crumb-studio --no-open        # 헤드리스 / SSH / CI    (URL 만 출력)
 npx crumb-studio --port 8080      # 다른 포트
@@ -128,17 +161,42 @@ Cross-platform 환경 변수:
 
 ## CLI
 
+모든 명령은 클론된 repo 안에서 `npx crumb …` (또는 다른 디렉터리에서 `npx --prefix /path/to/crumb crumb …`) 로 호출. `--version` / `-v` 는 패키지 버전 출력. `npx crumb --help` 가 동일한 표를 출력합니다.
+
 | 명령 | 동작 |
 |---|---|
 | `crumb run --goal "<피치>" [--preset <name>] [--adapter <id>]` | 세션 시작 |
 | `crumb event` | 서브프로세스 에이전트가 stdin JSON 으로 transcript append |
+| `crumb event tail [--all] [--kinds ...]` | transcript 이벤트 스트림 (private 기본 필터) |
 | `crumb replay <session-dir>` | transcript 에서 상태 재구성 (결정론 검증) |
 | `crumb resume <session-id\|dir>` | 상태 재구성 + mid-flight 재개 명령 출력 |
+| `crumb status <session-id\|dir>` | 진행 상황 + last 10 events + D1-D6 점수 |
+| `crumb explain <kind>` | transcript-kind schema lookup |
+| `crumb suggest <session-id\|dir>` | 다음 사용자 액션 추천 (approve/veto/pause/wait) |
+| `crumb tui <session-id\|dir>` | blessed-기반 라이브 옵저버 (터미널) |
+| `crumb model [--show \| --apply "NL"]` | 액터별 model + effort + provider 활성화 |
 | `crumb doctor` | 환경 종합 점검 (3 host OAuth + adapter health + preset gating) |
 | `crumb config <자연어>` | 자연어 설명에서 preset 추천 |
 | `crumb debug <session-id\|dir>` | F1-F7 routing 장애 진단 |
+| `crumb export <session-id\|dir> [--format ...]` | OTel GenAI / Anthropic / chrome://tracing export |
+| `crumb init [--host <name>] [--pin]` | host entry 점검 / cwd 를 안정 ULID 로 pin |
 | `crumb ls` | `~/.crumb/projects/*/sessions/` 모든 세션 + 이벤트 수 |
+| `crumb release <session-id> [--as vN]` | 산출물 스냅샷을 versions/ 로 + `kind=version.released` |
+| `crumb versions` | 릴리스 마일스톤 + parent chain |
+| `crumb copy-artifacts <session-id\|vN> --to <dest>` | frozen 산출물 복사 (베이글코드 제출용) |
+| `crumb migrate [--dry-run]` | 레거시 `<cwd>/sessions/` 를 `~/.crumb/projects/<id>/sessions/` 로 이동 |
+| `crumb studio [--port ...] [--bind ...]` | 웹 콘솔 (= `crumb-studio`) |
+| `crumb --version` / `-v` | 패키지 버전 출력 |
 | `npx crumb-studio [--port 7321] [--bind 127.0.0.1] [--no-open]` | 라이브 관측 대시보드 (HTTP + SSE) — 위 "라이브 대시보드" 섹션 참조 |
+
+라이프사이클 (클론된 repo 의 npm scripts):
+
+| 명령 | 동작 |
+|---|---|
+| `npm run setup` | install + build + doctor (idempotent — update 경로 동일) |
+| `npm run update` | `git pull --ff-only` 후 setup 재실행. dirty tree 거부 |
+| `npm run uninstall [-- --purge-data] [-- --purge-browsers]` | 빌드 산출물 제거. 옵션 플래그로 `~/.crumb` / Playwright 캐시 추가 제거 |
+| `npm run reset` | `dist/` + `node_modules/` 제거. `~/.crumb` 와 chromium 캐시는 보존 |
 
 ## 아키텍처 (v0.1, 한 화면)
 
