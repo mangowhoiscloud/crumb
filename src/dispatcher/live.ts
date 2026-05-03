@@ -36,6 +36,19 @@ import { probeAdapter } from '../helpers/adapter-health.js';
 const PER_SPAWN_TIMEOUT_MS = Number(process.env.CRUMB_PER_SPAWN_TIMEOUT_MS) || 30 * 60 * 1000; // 30 min hard ceiling
 const PER_SPAWN_IDLE_TIMEOUT_MS = Number(process.env.CRUMB_PER_SPAWN_IDLE_MS) || 5 * 60 * 1000; // 5 min idle
 
+/**
+ * v0.4.2 — in-memory registry of currently-running spawns, keyed by actor.
+ * Populated when `dispatch({type:'spawn'})` enters the adapter call and
+ * cleared in the `finally` block after spawn settles. Read by
+ * `case 'cancel_spawn'` to fire SIGTERM via `controller.abort()`.
+ *
+ * Not durable — process-local. The transcript-side audit trail (the
+ * `kind=user.intervene data.cancel=<actor>` line plus the resulting
+ * `kind=note` "spawn cancelled" line emitted from the cancel_spawn effect)
+ * is the durable record.
+ */
+const activeSpawns = new Map<Actor, AbortController>();
+
 export interface DispatcherDeps {
   writer: TranscriptWriter;
   registry: AdapterRegistry;
@@ -212,11 +225,14 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
 
       // v0.2.0/v0.3.1 per_spawn_timeout: AbortController fires SIGTERM via the
       // adapter's signal handler. See `setupSpawnTimers` for the two-timer
-      // (wall-clock ceiling + idle) policy.
+      // (wall-clock ceiling + idle) policy. v0.4.2: same controller is now
+      // exposed via `activeSpawns` so user.intervene { data.cancel } can
+      // SIGTERM the live subprocess from outside the timer path.
       const timers = setupSpawnTimers({
         wallClockMs: deps.perSpawnTimeoutMs ?? PER_SPAWN_TIMEOUT_MS,
         idleMs: deps.perSpawnIdleTimeoutMs ?? PER_SPAWN_IDLE_TIMEOUT_MS,
       });
+      activeSpawns.set(effect.actor, timers.controller);
 
       // v0.4.1 PR-F C — first-stdout heartbeat. Without this the studio shows
       // dispatch.spawn → silence for 30-200s (cold spawn + 60KB sandwich
@@ -328,6 +344,12 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         });
       } finally {
         timers.cleanup();
+        // Only deregister this entry if it still references our controller —
+        // a fresh spawn for the same actor may have replaced it (rare, but
+        // happens during fast respawn after FAIL routing).
+        if (activeSpawns.get(effect.actor) === timers.controller) {
+          activeSpawns.delete(effect.actor);
+        }
       }
 
       const timedOut = timers.controller.signal.aborted;
@@ -475,6 +497,46 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
         from: 'coordinator',
         kind: 'agent.stop',
         body: `coordinator-initiated stop: ${effect.reason}`,
+      });
+      break;
+    }
+    case 'cancel_spawn': {
+      // v0.4.2 — fire SIGTERM at the live subprocess via its AbortController.
+      // The actual termination happens asynchronously inside the spawn's
+      // `await adapter.spawn()` call; the spawn loop's catch/finally already
+      // records exit + writes the spawn-*.log. Here we only flip the abort
+      // bit and emit a transcript note so the studio + replay see when the
+      // user-driven cancel landed.
+      const targets: Actor[] =
+        effect.actor === 'all'
+          ? (Array.from(activeSpawns.keys()) as Actor[])
+          : ([effect.actor] as Actor[]);
+      const cancelled: Actor[] = [];
+      for (const a of targets) {
+        const ctrl = activeSpawns.get(a);
+        if (ctrl && !ctrl.signal.aborted) {
+          ctrl.abort();
+          cancelled.push(a);
+        }
+      }
+      await deps.writer.append({
+        session_id: deps.sessionId,
+        from: 'system',
+        kind: 'note',
+        body:
+          cancelled.length > 0
+            ? `cancel_spawn → SIGTERM sent to [${cancelled.join(', ')}] (reason: ${effect.reason})`
+            : `cancel_spawn → no active spawn matched ${effect.actor === 'all' ? '(any)' : effect.actor} (reason: ${effect.reason})`,
+        data: {
+          requested: effect.actor,
+          cancelled,
+          reason: effect.reason,
+        },
+        metadata: {
+          visibility: 'private',
+          deterministic: true,
+          tool: 'dispatch-cancel-spawn@v1',
+        },
       });
       break;
     }

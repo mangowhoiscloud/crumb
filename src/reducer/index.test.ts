@@ -616,6 +616,42 @@ describe('reducer', () => {
     expect(state.progress_ledger.circuit_breaker.builder).toBeUndefined();
   });
 
+  // v0.4.2 — /cancel mid-spawn (R2)
+
+  it('v0.4.2: user.intervene with data.cancel=<actor> emits cancel_spawn effect', () => {
+    const s0 = initialState('sess-test');
+    const ev = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      body: 'taking too long',
+      data: { cancel: 'builder' },
+    });
+    const { effects } = reduce(s0, ev);
+    expect(effects.some((e) => e.type === 'cancel_spawn')).toBe(true);
+    const cancel = effects.find((e) => e.type === 'cancel_spawn') as {
+      type: 'cancel_spawn';
+      actor: string;
+      reason: string;
+    };
+    expect(cancel.actor).toBe('builder');
+    expect(cancel.reason).toContain('taking too long');
+  });
+
+  it("v0.4.2: user.intervene with data.cancel='all' emits cancel_spawn for all", () => {
+    const s0 = initialState('sess-test');
+    const ev = fixed({
+      from: 'user',
+      kind: 'user.intervene',
+      data: { cancel: 'all' },
+    });
+    const { effects } = reduce(s0, ev);
+    const cancel = effects.find((e) => e.type === 'cancel_spawn') as
+      | { type: 'cancel_spawn'; actor: string; reason: string }
+      | undefined;
+    expect(cancel).toBeDefined();
+    expect(cancel!.actor).toBe('all');
+  });
+
   // v0.2.0 G5 — per-actor pause (Paperclip "pause any agent" pattern)
 
   it('v0.2.0 G5: user.pause with data.actor adds to paused_actors only', () => {

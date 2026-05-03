@@ -13,6 +13,7 @@ export type Effect =
   | DoneEffect
   | RollbackEffect
   | StopEffect
+  | CancelSpawnEffect
   | QaCheckEffect;
 
 export interface SpawnEffect {
@@ -70,6 +71,24 @@ export interface RollbackEffect {
 export interface StopEffect {
   type: 'stop';
   actor: Actor;
+  reason: string;
+}
+
+/**
+ * v0.4.2 — user-driven mid-spawn cancellation. Reducer emits this when
+ * `kind=user.intervene` carries `data.cancel = <actor> | 'all'`. The live
+ * dispatcher looks up the active AbortController in its in-memory
+ * `activeSpawns` registry and fires `controller.abort()`, sending SIGTERM to
+ * the running subprocess via the adapter signal handler. Trade-off: the
+ * subprocess is killed mid-edit so partially-written artifacts may be
+ * inconsistent — that's the user's explicit ask when they typed `/cancel`.
+ *
+ * `actor: 'all'` cancels every registered spawn (e.g. user types `/cancel`
+ * with no target during a parallel multi-actor flow).
+ */
+export interface CancelSpawnEffect {
+  type: 'cancel_spawn';
+  actor: Actor | 'all';
   reason: string;
 }
 

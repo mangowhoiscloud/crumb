@@ -4,6 +4,33 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — `/cancel` user verb + cancel_spawn effect: mid-spawn SIGTERM via dispatcher.AbortController (R2) (2026-05-03)
+
+Closes the second wire-layer gap from the 15-system frontier survey: mid-spawn user intervention. After R1 (chokidar swap, PR #122), the idle case responds in ~5-10ms, but the mid-spawn case — running subprocess does not see `user.intervene` until the spawn naturally completes — was still on the order of 30s to 30min (`PER_SPAWN_TIMEOUT_MS`). The dispatcher already had an `AbortController` per spawn (`src/dispatcher/live.ts:setupSpawnTimers`); it just wasn't reachable from `user.intervene`.
+
+Frontier consensus on this gap: only IDE-plugin tier (Cline / Continue / Cursor) wires `AbortSignal` directly into the LLM HTTP stream, all three with documented cancellation-leak bugs (Cline #5259, Continue #1449, Cursor forum #140944). Cooperative checkpoint (LangGraph / AutoGen / OpenHands / Temporal) is the safer default, but Crumb's cooperative default was *worse than those* — they at least check at every node/turn boundary, while Crumb checked only when the spawn naturally ended. R2 fixes that with an explicit user-driven verb instead of changing the cooperative default.
+
+Changes:
+
+- `src/effects/types.ts`: new `CancelSpawnEffect` (`type: 'cancel_spawn'`, `actor: Actor | 'all'`, `reason: string`) added to the `Effect` union. The dead-code `StopEffect` is left alone — different semantics ("write a transcript line" vs "fire SIGTERM").
+- `src/dispatcher/live.ts`:
+  - Module-level `activeSpawns: Map<Actor, AbortController>` registry. Populated in the `'spawn'` case right after `setupSpawnTimers`; cleared in the spawn's `finally` block (only if our controller still owns the slot, so a fast respawn after FAIL routing doesn't clobber the new entry).
+  - New `case 'cancel_spawn':` handler. Resolves the target list (`'all'` → every registered actor; specific actor → that one), calls `controller.abort()` on each, and emits a `kind=note` with `data: { requested, cancelled, reason }` so Studio + replay see when the user-driven cancel landed and which actors got SIGTERM.
+- `src/reducer/index.ts:494` (`case 'user.intervene'`): `data.cancel?: Actor | 'all'` recognized in the data typing. When set, emits a `cancel_spawn` effect with the reason text from `event.body` (or "user-requested cancel" default).
+- `src/inbox/parser.ts:204`: new `case 'cancel':` branch.
+  - `/cancel @<actor> [reason]` → `kind=user.intervene`, `body=reason`, `data: { cancel: <actor> }`
+  - `/cancel [reason]` (no `@`) → `kind=user.intervene`, `body=reason`, `data: { cancel: 'all' }`
+- `src/inbox/parser.test.ts`: 4 new tests cover all four `/cancel` shapes.
+- `src/reducer/index.test.ts`: 2 new tests cover the cancel branch (per-actor and `'all'`).
+
+Latency impact (mid-spawn case): 30s–30min → ~3-5s (dominated by SIGTERM grace + adapter cleanup).
+
+Trade-offs disclosed: mid-edit subprocess kill leaves `artifacts/game/` in inconsistent state (half-written files). Acceptable because the user typed `/cancel` explicitly — frontier IDE tools (Cline, Continue) have the same shape. LLM provider may keep generating server-side after the HTTP stream closes (industry-wide cost-leak; Continue #1449). Default cooperative path unchanged — regular `user.intervene` without `data.cancel` still uses routing-via-state-change.
+
+Verification: lint:all, typecheck, format:check, test (466/466 — was 460, +6 new), build — all clean.
+
+Follow-up: Studio UI button on active-spawn row that POSTs `/cancel @<actor>` (R5, natural fit alongside PR-G7-B's resume button). `git stash` of actor cwd before SIGTERM for recoverable cancellation (R6, requires actor cwds to be git repos — not currently the case).
+
 ### Changed — Inbox watcher: setInterval polling → chokidar fs-event push (R1+R4) (2026-05-03)
 
 The Studio user-intervene round-trip had an asymmetric latency profile: the transcript-to-browser fan-out direction was already on chokidar (`packages/studio/src/watcher.ts:14`, sub-10ms native FSEvents/inotify), but the browser-to-coordinator direction (`POST /api/sessions/:id/inbox` → `inbox.txt` append → coordinator polls) was on a 150ms `setInterval` loop in `src/inbox/watcher.ts:42`. After surveying 15 frontier multi-agent harnesses (LangGraph / Claude Code / Codex CLI / Cursor 2.0 / OpenHands / AutoGen 0.4 / Cline / Inspect AI / Aider / Devin / CrewAI / Continue.dev / SWE-Agent / Open Interpreter / Temporal Workflows) on their wire-layer transport, the verdict was that file-as-source-of-truth is the right architecture (matches Temporal Signals + OpenHands EventStream shape — durable, replay-deterministic, multi-process safe), but `setInterval` over `fs.statSync` is a degenerate consumer when chokidar is already in the dep tree.

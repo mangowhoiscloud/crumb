@@ -18,6 +18,8 @@
  *                                              (+ data.target_actor when @<actor> present)  — v0.2.0 G4
  *   /note <text>                             → kind=note, body=<text>
  *   /redo [body]                             → kind=user.intervene, body=<body>  (alias for free-text)
+ *   /cancel [@<actor>] [reason]              → kind=user.intervene, data.cancel=<actor>|'all'  — v0.4.2
+ *                                              SIGTERM the live spawn (mid-build kill — lossy)
  *   @<actor> <body>                          → kind=user.intervene, data.target_actor=<actor>, body=<body>
  *   <free text>                              → kind=user.intervene, body=<line>
  *
@@ -208,6 +210,31 @@ function parseSlash(line: string, sessionId: string): DraftMessage | null {
         from: 'user',
         kind: 'user.intervene',
         body: rest || undefined,
+      };
+    }
+    case 'cancel': {
+      // v0.4.2 — mid-spawn cancel. Reducer's user.intervene case turns
+      // `data.cancel = <actor> | 'all'` into a `cancel_spawn` effect that
+      // SIGTERMs the live subprocess via dispatcher.activeSpawns.
+      // `/cancel @builder reason…` → cancel that actor; bare `/cancel` →
+      // cancel ALL active spawns (rare; useful when user types /pause + /cancel
+      // in panic).
+      const at = rest.match(/^@([\w-]+)(?:\s+(.*))?$/);
+      if (at && isActor(at[1])) {
+        return {
+          session_id: sessionId,
+          from: 'user',
+          kind: 'user.intervene',
+          body: at[2]?.trim() || undefined,
+          data: { cancel: at[1] },
+        };
+      }
+      return {
+        session_id: sessionId,
+        from: 'user',
+        kind: 'user.intervene',
+        body: rest || undefined,
+        data: { cancel: 'all' },
       };
     }
     default:
