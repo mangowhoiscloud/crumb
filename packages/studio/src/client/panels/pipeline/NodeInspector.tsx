@@ -24,7 +24,7 @@ const ACTOR_DESCRIPTIONS: Record<string, string> = {
   builder: 'Phaser 3.80 multi-file PWA implementer. Emits artifact.created + build.',
   verifier: 'CourtEval (Grader → Critic → Defender → Re-grader). Reads qa.result for D2/D6.',
   validator: 'Anti-deception schema enforcement. D2/D6 forced to 0 on inconsistent verdicts.',
-  system: 'Dispatcher heartbeat: spawn / qa.result / hook effects. Never an LLM-driven actor.',
+  system: 'Rule-based dispatcher: spawn / qa.result (deterministic D2/D6 ground truth) / done(budget). Never an LLM-driven actor — emissions reproducible from the same transcript.',
   done: 'Terminal milestone — `kind=done` event lands here once validator audits clean.',
 };
 
