@@ -4,6 +4,24 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Changed — Inbox watcher: setInterval polling → chokidar fs-event push (R1+R4) (2026-05-03)
+
+The Studio user-intervene round-trip had an asymmetric latency profile: the transcript-to-browser fan-out direction was already on chokidar (`packages/studio/src/watcher.ts:14`, sub-10ms native FSEvents/inotify), but the browser-to-coordinator direction (`POST /api/sessions/:id/inbox` → `inbox.txt` append → coordinator polls) was on a 150ms `setInterval` loop in `src/inbox/watcher.ts:42`. After surveying 15 frontier multi-agent harnesses (LangGraph / Claude Code / Codex CLI / Cursor 2.0 / OpenHands / AutoGen 0.4 / Cline / Inspect AI / Aider / Devin / CrewAI / Continue.dev / SWE-Agent / Open Interpreter / Temporal Workflows) on their wire-layer transport, the verdict was that file-as-source-of-truth is the right architecture (matches Temporal Signals + OpenHands EventStream shape — durable, replay-deterministic, multi-process safe), but `setInterval` over `fs.statSync` is a degenerate consumer when chokidar is already in the dep tree.
+
+Changes (`src/inbox/watcher.ts`):
+
+- `setInterval(tick, 150)` + `statSync` polling replaced with `chokidar.watch(inboxPath, ...)` listening on `add` + `change` events. Drain runs are serialized via a Promise chain (`draining = draining.then(drain)`) so two close-together fs events don't race the `lastSize` bookkeeping.
+- New `shouldPollInbox()` helper mirrors `packages/studio/src/poll-detect.ts:13`: native FSEvents/inotify on macOS/Linux by default; `CRUMB_POLL=1` or WSL detection via `/proc/version` falls back to chokidar's `usePolling: true`. Tests pass `pollIntervalMs` to force polling with a small interval (no test wall-clock regression).
+- `pollIntervalMs` semantics tightened in the JSDoc: when set, forces polling with that interval (test path); when undefined (production default), chokidar uses native fs events with the WSL/Docker fallback. The 150ms-default behavior is gone — there's no "default poll interval" because the production path doesn't poll at all.
+- The misleading file-header comment ("Polling (not fs.watch) for cross-platform reliability — matches transcript reader's pattern") removed and replaced with the v0.4.2 chokidar rationale citing the Studio precedent.
+- `stop()` signature kept synchronous (fire-and-forget chokidar `close()`) so existing callers in `src/loop/coordinator.ts:313, 324` and the existing tests don't need `await` retrofits.
+
+**Latency**: idle case (coordinator between spawns) drops from ~150ms worst-case to ~5-10ms typical (FSEvents/inotify push). CPU: 6.7 spurious wakeups/sec → 0 when idle. **No invariant changes** — `inbox.txt` is still the durable artifact, `kind=user.intervene` is still emitted via the same `parseInboxLine` → `writer.append` path. Pure consumer-side optimization.
+
+The mid-spawn case (coordinator currently inside an LLM/builder subprocess) is a separate gap addressed by the upcoming `user.intervene → dispatcher.AbortController` wiring (R2, follow-up PR).
+
+Verification: `npm run lint:all && npm run typecheck && npm run format:check && npm test && npm run build` — 460/460 tests pass (3 inbox-watcher tests still green under the new transport), lint clean, format clean.
+
 ### Changed — Studio live exec feed suppresses raw stream-json + researcher §1/§2 envelope-aware extraction (2026-05-03)
 
 Per user feedback (single message, two pain points bundled): "추출할 때 game-design.md를 고려해서 추출할 수 있도록 하고 ⏺ Bash(...) ⎿ ...  raw {"type":"assistant",...} blob 별도의 창으로 띄워줄 수 있겠어? 지금은 live execution feed에서 이렇게 섞여져 보여."
