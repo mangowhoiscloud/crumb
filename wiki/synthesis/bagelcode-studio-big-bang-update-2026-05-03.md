@@ -590,6 +590,55 @@ This becomes part of the sandwich the dispatcher injects into every actor spawn,
 
 When writing `<DagCanvas>`, `<NodeInspector>`, `<HandoffEdge>`, or any Pipeline-canvas component, the PR description should cite the n8n file consulted and what was adopted vs adapted vs rejected. This keeps the lineage auditable and prevents accidentally re-inventing patterns n8n already validated.
 
+## 13. Portability + data-stewardship invariants (every M-PR must honor)
+
+User directives 2026-05-03 amendment: any path or filesystem coupling that prevents a fresh-machine setup from working with `clone → npm install → npx crumb-studio` is a **hard fail**. Symlinks fall under the same prohibition — they are platform-coupled (Windows / archive-extract failure modes), CI-fragile, and surprise the evaluator.
+
+### 13.1 Hardcoded path prohibition
+
+Forbidden in any M-PR:
+
+- ❌ Absolute paths anywhere except as a fallback inside an env-var lookup chain (e.g., `process.env.CRUMB_HOME ?? join(homedir(), '.crumb')` is OK; `'/Users/mango/.crumb'` is not)
+- ❌ Hardcoded `/Users/`, `/home/`, `C:\\` — not in TS, MD, JSON, TOML, comments, JSDoc, test fixtures, or sample output
+- ❌ Symlinks anywhere in the runtime resolution chain (no `ln -s`, no `fs.symlink`, no `package.json#bin` aliasing through symlinks). Use real files + the existing `import.meta.url` walk-up pattern in `src/cli.ts:inferRepoRoot()` for repo-root discovery.
+- ❌ `npm link` for development workflow (the convention persists symlinks under `node_modules/`); use `npx crumb-studio` (already supported) or `node packages/studio/dist/cli.js` directly.
+- ❌ Build outputs that reference absolute paths (Vite `base: '/'` only; never `base: '/Users/...'`)
+- ❌ Source maps that leak absolute paths in production bundles (configure Vite `build.sourcemap: 'hidden'` or post-process to strip absolute prefixes)
+
+Required:
+
+- Every path read via env-var fallback to `os.homedir()` / `os.tmpdir()` / `process.cwd()` / `import.meta.url`-relative walk
+- Every test fixture uses `path.join(__dirname, …)` or the equivalent; never absolute
+- Every `package.json#bin` resolves through `node_modules/.bin` (no relative `..` escapes)
+- CI matrix includes a "fresh clone" smoke: `cd $(mktemp -d) && git clone $REPO . && npm install && npx crumb-studio --port 7321 --no-open && curl http://127.0.0.1:7321/` — green on Linux + macOS + Windows-WSL on every PR.
+- `crumb doctor` (and `crumb doctor --self-check` from M10a) succeeds on a machine that has only Node 18 + git + the cloned repo. No `claude` / `codex` / `gemini` binary required for the doctor itself to run.
+
+### 13.2 Context hierarchy + transcript accumulation
+
+The transcript-as-truth invariant (AGENTS.md §invariant 1) is load-bearing for every observability surface; the migration must preserve it through every layer change. New rules:
+
+- **Single-writer discipline**: only the dispatcher's transcript writer (`src/transcript/writer.ts`) appends to `transcript.jsonl`. The migration must NOT introduce a second writer (e.g., a React-side optimistic insert) — even for "instant feedback" UX, route through inbox + chokidar + dispatcher → reducer → SSE. The user's perceived latency should be hidden by skeleton states (§8.1), not by speculative writes.
+- **Hierarchy preserved**: `~/.crumb/projects/<project_id>/sessions/<session_id>/{transcript.jsonl, meta.json, artifacts/, agent-workspace/, inbox.txt, .crumb/preset.toml?}` shape is invariant. The migration must NOT reshape the on-disk layout. Studio reads, never writes (except `inbox.txt` + `meta.json` status patches, which already exist).
+- **Append-only respected at every layer**: React state mutations are local (Zustand); they NEVER round-trip a transcript line back to disk. SSE streams are read-only — `setQueryData` updates the query cache, not the disk.
+- **No client-side transcript truncation** for performance. If a transcript grows to 50k events, the React virtualization (TanStack Virtual) must page on render, never on data — full event history stays in memory + cache so deep-link replay is identical to the v1 monolith. Eviction (if ever needed) lives in the server's `JsonlTail` / `EventBus`, not in the client.
+- **Anti-deception linkage** (AGENTS.md §invariant 5): every UI score badge resolves its source via `scores.D*.source` (`reducer-auto` / `qa-check-effect` / `verifier-llm`); rendering must NOT compute a score client-side from raw events — that would create a second source of truth. Tooltip on every badge cites the source.
+- **Replay determinism preserved**: `crumb replay <session-id>` must continue to produce byte-identical state derivation post-migration. M-series PRs that touch the reducer or the protocol schema MUST update the parity test (`src/protocol/parity.test.ts`) and pass `crumb replay` on the staged session corpus before merge.
+- **Transcript schema drift gate**: any change to `protocol/schemas/message.schema.json` (kind enum, field shape) is a `chore(protocol):` PR scoped to the protocol layer alone, never bundled with a UI PR. The migration's M-series PRs touch only Studio code; protocol changes ride the Prune stream.
+
+### 13.3 Cleanup discipline at end of migration
+
+At M8 (legacy bundle removal), AND every PR thereafter:
+
+- Every reference to the v1 vanilla bundle (file path, function name, JSDoc, comment, test fixture, wiki page) is purged. A single `chore/post-migration-cleanup` PR sweeps the codebase, `AGENTS.md` §Don't list, `CLAUDE.md`, `GEMINI.md`, and any `.skills/` files. CI gate: `grep -r "studio\.js\|studio\.html\|inline-client\.mjs\|studio-html\.generated"` returns zero hits in active source (wiki history mentions are tagged with a `<!-- historical -->` HTML comment so the LLM hygiene rule from §11.4 still passes).
+- Stale legacy comments (e.g., `// PR-K' fix for vanilla swimlane`, `// W-Studio-A retired by #145`) are removed when their referent code goes away. The migration does NOT leave breadcrumb trails through deleted code paths.
+- Exit conditions documented in `CHANGELOG.md` `[Unreleased]` with explicit "v1 retired" note + final v1 commit SHA so a future archaeologist can `git checkout` if needed.
+
+User directive verbatim, 2026-05-03 amendment:
+
+> 빅뱅 업데이트가 마무리되면 이전에 있던 잔재들로 로직이나 코드 구조가 혼선되지 않게 깨끗이 정리해.
+
+This is a hard gate at M8 — no soft-deprecation, no co-existence period after parity is reached, no "we'll clean it up later" debt accumulation.
+
 ## Trigger criteria — when to start M0
 
 Start M0 (`chore/studio-vite-scaffold`) when **all four** of these are true:
