@@ -382,6 +382,43 @@ describe('reducer', () => {
     expect(state.progress_ledger.circuit_breaker['builder']?.state).toBe('OPEN');
   });
 
+  it('PR-Prune-3: builder circuit OPEN transition immediately sets adapter_override.builder=claude-local', () => {
+    // Without the override set at the OPEN transition, the next spec→builder
+    // spawn picks claude-local via pickAdapter's defensive heuristic but the
+    // FAIL handler's "swap exhausted" guard (which checks adapter_override)
+    // takes one redundant respawn cycle before terminating.
+    let state = initialState('sess-test');
+    expect(state.progress_ledger.adapter_override['builder']).toBeUndefined();
+    for (let i = 0; i < 3; i++) {
+      const err = fixed({
+        id: `01H000000000000000000000${i}A`,
+        from: 'builder',
+        kind: 'error',
+      });
+      state = reduce(state, err).state;
+    }
+    expect(state.progress_ledger.circuit_breaker['builder']?.state).toBe('OPEN');
+    expect(state.progress_ledger.adapter_override['builder']).toBe('claude-local');
+  });
+
+  it('PR-Prune-3: builder error after circuit already OPEN does NOT re-set adapter_override', () => {
+    // Guards against accidentally clobbering a user-set override during a
+    // sustained outage. We only set it on the CLOSED→OPEN transition.
+    let state = initialState('sess-test');
+    state.progress_ledger.adapter_override['builder'] = 'mock';
+    for (let i = 0; i < 4; i++) {
+      const err = fixed({
+        id: `01H000000000000000000000${i}A`,
+        from: 'builder',
+        kind: 'error',
+      });
+      state = reduce(state, err).state;
+    }
+    expect(state.progress_ledger.circuit_breaker['builder']?.state).toBe('OPEN');
+    // override preserved — we only auto-set when adapter_override was empty
+    expect(state.progress_ledger.adapter_override['builder']).toBe('mock');
+  });
+
   it('user.intervene records constraint without changing speaker', () => {
     const s0 = initialState('sess-test');
     s0.progress_ledger.next_speaker = 'builder';

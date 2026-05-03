@@ -50,6 +50,11 @@ export interface ReduceResult {
 // 18-case switch into 18 files would convert single-file fan-out cost into
 // 18-file fan-out cost. See wiki/synthesis/bagelcode-user-intervention-frontier-2026-05-02.md
 // + wiki/references/bagelcode-nl-intervention-12-systems-2026-05-02.md §5.
+// PR-Prune-3 split the judge.score case body into sanitizeJudgeScore() +
+// routeOnVerdict() helpers below so the deepest hot path stays scannable.
+// The umbrella reduce() complexity is dominated by switch-case breadth (18
+// cases), which is the intentional fan-out shape; the disable below covers
+// the whole-function metric only.
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export function reduce(state: CrumbState, event: Message): ReduceResult {
   // Mutate a shallow clone — every nested update copies what it touches.
@@ -254,63 +259,19 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
 
     case 'verify.result':
     case 'judge.score': {
-      // Anti-deception pass — Rules 1, 2, 4, 5 (qa-check ground truth + self-bias
-      // + researcher video evidence). Rule 3 (D4 override) needs autoScores which
-      // requires the full transcript, so it's skipped here; summary.ts re-runs
-      // with autoScores populated for the canonical verdict math.
-      // See [[bagelcode-system-architecture-v0.1]] §7.3.
-      const audit = checkAntiDeception({
-        judgeScore: event,
-        qaResult: next.last_qa_result,
-        builderProvider: next.last_builder_provider,
-        researchVideoEvidenceIds: next.research_video_evidence_ids,
-      });
-      // Only swap to sanitized scores when violations actually fired. The
-      // validator unconditionally recomputes aggregate from D1–D6 dims, which
-      // would zero-out a verifier-supplied aggregate that didn't ship per-dim
-      // breakdowns — keep the original output when there's nothing to correct.
-      const useSanitized = audit.violations.length > 0;
-      const sanitized: Scores = useSanitized ? audit.scores : (event.scores ?? {});
-      const verdict = (sanitized.verdict ?? null) as Verdict | null;
-      const aggregate = sanitized.aggregate ?? event.scores?.aggregate ?? 0;
-
-      // Append a kind=audit event whenever violations fire — that record (not
-      // the original judge.score) is the canonical anti-deception trail. The
-      // verifier's raw output stays in transcript as evidence for replay.
-      if (audit.violations.length > 0) {
-        effects.push({
-          type: 'append',
-          message: {
-            // C3 — use next.session_id as the canonical source for all reducer-
-            // synthesized append effects. event.session_id and next.session_id
-            // are equal in single-session operation but state-derived form is
-            // the invariant we want to anchor on (see coordinator §"Hub-Ledger-
-            // Spoke" — state is the single source of truth, events flow through).
-            session_id: next.session_id,
-            from: 'validator',
-            kind: 'audit',
-            parent_event_id: event.id,
-            body: audit.violations.join(', '),
-            data: {
-              violations: audit.violations,
-              corrected_verdict: sanitized.verdict ?? null,
-              corrected_aggregate: sanitized.aggregate ?? null,
-            },
-            metadata: {
-              deterministic: true,
-              tool: 'anti-deception@v1',
-              audit_violations: audit.violations,
-            },
-          },
-        });
-      }
+      // PR-Prune-3 — case body split across 3 helpers:
+      //   sanitizeJudgeScore  : anti-deception Rules 1/2/4/5 + audit-effect emit
+      //                         (Rule 3 needs autoScores → summary.ts re-runs it
+      //                         with the full transcript for canonical verdict math)
+      //   inline budget guards : verify_count cap + ratchet revert + adaptive stop
+      //                         (kept inline because each one early-`break`s the case)
+      //   routeOnVerdict      : PASS / PARTIAL / FAIL routing (PR-Prune-2 adapter-swap path)
+      // See [[bagelcode-system-architecture-v0.1]] §7.3 for the anti-deception matrix.
+      const { sanitized, auditEffect, verdict, aggregate } = sanitizeJudgeScore(event, next);
+      if (auditEffect) effects.push(auditEffect);
 
       if (verdict) {
-        next.progress_ledger.score_history.push({
-          msg_id: event.id,
-          aggregate,
-          verdict,
-        });
+        next.progress_ledger.score_history.push({ msg_id: event.id, aggregate, verdict });
       }
       // v0.2.0 budget cap: verify_count > VERIFY_MAX → done(too_many_verify).
       // Count judge.score only — verify.result is its legacy alias and the
@@ -344,107 +305,8 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
         effects.push({ type: 'done', reason: 'adaptive_stop' });
         break;
       }
-      if (verdict === 'PASS') {
-        next.done = true;
-        effects.push({ type: 'done', reason: 'verdict_pass' });
-      } else if (verdict === 'PARTIAL') {
-        effects.push({
-          type: 'hook',
-          kind: 'partial',
-          body: 'Verifier returned PARTIAL — please confirm or veto',
-          data: { aggregate, scores: sanitized },
-        });
-      } else if (verdict === 'FAIL' || verdict === 'REJECT') {
-        // PR-Prune-2 — three-way routing on FAIL:
-        //   1. Builder circuit OPEN, adapter swap exhausted → done(builder_circuit_open)
-        //   2. Builder circuit OPEN, swap available         → adapter swap to claude-local + respawn builder
-        //   3. Builder CLOSED + Critical                    → rollback(planner-lead) [spec needs change]
-        //   4. Builder CLOSED + Important/Minor             → spawn(builder) w/ sandwich_append
-        //
-        // The verifier MAY hint at a deviation type via judge.score
-        // data.deviation.type ∈ {Critical, Important, Minor}, mirroring the
-        // code-review-protocol.md taxonomy. When omitted, we default to
-        // Important (respawn builder) — the prior behavior of always going
-        // to planner-lead overspecified the fix and burned a full plan-cycle
-        // for trivial issues like "missing entry redirector".
-        //
-        // Pre-PR-Prune-2 design used a separate `builder-fallback` actor for
-        // path (2). That actor was never spawned in 30+ days of production
-        // sessions — the same effect (different LLM) is achieved by
-        // overriding `adapter_override.builder = 'claude-local'` and
-        // respawning the original builder. One actor, one sandwich.
-        const eng = next.progress_ledger.circuit_breaker['builder'];
-        if (eng?.state === 'OPEN') {
-          const currentOverride = next.progress_ledger.adapter_override['builder'];
-          if (currentOverride === 'claude-local') {
-            next.done = true;
-            effects.push({ type: 'done', reason: 'builder_circuit_open' });
-            break;
-          }
-          next.progress_ledger.adapter_override['builder'] = 'claude-local';
-          next.progress_ledger.next_speaker = 'builder';
-          effects.push({
-            type: 'append',
-            message: {
-              session_id: next.session_id,
-              from: 'system',
-              parent_event_id: event.id,
-              kind: 'audit',
-              body: `adapter_swapped — builder circuit OPEN (${eng.consecutive_failures} consecutive failures), swapping adapter to claude-local`,
-              data: {
-                event: 'adapter_swapped',
-                actor: 'builder',
-                reason: 'builder_circuit_open',
-                consecutive_failures: eng.consecutive_failures,
-                last_failure_id: eng.last_failure_id,
-                new_adapter: 'claude-local',
-              },
-              metadata: { deterministic: true, tool: 'reducer-adapter-swap@v1' },
-            },
-          });
-          effects.push({
-            type: 'spawn',
-            actor: 'builder',
-            adapter: 'claude-local',
-            sandwich_appends: collectSandwichAppends(next, 'builder'),
-          });
-        } else {
-          // PR-G2 — deviation-typed routing.
-          const deviation = ((event.scores as { deviation?: { type?: string } } | undefined)
-            ?.deviation?.type ?? 'Important') as 'Critical' | 'Important' | 'Minor';
-          const feedback = sanitized.feedback ?? event.scores?.feedback ?? 'verify failed';
-          if (deviation === 'Critical') {
-            next.progress_ledger.next_speaker = 'planner-lead';
-            effects.push({
-              type: 'rollback',
-              to: 'planner-lead',
-              feedback,
-            });
-          } else {
-            // Important / Minor → respawn original builder with verifier
-            // feedback injected as a one-shot sandwich_append. Avoids a full
-            // plan cycle for tightly-scoped fixes (e.g. "add entry redirector",
-            // observed in session 01KQNEYQT53P5JFGD0944NBZ9D).
-            const suggested = (event.scores as { suggested_change?: string } | undefined)
-              ?.suggested_change;
-            const appendBody =
-              `Verifier feedback (${deviation}): ${feedback}` +
-              (suggested ? `\n\nSuggested change:\n${suggested}` : '');
-            next.task_ledger.facts.push({
-              source_id: event.id,
-              text: appendBody,
-              category: 'sandwich_append',
-              target_actor: 'builder',
-            });
-            next.progress_ledger.next_speaker = 'builder';
-            effects.push({
-              type: 'spawn',
-              actor: 'builder',
-              adapter: pickAdapter(next, 'builder'),
-              sandwich_appends: collectSandwichAppends(next, 'builder'),
-            });
-          }
-        }
+      if (verdict) {
+        effects.push(...routeOnVerdict(next, event, sanitized, verdict, aggregate));
       }
       break;
     }
@@ -712,11 +574,28 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
           consecutive_failures: 0,
         };
         const failures = cur.consecutive_failures + 1;
+        const nextState: 'OPEN' | 'CLOSED' = failures >= CIRCUIT_OPEN_AT ? 'OPEN' : 'CLOSED';
         next.progress_ledger.circuit_breaker[actor] = {
-          state: failures >= CIRCUIT_OPEN_AT ? 'OPEN' : 'CLOSED',
+          state: nextState,
           consecutive_failures: failures,
           last_failure_id: event.id,
         };
+        // PR-Prune-3 — when builder's circuit transitions to OPEN, immediately
+        // set adapter_override.builder='claude-local'. Without this, the next
+        // spec→builder spawn picks claude-local via pickAdapter's defensive
+        // OPEN-state heuristic but adapter_override stays unset; the FAIL
+        // handler's "swap exhausted" guard (which checks adapter_override) then
+        // takes one redundant respawn cycle before terminating. Setting the
+        // override at the OPEN transition makes the guard fire on the FIRST
+        // FAIL after the swap.
+        if (
+          actor === 'builder' &&
+          nextState === 'OPEN' &&
+          cur.state !== 'OPEN' &&
+          !next.progress_ledger.adapter_override['builder']
+        ) {
+          next.progress_ledger.adapter_override['builder'] = 'claude-local';
+        }
       }
       next.progress_ledger.stuck_count += 1;
       if (next.progress_ledger.stuck_count >= STUCK_THRESHOLD) {
@@ -858,6 +737,184 @@ export function reduce(state: CrumbState, event: Message): ReduceResult {
   }
 
   return { state: next, effects };
+}
+
+/**
+ * PR-Prune-3 — anti-deception sanitization for judge.score / verify.result.
+ * Pure helper, no state mutation. Returns the (possibly-corrected) scores
+ * plus an optional `audit` append-effect that the caller pushes when
+ * violations fire. The verifier's raw output stays in transcript regardless;
+ * the audit event is the canonical anti-deception trail.
+ *
+ * Only swaps to sanitized scores when violations actually fired — the
+ * validator unconditionally recomputes aggregate from D1–D6 dims, which
+ * would zero-out a verifier-supplied aggregate that didn't ship per-dim
+ * breakdowns. Keeping the original output when there's nothing to correct
+ * preserves the verifier's intent on clean events.
+ */
+function sanitizeJudgeScore(
+  event: Message,
+  state: CrumbState,
+): {
+  sanitized: Scores;
+  auditEffect: Effect | null;
+  verdict: Verdict | null;
+  aggregate: number;
+} {
+  const audit = checkAntiDeception({
+    judgeScore: event,
+    qaResult: state.last_qa_result,
+    builderProvider: state.last_builder_provider,
+    researchVideoEvidenceIds: state.research_video_evidence_ids,
+  });
+  const useSanitized = audit.violations.length > 0;
+  const sanitized: Scores = useSanitized ? audit.scores : (event.scores ?? {});
+  const verdict = (sanitized.verdict ?? null) as Verdict | null;
+  const aggregate = sanitized.aggregate ?? event.scores?.aggregate ?? 0;
+
+  const auditEffect: Effect | null = useSanitized
+    ? {
+        type: 'append',
+        message: {
+          // C3 — use state.session_id as the canonical source for all reducer-
+          // synthesized append effects. event.session_id and state.session_id
+          // are equal in single-session operation but state-derived form is
+          // the invariant we want to anchor on (see coordinator §"Hub-Ledger-
+          // Spoke" — state is the single source of truth, events flow through).
+          session_id: state.session_id,
+          from: 'validator',
+          kind: 'audit',
+          parent_event_id: event.id,
+          body: audit.violations.join(', '),
+          data: {
+            violations: audit.violations,
+            corrected_verdict: sanitized.verdict ?? null,
+            corrected_aggregate: sanitized.aggregate ?? null,
+          },
+          metadata: {
+            deterministic: true,
+            tool: 'anti-deception@v1',
+            audit_violations: audit.violations,
+          },
+        },
+      }
+    : null;
+
+  return { sanitized, auditEffect, verdict, aggregate };
+}
+
+/**
+ * PR-Prune-3 — verdict-based routing for judge.score / verify.result.
+ * Mutates `next` (sets next.done, next.progress_ledger.next_speaker,
+ * next.progress_ledger.adapter_override, next.task_ledger.facts) and returns
+ * the effects to push. Caller appends in order.
+ *
+ * Routing matrix (PR-Prune-2 + PR-Prune-3):
+ *   PASS                                       → done(verdict_pass)
+ *   PARTIAL                                    → hook(partial)
+ *   FAIL/REJECT + builder OPEN + swap exhausted → done(builder_circuit_open)
+ *   FAIL/REJECT + builder OPEN + swap available → adapter swap to claude-local + respawn builder
+ *   FAIL/REJECT + builder CLOSED + Critical    → rollback(planner-lead) [spec needs change]
+ *   FAIL/REJECT + builder CLOSED + Important/Minor → spawn(builder) w/ sandwich_append
+ *
+ * The verifier MAY hint at a deviation type via judge.score
+ * data.deviation.type ∈ {Critical, Important, Minor}, mirroring the
+ * code-review-protocol.md taxonomy. When omitted, we default to Important
+ * (respawn builder) — the prior behavior of always going to planner-lead
+ * overspecified the fix and burned a full plan-cycle for trivial issues
+ * like "missing entry redirector".
+ */
+function routeOnVerdict(
+  next: CrumbState,
+  event: Message,
+  sanitized: Scores,
+  verdict: Verdict,
+  aggregate: number,
+): Effect[] {
+  if (verdict === 'PASS') {
+    next.done = true;
+    return [{ type: 'done', reason: 'verdict_pass' }];
+  }
+  if (verdict === 'PARTIAL') {
+    return [
+      {
+        type: 'hook',
+        kind: 'partial',
+        body: 'Verifier returned PARTIAL — please confirm or veto',
+        data: { aggregate, scores: sanitized },
+      },
+    ];
+  }
+  if (verdict !== 'FAIL' && verdict !== 'REJECT') return [];
+
+  const eng = next.progress_ledger.circuit_breaker['builder'];
+  if (eng?.state === 'OPEN') {
+    if (next.progress_ledger.adapter_override['builder'] === 'claude-local') {
+      next.done = true;
+      return [{ type: 'done', reason: 'builder_circuit_open' }];
+    }
+    next.progress_ledger.adapter_override['builder'] = 'claude-local';
+    next.progress_ledger.next_speaker = 'builder';
+    return [
+      {
+        type: 'append',
+        message: {
+          session_id: next.session_id,
+          from: 'system',
+          parent_event_id: event.id,
+          kind: 'audit',
+          body: `adapter_swapped — builder circuit OPEN (${eng.consecutive_failures} consecutive failures), swapping adapter to claude-local`,
+          data: {
+            event: 'adapter_swapped',
+            actor: 'builder',
+            reason: 'builder_circuit_open',
+            consecutive_failures: eng.consecutive_failures,
+            last_failure_id: eng.last_failure_id,
+            new_adapter: 'claude-local',
+          },
+          metadata: { deterministic: true, tool: 'reducer-adapter-swap@v1' },
+        },
+      },
+      {
+        type: 'spawn',
+        actor: 'builder',
+        adapter: 'claude-local',
+        sandwich_appends: collectSandwichAppends(next, 'builder'),
+      },
+    ];
+  }
+
+  // PR-G2 — deviation-typed routing.
+  const deviation = ((event.scores as { deviation?: { type?: string } } | undefined)?.deviation
+    ?.type ?? 'Important') as 'Critical' | 'Important' | 'Minor';
+  const feedback = sanitized.feedback ?? event.scores?.feedback ?? 'verify failed';
+  if (deviation === 'Critical') {
+    next.progress_ledger.next_speaker = 'planner-lead';
+    return [{ type: 'rollback', to: 'planner-lead', feedback }];
+  }
+  // Important / Minor → respawn original builder with verifier feedback
+  // injected as a one-shot sandwich_append. Avoids a full plan cycle for
+  // tightly-scoped fixes (e.g. "add entry redirector", observed in session
+  // 01KQNEYQT53P5JFGD0944NBZ9D).
+  const suggested = (event.scores as { suggested_change?: string } | undefined)?.suggested_change;
+  const appendBody =
+    `Verifier feedback (${deviation}): ${feedback}` +
+    (suggested ? `\n\nSuggested change:\n${suggested}` : '');
+  next.task_ledger.facts.push({
+    source_id: event.id,
+    text: appendBody,
+    category: 'sandwich_append',
+    target_actor: 'builder',
+  });
+  next.progress_ledger.next_speaker = 'builder';
+  return [
+    {
+      type: 'spawn',
+      actor: 'builder',
+      adapter: pickAdapter(next, 'builder'),
+      sandwich_appends: collectSandwichAppends(next, 'builder'),
+    },
+  ];
 }
 
 /**
