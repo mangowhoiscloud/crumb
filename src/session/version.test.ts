@@ -219,5 +219,61 @@ describe('version', () => {
       const versionDir = join(dir, 'v1');
       expect(await snapshotArtifacts(sessionDir, versionDir)).toEqual({});
     });
+
+    // v0.4.3 — multi-file Phaser PWA shape (artifacts/game/index.html +
+    // artifacts/game/src/main.js + …). Earlier versions of snapshotArtifacts
+    // walked only the top level via readdir() and silently dropped nested
+    // files. Backed by wiki/synthesis/bagelcode-studio-big-bang-update-
+    // 2026-05-03.md §14.3.
+    it('walks recursively for multi-file PWA layouts (artifacts/game/src/**)', async () => {
+      const sessionDir = join(dir, 'multi-sess');
+      const artifactsDir = join(sessionDir, 'artifacts');
+      const gameDir = join(artifactsDir, 'game');
+      const gameSrcDir = join(gameDir, 'src');
+      const gameSrcEntitiesDir = join(gameSrcDir, 'entities');
+      await mkdir(gameSrcEntitiesDir, { recursive: true });
+      await writeFile(join(artifactsDir, 'DESIGN.md'), '# design', 'utf8');
+      await writeFile(join(gameDir, 'index.html'), '<html>game</html>', 'utf8');
+      await writeFile(join(gameDir, 'manifest.webmanifest'), '{"name":"x"}', 'utf8');
+      await writeFile(join(gameSrcDir, 'main.js'), 'console.log(1)', 'utf8');
+      await writeFile(join(gameSrcEntitiesDir, 'Player.js'), 'class P{}', 'utf8');
+
+      const versionDir = join(dir, 'v-multi');
+      const sha = await snapshotArtifacts(sessionDir, versionDir);
+
+      // All five files surface in the manifest, keyed on relative POSIX path.
+      expect(Object.keys(sha).sort()).toEqual([
+        'DESIGN.md',
+        'game/index.html',
+        'game/manifest.webmanifest',
+        'game/src/entities/Player.js',
+        'game/src/main.js',
+      ]);
+      // Every value is a sha256 hex digest.
+      for (const v of Object.values(sha)) {
+        expect(v).toMatch(/^[a-f0-9]{64}$/);
+      }
+      // Files actually copied to disk under versionDir.
+      const { readFile } = await import('node:fs/promises');
+      expect(await readFile(join(versionDir, 'artifacts', 'game', 'index.html'), 'utf8')).toBe(
+        '<html>game</html>',
+      );
+      expect(
+        await readFile(
+          join(versionDir, 'artifacts', 'game', 'src', 'entities', 'Player.js'),
+          'utf8',
+        ),
+      ).toBe('class P{}');
+    });
+
+    it('manifest keys use forward slashes regardless of host platform path separator', async () => {
+      const sessionDir = join(dir, 'sep-sess');
+      const nested = join(sessionDir, 'artifacts', 'a', 'b');
+      await mkdir(nested, { recursive: true });
+      await writeFile(join(nested, 'c.txt'), 'leaf', 'utf8');
+      const versionDir = join(dir, 'v-sep');
+      const sha = await snapshotArtifacts(sessionDir, versionDir);
+      expect(Object.keys(sha)).toEqual(['a/b/c.txt']);
+    });
   });
 });
