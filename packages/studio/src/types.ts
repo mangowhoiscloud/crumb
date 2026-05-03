@@ -7,7 +7,7 @@
  * src/protocol/types.ts. Any field here is best-effort.
  */
 
-export interface DashboardMessage {
+export interface StudioMessage {
   id: string;
   ts: string;
   session_id: string;

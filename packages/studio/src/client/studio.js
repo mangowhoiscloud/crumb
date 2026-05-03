@@ -11,7 +11,7 @@ const ACTOR_VAR = {
 
 const sessions = new Map();
 let activeSession = null;
-const eventCache = new Map(); // session_id → DashboardMessage[]
+const eventCache = new Map(); // session_id → StudioMessage[]
 
 function $(id) { return document.getElementById(id); }
 function escapeHTML(s) {
