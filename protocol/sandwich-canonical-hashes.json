@@ -3,9 +3,9 @@
   "comment": "Byte-identical sandwich SHA-256 lock (W2 CI gate). Regenerate via `npm run sandwich:update-hashes` when a sandwich .md or any inlined skill/specialist .md changes intentionally. Anthropic prompt cache is content-addressed; one whitespace change invalidates every dependent cache entry — keep edits deliberate.",
   "actors": {
     "coordinator": "76f90172abf649fd5c395eafecdf991a97fb91f8bb70a87c0099b89ca84c2f43",
-    "planner-lead": "39cbf18ba2d56d0f3a85aa04af3e91165dea995dd5be590a7fccad4eae45100b",
-    "researcher": "6b91bc7b60e25998740f4eff681a690dc78626d285208c96ce80937a41fc706d",
-    "builder": "ee416e1279dbcf43cadb875618a57064f48b538eec7017b7fdbbc0daef3b7d36",
-    "verifier": "141c96e63b25c2112529adb922b76ed20780bb52d5c32a1dd91acdcc45911dcb"
+    "planner-lead": "2ac56b32c7b1f77b73a325e9eb0c585779010b1c6fdcecaa2c72240bae4deaea",
+    "researcher": "3b219f7e22b9e9a0b5a2ddd213f38009e55fc160cb76070c4fb09b90294b9bc1",
+    "builder": "604aa72fe4ebb6abbe76413536f2e010d3515ff30800b77e3464843b234313c1",
+    "verifier": "26d7abdc3364e7b56a04cdee00272aa501fb3f01ed190f901005349184a69409"
   }
 }

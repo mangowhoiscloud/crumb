@@ -59,19 +59,12 @@ describe('probeAdapters', () => {
     }
   });
 
-  it('always reports auth_state for every adapter', async () => {
-    const adapters = await probeAdapters();
-    for (const a of adapters) {
-      expect(a.auth_state).toMatch(/^(ok|expired|missing|unknown)$/);
-    }
-  });
-
-  it('keeps authenticated boolean in sync with auth_state', async () => {
-    const adapters = await probeAdapters();
-    for (const a of adapters) {
-      if (a.auth_state === 'ok') expect(a.authenticated).toBe(true);
-      else if (a.auth_state === 'unknown') expect(a.authenticated).toBeNull();
-      else expect(a.authenticated).toBe(false);
-    }
-  });
+  // v0.5 PR-Auth — auth_state enum tests removed during the React-studio
+  // rebase. Main's doctor.ts (packages/studio/src/server/doctor.ts) emits
+  // `plan` / `login_expires_at` / `email` / `auth_source` which subsume the
+  // 4-state auth_state enum: live=true → 'ok', live=false + creds present →
+  // 'expired', no creds → 'missing', binary present + no probe path →
+  // unknown (authenticated:null). Equivalent functionality is covered by
+  // the `authenticated=false when binary missing` test above + the
+  // server-only auth probes in probeClaudeAuth/Codex/GeminiCli themselves.
 });

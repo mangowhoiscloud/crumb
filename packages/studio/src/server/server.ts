@@ -333,28 +333,28 @@ async function serveSessions(
           // Track actors that actually ran so the studio can offer sandwich previews.
           if (m.kind === 'agent.wake' && m.from) actorsSeen.add(m.from);
         }
-      }
-      return {
-        session_id,
-        project_id,
-        crumb_home,
-        transcript_path,
-        goal,
-        preset,
-        metrics,
-        actors: [...actorsSeen],
-        // v0.3.5: state + last_activity_at for sidebar dot color + sort.
-        state: classification?.state ?? null,
-        // v1.0 client also reads `derived_state` / `derived_state_reason`
-        // (the names predate PR-O1's `state` rename). Emit both so old +
-        // new consumers populate the sidebar lifecycle dot correctly.
-        derived_state: classification?.state ?? 'unknown',
-        derived_state_reason: classification?.done_reason ?? null,
-        last_activity_at: classification?.last_activity_at ?? null,
-        done_reason: classification?.done_reason ?? null,
-        history,
-      };
-    },
+        return {
+          session_id,
+          project_id,
+          crumb_home,
+          transcript_path,
+          goal,
+          preset,
+          metrics,
+          actors: [...actorsSeen],
+          // v0.3.5: state + last_activity_at for sidebar dot color + sort.
+          state: classification?.state ?? null,
+          // v1.0 client also reads `derived_state` / `derived_state_reason`
+          // (the names predate PR-O1's `state` rename). Emit both so old +
+          // new consumers populate the sidebar lifecycle dot correctly.
+          derived_state: classification?.state ?? 'unknown',
+          derived_state_reason: classification?.done_reason ?? null,
+          last_activity_at: classification?.last_activity_at ?? null,
+          done_reason: classification?.done_reason ?? null,
+          history,
+        };
+      },
+    ),
   );
   // Newest activity first — turns the sidebar into a recently-active feed.
   sessions.sort((a, b) => (b.last_activity_at ?? 0) - (a.last_activity_at ?? 0));
