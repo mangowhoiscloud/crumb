@@ -56,7 +56,20 @@ export interface SessionRow {
   project_id: string;
   goal: string | null;
   metrics?: SessionMetrics;
-  derived_state?: 'live' | 'paused' | 'done' | 'errored' | 'terminal' | 'unknown';
+  /**
+   * Lifecycle classification (server emits one of):
+   *   live / idle / interrupted / abandoned / terminal / unknown
+   */
+  derived_state?:
+    | 'live'
+    | 'idle'
+    | 'paused'
+    | 'done'
+    | 'errored'
+    | 'terminal'
+    | 'interrupted'
+    | 'abandoned'
+    | 'unknown';
   derived_state_reason?: string | null;
   done_reason?: string | null;
   live?: boolean;

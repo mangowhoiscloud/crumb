@@ -17,11 +17,14 @@ interface Props {
 }
 
 const STATE_DOT_COLOR: Record<string, string> = {
-  live: 'var(--lime)',
-  paused: 'var(--warn)',
+  live: 'var(--tone-pass)',
+  idle: 'var(--ink-muted)',
+  paused: 'var(--tone-partial)',
   done: 'var(--ink-muted)',
-  errored: 'var(--audit-fg)',
+  errored: 'var(--tone-fail)',
   terminal: 'var(--ink-tertiary)',
+  interrupted: 'var(--tone-partial)',
+  abandoned: 'var(--audit-fg)',
   unknown: 'var(--ink-tertiary)',
 };
 
