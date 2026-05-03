@@ -897,6 +897,17 @@ es.addEventListener('state', (e) => {
   const d = JSON.parse(e.data);
   const s = ensureSession(d.session_id, null);
   s.metrics = d.metrics;
+  // v0.5 PR-O1.5: server now pushes lifecycle classification alongside
+  // metrics every change batch. Mirror it onto the client-side session
+  // so the header pill / sidebar dot transition in real time without
+  // waiting for the next /api/sessions poll. Datadog live tail / OTel
+  // GenAI span lifecycle convention.
+  if (d.lifecycle) {
+    s.state = d.lifecycle.state;
+    s.last_activity_at = d.lifecycle.last_activity_at;
+    s.done_reason = d.lifecycle.done_reason ?? null;
+    s.live = d.lifecycle.state === 'live';
+  }
   if (d.session_id === activeSession) renderHeader();
   renderSessionList();
 });
