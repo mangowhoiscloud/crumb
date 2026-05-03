@@ -1,5 +1,5 @@
 ---
-title: 베이글코드 과제 — Crumb 시스템 구조 + Prompt Assemble 절차 (Hybrid Lock)
+title: Bagelcode Task — Crumb System Architecture + Prompt Assemble Procedure (Hybrid Lock)
 category: concepts
 tags: [bagelcode, architecture, system-overview, prompt-assemble, transcript, sandwich, envelope, cache-boundary, hybrid, 2026]
 sources:
@@ -11,8 +11,8 @@ sources:
   - "src/protocol/schemas/message.schema.json"
   - "agents/_event-protocol.md"
 summary: >-
-  Hybrid lock 직후 v2 시스템 구조 — 외부 1 host (Claude Code) + Task subagent N + Verifier inline.
-  §1-§2 토폴로지는 v0.1 (system-architecture-v0.1) 가 canonical 로 대체, §3-§9 는 v0.1 에서도 유효.
+  v2 system architecture immediately after the Hybrid lock — external 1 host (Claude Code) + Task subagents N + Verifier inline.
+  §1-§2 topology is superseded as canonical by v0.1 (system-architecture-v0.1); §3-§9 remain valid in v0.1.
 provenance:
   extracted: 0.65
   inferred: 0.30
@@ -21,43 +21,43 @@ created: 2026-05-02
 updated: 2026-05-02
 ---
 
-# Crumb 시스템 구조 + Prompt Assemble 절차 (v2)
+# Crumb System Architecture + Prompt Assemble Procedure (v2)
 
-> ★ **2026-05-02 supersession** — 본 페이지 §1-§2 (토폴로지 + 38 kind) 는 [[bagelcode-system-architecture-v0.1]] 로 대체. v0.1 변화 요지: 외부 1 host → Multi-host 4 entry, Engineering Lead inline → builder + verifier actor split, 38 kind → 39 kind (+`qa.result`), single-layer Verifier → 3-layer scoring (reducer auto + qa_check effect + verifier CourtEval), MCP Provider 신규, persistence boost (`crumb resume`) 신규. 본 페이지 §3 (prompt assemble 5단계) / §4 (per-turn flow) / §5 (cache 경계) / §6 (control plane vs LLM layer 책임 분담) / §7 (default vs cross-provider) / §8 (headless) / §9 (sub-system 변경 영향) 은 v0.1 에서도 변경 없이 유효 — 단 actor enum / kind 수 / metadata 필드는 v0.1 기준 갱신 필요.
+> ★ **2026-05-02 supersession** — §1-§2 of this page (topology + 38 kinds) is superseded by [[bagelcode-system-architecture-v0.1]]. v0.1 change summary: external 1 host → Multi-host 4 entry, Engineering Lead inline → builder + verifier actor split, 38 kinds → 39 kinds (+`qa.result`), single-layer Verifier → 3-layer scoring (reducer auto + qa_check effect + verifier CourtEval), MCP Provider added, persistence boost (`crumb resume`) added. §3 (5-step prompt assemble) / §4 (per-turn flow) / §5 (cache boundary) / §6 (control plane vs LLM layer responsibility split) / §7 (default vs cross-provider) / §8 (headless) / §9 (sub-system change impact) of this page remain valid unchanged in v0.1 — only the actor enum / kind count / metadata fields need to be updated to v0.1 baseline.
 >
-> [[bagelcode-host-harness-decision]] (Hybrid lock) 후의 **v2 시스템 구조**. 전체 개요도 + transcript schema (v2 시점 38 kind 기준) + sandwich/envelope assemble 절차 + per-turn flow.
+> The **v2 system architecture** following [[bagelcode-host-harness-decision]] (Hybrid lock). Overall overview diagram + transcript schema (38 kind baseline at v2) + sandwich/envelope assemble procedure + per-turn flow.
 >
-> [[bagelcode-final-design-2026]] §1 의 "외부 4 / 내부 7" 그림은 본 페이지로 대체. final-design §2-§8 (transcript schema / state machine / adapter / OTel) 은 변경 없이 유효.
+> The "external 4 / internal 7" diagram in [[bagelcode-final-design-2026]] §1 is replaced by this page. final-design §2-§8 (transcript schema / state machine / adapter / OTel) remain valid unchanged.
 
 ---
 
-## 0. 한 줄 요약
+## 0. One-line summary
 
 ```
-USER (자연어)
+USER (natural language)
    ▾
-Claude Code (host 하네스 = Coordinator 역할)              ← LLM layer
+Claude Code (host harness = Coordinator role)              ← LLM layer
    ▾  Task tool spawn (depth=1)
 specialist subagents (Planner Lead / Engineering Lead / sub-specialists)
-   ▾  envelope 주입 (XML system prompt) + crumb event 호출
-transcript.jsonl  (38 kind × 11 field, append-only, ULID 정렬)        ← Control plane
+   ▾  envelope injection (XML system prompt) + crumb event call
+transcript.jsonl  (38 kind × 11 field, append-only, ULID sorted)        ← Control plane
    ▾
 reducer (pure) → state → effects → dispatcher                          ← Control plane
    ▾  spawn / append / persist / hook / done
 
 cross-provider opt-in:
-   Engineering Lead = subprocess spawn codex-local CLI (외부 actor 추가)
-   Verifier         = host Claude Code Task subagent (다른 sandwich, cross-assemble)
+   Engineering Lead = subprocess spawn codex-local CLI (adds external actor)
+   Verifier         = host Claude Code Task subagent (different sandwich, cross-assemble)
 ```
 
-3 layer 분리:
-- **자연어 인터페이스** = Claude Code (host)
-- **자연어 → 백엔드 라우팅** = `.claude/skills/crumb/SKILL.md` + `agents/*.md` sandwich
-- **오케스트레이션 control plane** = `src/{transcript, reducer, state, validator, adapter, dispatcher, loop}/`
+3-layer separation:
+- **Natural language interface** = Claude Code (host)
+- **Natural language → backend routing** = `.claude/skills/crumb/SKILL.md` + `agents/*.md` sandwich
+- **Orchestration control plane** = `src/{transcript, reducer, state, validator, adapter, dispatcher, loop}/`
 
 ---
 
-## 1. 전체 개요도 — Default mode (single provider)
+## 1. Overall overview — Default mode (single provider)
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────┐
@@ -122,7 +122,7 @@ cross-provider opt-in:
 
 ---
 
-## 2. 전체 개요도 — Cross-provider mode (`--cross-provider`)
+## 2. Overall overview — Cross-provider mode (`--cross-provider`)
 
 ```
 USER → CLAUDE CODE (host)
@@ -146,41 +146,41 @@ USER → CLAUDE CODE (host)
 control plane = 동일 (transcript + reducer + state)
 ```
 
-→ 외부 process **1 → 2 추가**. 내부 subagent depth 동일.
+→ External processes go from **1 → 2 added**. Internal subagent depth is the same.
 
 ---
 
-## 3. Schema — 실코드 기준 (38 kind × 11 field)
+## 3. Schema — actual code baseline (38 kind × 11 field)
 
-`src/protocol/schemas/message.schema.json` 발췌.
+Excerpt from `src/protocol/schemas/message.schema.json`.
 
-### 11 field
+### 11 fields
 
 ```typescript
 type Message = {
-  // 식별 (4)
+  // identification (4)
   id:               ULID                  // 26-char Crockford base32
   ts:               ISO-8601              // UTC
   session_id:       string
-  task_id?:         string                // multi-task 안 session
+  task_id?:         string                // multi-task within a session
 
-  // 라우팅 (4)
+  // routing (4)
   from:             ActorId               // user / coordinator / planner-lead /
                                           // engineering-lead / builder-fallback /
-                                          // validator / system   (7개)
+                                          // validator / system   (7 total)
   to?:              ActorId | "*"
   parent_event_id?: ULID
   in_reply_to?:     ULID                  // deprecated alias
 
-  // 분류 (3)
-  kind:             MessageKind           // 38개 (아래)
+  // classification (3)
+  kind:             MessageKind           // 38 (below)
   topic?:           string
-  step?:            SpecialistStep        // 12개 (아래)
+  step?:            SpecialistStep        // 12 (below)
 }
 
-// 본문 (옵션 — kind 별 schema 결정)
-body?:           string                   // 자유 텍스트
-data?:           Record<string, unknown>  // structured payload (kind별 schema)
+// body (optional — schema determined per kind)
+body?:           string                   // free text
+data?:           Record<string, unknown>  // structured payload (per-kind schema)
 content?:        { format: 'markdown'|'json'|'text'|'xml', text: string }
 artifacts?:      ArtifactRef[]
 scores?:         { D1..D6, aggregate, verdict }
@@ -190,129 +190,129 @@ metadata?:       { visibility, model, turn, tokens_in/out, cache_read/write,
                    latency_ms, cost_usd, thinking_tokens, audit_violations }
 ```
 
-### 38 kinds (실 schema enum)
+### 38 kinds (actual schema enum)
 
 ```
 ─── system (4) ─────────────────────────
-session.start          세션 개시 + manifest
-session.end            세션 종료
-agent.wake             actor spawn 명령
-agent.stop             actor 정지
+session.start          session start + manifest
+session.end            session end
+agent.wake             actor spawn command
+agent.stop             actor stop
 
 ─── workflow (10) ──────────────────────
-goal                   사용자 최상위 요청
-question.socratic      Planner Lead → user 모호성 질문
-answer.socratic        user 응답
-spec                   Planner Lead 산출 (AC + 룰북)
-spec.update            spec 수정
-build                  Engineering Lead 코드 산출
-verify.request         검증 요청
-verify.result          검증 결과 (legacy alias of judge.score)
+goal                   user top-level request
+question.socratic      Planner Lead → user ambiguity question
+answer.socratic        user response
+spec                   Planner Lead output (AC + rulebook)
+spec.update            spec edit
+build                  Engineering Lead code output
+verify.request         verification request
+verify.result          verification result (legacy alias of judge.score)
 judge.score            ★ first-class scorecard (D1-D6 + aggregate + verdict)
-done                   최종 산출 확정
+done                   final output confirmed
 
 ─── dialogue (5) ──────────────────────
-agent.thought_summary  private CoT (캐시 X, summary만)
-question               일반 질문 (Lead → User 또는 cross-Lead)
-answer                 응답
-debate                 다자 토론 entry (CourtEval 내부)
-note                   자유 코멘트 (라우팅 X)
+agent.thought_summary  private CoT (no cache, summary only)
+question               general question (Lead → User or cross-Lead)
+answer                 response
+debate                 multi-party debate entry (CourtEval internal)
+note                   free-form comment (no routing)
 
 ─── lead-internal step (5) ──────────
-step.socratic          Planner Lead step 진입 마킹
+step.socratic          Planner Lead step entry marker
 step.concept
 step.research
 step.design
-step.judge             Verifier 의 grader/critic/defender/regrader
+step.judge             Verifier's grader/critic/defender/regrader
 
 ─── user intervention (5) ─────────────
-user.intervene         일반 개입
-user.veto              특정 메시지 거부
-user.approve           명시 승인
-user.pause             전역 pause
-user.resume            전역 resume
+user.intervene         general intervention
+user.veto              reject specific message
+user.approve           explicit approval
+user.pause             global pause
+user.resume            global resume
 
 ─── handoff (3) ────────────────────────
-handoff.requested      Lead → Lead 명시
-handoff.accepted       coordinator 의 ack
-handoff.rollback       verify FAIL → planner-lead 회귀
+handoff.requested      Lead → Lead explicit
+handoff.accepted       coordinator's ack
+handoff.rollback       verify FAIL → revert to planner-lead
 
 ─── artifact / meta (6) ──────────────
-artifact.created       산출물 ref (path + sha256)
-ack                    수신 확인
-error                  오류 보고
-audit                  감사 (auto)
-tool.call              ★ subagent 의 도구 호출 trace
-tool.result            ★ 도구 결과 trace
+artifact.created       artifact ref (path + sha256)
+ack                    receipt confirmation
+error                  error report
+audit                  audit (auto)
+tool.call              ★ subagent's tool call trace
+tool.result            ★ tool result trace
 hook                   coordinator → user modal
 ```
 
-→ **38 kind**. (final-design-2026 §2 의 "28 kind" 는 P0 이전 카운트, 현재 schema 가 정확.)
+→ **38 kinds**. (The "28 kinds" in final-design-2026 §2 is the pre-P0 count; the current schema is correct.)
 
-### 12 step enum (Lead 안 sub-step)
+### 12-step enum (sub-steps inside Lead)
 
 ```
 socratic / concept / research / design   ← Planner Lead
 builder / qa / verifier                   ← Engineering Lead
-grader / critic / defender / regrader     ← Verifier 안 CourtEval
+grader / critic / defender / regrader     ← inside Verifier (CourtEval)
 synth                                      ← Lead final
 ```
 
-### 7 from enum (실 actor)
+### 7 from enum (actual actors)
 
 ```
 user / coordinator / planner-lead / engineering-lead / builder-fallback /
 validator / system
 ```
 
-→ specialist (concept-designer / researcher / qa 등) 은 from 별도 X. step 필드로 구분 (Lead actor 가 emit, step 으로 어느 sub-role 인지 표기).
+→ Specialists (concept-designer / researcher / qa etc.) don't have separate `from` values. Distinguished by the `step` field (the Lead actor emits, with `step` marking which sub-role).
 
 ---
 
-## 4. Prompt Assemble 절차 — 5 단계
+## 4. Prompt Assemble Procedure — 5 steps
 
-### 단계 1 — sandwich load (static, cache 1h)
+### Step 1 — sandwich load (static, cache 1h)
 
-각 actor 마다 4 section sandwich:
+A 4-section sandwich per actor:
 
 ```
 agents/coordinator.md          ← Coordinator (host inline)
 agents/planner-lead.md          ← Planner Lead subagent
-agents/engineering-lead.md     ← Engineering Lead subagent (또는 codex 외부)
-agents/builder-fallback.md     ← Builder Fallback (Codex 죽었을 때)
+agents/engineering-lead.md     ← Engineering Lead subagent (or codex external)
+agents/builder-fallback.md     ← Builder Fallback (when Codex dies)
 agents/specialists/
-  concept-designer.md           ← Planner 의 step.concept
-  researcher.md                 ← Planner 의 step.research
-  visual-designer.md            ← Planner 의 step.design
-  qa.md                         ← Engineering 의 step.qa
-  verifier.md                   ← Engineering 의 step.verifier (CourtEval 4 sub-step inline)
-agents/_event-protocol.md       ← 모든 sandwich 가 inline append (subagent 의 transcript 호출 spec)
+  concept-designer.md           ← Planner's step.concept
+  researcher.md                 ← Planner's step.research
+  visual-designer.md            ← Planner's step.design
+  qa.md                         ← Engineering's step.qa
+  verifier.md                   ← Engineering's step.verifier (CourtEval 4 sub-step inline)
+agents/_event-protocol.md       ← inline-appended by every sandwich (subagent's transcript-emit spec)
 ```
 
-각 sandwich 내부:
+Inside each sandwich:
 
 ```xml
-§1 <role>           누구이고 누구한테 PATCH 하는가
+§1 <role>           Who you are and who you PATCH to
 §2 <contract>       input-kinds / output-kinds / handoff-target
-§3 <tools>          허용 tool set (Read/Write/Edit/Bash/Task 등)
-§4 <enforcement>    forbidden + required + STOP 조건
-   <system-reminder> token budget + anti-deception 룰
+§3 <tools>          allowed tool set (Read/Write/Edit/Bash/Task etc.)
+§4 <enforcement>    forbidden + required + STOP conditions
+   <system-reminder> token budget + anti-deception rules
 ```
 
-### 단계 2 — envelope assemble (per-spawn, 부분 dynamic)
+### Step 2 — envelope assemble (per-spawn, partially dynamic)
 
-Coordinator 가 다음 actor spawn 시 **XML envelope 으로 system prompt 합성**:
+When the Coordinator spawns the next actor, it **synthesizes the system prompt as an XML envelope**:
 
 ```xml
 <crumb:envelope session="01J9..." turn="4" task="task_main_game">
   
-  <crumb:contract>           ← sandwich §2 의 contract 인용
+  <crumb:contract>           ← cites sandwich §2 contract
     <input-kinds>spec, spec.update, user.intervene</input-kinds>
     <output-kinds>build, artifact.created</output-kinds>
     <handoff-target>verifier</handoff-target>
   </crumb:contract>
   
-  <crumb:task-ledger version="3">    ← state.task_ledger 직렬화
+  <crumb:task-ledger version="3">    ← state.task_ledger serialized
     <fact>match-3, 60s 제한, 콤보 1.5×</fact>
     <constraint>mobile-first, Phaser CDN, ≤60KB own code</constraint>
     <decision>vanilla Canvas, no bundler</decision>
@@ -340,17 +340,17 @@ Coordinator 가 다음 actor spawn 시 **XML envelope 으로 system prompt 합�
 </crumb:envelope>
 ```
 
-→ **agent-friendly** (XML, machine-parseable) **+ kind-filtered** (broadcast 금지) **+ artifact ref only** (body 0).
+→ **Agent-friendly** (XML, machine-parseable) **+ kind-filtered** (no broadcast) **+ artifact ref only** (body 0).
 
-### 단계 3 — 주입 경로 (adapter 별)
+### Step 3 — Injection path (per adapter)
 
-| Adapter | 주입 경로 | format |
+| Adapter | Injection path | Format |
 |---|---|---|
 | **claude-local** | `--append-system-prompt @<envelope_file>` + `--add-dir <session_dir>` + `-p "<task instruction>"` | XML (sandwich + envelope) |
 | **codex-local** | stdin (`proc.stdin.write(envelope)`) + `codex exec --cd <session_dir> --full-auto` | Markdown (Codex prefers Markdown over XML — see [[bagelcode-xml-frontier-2026]]) |
 | **mock** | in-memory pass-through | XML |
 
-env 4종 항상 propagate:
+4 env vars always propagated:
 
 ```
 CRUMB_TRANSCRIPT_PATH = sessions/<ulid>/transcript.jsonl
@@ -359,9 +359,9 @@ CRUMB_SESSION_DIR     = sessions/<ulid>/
 CRUMB_ACTOR           = planner-lead | engineering-lead | ...
 ```
 
-→ subagent (Task tool / Codex subagent) 에 부모 env 자동 상속 (Anthropic / Codex 기본 동작 — env propagation spike 로 검증).
+→ Subagents (Task tool / Codex subagent) auto-inherit parent env (Anthropic / Codex default behavior — verified via env propagation spike).
 
-### 단계 4 — Cache 경계 ([[bagelcode-caching-strategy]] §"Cache breakpoint 위치")
+### Step 4 — Cache boundary ([[bagelcode-caching-strategy]] §"Cache breakpoint location")
 
 ```
 [1] sandwich §1 contract       ──┐
@@ -371,16 +371,16 @@ CRUMB_ACTOR           = planner-lead | engineering-lead | ...
                                               ★ cache breakpoint 1, 2 (max 4)
 [5] envelope task-ledger       ──┐
 [6] envelope relevant-messages   │ DYNAMIC 5m  ← cache_control: {ttl: "5m"} on stable prefix
-                                 │           (goal + 초기 spec 안정 시)
-                                 │            ★ cache breakpoint 3 (선택)
-[7] task instruction (-p)      ──┘ NO CACHE   (rolling, per-turn 변경)
+                                 │           (when goal + initial spec are stable)
+                                 │            ★ cache breakpoint 3 (optional)
+[7] task instruction (-p)      ──┘ NO CACHE   (rolling, changes per turn)
 ```
 
-Codex / Gemini 자동 prefix cache (별도 마커 X) — sandwich 를 system prompt 맨 앞에 두면 자동.
+Codex / Gemini auto prefix-cache (no separate marker) — putting the sandwich at the very front of the system prompt is automatic.
 
-### 단계 5 — Subagent 의 transcript emit
+### Step 5 — Subagent's transcript emit
 
-`agents/_event-protocol.md` (모든 sandwich 가 inline append):
+`agents/_event-protocol.md` (inline-appended by every sandwich):
 
 ```bash
 crumb event <<'JSON'
@@ -394,12 +394,12 @@ crumb event <<'JSON'
 JSON
 ```
 
-`crumb event` (= `src/cli.ts cmdEvent`) 가:
-1. stdin JSON 읽기 → `DraftMessage` parse
-2. `TranscriptWriter.append(draft)` — auto-fill ULID + ISO ts
+`crumb event` (= `src/cli.ts cmdEvent`):
+1. reads stdin JSON → parses `DraftMessage`
+2. `TranscriptWriter.append(draft)` — auto-fills ULID + ISO ts
 3. ajv validation (`message.schema.json`)
 4. `O_APPEND` flush to `$CRUMB_TRANSCRIPT_PATH`
-5. stdout `{"id": "...", "ts": "..."}` (subagent 가 다음 메시지의 parent_event_id 로 사용)
+5. stdout `{"id": "...", "ts": "..."}` (subagent uses this as the next message's parent_event_id)
 
 ---
 
@@ -445,110 +445,110 @@ JSON
 └──────┘             └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-자연어 사용자 개입 (turn 중):
+Natural-language user intervention (mid-turn):
 ```
-사용자: "콤보 보너스 좀 더 짧게"
-   ▾ Claude Code 받음
+User: "Make the combo bonus shorter."
+   ▾ Claude Code receives
    ▾ crumb event kind=user.intervene, data={target: "tuning.json/combo_multipliers"}
-   ▾ append → reduce → effect: spec.update 라우팅 (Planner Lead 재spawn)
+   ▾ append → reduce → effect: spec.update routing (re-spawn Planner Lead)
 ```
 
 ---
 
-## 6. Control plane vs LLM layer 책임 분담
+## 6. Control plane vs LLM layer responsibility split
 
-| 책임 | LLM layer (Claude Code / Codex) | Control plane (자체 light layer) |
+| Responsibility | LLM layer (Claude Code / Codex) | Control plane (own light layer) |
 |---|---|---|
-| 자연어 이해 | ✅ host 가 처리 | ❌ |
-| 자연어 → action 변환 | ✅ skill SKILL.md routing | ❌ |
-| Reasoning (CoT, thinking) | ✅ provider 모델 | ❌ |
-| Code 생성 | ✅ Builder subagent | ❌ |
-| Tool calls (Read/Write/Bash) | ✅ Claude Code/Codex 기본 | ❌ |
-| **Transcript schema 강제** | ❌ | ✅ `protocol/schemas/*.json` + ajv |
-| **Append-only / ULID 정렬** | ❌ | ✅ `src/transcript/writer.ts` (O_APPEND + flock) |
+| Natural language understanding | ✅ host handles | ❌ |
+| Natural language → action conversion | ✅ skill SKILL.md routing | ❌ |
+| Reasoning (CoT, thinking) | ✅ provider model | ❌ |
+| Code generation | ✅ Builder subagent | ❌ |
+| Tool calls (Read/Write/Bash) | ✅ Claude Code/Codex default | ❌ |
+| **Transcript schema enforcement** | ❌ | ✅ `protocol/schemas/*.json` + ajv |
+| **Append-only / ULID sort** | ❌ | ✅ `src/transcript/writer.ts` (O_APPEND + flock) |
 | **Reducer (state derivation)** | ❌ | ✅ `src/reducer/index.ts` (pure) |
 | **Replay determinism** | ❌ | ✅ `crumb replay <session-dir>` |
 | **Validator (anti-deception)** | ❌ | ✅ `src/validator/anti-deception.ts` |
-| **Adapter 추상화** | ❌ | ✅ `src/adapters/{claude,codex,mock}-local.ts` |
-| **Routing rules (next_speaker)** | ⚠ sandwich 안 명시만 | ✅ reducer 가 강제 |
+| **Adapter abstraction** | ❌ | ✅ `src/adapters/{claude,codex,mock}-local.ts` |
+| **Routing rules (next_speaker)** | ⚠ only declared in sandwich | ✅ enforced by reducer |
 | **Stuck escalation** | ❌ | ✅ progress_ledger.stuck_count |
 | **Adaptive stop** | ❌ | ✅ score_history variance < 1.0 |
 | **OTel GenAI alias export** | ❌ | ✅ `crumb export --format otel-jsonl` |
 | **Cross-provider guard** | ❌ | ✅ Builder.metadata.model.provider_family ≠ Verifier.metadata.model.provider_family |
 
-→ **자유도의 본질 = control plane**. LLM 호출 layer 만 host 에 위임 = 팀핏 + ToS 안전 + 자유도 보존.
+→ **The essence of freedom = control plane.** Delegating only the LLM call layer to the host = team-fit + ToS-safe + freedom preserved.
 
 ---
 
-## 7. Default vs Cross-provider 차이 표
+## 7. Default vs Cross-provider comparison table
 
-| 항목 | Default | `--cross-provider` |
+| Item | Default | `--cross-provider` |
 |---|---|---|
-| 외부 process 수 | 1 (Claude Code) | 2 (Claude Code + Codex CLI) |
-| Coordinator | Claude Code 자체 | Claude Code 자체 |
+| External process count | 1 (Claude Code) | 2 (Claude Code + Codex CLI) |
+| Coordinator | Claude Code itself | Claude Code itself |
 | Planner Lead | Claude Code Task subagent | Claude Code Task subagent |
 | Engineering Lead | Claude Code Task subagent | **Codex CLI subprocess** |
-| Verifier | Claude Code Task subagent (다른 sandwich) | **Claude Code Task subagent (cross-assemble)** |
+| Verifier | Claude Code Task subagent (different sandwich) | **Claude Code Task subagent (cross-assemble)** |
 | Builder Fallback | Claude Code | Claude Code |
-| 평가자 인증 부담 | `claude login` 1회 | `claude login` + `codex login` |
-| 격리 효과 (matrix C1) | 다른 sandwich + 다른 컨텍스트 (same-provider self-judge risk 완화) | + 다른 provider (full cross-assemble) |
-| cross-provider matrix backing (C2) | 부분 | 완전 (CP-WBFT + MAR + Lanham 0.32→0.89) |
+| Evaluator auth burden | `claude login` once | `claude login` + `codex login` |
+| Isolation effect (matrix C1) | different sandwich + different context (mitigates same-provider self-judge risk) | + different provider (full cross-assemble) |
+| cross-provider matrix backing (C2) | partial | full (CP-WBFT + MAR + Lanham 0.32→0.89) |
 | ToS | ✅ Claude Code OAuth | ✅ Claude Code OAuth + Codex Plus OAuth |
-| transcript schema | 동일 | 동일 |
-| reducer | 동일 | 동일 |
-| metadata.model.provider_family 차이 | 같음 (warn audit) | 다름 (no warn) |
+| transcript schema | identical | identical |
+| reducer | identical | identical |
+| metadata.model.provider_family difference | same (warn audit) | different (no warn) |
 
-→ **transcript / reducer / control plane 100% 동일**. LLM layer 만 토폴로지 차이.
+→ **Transcript / reducer / control plane 100% identical.** Only the LLM layer differs in topology.
 
 ---
 
 ## 8. Headless mode — `crumb run --goal "..."`
 
-평가자 / CI / non-interactive 환경:
+For evaluators / CI / non-interactive environments:
 
 ```bash
 $ npx tsx src/index.ts run \
     --goal "60-second match-3 with combo bonus" \
     --adapter mock \                    # deterministic demo
-    --idle-timeout 5000                  # 5s 무응답 → done
+    --idle-timeout 5000                  # 5s no response → done
 $ jq -r '"\(.kind)\t\(.from)"' sessions/*/transcript.jsonl
-$ npx tsx src/index.ts replay sessions/<id>     # 동일 state 재구성
+$ npx tsx src/index.ts replay sessions/<id>     # reconstructs identical state
 ```
 
-skill 없는 환경 (Claude Code 미설치) 에서도 mock adapter 로 demo 가능. `--adapter claude-local` 또는 `codex-local` 명시 시 실제 CLI subprocess (단 인증 필요).
+Even environments without the skill (no Claude Code installed) can demo via the mock adapter. With explicit `--adapter claude-local` or `codex-local`, real CLI subprocess runs (auth required).
 
 ---
 
-## 9. Sub-system 변경 영향 (host-harness 결정 후)
+## 9. Sub-system change impact (after host-harness decision)
 
-| Sub-system | 변경 | 영향 위치 |
+| Sub-system | Change | Affected location |
 |---|---|---|
-| `protocol/schemas/*.json` | 변경 없음 | — |
-| `src/transcript/` | 변경 없음 | — |
-| `src/reducer/` | 변경 없음 | — |
-| `src/state/` | 변경 없음 | — |
-| `src/validator/` | + cross-provider guard (warn-only) | `src/validator/cross-provider-guard.ts` 신설 |
-| `src/adapters/` | 변경 없음 (claude/codex/mock 그대로) | — |
-| `src/dispatcher/` | --cross-provider 분기 (engineering-lead = codex-local 매핑) | 작은 변경 |
-| `src/loop/coordinator` | next_speaker 업데이트 (verifier 외부 actor 분기 옵션) | 작은 변경 |
-| `src/cli.ts` | + `--cross-provider` flag | 작은 변경 |
-| `agents/coordinator.md` | Task tool forbidden 제거 | 정정 |
-| `agents/{planner,engineering}-lead.md` | Task tool spawn 명시 + sequential-steps 갱신 | 정정 |
-| `agents/specialists/*.md` | 신설 (concept-designer / researcher / visual-designer / qa / verifier) | 5 신설 |
-| `.claude/skills/crumb/SKILL.md` | 신설 (host 활성화 entry) | 신설 |
-| `.crumb/config.toml` + presets | + `[verifier]` + cross-provider preset | 정정 + 신설 |
+| `protocol/schemas/*.json` | No change | — |
+| `src/transcript/` | No change | — |
+| `src/reducer/` | No change | — |
+| `src/state/` | No change | — |
+| `src/validator/` | + cross-provider guard (warn-only) | new `src/validator/cross-provider-guard.ts` |
+| `src/adapters/` | No change (claude/codex/mock as-is) | — |
+| `src/dispatcher/` | --cross-provider branch (engineering-lead = codex-local mapping) | small change |
+| `src/loop/coordinator` | next_speaker update (verifier external-actor branch option) | small change |
+| `src/cli.ts` | + `--cross-provider` flag | small change |
+| `agents/coordinator.md` | remove Task tool forbidden | correction |
+| `agents/{planner,engineering}-lead.md` | spell out Task tool spawn + update sequential-steps | correction |
+| `agents/specialists/*.md` | new (concept-designer / researcher / visual-designer / qa / verifier) | 5 new |
+| `.claude/skills/crumb/SKILL.md` | new (host activation entry) | new |
+| `.crumb/config.toml` + presets | + `[verifier]` + cross-provider preset | correction + new |
 
 ---
 
 ## See also
 
-- [[bagelcode]] / [[bagelcode-host-harness-decision]] — 이 구조의 결정 근거
-- [[bagelcode-verifier-isolation-matrix]] — cross-provider opt-in 결정 backing
-- [[bagelcode-transcripts-schema]] — schema 1차 spec (28 → 38 kind 진화)
-- [[bagelcode-caching-strategy]] — cache 경계 (단계 4 의 1h/5m TTL)
-- [[bagelcode-final-design-2026]] — §1 그림 본 페이지로 대체, §2-§8 유효
-- [[bagelcode-fault-tolerance-design]] — F1-F5 (control plane 의 validator + circuit + stuck escalation)
-- [[bagelcode-rubric-scoring]] — D1-D6 + anti-deception 5 룰
-- [[bagelcode-paperclip-vs-alternatives]] — 자체 light layer = control plane 만 깎음
-- `src/protocol/schemas/message.schema.json` — 38 kind enum 실 source
+- [[bagelcode]] / [[bagelcode-host-harness-decision]] — rationale for this architecture
+- [[bagelcode-verifier-isolation-matrix]] — backing for the cross-provider opt-in decision
+- [[bagelcode-transcripts-schema]] — schema first-pass spec (28 → 38 kind evolution)
+- [[bagelcode-caching-strategy]] — cache boundary (the 1h/5m TTL in step 4)
+- [[bagelcode-final-design-2026]] — §1 figure replaced by this page, §2-§8 valid
+- [[bagelcode-fault-tolerance-design]] — F1-F5 (control plane's validator + circuit + stuck escalation)
+- [[bagelcode-rubric-scoring]] — D1-D6 + 5 anti-deception rules
+- [[bagelcode-paperclip-vs-alternatives]] — own light layer = control plane only, trimmed
+- `src/protocol/schemas/message.schema.json` — actual source of the 38 kind enum
 - `agents/_event-protocol.md` — subagent transcript emit spec

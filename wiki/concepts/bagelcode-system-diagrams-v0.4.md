@@ -1,9 +1,9 @@
 ---
-title: Crumb v0.4 시스템 다이어그램 — 6 Mermaid (spawn / score / anti-deception / judge-input / routing / preset)
+title: Crumb v0.4 System Diagrams — 6 Mermaid (spawn / score / anti-deception / judge-input / routing / preset)
 category: concepts
 tags: [bagelcode, crumb, diagrams, mermaid, v0.4, system-architecture]
 sources:
-  - "[[bagelcode-system-architecture-v0.4]] — text spec, 이 페이지의 짝"
+  - "[[bagelcode-system-architecture-v0.4]] — text spec, companion of this page"
   - "[[bagelcode-system-architecture-v0.1]] §1-§14 baseline"
   - "src/dispatcher/live.ts (spawn lifecycle)"
   - "src/reducer/index.ts (routing)"
@@ -11,21 +11,21 @@ sources:
   - "src/state/scorer.ts (combine D3/D5)"
   - "src/dispatcher/preset-loader.ts (binding resolution)"
 summary: >-
-  Crumb v0.4 의 6 다이어그램. 모두 Mermaid; 각 그림이 [[bagelcode-system-architecture-v0.4]] 의
-  특정 섹션과 1:1 대응. (1) spawn lifecycle, (2) score path, (3) anti-deception waterfall,
+  6 diagrams for Crumb v0.4. All Mermaid; each diagram corresponds 1:1 to a specific section of
+  [[bagelcode-system-architecture-v0.4]]. (1) spawn lifecycle, (2) score path, (3) anti-deception waterfall,
   (4) judge-input bundle projection, (5) routing matrix, (6) preset binding resolution.
 ---
 
-# Crumb v0.4 시스템 다이어그램
+# Crumb v0.4 System Diagrams
 
-> 6 Mermaid 다이어그램. 텍스트 spec 은 [[bagelcode-system-architecture-v0.4]].
-> 색상 — Tailwind CSS 기반 (Claude Code `mermaid-diagrams` skill 가이드 참조).
+> 6 Mermaid diagrams. The text spec is [[bagelcode-system-architecture-v0.4]].
+> Colors — Tailwind CSS based (see Claude Code `mermaid-diagrams` skill guide).
 
 ---
 
 ## 1. Spawn lifecycle — sandwich → adapter → timer race → emit
 
-dispatcher 가 reducer 의 `effect{type:'spawn'}` 을 받아 actor subprocess 를 띄우는 전체 lifecycle. verifier 의 추가 분기 (judge-input bundle prepare) 가 강조됨.
+The full lifecycle by which the dispatcher receives the reducer's `effect{type:'spawn'}` and launches an actor subprocess. The verifier's additional branch (judge-input bundle prepare) is highlighted.
 
 ```mermaid
 flowchart TD
@@ -70,7 +70,7 @@ flowchart TD
 
 ## 2. Score path — D1-D6 source-of-truth + 3-layer combine
 
-verifier emit → reducer/validator → final aggregate 의 dim-by-dim provenance. Rule 4 numerical discount 가 LLM half (D1/D3/D5) 만 깎는 위치가 명확.
+Dim-by-dim provenance from verifier emit → reducer/validator → final aggregate. The position where Rule 4's numerical discount only trims the LLM half (D1/D3/D5) is made explicit.
 
 ```mermaid
 flowchart LR
@@ -122,7 +122,7 @@ flowchart LR
 
 ## 3. Anti-deception waterfall — 7 rules
 
-`checkAntiDeception` 의 순차 실행. 마지막 단계의 verdict downgrade 까지.
+Sequential execution of `checkAntiDeception`. Through to the verdict downgrade in the final step.
 
 ```mermaid
 flowchart TD
@@ -175,7 +175,7 @@ flowchart TD
 
 ## 4. Verifier judge-input bundle projection — file-level isolation
 
-dispatcher 가 verifier spawn 직전 `transcript.jsonl` → `judge-input.jsonl` 로 projection 하는 whitelist / blocklist matrix.
+The whitelist / blocklist matrix the dispatcher uses to project `transcript.jsonl` → `judge-input.jsonl` immediately before spawning the verifier.
 
 ```mermaid
 flowchart TD
@@ -215,16 +215,16 @@ flowchart TD
     OUT --> ENV --> SPAWN
 ```
 
-근거 frontier:
+Frontier basis:
 - ComplexEval Bench EMNLP 2025 §805 — auxiliary information bias scales with task complexity
 - Preference Leakage ICLR 2026 — same-family generator reasoning inflates judge scores
-- Anthropic Hybrid Norm 2026 — prompt-only mitigation 50%, file-level isolation = 잔여 50%
+- Anthropic Hybrid Norm 2026 — prompt-only mitigation 50%, file-level isolation = remaining 50%
 
 ---
 
 ## 5. Routing matrix — kind → next_speaker / done / hook
 
-reducer 의 18-case switch 를 단일 그래프로. event 가 들어왔을 때 어떤 effect 가 발화하는지.
+The reducer's 18-case switch as a single graph. Which effect is emitted when a given event arrives.
 
 ```mermaid
 flowchart TD
@@ -277,7 +277,7 @@ flowchart TD
 
 ## 6. Preset binding resolution — (harness × provider × model) tuple
 
-dispatch 가 actor → adapter 를 결정하는 fallback chain.
+The fallback chain by which dispatch decides actor → adapter.
 
 ```mermaid
 flowchart TD
@@ -306,17 +306,17 @@ flowchart TD
 
 5 presets:
 - **bagelcode-cross-3way** ★ default — builder=codex, verifier=gemini-cli, rest=ambient
-- **solo** — single-host (Claude only); R4 self-bias 의 경고 표시
+- **solo** — single-host (Claude only); shows R4 self-bias warning
 - **sdk-enterprise** — API key direct (coordinator/planner/builder-fallback=anthropic-sdk, builder=openai-sdk, verifier=google-sdk)
 - **mock** — deterministic CI / no auth
-- **bagelcode-video-research** — researcher=gemini-sdk 명시 (video evidence path)
+- **bagelcode-video-research** — researcher=gemini-sdk explicit (video evidence path)
 
 ---
 
 ## See also
 
-- [[bagelcode-system-architecture-v0.4]] — text spec (이 페이지의 짝)
-- [[bagelcode-system-architecture-v0.1]] — v0.1 baseline 다이어그램 6 종 (orchestration topology / handoff / scoring layers / etc.)
-- [[bagelcode-orchestration-topology]] — Hub-Ledger-Spoke 도형
-- [[bagelcode-fault-tolerance-design]] — F1-F5 fault matrix (Rule 7 이 F2 verdict-without-evidence 보강)
-- `~/.claude/skills/mermaid-diagrams/SKILL.md` — Tailwind 색감 가이드 (Claude Code skill)
+- [[bagelcode-system-architecture-v0.4]] — text spec (companion of this page)
+- [[bagelcode-system-architecture-v0.1]] — v0.1 baseline 6 diagrams (orchestration topology / handoff / scoring layers / etc.)
+- [[bagelcode-orchestration-topology]] — Hub-Ledger-Spoke shape
+- [[bagelcode-fault-tolerance-design]] — F1-F5 fault matrix (Rule 7 reinforces F2 verdict-without-evidence)
+- `~/.claude/skills/mermaid-diagrams/SKILL.md` — Tailwind palette guide (Claude Code skill)
