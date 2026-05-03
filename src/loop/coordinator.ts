@@ -328,6 +328,21 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
           // precede fallback-spawn; build emit must precede qa_check etc.)
           // but fire async so the next event's reduce + dispatch can start
           // immediately — that's the immediate-wake guarantee.
+          //
+          // INVARIANT (C1 from post-#104 audit, reaffirmed): the within-IIFE
+          // sequential `await dispatch(eff)` is sufficient to guarantee that
+          // ordered effects (e.g. `[append(audit), spawn(builder-fallback)]`)
+          // observe the right transcript prefix when the spawn reads it. The
+          // chain is:
+          //   dispatch(append) → writer.append() → fs/promises appendFile()
+          // `appendFile` resolves AFTER the kernel's write(2) returns, which
+          // commits the bytes to the OS page cache. Subsequent reads in the
+          // same OS (the spawn's subprocess inherits the parent's filesystem
+          // namespace + page cache) see the bytes immediately — fsync is not
+          // required for cross-process visibility, only for crash durability.
+          // So `await dispatch(append-audit)` returning ⇒ audit line is
+          // visible to the about-to-spawn fallback subprocess. No extra fsync
+          // or barrier needed here; the audit Q1 race scenario was theoretical.
           pendingItems += 1;
           void (async () => {
             try {
