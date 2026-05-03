@@ -44,6 +44,21 @@ These PRs land on vanilla because they are already in flight, address concrete u
 
 **Rule**: any new feature work that would land in `packages/studio/src/client/studio.{html,css,js}` must instead target `packages/studio/src/client-v2/` (the M0 scaffold output). The legacy bundle accepts only bug fixes that block the M2 baseline snapshot.
 
+### 0.0.1 Vanilla last-call exception — parallel-stream PR-O4 sparklines
+
+While the cutoff was being committed, another stream pushed `feat/aggregate-strip-sparkline` (`feat(studio): score-trajectory sparklines + per-actor metric tooltips (PR-O4)`) — a +55 LoC CSS / +122 LoC JS additive change to the v1 vanilla bundle. The plan accommodates it without rolling back:
+
+| Concern | Resolution |
+|---|---|
+| Does it land on vanilla? | Yes — additive only, no schema or layout shift, fits the M2 visual baseline. |
+| Does it duplicate M6 work? | Logic-wise yes (sparklines render score history); structurally no (vanilla DOM vs Tremor SparkAreaChart). M6 ports the **derivation formulas** (D1-D6 history extraction, per-actor token/cost/latency rollup) **verbatim**, then re-renders via Tremor — same numbers, different chrome. |
+| What carries forward to M2/M3/M6? | (a) Visual baseline snapshot in M2 captures the sparkline + tooltip pixel-for-pixel as the target chrome v2 must match. (b) Derivation helpers (`scoreHistoryFor()` / `aggregateActorRuntime()` from this PR) move into `packages/studio/src/server/metrics.ts` as part of the §17 audit's "client recompute → server-derived" fix in M1. M6's `<Scorecard>` panel reads the same `metrics.per_actor` + `metrics.score_history` fields the v1 implementation needed. |
+| Is the cutoff broken? | No. The cutoff says "vanilla last-call (cutoff frozen)" — PR-O4 was already in-flight before the cutoff committed. It joins #161 + #164 as a third vanilla last-call. Future PR-O5 / F5 / etc. still defer per the original list. |
+
+**Action when PR-O4 lands**: M2 baseline snapshot includes the sparklines; M6 mapping table gets a row pointing at the exact formula source so re-implementation has one place to reference; CHANGELOG `[Unreleased]` records "PR-O4 sparklines (vanilla last-call) — formulas migrate to server in M1, render to Tremor in M6".
+
+**Generalized policy**: any future parallel-stream vanilla PR that lands during the M0–M2 window is accepted only if (a) additive, (b) visually consistent with the M2 baseline target, and (c) its derivation logic is portable to server/Tremor in M1/M6. Anything that re-shapes the layout, introduces a new on-disk path, or duplicates schema is rejected — defer to a v2 panel instead. M-series PRs cite the parallel PR's commit SHA when they re-implement so the lineage is traceable.
+
 ### Big-bang execution order — locked
 
 - **M0 (NEXT)** `chore/studio-vite-scaffold` — Vite + React 19 + TypeScript scaffold at `packages/studio/src/client-v2/`. `?app=v2` route serves the new bundle; default `?app=v1` keeps vanilla live until M7.1.
