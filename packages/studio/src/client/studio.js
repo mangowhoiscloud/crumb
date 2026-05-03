@@ -353,6 +353,236 @@ function renderHeader() {
  * count badge is offset to top-right corner with a subtle accent so it
  * doesn't compete with the chip's primary kind label.
  */
+/**
+ * v0.5 PR-O3 — Wall-clock waterfall renderer.
+ *
+ * Frontier convention (Datadog APM trace / Chrome DevTools Performance /
+ * Jaeger / Honeycomb): each spawn becomes a horizontal bar whose width is
+ * proportional to wall-clock duration. Same actor lane order as the
+ * swimlane so the user can mentally map between Pipeline ↔ Waterfall.
+ *
+ * Span derivation (from existing transcript only — no new schema):
+ *   parent: agent.wake (start) → agent.stop (end), latency_ms in metadata
+ *   children: step.* events between the parent's wake/stop, treated as
+ *             instantaneous markers (zero-width tick) since transcript
+ *             carries no per-step duration field today
+ *
+ * Click → opens the existing right-rail detail panel via showDetail()
+ *   (same paginator, same sandwich preview, same send-message form).
+ * Hover → tooltip with kind, duration, tokens, cost.
+ *
+ * Empty when no agent.wake/agent.stop pair exists yet.
+ */
+function renderWaterfall() {
+  const root = $('waterfall-body');
+  const empty = $('waterfall-empty');
+  const tooltip = $('waterfall-tooltip');
+  if (!root) return;
+  if (tooltip) tooltip.style.display = 'none';
+  if (!activeSession) {
+    root.innerHTML = '<div class="empty">Pick a session.</div>';
+    return;
+  }
+  const events = eventCache.get(activeSession) ?? [];
+  const spans = buildWaterfallSpans(events);
+  if (spans.length === 0) {
+    root.innerHTML =
+      '<div class="empty" id="waterfall-empty">Waiting for agent.wake → agent.stop pairs…</div>';
+    $('waterfall-axis').textContent = '—';
+    return;
+  }
+  // Wall-clock window — first wake to max(now, last stop). Pinning end
+  // to "now" means in-flight spans visibly grow as transcript appends,
+  // which is the live-tail experience users expect from Datadog APM.
+  const t0 = spans[0].startTs;
+  const tMaxFromSpans = spans.reduce((m, s) => Math.max(m, s.endTs ?? s.startTs), t0);
+  const tMax = Math.max(tMaxFromSpans, Date.now());
+  const totalMs = Math.max(1, tMax - t0);
+
+  // Group spans by actor lane so each row reads naturally.
+  const byActor = new Map();
+  for (const sp of spans) {
+    if (!byActor.has(sp.actor)) byActor.set(sp.actor, []);
+    byActor.get(sp.actor).push(sp);
+  }
+
+  const lanes = [...byActor.entries()].map(([actor, list]) => {
+    const bars = list
+      .map((sp) => {
+        const left = ((sp.startTs - t0) / totalMs) * 100;
+        const width = Math.max(0.4, ((sp.endTs - sp.startTs) / totalMs) * 100);
+        const cls = ['waterfall-bar'];
+        if (sp.errored) cls.push('errored');
+        if (sp.audit) cls.push('audit');
+        if (!sp.endTsKnown) cls.push('in-flight');
+        return (
+          '<div class="' +
+          cls.join(' ') +
+          '" data-id="' +
+          escapeHTML(sp.wakeId) +
+          '" data-stop-id="' +
+          escapeHTML(sp.stopId ?? '') +
+          '" data-tooltip="' +
+          escapeHTML(sp.tooltipText) +
+          '" style="left:' +
+          left.toFixed(2) +
+          '%;width:' +
+          width.toFixed(2) +
+          '%;">' +
+          '<span class="waterfall-bar-label">' +
+          escapeHTML(sp.label) +
+          '</span>' +
+          '</div>'
+        );
+      })
+      .join('');
+    // Step markers (instant ticks, zero-width). Sit on top of the bar row
+    // so the user can correlate sub-step boundaries against the parent.
+    const ticks = list
+      .flatMap((sp) =>
+        (sp.stepMarkers ?? []).map((tick) => {
+          const left = ((tick.ts - t0) / totalMs) * 100;
+          return (
+            '<div class="waterfall-tick" data-id="' +
+            escapeHTML(tick.id) +
+            '" data-tooltip="' +
+            escapeHTML(tick.kind + ' · ' + tick.actor) +
+            '" style="left:' +
+            left.toFixed(2) +
+            '%;"></div>'
+          );
+        }),
+      )
+      .join('');
+    return (
+      '<div class="waterfall-lane">' +
+      '<div class="waterfall-lane-label"><span class="glyph" style="background:var(' +
+      ACTOR_VAR[actor] +
+      ');"></span>' +
+      escapeHTML(actor) +
+      '</div>' +
+      '<div class="waterfall-lane-track">' +
+      bars +
+      ticks +
+      '</div>' +
+      '</div>'
+    );
+  });
+
+  root.innerHTML = lanes.join('');
+  $('waterfall-axis').textContent =
+    formatWallClock(0) + ' → ' + formatWallClock(totalMs) + '  (total ' + formatWallClock(totalMs) + ')';
+
+  // Bar click → existing detail panel. Tick click → same.
+  root.querySelectorAll('.waterfall-bar, .waterfall-tick').forEach((el) => {
+    el.addEventListener('click', () => {
+      const id = el.dataset.id;
+      if (id) showDetail(id, null);
+    });
+    // Tooltip on hover — Chrome DevTools Performance pattern, positioned
+    // relative to the waterfall section so it never overlaps the bar.
+    el.addEventListener('mouseenter', (e) => {
+      if (!tooltip) return;
+      tooltip.textContent = el.dataset.tooltip ?? '';
+      tooltip.style.display = 'block';
+      const rect = el.getBoundingClientRect();
+      const sectRect = $('waterfall-section').getBoundingClientRect();
+      tooltip.style.left = rect.left - sectRect.left + 'px';
+      tooltip.style.top = rect.bottom - sectRect.top + 4 + 'px';
+    });
+    el.addEventListener('mouseleave', () => {
+      if (tooltip) tooltip.style.display = 'none';
+    });
+  });
+}
+
+function buildWaterfallSpans(events) {
+  // Pair agent.wake with the next agent.stop on the same actor.
+  const openByActor = new Map();
+  const spans = [];
+  for (const e of events) {
+    if (e.kind === 'agent.wake' && e.from) {
+      // Close any prior open span on this actor (orphan); becomes in-flight.
+      openByActor.set(e.from, {
+        actor: e.from,
+        wakeId: e.id,
+        startTs: Date.parse(e.ts),
+        stepMarkers: [],
+      });
+    } else if (e.kind === 'agent.stop' && e.from) {
+      const open = openByActor.get(e.from);
+      if (open) {
+        const md = e.metadata ?? {};
+        const dur = typeof md.latency_ms === 'number' ? md.latency_ms : null;
+        const endTs = dur != null ? open.startTs + dur : Date.parse(e.ts);
+        const tokens =
+          typeof md.tokens_in === 'number' || typeof md.tokens_out === 'number'
+            ? `${formatTokens(md.tokens_in ?? 0)} → ${formatTokens(md.tokens_out ?? 0)}`
+            : null;
+        const cost = typeof md.cost_usd === 'number' ? formatCost(md.cost_usd) : null;
+        const tooltipParts = [
+          open.actor,
+          formatWallClock(endTs - open.startTs),
+          tokens,
+          cost,
+        ].filter(Boolean);
+        spans.push({
+          actor: open.actor,
+          wakeId: open.wakeId,
+          stopId: e.id,
+          startTs: open.startTs,
+          endTs,
+          endTsKnown: true,
+          label: open.actor,
+          tooltipText: tooltipParts.join(' · '),
+          errored: typeof e.body === 'string' && /error|exit=\d+/i.test(e.body) && !/exit=0/.test(e.body),
+          audit: false,
+          stepMarkers: open.stepMarkers,
+        });
+        openByActor.delete(open.actor);
+      }
+    } else if (typeof e.kind === 'string' && e.kind.startsWith('step.') && e.from) {
+      // Attach as a tick to the open parent on this actor (if any).
+      const open = openByActor.get(e.from);
+      if (open) {
+        open.stepMarkers.push({ id: e.id, ts: Date.parse(e.ts), kind: e.kind, actor: e.from });
+      }
+    } else if (e.kind === 'audit' && e.from) {
+      // Mark the open parent as audited so the bar gets the audit color.
+      const open = openByActor.get(e.from);
+      if (open) open.audited = true;
+    }
+  }
+  // Still-open spans → in-flight (right edge clamps to "now" at render time).
+  for (const open of openByActor.values()) {
+    spans.push({
+      actor: open.actor,
+      wakeId: open.wakeId,
+      stopId: null,
+      startTs: open.startTs,
+      endTs: Date.now(),
+      endTsKnown: false,
+      label: open.actor + ' · running',
+      tooltipText: open.actor + ' · running · ' + formatWallClock(Date.now() - open.startTs),
+      errored: false,
+      audit: !!open.audited,
+      stepMarkers: open.stepMarkers,
+    });
+  }
+  spans.sort((a, b) => a.startTs - b.startTs);
+  return spans;
+}
+
+function formatWallClock(ms) {
+  if (ms < 1000) return Math.max(0, Math.round(ms)) + 'ms';
+  const s = ms / 1000;
+  if (s < 60) return s.toFixed(1) + 's';
+  const m = s / 60;
+  if (m < 60) return Math.floor(m) + 'm ' + Math.round(s - Math.floor(m) * 60) + 's';
+  const h = m / 60;
+  return Math.floor(h) + 'h ' + Math.round(m - Math.floor(h) * 60) + 'm';
+}
+
 function renderSwimlane() {
   const root = $('swimlane');
   if (!activeSession) {
@@ -1190,6 +1420,7 @@ onAppendMsg((d) => {
   if (d.session_id === activeSession) {
     renderSwimlane();
     renderScorecard();
+    if (activeView === 'waterfall') renderWaterfall();
   }
   renderSessionList();
 });
@@ -1925,12 +2156,18 @@ function setActiveView(view) {
       if (s?.actors?.length) selectLogActor(s.actors[0]);
       else setLogsState('awaiting-actor');
     }
+  } else if (view === 'waterfall') {
+    // v0.5 PR-O3 — Wall-clock-proportional span view. Re-renders on every
+    // tab entry so newly-arrived spawns / spans are reflected. Append
+    // handler also calls renderWaterfall() when the active view is
+    // 'waterfall' so the bars grow live.
+    renderWaterfall();
   } else {
-    // Tab switched away from logs — keep the EventSource alive so background
-    // chunks accumulate, but if we're in a transient state (connecting / stalled)
-    // we don't gain anything by holding it. Frontier convention (Datadog,
-    // ArgoCD) is to keep streaming connections warm across tab switches; we
-    // follow that here.
+    // Tab switched away from logs / waterfall — keep the EventSource alive
+    // so background chunks accumulate, but if we're in a transient state
+    // (connecting / stalled) we don't gain anything by holding it. Frontier
+    // convention (Datadog, ArgoCD) is to keep streaming connections warm
+    // across tab switches; we follow that here.
   }
 }
 
