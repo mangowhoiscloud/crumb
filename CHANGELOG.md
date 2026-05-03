@@ -4,6 +4,35 @@ All notable changes to Crumb are documented here. Format: [Keep a Changelog 1.1.
 
 ## [Unreleased]
 
+### Added — CRUMB STUDIO branding wordmark + light (default) / dark theme system (F3) (2026-05-03)
+
+The studio chrome was previously dark-only with a Linear-style violet accent. F3 introduces a brand-derived light theme as the new default, preserves the existing dark palette under `[data-theme="dark"]`, and adds a top-left wordmark + theme toggle. All design tokens documented in the new `design.md` at the repo root.
+
+**Logo-derived light palette** — sampled from the Crumb logo via Pillow median-cut quantization (10 bins):
+
+| Source | Hex | Token |
+|---|---|---|
+| Logo cream background (84.9% area) | `#FDF3E7` | `--canvas` |
+| Logo dark brown (wordmark + face) | `#623819` | `--ink` |
+| Logo golden bread body | `#DAAB78` | `--primary` |
+| Logo pale gold highlight | `#FCE5BF` | `--surface-3` |
+
+The full token set + WCAG audit + dark-theme overrides + actor lane recoloring per theme is documented in `design.md` (VoltAgent 9-section structure).
+
+**Implementation** (`packages/studio/src/client/studio.{html,css,js}` + new `/design.md`):
+
+- **CSS palette restructure** — `:root` now holds the light defaults (Crumb logo derived). Dark theme moved under `[data-theme="dark"]` overrides on `<html>`. Semantic colors (audit / warn / lime / accent-grep) and 9 actor lane colors get light-mode variants per WCAG ≥4.5:1 against canvas.
+- **Brand wordmark** in the top of `<aside class="sessions">`. Inline 24×24 SVG bread silhouette (loaf + 3 dropping crumbs, single-path, `fill: currentColor` colored via `--primary`) + `CRUMB STUDIO` wordmark. The wordmark uses a `'Crumb Brand'` `@font-face` cascade: `local('Cabinet Grotesk Extrabold/Bold')` → `local('SF Pro Rounded')` → `ui-rounded` → `system-ui`. No external download at runtime; Cabinet Grotesk wins automatically when locally installed (e.g. via Fontshare). To bundle it in-blob next iteration, drop a woff2 into `packages/studio/src/client/assets/` and extend `inline-client.mjs` to base64-inline a `data:font/woff2;base64,...` `src`.
+- **Theme toggle** in the rightmost slot of `<nav class="view-tabs">` (`#theme-toggle`). Glyph swaps between ☀ (current dark, click → light) and 🌙 (current light, click → dark). Clicking writes `localStorage.crumb.theme = 'light' | 'dark'`.
+- **FOUC prevention** — pre-paint script in `<head>` (before `<style>` parse) reads localStorage / `prefers-color-scheme` and sets `<html data-theme="...">` *before first paint*. This eliminates the white flash that plagues naive theme implementations on dark-mode users.
+- **OS preference watcher** — when no explicit user override is stored, `matchMedia('(prefers-color-scheme: dark)').change` updates the theme on the fly. Once the user clicks the toggle, the explicit preference takes over.
+
+**Why this matters for reviewers**: a Bagelcode panel opening Studio for the first time gets a brand-aligned light interface that matches the logo on the same page (the user's spec); panel members on dark-mode OS still get the dark theme automatically; everyone can flip on demand. The pre-paint script means no theme flash on initial load — a quality bar most dashboards miss.
+
+`design.md` is positioned at repo root following VoltAgent's `awesome-design-md` convention. Cross-references the game-side `agents/specialists/visual-designer.md` (separate namespace — game palettes are per-session, dashboard chrome is global).
+
+Verification: `npm run lint:all && npm run typecheck && npm run format:check && npm test && npm run build` — 466/466 tests pass, lint clean, format clean. Studio HTML re-inlined to ~263 KB. Live verified at http://127.0.0.1:7321/ in both themes.
+
 ### Changed — 4-pane studio layout + Datadog-grade scorecard hybrid + event detail spread (PR-K + PR-K' + Layout fix) (2026-05-03)
 
 Composite of three previously-separate strands, merged into one cohesive UI overhaul:

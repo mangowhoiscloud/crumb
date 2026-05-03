@@ -1,5 +1,54 @@
+/* PR-Branding (F3) — Light theme is default. Dark theme overrides via
+ * [data-theme="dark"] on <html>. Pre-paint script in <head> sets the
+ * attribute from localStorage or prefers-color-scheme to prevent FOUC.
+ *
+ * Light palette derived from the Crumb logo via Pillow median-cut quantization
+ * (5/2/2026): #FDF3E7 cream / #623819 dark brown / #DAAB78 golden bread /
+ * #FCE5BF pale gold. See design.md for full token table + WCAG audit.
+ */
 :root {
-  /* Linear chassis */
+  /* Light theme (default) — Crumb logo derived */
+  --canvas: #FDF3E7;
+  --surface-1: #F5E9D5;
+  --surface-2: #EDDFC4;
+  --surface-3: #E5D5B3;
+  --hairline: #D8C39C;
+  --hairline-strong: #C0A77B;
+  --ink: #623819;
+  --ink-muted: #825A36;
+  --ink-subtle: #A07F58;
+  --ink-tertiary: #B89B78;
+  --primary: #DAAB78;
+  --primary-hover: #C89460;
+
+  /* Semantic — light variants (WCAG ≥4.5:1 against canvas) */
+  --audit-bg: #FBE6EB;
+  --audit-fg: #B23A60;
+  --lime: #5C7A0E;
+  --warn: #A85A1F;
+  --accent-grep: #D67635;
+  --accent-grep-active: #B05420;
+
+  /* Actor lane colors — light variants */
+  --actor-user: #5C5DAB;
+  --actor-coordinator: #7A7F88;
+  --actor-planner-lead: #A85A1F;
+  --actor-researcher: #5E4674;
+  --actor-builder: #5C7A0E;
+  --actor-verifier: #B23A60;
+  --actor-builder-fallback: #A89178;
+  --actor-validator: #A85A1F;
+  --actor-system: #A0876B;
+
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-pill: 9999px;
+}
+
+/* Dark theme — preserved from v0.4 Linear chassis */
+[data-theme="dark"] {
   --canvas: #010102;
   --surface-1: #0f1011;
   --surface-2: #141516;
@@ -13,17 +62,13 @@
   --primary: #5e6ad2;
   --primary-hover: #828fff;
 
-  /* Sentry audit / error palette */
   --audit-bg: #1f1633;
   --audit-fg: #fa7faa;
   --lime: #c2ef4e;
   --warn: #ffb287;
-
-  /* IDE-style grep highlight (orange) — distinct from --warn peach + --accent-warm gold */
   --accent-grep: #ff9f1c;
   --accent-grep-active: #ff5e00;
 
-  /* Crumb actor lane glyphs */
   --actor-user: #5e6ad2;
   --actor-coordinator: #8a8f98;
   --actor-planner-lead: #ffb287;
@@ -33,12 +78,28 @@
   --actor-builder-fallback: #62666d;
   --actor-validator: #ffb287;
   --actor-system: #34343a;
+}
 
-  --r-xs: 4px;
-  --r-sm: 6px;
-  --r-md: 8px;
-  --r-lg: 12px;
-  --r-pill: 9999px;
+/* PR-Branding (F3) — Crumb wordmark font cascade. local() chain tries
+ * (1) Cabinet Grotesk if user has it installed (best logo match — closest
+ *     to the bread silhouette's rounded-bold-sans character),
+ * (2) Apple SF Pro Rounded via local SDK,
+ * (3) ui-rounded W3C generic.
+ * No external download needed at runtime; no inline-budget impact. To
+ * bundle Cabinet Grotesk in-blob, drop a woff2 into
+ * `packages/studio/src/client/assets/` and extend inline-client.mjs to
+ * base64-inline it as a `data:font/woff2;base64,...` src here. */
+@font-face {
+  font-family: 'Crumb Brand';
+  font-weight: 800;
+  font-display: swap;
+  src:
+    local('Cabinet Grotesk Extrabold'),
+    local('CabinetGrotesk-Extrabold'),
+    local('Cabinet Grotesk Bold'),
+    local('CabinetGrotesk-Bold'),
+    local('SF Pro Rounded Black'),
+    local('SF Pro Rounded Bold');
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -122,7 +183,58 @@ aside.sessions {
   background: var(--canvas);
   border-right: 1px solid var(--hairline);
   overflow-y: auto;
-  padding: 12px 0;
+  padding: 0 0 12px;
+}
+
+/* PR-Branding (F3) — top-of-sidebar wordmark. Sits above the Adapters
+ * heading (which itself is the first .sessions-header). Inline SVG mark +
+ * Cabinet Grotesk-style wordmark. currentColor on the SVG so it recolors
+ * with theme. */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink);
+}
+.brand-mark {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  color: var(--primary);
+}
+.brand-text {
+  font-family: 'Crumb Brand', ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.4px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.brand-text .brand-suffix {
+  color: var(--ink-subtle);
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+/* PR-Branding (F3) — theme toggle button in view-tabs rightmost slot.
+ * Glyph swap (☀ ↔ 🌙) handled by JS. */
+.theme-toggle {
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--ink-muted);
+  border-radius: var(--r-sm);
+  padding: 4px 10px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.theme-toggle:hover {
+  background: var(--surface-2);
+  border-color: var(--primary);
+  color: var(--ink);
 }
 aside.sessions h2 {
   font-size: 11px;
