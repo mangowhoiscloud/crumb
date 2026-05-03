@@ -91,6 +91,22 @@ export interface RunOptions {
    * exposes this; CLI exposes via `--video-refs <url>,<url>,...`.
    */
   videoRefs?: string[];
+  /**
+   * v0.4 — explicit genre profile (CLI `--genre` / Studio picker). When set,
+   * the goal event carries `data.genre_profile = <profile>` so the reducer
+   * populates `task_ledger.genre_profile`. When undefined, planner-lead
+   * resolves via researcher proposal (auto-detect path). See
+   * `agents/specialists/game-design.md` §1.3.
+   */
+  genreProfile?: string;
+  /**
+   * v0.4 — explicit persistence profile (CLI `--persistence` / Studio
+   * picker). When set, populates `task_ledger.persistence_profile`. When
+   * undefined, planner-lead runs §1.4 trigger logic (leaderboard markers
+   * → postgres-anon, else local-only). See `agents/specialists/game-design.md`
+   * §1.4.
+   */
+  persistenceProfile?: string;
 }
 
 // Wall-clock defaults raised v0.4.1: builder spawns observed at 10+ min for
@@ -220,17 +236,21 @@ export async function runSession(opts: RunOptions): Promise<{ state: CrumbState 
       kind: 'session.start',
       body: `session ${opts.sessionId} started`,
     });
+    // v0.4: pass video_refs / genre_profile / persistence_profile through
+    // goal.data so reducer.case 'goal' picks them up. Build once so multiple
+    // optional fields don't fight over the spread.
+    const goalData: Record<string, unknown> = {};
+    if (opts.videoRefs && opts.videoRefs.length > 0) {
+      goalData.video_refs = opts.videoRefs;
+    }
+    if (opts.genreProfile) goalData.genre_profile = opts.genreProfile;
+    if (opts.persistenceProfile) goalData.persistence_profile = opts.persistenceProfile;
     await writer.append({
       session_id: opts.sessionId,
       from: 'user',
       kind: 'goal',
       body: opts.goal,
-      // v0.4: pass video_refs through goal.data so reducer.case 'goal' picks
-      // them up and flips goal_has_video_refs. When absent, researcher uses
-      // text-only path (existing behavior — empty array same as undefined).
-      ...(opts.videoRefs && opts.videoRefs.length > 0
-        ? { data: { video_refs: opts.videoRefs } }
-        : {}),
+      ...(Object.keys(goalData).length > 0 ? { data: goalData } : {}),
     });
   }
 

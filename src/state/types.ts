@@ -35,6 +35,47 @@ export interface ACPredicateLedgerItem {
   timeout_ms?: number;
 }
 
+/**
+ * v0.4 — genre profile axis. See `agents/specialists/game-design.md` §1.3.
+ * `auto-detect` (default) hands the choice to the researcher's named-game
+ * lock-in + the planner's confidence gate; explicit values bypass that.
+ */
+export type GenreProfile =
+  | 'auto-detect'
+  | 'casual-portrait'
+  | 'pixel-arcade'
+  | 'sidescroll-2d'
+  | 'flash-3d-arcade';
+
+export const GENRE_PROFILES: readonly GenreProfile[] = [
+  'auto-detect',
+  'casual-portrait',
+  'pixel-arcade',
+  'sidescroll-2d',
+  'flash-3d-arcade',
+] as const;
+
+export const isGenreProfile = (v: unknown): v is GenreProfile =>
+  typeof v === 'string' && (GENRE_PROFILES as readonly string[]).includes(v);
+
+/**
+ * v0.4 — persistence profile axis. See `agents/specialists/game-design.md` §1.4.
+ * `local-only` is the new default (Dexie); `postgres-anon` activates on
+ * leaderboard markers (existing §1.2 trigger); `edge-orm` opt-in only
+ * (lifts §1.1 "no worker tier"); `firebase-realtime` reserved (P0 제외).
+ */
+export type PersistenceProfile = 'local-only' | 'postgres-anon' | 'edge-orm' | 'firebase-realtime';
+
+export const PERSISTENCE_PROFILES: readonly PersistenceProfile[] = [
+  'local-only',
+  'postgres-anon',
+  'edge-orm',
+  'firebase-realtime',
+] as const;
+
+export const isPersistenceProfile = (v: unknown): v is PersistenceProfile =>
+  typeof v === 'string' && (PERSISTENCE_PROFILES as readonly string[]).includes(v);
+
 export interface TaskLedger {
   facts: TaskFact[];
   goal: string | null;
@@ -46,6 +87,23 @@ export interface TaskLedger {
    */
   ac_predicates: ACPredicateLedgerItem[];
   artifacts: { path: string; sha256: string }[];
+  /**
+   * v0.4 — genre profile (auto-detect | casual-portrait | pixel-arcade |
+   * sidescroll-2d | flash-3d-arcade). Populated from `goal.data.genre_profile`
+   * (CLI `--genre` / Studio picker) or stays `undefined` for the auto-detect
+   * default. Read by planner-lead step.design (resolves auto-detect via
+   * researcher proposal) and builder step 1 (selects file-tree template per
+   * `agents/specialists/game-design.md` §1.3).
+   */
+  genre_profile?: GenreProfile;
+  /**
+   * v0.4 — persistence profile (local-only | postgres-anon | edge-orm |
+   * firebase-realtime). Populated from `goal.data.persistence_profile`
+   * (CLI `--persistence` / Studio picker) or stays `undefined`; planner-lead
+   * runs the §1.4 trigger logic (leaderboard markers → postgres-anon, else
+   * local-only) when undefined.
+   */
+  persistence_profile?: PersistenceProfile;
 }
 
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';

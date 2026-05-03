@@ -29,6 +29,37 @@ describe('reducer', () => {
     expect((effects[0] as { prompt?: string }).prompt).toContain('Begin your turn');
   });
 
+  it('v0.4: goal.data.genre_profile + persistence_profile populate task_ledger', () => {
+    const s0 = initialState('sess-test');
+    const goal = fixed({
+      kind: 'goal',
+      body: 'megaman-style platformer',
+      data: { genre_profile: 'sidescroll-2d', persistence_profile: 'local-only' },
+    });
+    const { state } = reduce(s0, goal);
+    expect(state.task_ledger.genre_profile).toBe('sidescroll-2d');
+    expect(state.task_ledger.persistence_profile).toBe('local-only');
+  });
+
+  it('v0.4: invalid genre_profile is rejected at reducer (defensive — CLI validates first)', () => {
+    const s0 = initialState('sess-test');
+    const goal = fixed({
+      kind: 'goal',
+      body: 'whatever',
+      data: { genre_profile: 'not-a-real-profile' },
+    });
+    const { state } = reduce(s0, goal);
+    expect(state.task_ledger.genre_profile).toBeUndefined();
+  });
+
+  it('v0.4: goal without profile data leaves task_ledger profiles undefined (auto-detect path)', () => {
+    const s0 = initialState('sess-test');
+    const goal = fixed({ kind: 'goal', body: 'plain goal' });
+    const { state } = reduce(s0, goal);
+    expect(state.task_ledger.genre_profile).toBeUndefined();
+    expect(state.task_ledger.persistence_profile).toBeUndefined();
+  });
+
   it('routes spec → spawn(builder, codex-local) by default', () => {
     const s0 = initialState('sess-test');
     const spec = fixed({
