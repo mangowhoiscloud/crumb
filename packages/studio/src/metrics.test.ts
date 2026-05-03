@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 
 import { computeMetrics } from './metrics.js';
-import type { DashboardMessage } from './types.js';
+import type { StudioMessage } from './types.js';
 
-const m = (over: Partial<DashboardMessage>): DashboardMessage => ({
+const m = (over: Partial<StudioMessage>): StudioMessage => ({
   id: '01H',
   ts: '2026-05-02T12:00:00.000Z',
   session_id: 's',

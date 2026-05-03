@@ -6,11 +6,11 @@ import {
   LIVE_THRESHOLD_MS,
   classifyFromMtime,
 } from './bootstrap.js';
-import type { DashboardMessage } from './types.js';
+import type { StudioMessage } from './types.js';
 
 const NOW = 1_700_000_000_000;
 
-function msg(kind: string, extra: Partial<DashboardMessage> = {}): DashboardMessage {
+function msg(kind: string, extra: Partial<StudioMessage> = {}): StudioMessage {
   return {
     id: `01-${kind}`,
     ts: new Date(NOW).toISOString(),

@@ -11,7 +11,7 @@
 
 import { stat } from 'node:fs/promises';
 
-import type { DashboardMessage } from './types.js';
+import type { StudioMessage } from './types.js';
 
 export type SessionState = 'live' | 'idle' | 'interrupted' | 'abandoned' | 'terminal';
 
@@ -41,7 +41,7 @@ export const ABANDONED_THRESHOLD_MS = 24 * 3600_000; // 1d → abandoned
  */
 export async function classifySessionState(
   transcriptPath: string,
-  history: DashboardMessage[],
+  history: StudioMessage[],
   now: number = Date.now(),
 ): Promise<SessionClassification> {
   const st = await stat(transcriptPath);
@@ -79,7 +79,7 @@ export async function classifySessionState(
  */
 export function classifyFromMtime(
   mtimeMs: number,
-  history: DashboardMessage[],
+  history: StudioMessage[],
   now: number = Date.now(),
 ): SessionClassification {
   const ageMs = Math.max(0, now - mtimeMs);

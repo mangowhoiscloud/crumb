@@ -16,7 +16,7 @@
 
 import { open, stat } from 'node:fs/promises';
 
-import type { DashboardMessage } from './types.js';
+import type { StudioMessage } from './types.js';
 
 export class JsonlTail {
   private offset = 0;
@@ -24,7 +24,7 @@ export class JsonlTail {
 
   constructor(private readonly path: string) {}
 
-  async pull(): Promise<DashboardMessage[]> {
+  async pull(): Promise<StudioMessage[]> {
     let size: number;
     try {
       size = (await stat(this.path)).size;
@@ -52,12 +52,12 @@ export class JsonlTail {
       const complete = lastNewline >= 0 ? text.slice(0, lastNewline) : '';
       this.fragment = lastNewline >= 0 ? text.slice(lastNewline + 1) : text;
 
-      const out: DashboardMessage[] = [];
+      const out: StudioMessage[] = [];
       for (const rawLine of complete.split('\n')) {
         const line = rawLine.replace(/\r$/, '').trim();
         if (line.length === 0) continue;
         try {
-          out.push(JSON.parse(line) as DashboardMessage);
+          out.push(JSON.parse(line) as StudioMessage);
         } catch (err) {
           // eslint-disable-next-line no-console
           console.warn(

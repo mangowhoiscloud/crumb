@@ -5,7 +5,7 @@
  * The browser can therefore stay dumb (just render the JSON it receives).
  */
 
-import type { DashboardMessage, Verdict } from './types.js';
+import type { StudioMessage, Verdict } from './types.js';
 
 export interface ActorTotals {
   turns: number;
@@ -70,7 +70,7 @@ const STUDIO_RESPEC_MAX = 3;
 const STUDIO_VERIFY_MAX = 5;
 const STUDIO_TOKEN_HARD_CAP_DEFAULT = 300_000;
 
-export function computeMetrics(transcript: DashboardMessage[]): SessionMetrics {
+export function computeMetrics(transcript: StudioMessage[]): SessionMetrics {
   let tokens_in = 0;
   let tokens_out = 0;
   let cache_read = 0;

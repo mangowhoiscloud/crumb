@@ -122,6 +122,7 @@ Preset files live at `.crumb/presets/*.toml`. Run `crumb doctor` to see which pr
 - ❌ Force a default preset if the user did not pick one — run ambient
 - ❌ Produce D2 / D6 scores from an LLM judge — those come from the `qa_check` effect's ground truth
 - ❌ Modify existing transcript lines (append-only, ULID-sorted)
+- ❌ Use `dashboard` as a Crumb identifier (type name, file name, package name, branch name). The package was renamed to `studio` in PR #96; the noun is reserved for non-Crumb references (e.g., "Datadog dashboards"). Use `Studio*` for any new symbol.
 
 ## Must (universal — every host)
 

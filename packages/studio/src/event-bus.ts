@@ -5,12 +5,12 @@
  * are isolated so one bad client cannot break the bus.
  */
 
-import type { DashboardMessage } from './types.js';
+import type { StudioMessage } from './types.js';
 import type { SessionMetrics } from './metrics.js';
 import type { SessionState } from './bootstrap.js';
 
 export type LiveEvent =
-  | { type: 'append'; session_id: string; msg: DashboardMessage }
+  | { type: 'append'; session_id: string; msg: StudioMessage }
   | {
       type: 'session_start';
       session_id: string;

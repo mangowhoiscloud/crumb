@@ -45,14 +45,14 @@ import { SessionWatcher } from './watcher.js';
 
 const HEARTBEAT_MS = 15_000;
 
-export interface DashboardServer {
+export interface StudioServer {
   port: number;
   bind: string;
   url: string;
   close(): Promise<void>;
 }
 
-export interface DashboardServerOptions {
+export interface StudioServerOptions {
   port?: number;
   bind?: string; // '127.0.0.1' (default) or '0.0.0.0'
   glob?: string; // legacy single-home glob (test fixture)
@@ -67,9 +67,7 @@ export interface DashboardServerOptions {
   repoRoot?: string;
 }
 
-export async function startStudioServer(
-  opts: DashboardServerOptions = {},
-): Promise<DashboardServer> {
+export async function startStudioServer(opts: StudioServerOptions = {}): Promise<StudioServer> {
   const bind = opts.bind ?? '127.0.0.1';
   const requestedPort = opts.port ?? 7321;
   const repoRoot = opts.repoRoot ?? process.cwd();

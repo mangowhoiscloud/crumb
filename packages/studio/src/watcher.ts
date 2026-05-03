@@ -28,13 +28,13 @@ import {
   sessionIdFromPath,
 } from './paths.js';
 import { shouldPoll } from './poll-detect.js';
-import type { DashboardMessage } from './types.js';
+import type { StudioMessage } from './types.js';
 import { computeMetrics } from './metrics.js';
 
 interface PerSession {
   tail: JsonlTail;
   startEmitted: boolean;
-  history: DashboardMessage[];
+  history: StudioMessage[];
 }
 
 export interface WatcherOptions {
@@ -111,7 +111,7 @@ export class SessionWatcher {
     project_id: string;
     crumb_home: string;
     transcript_path: string;
-    history: DashboardMessage[];
+    history: StudioMessage[];
   }> {
     return [...this.sessions.entries()].map(([path, s]) => ({
       session_id: sessionIdFromPath(path),
@@ -133,7 +133,7 @@ export class SessionWatcher {
       project_id: string;
       crumb_home: string;
       transcript_path: string;
-      history: DashboardMessage[];
+      history: StudioMessage[];
       classification: SessionClassification | null;
     }>
   > {
@@ -164,7 +164,7 @@ export class SessionWatcher {
 
   private async handleChange(path: string): Promise<void> {
     const s = this.getOrCreate(path);
-    let messages: DashboardMessage[];
+    let messages: StudioMessage[];
     try {
       messages = await s.tail.pull();
     } catch (err) {
@@ -227,9 +227,9 @@ async function peekSessionStart(path: string): Promise<SessionStartHints> {
     for (const rawLine of lines) {
       const line = rawLine.replace(/\r$/, '').trim();
       if (line.length === 0) continue;
-      let evt: DashboardMessage;
+      let evt: StudioMessage;
       try {
-        evt = JSON.parse(line) as DashboardMessage;
+        evt = JSON.parse(line) as StudioMessage;
       } catch {
         continue;
       }
