@@ -78,6 +78,7 @@ const TS_KINDS = [
   'user.approve',
   'user.pause',
   'user.resume',
+  'ack',
   'handoff.requested',
   'handoff.rollback',
   'artifact.created',

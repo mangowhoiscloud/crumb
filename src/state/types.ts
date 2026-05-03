@@ -180,6 +180,19 @@ export interface ProgressLedger {
   phase_b_step_design_seen: boolean;
   phase_b_spec_seen: boolean;
   phase_b_handoff_to_builder_seen: boolean;
+  /**
+   * v0.5 PR-Inbox-Console — Tier 3 pairing buffer. Reducer pushes the id of
+   * every `user.intervene/pause/resume/approve/veto` event here; dispatcher
+   * drains the list at the next spawn-start and stamps
+   * `metadata.consumed_intervene_ids = [<drained ids>]` on every event the
+   * actor emits during that spawn. Studio inbox panel uses the stamp to
+   * group actor responses under the originating user input.
+   *
+   * Drain timing = spawn-start (not per-event), so a single user input that
+   * cascades into multiple spawns gets credit on the first one only — keeps
+   * the inbox UI grouping unambiguous.
+   */
+  pending_intervene_ids: string[];
 }
 
 /**
@@ -277,6 +290,7 @@ export const initialState = (sessionId: string): CrumbState => ({
     phase_b_step_design_seen: false,
     phase_b_spec_seen: false,
     phase_b_handoff_to_builder_seen: false,
+    pending_intervene_ids: [],
   },
   last_message: null,
   last_qa_result: null,

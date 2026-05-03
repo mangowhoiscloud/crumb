@@ -398,6 +398,23 @@ export function stampEnvMetadata(draft: DraftMessage, env: NodeJS.ProcessEnv): D
     md.cross_provider = provider !== builderProvider;
     mutated = true;
   }
+  // v0.5 PR-Inbox-Console — Tier 3 stamp. CRUMB_CONSUMED_INTERVENE_IDS env
+  // is a comma-separated list set by the dispatcher at spawn-start (drained
+  // from progress_ledger.pending_intervene_ids). Every event the actor
+  // emits during this spawn carries it via metadata.consumed_intervene_ids,
+  // letting the studio inbox panel group actor responses under the user
+  // input that originated them. Never overwrites — actor may set its own.
+  const consumedRaw = env.CRUMB_CONSUMED_INTERVENE_IDS;
+  if (consumedRaw && md.consumed_intervene_ids === undefined) {
+    const ids = consumedRaw
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    if (ids.length > 0) {
+      md.consumed_intervene_ids = ids;
+      mutated = true;
+    }
+  }
   return mutated ? { ...draft, metadata: md } : draft;
 }
 

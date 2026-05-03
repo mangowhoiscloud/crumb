@@ -289,6 +289,13 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
           ...(binding?.harness ? { harness: binding.harness } : {}),
           ...(binding?.provider ? { provider: binding.provider } : {}),
           ...(binding?.model ? { model: binding.model } : {}),
+          // v0.5 PR-Inbox-Console — Tier 3 stamp. The first event of a spawn
+          // carries the drained user.* ids so the inbox panel can fold this
+          // wake (and the events that follow until the next spawn) under the
+          // originating user input.
+          ...(effect.consumed_intervene_ids && effect.consumed_intervene_ids.length > 0
+            ? { consumed_intervene_ids: effect.consumed_intervene_ids }
+            : {}),
         },
       });
 
@@ -405,6 +412,13 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
           // to the underlying CLI (API-only) — informational only.
           model: binding?.model,
           effort: binding?.effort,
+          // v0.5 PR-Inbox-Console — Tier 3 forward. Drained user.* event ids
+          // attached to this spawn by the reducer; adapter env wires them
+          // into CRUMB_CONSUMED_INTERVENE_IDS so every actor emission is
+          // tagged with metadata.consumed_intervene_ids for inbox grouping.
+          ...(effect.consumed_intervene_ids && effect.consumed_intervene_ids.length > 0
+            ? { consumedIntervenIds: effect.consumed_intervene_ids }
+            : {}),
           signal: timers.controller.signal,
           onStdoutActivity: timers.onStdoutActivity,
           onStdoutChunk: (b) => {
@@ -614,6 +628,12 @@ export async function dispatch(effect: Effect, deps: DispatcherDeps): Promise<vo
       // fall back to binding.model so codex/gemini sessions aren't blank.
       if (typeof stopMetadata.model !== 'string' && binding?.model) {
         stopMetadata.model = binding.model;
+      }
+      // v0.5 PR-Inbox-Console — Tier 3 stamp on agent.stop too so the inbox
+      // panel keeps the spawn's bracket (wake → … → stop) under the same
+      // originating user input.
+      if (effect.consumed_intervene_ids && effect.consumed_intervene_ids.length > 0) {
+        stopMetadata.consumed_intervene_ids = effect.consumed_intervene_ids;
       }
       await deps.writer.append({
         session_id: deps.sessionId,

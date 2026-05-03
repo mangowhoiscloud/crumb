@@ -123,6 +123,16 @@ export interface SpawnRequest {
    * Bench EMNLP 2025 Findings §805 + Preference Leakage ICLR 2026.
    */
   judgeInputPath?: string;
+  /**
+   * v0.5 PR-Inbox-Console — Tier 3 pairing. List of `user.intervene/pause/
+   * resume/approve/veto` event ids drained from `progress_ledger.
+   * pending_intervene_ids` at this spawn-start. Dispatcher forwards them as
+   * `CRUMB_CONSUMED_INTERVENE_IDS` (csv); `crumb event`'s `stampEnvMetadata`
+   * picks them up and stamps `metadata.consumed_intervene_ids` on every
+   * event the actor emits during the spawn. Studio inbox panel uses the
+   * stamp to fold actor responses under the originating user input.
+   */
+  consumedIntervenIds?: string[];
 }
 
 export interface SpawnResult {
