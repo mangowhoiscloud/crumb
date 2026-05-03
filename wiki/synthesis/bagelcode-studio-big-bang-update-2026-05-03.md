@@ -485,6 +485,111 @@ A PR that passes CI but fails any of these bars is sent back. The bar is enforce
 
 ---
 
+## 11. Legacy `dashboard` cruft + naming hygiene cleanup
+
+The package was renamed `packages/dashboard` → `packages/studio` in PR #96 (`e586cb8`). The rename moved the source tree and updated `package.json#name` / `bin` / `keywords`, but it did **not** scrub three classes of leftover:
+
+### 11.1 Filesystem cruft (one worktree only)
+
+`/Users/mango/workspace/crumb/packages/dashboard/` exists as untracked filesystem artifacts in the `crumb-dash` worktree. Contents:
+- `dist/` — compiled `bootstrap.js` / `cli.js` / `dashboard-html.generated.js` / `dashboard-html.js` / `doctor.js` / `event-bus.js` / `index.js` / `jsonl-tail.js` / `metrics.js` / `open-browser.js` etc. — the pre-rename tsc output
+- `src/dashboard-html.generated.ts` — pre-rename inliner output
+- `node_modules/` — the package's own dep cache
+
+There is **no `package.json`** under `packages/dashboard/` — the directory is purely orphaned build output. It is not in git (`git ls-files | grep dashboard` → empty) and absent from every other worktree (`crumb-redesign-plan`, `crumb-waterfall`, etc. — verified). It only persists in `crumb-dash` because that worktree was created before PR #96 and never had the orphaned dist/ + node_modules/ removed.
+
+**Action**: `rm -rf /Users/mango/workspace/crumb/packages/dashboard/` from inside the `crumb-dash` worktree. Filesystem-only delete, no git operation. Documented as user-driven (removal is destructive; user runs the command, not the agent). After removal `git status` returns clean.
+
+### 11.2 In-code naming residue (`Dashboard*` types in active studio source)
+
+The active `packages/studio/src/` source still uses `Dashboard`-prefixed type names — never reverted post-rename:
+
+| File | Symbol | Occurrences |
+|---|---|---|
+| `packages/studio/src/types.ts` | `interface DashboardMessage` | 1 (definition) |
+| `packages/studio/src/server.ts` | `interface DashboardServer`, `interface DashboardServerOptions`, `startDashboardServer()` | 4 (def + signature) |
+| `packages/studio/src/event-bus.ts` | `import type { DashboardMessage }` | 2 |
+| `packages/studio/src/bootstrap.ts` | `import type { DashboardMessage }`, parameter typing | 3 |
+| `packages/studio/src/jsonl-tail.ts` | `import type { DashboardMessage }`, return types | 4 |
+| `packages/studio/src/metrics.ts` | `import type { DashboardMessage }`, function param | 2 |
+| `packages/studio/src/watcher.ts` | `import type { DashboardMessage }`, history typing | 6 |
+| `packages/studio/src/index.ts` | re-export `DashboardServer`, `DashboardServerOptions`, `DashboardMessage` | 2 |
+| `packages/studio/src/bootstrap.test.ts` + `metrics.test.ts` | type-imports | 2 |
+| `packages/studio/src/client/studio.js` | inline comment `// session_id → DashboardMessage[]` | 1 |
+| `packages/studio/src/client/studio.html` | inline copy "this dashboard" / "read-only dashboard" | 2 |
+| `packages/studio/package.json#keywords` | `"dashboard"` keyword | 1 |
+
+**Total: ~30 stale references across 12 files.** Each is a place where a future LLM (Claude / Codex / Gemini) may re-hallucinate a `Dashboard*` API or a `packages/dashboard/` path because the in-code naming contradicts the brand.
+
+**Action — PR `chore/studio-naming-purge`** (small, low-risk, decoupled from migration):
+- Rename `DashboardMessage` → `StudioMessage`, `DashboardServer` → `StudioServer`, `DashboardServerOptions` → `StudioServerOptions`, `startDashboardServer()` → `startStudioServer()` (the latter is already aliased in `index.ts` since PR #96 — drop the dashboard-named export)
+- Update all imports + re-exports in the 10 source files + 2 test files
+- Update inline copy in `studio.html` ("dashboard" → "studio") in the welcome banner + comments
+- Drop `"dashboard"` from `packages/studio/package.json#keywords`
+- Verify gate: `lint:all` + `typecheck` + `test` + `build` all green
+- Diff is purely renames; no runtime behavior change
+
+This PR can land any time before or during the migration and is independent of the Prune queue.
+
+### 11.3 Wiki + raw research mentions
+
+Three categories of `dashboard` mentions in `wiki/`:
+
+| Category | Examples | Action |
+|---|---|---|
+| **Historical / conceptual context** (intentional) | `wiki/concepts/bagelcode-final-design-2026.md`, `wiki/concepts/bagelcode-naming-crumb.md`, `wiki/synthesis/bagelcode-team-profile.md`, `raw/bagelcode-research/observability-frontier-2026-05.md` | **Keep** — describes the rename history and prior state intentionally |
+| **Active observability context (post-rename)** | `wiki/synthesis/bagelcode-studio-observability-plan-2026-05-03.md` (PR #137 era; cites Datadog dashboards as a reference, which is the noun "dashboard" not the package) | **Keep** — non-Crumb dashboards are valid references |
+| **Stale package-name leakage** | `.skills/wiki-status/SKILL.md`, `.skills/skill-creator/SKILL.md` (if any reference `packages/dashboard/`) | Audit during the naming-purge PR; rewrite to `packages/studio/` if found |
+
+The `chore/studio-naming-purge` PR description must explicitly enumerate which wiki / skill mentions were rewritten and which were left as historical context, so a future LLM can read the diff and learn the convention: "Dashboard the noun is fine; `Dashboard*` as a Crumb identifier is forbidden."
+
+### 11.4 LLM hygiene rule (codified in AGENTS.md)
+
+Add a one-liner under AGENTS.md §Don't (universal):
+
+> ❌ Use `dashboard` as a Crumb identifier (type name, file name, package name, branch name). The package was renamed to `studio` in PR #96; the noun is reserved for non-Crumb references (e.g., "Datadog dashboards"). Use `Studio*` for any new symbol.
+
+This becomes part of the sandwich the dispatcher injects into every actor spawn, so cross-host (Claude Code / Codex / Gemini) the invariant is enforced upstream of code generation.
+
+## 12. n8n grounding
+
+`https://github.com/n8n-io/n8n` is cloned at `/Users/mango/workspace/n8n` (depth 1, ~207 MB). n8n is the closest extant frontier reference for the user's interactive-pipeline ask (drag nodes, click-to-inspect, default + custom layout, n8n-style canvas chrome). It is grounding material — patterns, primitives, store organization — not a stack target (n8n is Vue 3; we are React).
+
+### 12.1 Anchor files an implementer should read
+
+| File | What to study |
+|---|---|
+| `packages/frontend/editor-ui/src/features/workflows/canvas/components/Canvas.vue` | Canvas root — how vue-flow is wired into the rest of the editor (selection, zoom, pan, viewport persistence) |
+| `packages/frontend/editor-ui/src/app/views/NodeView.vue` | The "view a single node" route — equivalent of our `<NodeInspector>` |
+| `packages/frontend/editor-ui/src/app/components/NodeViewUnfinishedWorkflowMessage.vue` | Empty-state pattern on canvas — useful for our "no session yet" canvas |
+| `packages/frontend/editor-ui/src/app/views/CanvasAddButton.vue` | Floating add-node button — pattern for our future Sticky-Note add affordance (M9) |
+| `packages/frontend/@n8n/design-system/src/components/CanvasPill/` | Canvas chrome pills — pattern for our critical-path / cross-provider chips |
+| `packages/frontend/@n8n/design-system/src/components/CanvasThinkingPill/` | Live "thinking" indicator on canvas — pattern for our active-actor pulse |
+| `packages/frontend/editor-ui/src/app/stores/` | Pinia store organization — translate to Zustand slice pattern |
+
+### 12.2 Pattern translation table (Vue → React)
+
+| n8n (Vue 3) | Crumb (React 19) | Notes |
+|---|---|---|
+| `vue-flow` | `@xyflow/react` | Same author / same architecture; React Flow is the canonical port |
+| Pinia stores | Zustand slices | One slice per concern (selection, layout, ui) |
+| `<script setup>` Composition API | function components + custom hooks | Hooks correspond to composables 1:1 |
+| Element Plus components | shadcn/ui | Both Radix-flavored / accessible-first |
+| `provide / inject` | React Context (sparingly) or Zustand | Prefer Zustand to avoid context-tax |
+| `vee-validate` | React Hook Form + Zod | Cascading-form pattern equivalent |
+| `vue-i18n` | `i18next` (M2 prep) | Same key/locale shape |
+
+### 12.3 What we DON'T copy from n8n
+
+- The full n8n editor scope (workflow execution, credential management, expression editor, parameter inputs per node) — Crumb doesn't run user-defined workflows; the actor graph is fixed by AGENTS.md
+- n8n's auth + multi-user model — Crumb is local single-machine, no auth
+- n8n's enterprise license boundary (`packages/@n8n/*.ee/`) — Crumb is fully MIT
+- n8n's deep "Sticky Note" feature set — only the basic annotation pattern is portable to M9
+
+### 12.4 Grounding rule for implementers
+
+When writing `<DagCanvas>`, `<NodeInspector>`, `<HandoffEdge>`, or any Pipeline-canvas component, the PR description should cite the n8n file consulted and what was adopted vs adapted vs rejected. This keeps the lineage auditable and prevents accidentally re-inventing patterns n8n already validated.
+
 ## Trigger criteria — when to start M0
 
 Start M0 (`chore/studio-vite-scaffold`) when **all four** of these are true:
