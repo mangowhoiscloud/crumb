@@ -18,7 +18,6 @@
  * Transcript / DesignCheck.
  */
 
-import { useEffect, useState } from 'react';
 import {
   DockviewReact,
   type DockviewApi,
@@ -34,10 +33,7 @@ import { ViewPane } from './panels/ViewPane';
 import { Narrative } from './panels/Narrative';
 import { Feed } from './panels/Feed';
 import { DetailRail } from './panels/DetailRail';
-
-interface SessionsSnapshot {
-  sessions: Array<{ session_id: string; goal: string | null }>;
-}
+import { useSessions, useSessionsSseBridge } from './hooks/useSessions';
 
 const PANEL_COMPONENTS: Record<string, React.FC<IDockviewPanelProps>> = {
   sidebar: Sidebar,
@@ -97,22 +93,9 @@ function onReady(event: DockviewReadyEvent): void {
 }
 
 export function App() {
-  const [snapshot, setSnapshot] = useState<SessionsSnapshot | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/api/sessions')
-      .then((r) => r.json() as Promise<SessionsSnapshot>)
-      .then((j) => {
-        if (!cancelled) setSnapshot(j);
-      })
-      .catch(() => {
-        /* M2 placeholder — error UI lands in M3 */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Live sessions cache + SSE bridge. Sidebar re-reads via useSessions().
+  const sessions = useSessions();
+  useSessionsSseBridge();
 
   return (
     <div
@@ -133,7 +116,7 @@ export function App() {
         </span>
         <span style={{ flex: 1 }} />
         <span style={{ color: 'var(--ink-subtle)', fontSize: 12 }}>
-          v2 preview · {snapshot ? `${snapshot.sessions.length} sessions` : 'loading…'}
+          v2 preview · {sessions.data ? `${sessions.data.sessions.length} sessions` : 'loading…'}
         </span>
         <DensityToggle />
         <ThemeToggle />
