@@ -10,7 +10,7 @@
 
 ## What is this repo
 
-**Crumb** is a multi-agent execution harness for casual game prototyping. A user pitches a game idea in one line; Coordinator (the host harness itself) routes through Planner Lead → Builder → deterministic qa_check → Verifier (CourtEval), recorded as a **replay-deterministic JSONL transcript** (39 kinds × 11 fields × 12 specialist steps × 8 actors).
+**Crumb** is a multi-agent execution harness for casual game prototyping. A user pitches a game idea in one line; Coordinator (the host harness itself) routes through Planner Lead → Builder → deterministic qa_check → Verifier (CourtEval), recorded as a **replay-deterministic JSONL transcript** (35 kinds × 11 fields × 13 specialist steps × 9 actors).
 
 Built for the [Bagelcode New Title Team AI Developer recruitment task](https://career.bagelcode.com/ko/o/208045) (2026-05-03 deadline). See [README.md](./README.md) / [README.ko.md](./README.ko.md) for human onboarding.
 
@@ -26,7 +26,7 @@ COORDINATOR (host inline)
 PLANNER LEAD ─▶ BUILDER ─▶ qa_check effect (no LLM) ─▶ VERIFIER ─▶ done
                                                      (BUILDER FALLBACK on circuit OPEN)
    ▾
-transcript.jsonl (39 kind × 11 field, append-only, ULID sorted)
+transcript.jsonl (35 kind × 11 field, append-only, ULID sorted)
    ▾
 control plane (pure reducer + state) — replay-deterministic
    ▾
@@ -77,13 +77,13 @@ And 5 procedural skills (sandwich-loaded inline):
 Source: `protocol/schemas/message.schema.json`.
 
 ```
-39 kinds × 11 fields × 12 specialist steps × 8 actors
+35 kinds × 11 fields × 13 specialist steps × 9 actors
   + scores D1–D6 source-of-truth matrix (verifier-llm / qa-check-effect / reducer-auto — single origin per dim; D3/D5 LLM and auto components are combined deterministically by combineDimScore)
   + metadata 14 fields (incl. v0.1: harness / provider / adapter_session_id / cache_carry_over /
     deterministic / cross_provider)
 ```
 
-Each transcript line carries: `id` (ULID) / `ts` (ISO-8601) / `session_id` / `from` (one of 8 actors) / `kind` / `body` / optional `data` / `artifacts` / `scores` / `metadata`. Replay-deterministic; `crumb replay <session-dir>` re-derives identical state.
+Each transcript line carries: `id` (ULID) / `ts` (ISO-8601) / `session_id` / `from` (one of 9 actors) / `kind` / `body` / optional `data` / `artifacts` / `scores` / `metadata`. Replay-deterministic; `crumb replay <session-dir>` re-derives identical state.
 
 ## Multi-host entries
 
@@ -229,7 +229,7 @@ tail -f ~/.crumb/projects/<project-id>/sessions/<session-id>/transcript.jsonl | 
 - `agents/_event-protocol.md`    — How subprocess agents emit transcript events via `crumb event`
 - `skills/*.md`                  — 5 procedural workflow skills referenced by agent sandwiches
 - `protocol/schema.md`           — 1-page transcript spec for humans
-- `protocol/schemas/`            — JSON Schema files for the validator (39 kinds × 11 fields × scores D1-D6)
+- `protocol/schemas/`            — JSON Schema files for the validator (35 kinds × 11 fields × scores D1-D6)
 - `.crumb/config.toml`           — Default actor binding (Paperclip-inspired BYO)
 - `.crumb/presets/*.toml`        — Named presets: `bagelcode-cross-3way`, `mock`, `sdk-enterprise`, `solo`
 - `.claude/skills/crumb/SKILL.md` — Claude Code natural-language entry (host harness skill)
@@ -288,7 +288,7 @@ Every architecture decision in this repo is grounded in `wiki/`. Before changing
 - [`agents/_event-protocol.md`](./agents/_event-protocol.md) — `crumb event` emit spec
 
 ### Schema + control plane
-- [`protocol/schemas/message.schema.json`](./protocol/schemas/message.schema.json) — 39 kind × 11 field
+- [`protocol/schemas/message.schema.json`](./protocol/schemas/message.schema.json) — 35 kind × 11 field
 - [`protocol/schema.md`](./protocol/schema.md) — 1-page human spec
 - `src/reducer/`, `src/dispatcher/`, `src/state/`, `src/transcript/`, `src/adapters/`, `src/loop/`
 

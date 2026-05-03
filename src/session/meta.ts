@@ -10,8 +10,8 @@
  * from transcript.jsonl). It exists purely to give `crumb ls` and `crumb resume` a fast
  * O(1) lookup of session lifecycle without scanning the transcript head.
  *
- * For forks: `parent_session_id` + `fork_event_id` carry the same info as the
- * `kind=session.forked` first transcript event; meta.json mirrors them so listing
+ * For forks: `parent_session_id` + `fork_event_id` mirror the v0.3.0 fork model
+ * (reserved — fork emit not yet implemented). meta.json carries them so listing
  * forks doesn't require opening every transcript.
  */
 
@@ -29,7 +29,7 @@ export interface SessionMeta {
   ended_at?: string;
   goal?: string;
   preset?: string;
-  /** Set only on forked sessions. Mirrors the kind=session.forked event. */
+  /** Set only on forked sessions (v0.3.0 fork model — reserved, emit not yet implemented). */
   parent_session_id?: string;
   fork_event_id?: string;
   /** Optional human label, e.g. set by `crumb run --label "match-3 v1"`. */

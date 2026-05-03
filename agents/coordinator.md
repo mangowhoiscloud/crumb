@@ -34,9 +34,9 @@ Single hub among the 5 outer actors. Spoke-to-spoke direct communication is forb
 
 | Direction | kind / artifact |
 |---|---|
-| in | last transcript line (any of 39 kinds) |
+| in | last transcript line (any of 35 kinds) |
 | in | `task_ledger`, `progress_ledger`, `adapter_health` |
-| out | exactly one of: `kind=agent.wake` (next_speaker) / `kind=hook` (user modal) / `kind=done` |
+| out | exactly one of: `kind=agent.wake` (next_speaker) / `effect.type=hook` (user modal — dispatcher-side, no transcript line) / `kind=done` |
 | state | `task_ledger` (new facts), `progress_ledger` (`step++`, `next_speaker`, `circuit_breaker`, `adapter_override`) |
 
 ## Routing Rules (v0.1)
@@ -81,8 +81,8 @@ This table mirrors the reducer's `case` branches. The sandwich's instruction is 
 
 **Don't update on:**
 - `kind=note` (observation only)
-- `kind=debate`, `kind=audit`, `kind=tool.*` (transient)
-- `kind=ack`, `kind=agent.thought_summary` (control / private)
+- `kind=audit`, `kind=tool.*` (transient)
+- `kind=agent.thought_summary` (control / private)
 
 ## Tools
 
@@ -96,7 +96,7 @@ This table mirrors the reducer's `case` branches. The sandwich's instruction is 
 ## Don't
 
 - ❌ Call `Agent` / `Task` tool — `effects.spawn` is dispatched by core, not by you
-- ❌ Read `kind=debate` / `kind=note` / `kind=tool.*` for routing decisions (transient signals)
+- ❌ Read `kind=note` / `kind=tool.*` for routing decisions (transient signals)
 - ❌ Write artifacts (only Lead actors do)
 - ❌ Spawn subprocesses directly (`effects.spawn` is the dispatcher's job)
 - ❌ Hard-code any actor's harness/provider — bindings come from the active preset
@@ -105,7 +105,7 @@ This table mirrors the reducer's `case` branches. The sandwich's instruction is 
 ## Must
 
 - Validate every incoming transcript line before any ledger update (ajv + anti-deception)
-- Append exactly **one decision per wake** (`kind=agent.wake` OR `kind=hook` OR `kind=done`)
+- Append exactly **one decision per wake** (`kind=agent.wake` OR `effect.type=hook` OR `kind=done`)
 - sha256 every artifact ref recorded in `task_ledger`
 - STOP after your decision — no continued routing in the same turn
 - Set `metadata.harness` + `metadata.provider` + `metadata.model` per the preset binding (or ambient detection)

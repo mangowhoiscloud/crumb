@@ -142,7 +142,7 @@ Append: `kind=step.judge`, `step=critic`, `data={challenges: [...]}`.
 Defend the original Grader scores against the Critic's challenges:
 
 > "D1 = 4.5 fair because spec.md §3.2 explicitly says 'single tap mode for v1' — multi-touch is v2 backlog"
-> "D3.semantic = 5 fair because the short messages are routing acks (kind=ack), not content — they're structurally short"
+> "D3.semantic = 5 fair because the short messages are routing notes (kind=note), not content — they're structurally short"
 > "D5.quality = 4 fair because the color intervention was reflected in tuning.json color tokens, not DESIGN.md (separation per the system architecture §10)"
 
 **Defender's role is NOT cheerleading — it is evidence-based rebuttal.** If the Critic is right, say so by failing to defend.

@@ -9,7 +9,7 @@
 
 ## What it is
 
-Crumb treats multi-agent collaboration as an **observable execution protocol**, not just a chat interface. Every message, tool call, artifact, user intervention, deterministic QA result, judge score, and reasoning summary is recorded as a **replay-deterministic JSONL transcript** (39 kinds × 11 fields × 12 specialist steps × 8 actors).
+Crumb treats multi-agent collaboration as an **observable execution protocol**, not just a chat interface. Every message, tool call, artifact, user intervention, deterministic QA result, judge score, and reasoning summary is recorded as a **replay-deterministic JSONL transcript** (35 kinds × 11 fields × 13 specialist steps × 9 actors).
 
 Built for the [Bagelcode New Title Team AI Developer recruitment task](https://career.bagelcode.com/ko/o/208045) (2026-05-03 deadline). See [README.ko.md](./README.ko.md) for Korean.
 
@@ -18,13 +18,13 @@ Built for the [Bagelcode New Title Team AI Developer recruitment task](https://c
 | Mail keyword | Where it lands in Crumb |
 |---|---|
 | "Claude Code, Codex, Gemini CLI **등 다양한 에이전트를 동시에 사용**" | `bagelcode-cross-3way` preset (default) — builder=Codex, verifier=Gemini, rest=ambient. 3-host first-class. |
-| "여러 AI 에이전트가 **서로 통신**" | 8 actors × 39 transcript kinds, `kind=handoff.{requested,accepted,rollback}` between actors. |
+| "여러 AI 에이전트가 **서로 통신**" | 9 actors × 35 transcript kinds, `kind=handoff.{requested,rollback}` between actors. |
 | "사용자가 협업 과정에 **개입하거나 관찰**" | 5 user.* events × 4 host = 20-cell matrix. Natural language → `kind=user.intervene`. |
 | "통신 방식 / 프로토콜 / UI **자유**" | JSONL transcript + 4 entry path (Claude Code / Codex / Gemini / headless). |
 | "AI 코딩 에이전트를 사용하여 개발" | Built with Claude Code + Codex; commits, sandwich files, helpers, OTel exporter all show provenance. |
 | "**README대로 실행**시 동작" | `npx tsx src/index.ts run --adapter mock` works with zero auth, deterministic. |
 | "**.md 파일 포함**" | agents/*.md (5) + skills/*.md (5) + specialists/*.md (3) + .{claude,codex,gemini}/ entries (5). |
-| "JSONL **또는** 녹화" | `transcript.jsonl` 39 kinds; demo screencast follow-up. |
+| "JSONL **또는** 녹화" | `transcript.jsonl` 35 kinds; demo screencast follow-up. |
 
 ## Quickstart
 
@@ -186,7 +186,7 @@ USER (natural language) ─ goal/intervene ───▶ COORDINATOR (host harnes
 
 - **Outer 6 actors** (incl. researcher v0.3.0) + **2 specialist** (planner inline) + **1 contract** (game-design.md, 4+ actors inline-read) + **5 skill** (procedural workflow)
 - **Multi-host 4 entry**: Claude Code skill / Codex CLI / Gemini CLI / headless `crumb run`
-- **Schema**: 40 kinds × 11 fields × 12 specialist steps × 8 actors × OTel GenAI alias
+- **Schema**: 35 kinds × 11 fields × 13 specialist steps × 9 actors × OTel GenAI alias
 - **3-layer scoring**: reducer-auto (D3/D4) + qa-check-effect (D2/D6, deterministic) + verifier-llm (D1, semantic)
 - **Cost**: $0/session via subscriptions (Claude Max + Codex Plus + Gemini Advanced) — or `--adapter mock` for free
 - **Configurability**: `(harness × provider × model)` 3-tuple per actor; user picks via preset; ambient fallback follows entry host
@@ -229,7 +229,7 @@ A successful session produces:
 
 ```
 sessions/<session-id>/
-├── transcript.jsonl                    # Replay-deterministic event log (39 kind × 11 field)
+├── transcript.jsonl                    # Replay-deterministic event log (35 kind × 11 field)
 ├── ledgers/
 │   ├── task.json                       # Cumulative facts (transcript-derivable)
 │   └── progress.json                   # Per-turn state (transcript-derivable)
@@ -256,7 +256,7 @@ These are the **input asset** for a downstream Unity team — Crumb is the *prot
 ## Status
 
 ```
-✅ Schema v0.1 — 39 kind × 11 field × 12 step × 8 from + D1-D6 source-of-truth scoring
+✅ Schema v0.1 — 35 kind × 11 field × 13 step × 9 from + D1-D6 source-of-truth scoring
 ✅ Pure reducer — circuit breaker, adaptive stop, rollback, user.veto rebound (vitest)
 ✅ Adapters — claude-local / codex-local / gemini-local / mock
 ✅ Live dispatcher — spawn / append / hook / rollback / stop / done / qa_check

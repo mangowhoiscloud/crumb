@@ -1,7 +1,7 @@
 /**
  * /crumb explain <kind> — schema 어휘 lookup helper.
  *
- * 43 kinds × 11 identification fields. Static registry — no transcript I/O.
+ * 35 kinds × 11 identification fields. Static registry — no transcript I/O.
  * Source-of-truth: protocol/schemas/message.schema.json + v0.1 §3.
  */
 
@@ -37,15 +37,6 @@ export const KIND_REGISTRY: Record<Kind, KindInfo> = {
     description: 'Session 종료. summary.html + exports/* 자동 emit.',
     emitter: 'system (coordinator finish)',
     ref: 'v0.1 §10 (4 surface)',
-  },
-  'session.forked': {
-    kind: 'session.forked',
-    category: 'system',
-    description:
-      'v0.3.0: Forked session 의 첫 event. 부모 transcript 복사 없이 metadata.crumb.{parent_session_id, fork_event_id} 만 기록 — reducer 가 read 시점에 부모를 fork_event_id 까지 hydrate.',
-    emitter: 'system (crumb fork)',
-    payload: 'metadata.crumb={parent_session_id, fork_event_id}',
-    ref: 'v0.3.0 fork model — wiki §v4',
   },
   'agent.wake': {
     kind: 'agent.wake',
@@ -119,13 +110,6 @@ export const KIND_REGISTRY: Record<Kind, KindInfo> = {
     source_of_truth: 'D2 exec / D6 portability — verifier 가 못 바꿈',
     ref: 'v0.1 §3.5',
   },
-  'verify.request': {
-    kind: 'verify.request',
-    category: 'workflow',
-    description: 'Coordinator 가 verifier 호출.',
-    emitter: 'coordinator',
-    ref: 'v0.1 §4.2',
-  },
   'verify.result': {
     kind: 'verify.result',
     category: 'workflow',
@@ -155,27 +139,6 @@ export const KIND_REGISTRY: Record<Kind, KindInfo> = {
     kind: 'agent.thought_summary',
     category: 'dialogue',
     description: 'Actor 내부 reasoning trace (Anthropic thinking_tokens equivalent).',
-    emitter: 'any actor',
-    ref: 'v0.1 §3.3',
-  },
-  question: {
-    kind: 'question',
-    category: 'dialogue',
-    description: 'Free-form actor question. socratic 외 일반 질의.',
-    emitter: 'any actor',
-    ref: 'v0.1 §3.3',
-  },
-  answer: {
-    kind: 'answer',
-    category: 'dialogue',
-    description: 'Free-form actor answer.',
-    emitter: 'any actor',
-    ref: 'v0.1 §3.3',
-  },
-  debate: {
-    kind: 'debate',
-    category: 'dialogue',
-    description: 'Multi-actor 의견 충돌 — CourtEval critic/defender 외 free-form.',
     emitter: 'any actor',
     ref: 'v0.1 §3.3',
   },
@@ -275,13 +238,6 @@ export const KIND_REGISTRY: Record<Kind, KindInfo> = {
     emitter: 'any actor',
     ref: 'v0.1 §4.2',
   },
-  'handoff.accepted': {
-    kind: 'handoff.accepted',
-    category: 'handoff',
-    description: 'Coordinator 가 handoff 수락 — 다음 actor spawn.',
-    emitter: 'coordinator',
-    ref: 'v0.1 §4.2',
-  },
   'handoff.rollback': {
     kind: 'handoff.rollback',
     category: 'handoff',
@@ -296,13 +252,6 @@ export const KIND_REGISTRY: Record<Kind, KindInfo> = {
     description: 'Actor 가 산출물 emit. sha256 + path 보존.',
     emitter: 'any actor',
     payload: 'artifacts=[{path, sha256, role}]',
-    ref: 'v0.1 §3.1',
-  },
-  ack: {
-    kind: 'ack',
-    category: 'meta',
-    description: 'ack_required 메시지에 대한 수신 확인.',
-    emitter: 'any actor',
     ref: 'v0.1 §3.1',
   },
   error: {
@@ -336,13 +285,6 @@ export const KIND_REGISTRY: Record<Kind, KindInfo> = {
     parent: 'tool.call',
     ref: 'v0.1 §3.3',
   },
-  hook: {
-    kind: 'hook',
-    category: 'meta',
-    description: '사용자 modal 표면 — PARTIAL verdict / stuck threshold 시.',
-    emitter: 'coordinator',
-    ref: 'v0.1 §8.1 (After kind=judge.score PARTIAL → kind=hook)',
-  },
   'version.released': {
     kind: 'version.released',
     category: 'version',
@@ -350,15 +292,6 @@ export const KIND_REGISTRY: Record<Kind, KindInfo> = {
       'v0.3.0: Session artifacts 가 immutable milestone (versions/<vN>/) 으로 promote 됨. manifest.toml 에 parent_version + scorecard 동결.',
     emitter: 'system (crumb release)',
     payload: 'data={version, label?, parent_version, source_session, source_event_id}',
-    ref: 'v0.3.0 version graph — wiki §v4',
-  },
-  'version.refinement': {
-    kind: 'version.refinement',
-    category: 'version',
-    description:
-      'v0.3.0: 기존 version 기반의 점진적 개선 표시 (소규모 tweak — D1-D6 scorecard 변동 추적).',
-    emitter: 'system (crumb release --refinement-of vN)',
-    payload: 'data={version, base_version, scorecard_delta}',
     ref: 'v0.3.0 version graph — wiki §v4',
   },
 };
