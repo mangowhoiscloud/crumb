@@ -47,8 +47,38 @@ const IDLE: StreamState = { events: [], status: 'idle', reconnectAttempts: 0 };
 const subscribers = new Set<() => void>();
 let activeSession: string | null = null;
 let activeSource: EventSource | null = null;
-let activeWindowSize = 500;
+// Default window 5000 — long sessions (Phaser builder + multi-round
+// CourtEval verifier) hit 700–1500 events; the previous 500 cap evicted
+// early agent.wake / step.* records, which made Waterfall miss the
+// pre-builder spans the user reported. 5000 covers any reasonable
+// session (~25 MB client RAM at 5 KB / event).
+let activeWindowSize = 5000;
 let state: StreamState = IDLE;
+
+// Backfill burst coalescing — without this, a 700-event backfill fired
+// 700 setState calls in <100 ms on session switch, freezing every
+// panel's re-render. We accumulate incoming events into a pending
+// buffer and flush via microtask, collapsing the burst into one
+// commit. Live (post-burst) events still flush per-tick because the
+// buffer drains immediately when no further events follow.
+let pending: TranscriptEvent[] = [];
+let flushScheduled = false;
+
+function scheduleFlush(): void {
+  if (flushScheduled) return;
+  flushScheduled = true;
+  queueMicrotask(() => {
+    flushScheduled = false;
+    if (pending.length === 0) return;
+    const batch = pending;
+    pending = [];
+    set((prev) => ({
+      ...prev,
+      status: 'streaming',
+      events: [...prev.events, ...batch].slice(-activeWindowSize),
+    }));
+  });
+}
 
 function notify(): void {
   for (const fn of subscribers) fn();
@@ -66,6 +96,11 @@ function teardown(): void {
     activeSource.close();
     activeSource = null;
   }
+  // Drop any in-flight backfill batch — it's tied to the closed
+  // connection's session, not the next one. Without this, switching
+  // sessions while the backfill burst is still queued mixes events
+  // from the old session into the new one's first paint.
+  pending = [];
 }
 
 function ensureConnection(sessionId: string | null, windowSize: number): void {
@@ -97,11 +132,8 @@ function ensureConnection(sessionId: string | null, windowSize: number): void {
     try {
       const data = JSON.parse(me.data) as { msg?: TranscriptEvent };
       if (!data.msg) return;
-      set((prev) => ({
-        ...prev,
-        status: 'streaming',
-        events: [...prev.events, data.msg as TranscriptEvent].slice(-activeWindowSize),
-      }));
+      pending.push(data.msg as TranscriptEvent);
+      scheduleFlush();
     } catch {
       /* malformed — drop */
     }
