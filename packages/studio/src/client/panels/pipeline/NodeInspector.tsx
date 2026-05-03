@@ -38,27 +38,6 @@ interface ActorTotals {
   events?: number;
 }
 
-const RECENT_EVENT_KINDS_PRIORITY = new Set([
-  'agent.wake',
-  'agent.stop',
-  'step.socratic',
-  'step.concept',
-  'step.research',
-  'step.research.video',
-  'step.design',
-  'step.judge',
-  'spec',
-  'spec.update',
-  'build',
-  'qa.result',
-  'verify.result',
-  'judge.score',
-  'handoff.requested',
-  'handoff.rollback',
-  'note',
-  'audit',
-  'error',
-]);
 
 export function NodeInspector() {
   const actor = useSelectedNodeActor();
