@@ -64,6 +64,7 @@
   --actor-builder-fallback: #946a48;
   --actor-validator: #b8742d;
   --actor-system: #4a3220;
+  --actor-done: #6b8c2a;
 
   /* Radii. */
   --r-xs: 4px;
@@ -133,6 +134,7 @@
   --actor-builder-fallback: #62666d;
   --actor-validator: #ffb287;
   --actor-system: #34343a;
+  --actor-done: #c2ef4e;
 }
 
 /* Compact density — Datadog Notebook convention; M3+ inherits this from

@@ -22,6 +22,7 @@ const ACTORS = [
   'verifier',
   'validator',
   'system',
+  'done',
 ] as const;
 
 export type Actor = (typeof ACTORS)[number];
@@ -34,25 +35,39 @@ export interface ActorNodeData extends Record<string, unknown> {
 const NODE_W = 132;
 const NODE_H = 48;
 
-const EDGES: Array<[Actor, Actor, string]> = [
+/**
+ * Forward edges drive dagre's left-to-right ranking. The
+ * `researcher → planner-lead` synth handoff is a back-edge — including
+ * it in dagre creates a cycle that collapses planner-lead and
+ * researcher into the same column (the symptom users saw as "tangled
+ * planner-lead + researcher"). We render the back-edge separately as a
+ * curved return arrow (smoothstep) so the visual still tells the
+ * Phase A → researcher → Phase B story without breaking the ranking.
+ */
+const FORWARD_EDGES: Array<[Actor, Actor, string]> = [
   ['user', 'coordinator', 'goal'],
   ['coordinator', 'planner-lead', 'spec'],
   ['planner-lead', 'researcher', 'evidence'],
-  ['researcher', 'planner-lead', 'synth'],
   ['planner-lead', 'builder', 'build'],
   ['builder', 'verifier', 'verify'],
   ['verifier', 'validator', 'audit'],
+  // Terminal milestone — kind=done lands here. validator passes the
+  // verdict through; verifier's PASS short-circuits straight to done
+  // when validator audits clean.
+  ['validator', 'done', 'done'],
 ];
+
+const BACK_EDGES: Array<[Actor, Actor, string]> = [['researcher', 'planner-lead', 'synth']];
 
 export function buildDefaultLayout(): { nodes: Node<ActorNodeData>[]; edges: Edge[] } {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: 'LR', nodesep: 28, ranksep: 76, marginx: 16, marginy: 16 });
+  g.setGraph({ rankdir: 'LR', nodesep: 32, ranksep: 96, marginx: 24, marginy: 24 });
 
   for (const actor of ACTORS) {
     g.setNode(actor, { width: NODE_W, height: NODE_H });
   }
-  for (const [from, to] of EDGES) {
+  for (const [from, to] of FORWARD_EDGES) {
     g.setEdge(from, to);
   }
   dagre.layout(g);
@@ -67,7 +82,7 @@ export function buildDefaultLayout(): { nodes: Node<ActorNodeData>[]; edges: Edg
     };
   });
 
-  const edges: Edge[] = EDGES.map(([from, to, label]) => ({
+  const forward: Edge[] = FORWARD_EDGES.map(([from, to, label]) => ({
     id: `${from}-${to}`,
     source: from,
     target: to,
@@ -76,7 +91,20 @@ export function buildDefaultLayout(): { nodes: Node<ActorNodeData>[]; edges: Edg
     animated: false,
   }));
 
-  return { nodes, edges };
+  const back: Edge[] = BACK_EDGES.map(([from, to, label]) => ({
+    id: `${from}-${to}`,
+    source: from,
+    target: to,
+    label,
+    // smoothstep with curvature reads as a return arrow (researcher
+    // hands evidence-synth back to planner-lead's Phase B re-spawn)
+    type: 'smoothstep',
+    animated: false,
+    style: { strokeDasharray: '4 4', stroke: 'var(--ink-tertiary)' },
+    labelStyle: { fill: 'var(--ink-tertiary)' },
+  }));
+
+  return { nodes, edges: [...forward, ...back] };
 }
 
 export const ALL_ACTORS = ACTORS;

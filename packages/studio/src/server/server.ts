@@ -812,8 +812,16 @@ function serveStream(
   if (sessionFilter !== '*') {
     const match = watcher.snapshot().find((s) => s.session_id === sessionFilter);
     if (match) {
-      const HISTORY_REPLAY_CAP = 500;
-      const slice = match.history.slice(-HISTORY_REPLAY_CAP);
+      // Replay the full session history. Earlier we capped at 500 to
+      // bound a runaway-session burst, but real sessions easily reach
+      // 500+ events (one Phaser game gen typically lands 600-1500 due to
+      // Builder + Verifier tool.call traffic) and dropping the oldest
+      // entries removed `session.start` + `goal` from the Transcript
+      // panel's first paint, which was confusing. Memory is fine —
+      // a 5,000-event transcript is well under 5 MB even with 47 KB
+      // stream-json dumps embedded. Client-side rolling window (500
+      // default in useTranscriptStream) still bounds renderer cost.
+      const slice = match.history;
       for (const msg of slice) {
         write({ type: 'append', session_id: match.session_id, msg });
       }
